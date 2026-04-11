@@ -1,0 +1,18 @@
+[package]
+name = "vedaksha-locale"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Localization engine for Vedākṣa — planet, sign, nakshatra names in 7 languages"
+
+[dependencies]
+
+[dev-dependencies]
+
+[features]
+default = ["std"]
+std = []

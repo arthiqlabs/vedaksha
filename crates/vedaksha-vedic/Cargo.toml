@@ -1,0 +1,22 @@
+[package]
+name = "vedaksha-vedic"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Vedic astrology: nakshatras, dashas, vargas, yogas, shadbala"
+
+[dependencies]
+vedaksha-math = { version = "0.1.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "0.1.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "0.1.0", path = "../vedaksha-astro" }
+serde = { workspace = true }
+
+[dev-dependencies]
+
+[features]
+default = ["std"]
+std = ["vedaksha-ephem-core/std"]
