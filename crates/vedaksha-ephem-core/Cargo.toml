@@ -1,0 +1,22 @@
+[package]
+name = "vedaksha-ephem-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Astronomy engine: JPL DE441 reader, coordinate transformations, precession, nutation"
+
+[dependencies]
+libm = "0.2"
+vedaksha-math = { version = "0.1.0", path = "../vedaksha-math" }
+
+[dev-dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = ["std"]
+std = []
