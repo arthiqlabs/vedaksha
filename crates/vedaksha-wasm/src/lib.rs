@@ -249,6 +249,7 @@ fn body_from_name(name: &str) -> Option<vedaksha_ephem_core::bodies::Body> {
         "neptune" => Some(Body::Neptune),
         "meannode" | "mean_node" | "rahu" => Some(Body::MeanNode),
         "truenode" | "true_node" => Some(Body::TrueNode),
+        "truenodeosculating" | "true_node_osculating" | "osculating_node" => Some(Body::TrueNodeOsculating),
         _ => None,
     }
 }

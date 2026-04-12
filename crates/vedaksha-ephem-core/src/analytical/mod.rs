@@ -225,6 +225,10 @@ impl EphemerisProvider for AnalyticalProvider {
                 let lon = crate::nodes::true_node(jd);
                 Ok(node_state(lon))
             }
+            Body::TrueNodeOsculating => {
+                let lon = crate::nodes::true_node_osculating(jd);
+                Ok(node_state(lon))
+            }
 
             // Pluto not available in analytical theory
             Body::Pluto => Err(ComputeError::BodyNotAvailable {
@@ -358,6 +362,7 @@ mod tests {
             Body::Neptune,
             Body::MeanNode,
             Body::TrueNode,
+            Body::TrueNodeOsculating,
         ];
         for body in bodies {
             let result = provider().compute_state(body, J2000);
