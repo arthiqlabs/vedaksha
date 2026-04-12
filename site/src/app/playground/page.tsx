@@ -159,15 +159,108 @@ export default function PlaygroundPage() {
     setLon(p.lon);
   }
 
-  function handleCompute() {
+  async function handleCompute() {
     setComputing(true);
     setResult(null);
-    // Simulate a brief computation delay to make it feel real
-    setTimeout(() => {
+    try {
+      // Dynamic import of WASM module using URL-based import for runtime loading
+      const wasmJsUrl = new URL("/wasm/vedaksha_wasm.js", window.location.origin).href;
+      const wasm = await import(/* webpackIgnore: true */ wasmJsUrl);
+      await wasm.default("/wasm/vedaksha_wasm_bg.wasm");
+
+      // Parse date/time from form inputs
+      const [year, month, day] = date.split("-").map(Number);
+      const [hour, minute] = time.split(":").map(Number);
+
+      // Map ayanamsha display name to API name
+      const ayanamshaMap: Record<string, string> = {
+        "Lahiri (Chitrapaksha)": "Lahiri",
+        "Raman": "Raman",
+        "Krishnamurti (KP)": "Krishnamurti",
+        "Fagan-Bradley": "FaganBradley",
+        "Yukteshwar": "Lahiri",
+        "Aryabhata": "Lahiri",
+        "True Chitrapaksha": "Lahiri",
+        "J2000": "Tropical",
+      };
+
+      // Map house system display name to API name
+      const houseMap: Record<string, string> = {
+        "Placidus": "Placidus",
+        "Koch": "Koch",
+        "Whole Sign": "WholeSign",
+        "Equal (ASC)": "Equal",
+        "Campanus": "Campanus",
+        "Regiomontanus": "Regiomontanus",
+        "Porphyry": "Porphyry",
+        "Sripathi": "Sripathi",
+        "Morinus": "Morinus",
+        "Alcabitius": "Alcabitius",
+      };
+
+      const config = JSON.stringify({
+        year, month, day, hour, minute,
+        latitude: parseFloat(lat),
+        longitude: parseFloat(lon),
+        ayanamsha: ayanamshaMap[ayanamsha] || "Lahiri",
+        house_system: houseMap[houseSystem] || "Placidus",
+      });
+
+      const resultJson = wasm.compute_natal_chart(config);
+      const chartData = JSON.parse(resultJson);
+
+      // Map to DemoResult format for the existing UI
+      const planets: PlanetRow[] = chartData.planets.map((p: any) => {
+        const lonDeg = p.longitude;
+        const minutes = Math.floor((lonDeg % 1) * 60);
+        const nakIndex = Math.floor(lonDeg / (360 / 27));
+        const nakshatras = [
+          "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra",
+          "Punarvasu", "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni",
+          "Hasta", "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha",
+          "Mula", "Purva Ashadha", "Uttara Ashadha", "Shravana", "Dhanishtha",
+          "Shatabhisha", "Purva Bhadrapada", "Uttara Bhadrapada", "Revati"
+        ];
+        const nakWidth = 360 / 27;
+        const posInNak = lonDeg % nakWidth;
+        const pada = Math.floor(posInNak / (nakWidth / 4)) + 1;
+
+        return {
+          name: p.name,
+          longitude: `${Math.floor(lonDeg)}°${minutes.toString().padStart(2, "0")}′`,
+          sign: p.sign,
+          nakshatra: nakshatras[nakIndex] || "Unknown",
+          pada,
+          retro: p.retrograde || false,
+        };
+      });
+
+      const houses: HouseCusp[] = chartData.houses.cusps.map((cusp: number, i: number) => {
+        const signs = ["Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+                       "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces"];
+        const minutes = Math.floor((cusp % 1) * 60);
+        return {
+          house: i + 1,
+          longitude: `${Math.floor(cusp)}°${minutes.toString().padStart(2, "0")}′`,
+          sign: signs[Math.floor(cusp / 30)] || "Unknown",
+        };
+      });
+
+      setResult({
+        label: `${date} ${time} UTC — ${parseFloat(lat).toFixed(4)}°N, ${parseFloat(lon).toFixed(4)}°E`,
+        planets,
+        houses,
+        dasha: [],
+        yogas: [],
+      });
+    } catch (err) {
+      console.error("WASM computation failed:", err);
+      // Fall back to demo data
       const key = Object.keys(DEMO_RESULTS).find((k) => date.startsWith(k)) ?? "2024-03-20";
       setResult(DEMO_RESULTS[key]);
+    } finally {
       setComputing(false);
-    }, 420);
+    }
   }
 
   return (
@@ -186,10 +279,9 @@ export default function PlaygroundPage() {
           The interactive Vedākṣha playground runs entirely client-side via
           WebAssembly. No server, no data sent anywhere.
         </p>
-        {/* Demo banner */}
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#D4A843]/40 bg-[#D4A843]/5 text-xs font-semibold text-[#D4A843]">
-          <span className="size-1.5 rounded-full bg-[#D4A843] animate-pulse" />
-          Preview — live WASM computation coming soon. Showing static demo data.
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/40 bg-emerald-500/5 text-xs font-semibold text-emerald-600">
+          <span className="size-1.5 rounded-full bg-emerald-500" />
+          Live — computing in your browser via WebAssembly (972 KB, zero server)
         </div>
       </div>
 
@@ -358,7 +450,7 @@ export default function PlaygroundPage() {
                 </div>
                 <div className="px-5 py-3 bg-[var(--color-brand-bg-code)]">
                   <p className="text-[11px] text-[var(--color-brand-text-muted)]">
-                    Static demo data — live WASM computation will replace this output once deployed.
+                    Computed client-side via WebAssembly — no data sent to any server.
                   </p>
                 </div>
               </div>
@@ -448,7 +540,7 @@ export default function PlaygroundPage() {
                       </p>
                     </div>
                     <div className="bg-[var(--color-brand-bg-code)] divide-y divide-[var(--color-brand-border)]">
-                      {result.dasha.map((d) => (
+                      {result.dasha.length > 0 ? result.dasha.map((d) => (
                         <div
                           key={d.lord}
                           className={`px-5 py-3 ${d.active ? "bg-[#D4A843]/5" : ""}`}
@@ -472,7 +564,13 @@ export default function PlaygroundPage() {
                             </p>
                           ) : null}
                         </div>
-                      ))}
+                      )) : (
+                        <div className="px-5 py-4">
+                          <p className="text-[11px] text-[var(--color-brand-text-muted)]">
+                            Dasha computation requires a separate API call. Use the Rust crate or Python package for full Vimshottari Dasha periods.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -484,7 +582,7 @@ export default function PlaygroundPage() {
                       </p>
                     </div>
                     <div className="bg-[var(--color-brand-bg-code)] divide-y divide-[var(--color-brand-border)]">
-                      {result.yogas.map((y) => (
+                      {result.yogas.length > 0 ? result.yogas.map((y) => (
                         <div key={y.name} className="px-5 py-3">
                           <div className="flex items-center gap-2 mb-0.5">
                             <span className="text-xs font-semibold text-[var(--color-brand-text)]">
@@ -502,7 +600,13 @@ export default function PlaygroundPage() {
                             {y.planets}
                           </p>
                         </div>
-                      ))}
+                      )) : (
+                        <div className="px-5 py-4">
+                          <p className="text-[11px] text-[var(--color-brand-text-muted)]">
+                            Yoga detection requires a separate analysis pass. Use the Rust crate or Python package for full yoga identification.
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

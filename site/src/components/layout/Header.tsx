@@ -49,6 +49,12 @@ export function Header() {
           >
             Pricing
           </a>
+          <a
+            href="/playground"
+            className="text-base font-medium text-[#D4A843] hover:text-[#D4A843]/80 transition-colors"
+          >
+            Playground
+          </a>
         </nav>
 
         {/* Right: CTA + dark mode + mobile menu */}
@@ -109,6 +115,13 @@ export function Header() {
             onClick={() => setMenuOpen(false)}
           >
             Pricing
+          </a>
+          <a
+            href="/playground"
+            className="text-base font-medium text-[#D4A843] hover:text-[#D4A843]/80 transition-colors"
+            onClick={() => setMenuOpen(false)}
+          >
+            Playground
           </a>
           <a
             href="/docs"

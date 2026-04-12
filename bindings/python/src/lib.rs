@@ -179,6 +179,137 @@ fn nakshatra_name_i18n(index: usize, language: &str) -> PyResult<String> {
     Ok(vedaksha_locale::nakshatras::nakshatra_name(index, lang).to_string())
 }
 
+/// Compute a complete natal chart from birth data.
+///
+/// Args:
+///     year: Birth year (negative for BCE)
+///     month: Birth month (1-12)
+///     day: Birth day (1-31)
+///     hour: Birth hour UTC (0-23)
+///     minute: Birth minute (0-59)
+///     latitude: Geographic latitude in degrees [-90, 90]
+///     longitude: Geographic longitude in degrees [-180, 180]
+///     ayanamsha: Ayanamsha system ("Lahiri", "FaganBradley", etc.)
+///     house_system: House system ("Placidus", "WholeSign", etc.)
+///
+/// Returns:
+///     JSON string with complete chart: planets, houses, aspects, ayanamsha value
+#[pyfunction]
+#[pyo3(signature = (year, month, day, hour, minute, latitude, longitude, ayanamsha="Lahiri", house_system="Placidus"))]
+fn compute_natal_chart(
+    year: i32,
+    month: u32,
+    day: u32,
+    hour: u32,
+    minute: u32,
+    latitude: f64,
+    longitude: f64,
+    ayanamsha: &str,
+    house_system: &str,
+) -> PyResult<String> {
+    use vedaksha_ephem_core::analytical::AnalyticalProvider;
+    use vedaksha_ephem_core::bodies::Body;
+    use vedaksha_ephem_core::coordinates;
+    use vedaksha_ephem_core::jpl::EphemerisProvider;
+    use vedaksha_ephem_core::nutation;
+    use vedaksha_ephem_core::obliquity;
+    use vedaksha_ephem_core::sidereal_time;
+
+    let ayanamsha_system = parse_ayanamsha(ayanamsha)?;
+    let house_sys = parse_house_system(house_system)?;
+
+    // Calendar to JD (UTC)
+    let day_fraction = day as f64
+        + hour as f64 / 24.0
+        + minute as f64 / 1440.0;
+    let jd = calendar_to_jd(year, month, day_fraction);
+
+    // Range check
+    let provider = AnalyticalProvider;
+    let (jd_min, jd_max) = provider.time_range();
+    if jd < jd_min || jd > jd_max {
+        return Err(PyValueError::new_err(format!(
+            "Date out of range: JD {jd:.1} outside [{jd_min:.0}, {jd_max:.0}]"
+        )));
+    }
+
+    // Compute positions for 9 standard Jyotish bodies
+    let bodies: &[(&str, Body)] = &[
+        ("Sun", Body::Sun),
+        ("Moon", Body::Moon),
+        ("Mercury", Body::Mercury),
+        ("Venus", Body::Venus),
+        ("Mars", Body::Mars),
+        ("Jupiter", Body::Jupiter),
+        ("Saturn", Body::Saturn),
+        ("MeanNode", Body::MeanNode),
+        ("TrueNode", Body::TrueNode),
+    ];
+
+    let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::new();
+    for (name, body) in bodies {
+        let pos = coordinates::apparent_position(&provider, *body, jd)
+            .map_err(|e| PyValueError::new_err(format!("Failed to compute {name}: {e}")))?;
+        planet_data.push((
+            name.to_string(),
+            pos.ecliptic.longitude.to_degrees(),
+            pos.ecliptic.latitude.to_degrees(),
+            pos.ecliptic.distance,
+            pos.longitude_speed,
+        ));
+    }
+
+    // Sidereal time → RAMC
+    let jd_tt = vedaksha_ephem_core::delta_t::ut1_to_tt(jd);
+    let (dpsi, deps) = nutation::nutation(jd_tt);
+    let eps_true = obliquity::true_obliquity(jd_tt, deps);
+    let geo_lon_rad = longitude * core::f64::consts::PI / 180.0;
+    let last = sidereal_time::local_sidereal_time(jd_tt, geo_lon_rad, dpsi, eps_true);
+    let ramc_deg = last * 180.0 / core::f64::consts::PI;
+
+    // Obliquity in degrees
+    let obliquity_deg = obliquity::mean_obliquity(jd_tt) * 180.0 / core::f64::consts::PI;
+
+    // Chart config
+    let config = vedaksha_astro::chart::ChartConfig {
+        house_system: house_sys,
+        ayanamsha: Some(ayanamsha_system),
+        rulership_scheme: vedaksha_astro::dignity::RulershipScheme::Traditional,
+        aspect_types: vedaksha_astro::aspects::AspectType::MAJOR.to_vec(),
+        orb_factor: 1.0,
+    };
+
+    let chart = vedaksha_astro::chart::compute_chart(
+        &planet_data, ramc_deg, latitude, obliquity_deg, jd, &config,
+    );
+
+    let ayanamsha_value = vedaksha_astro::sidereal::ayanamsha_value(ayanamsha_system, jd);
+
+    let output = serde_json::json!({
+        "planets": chart.planets,
+        "houses": {
+            "cusps": chart.houses.cusps,
+            "asc": chart.houses.asc,
+            "mc": chart.houses.mc,
+            "system": format!("{:?}", chart.houses.system),
+            "polar_fallback": chart.houses.polar_fallback,
+        },
+        "aspects": chart.aspects.iter().map(|a| serde_json::json!({
+            "body1": a.body1_index,
+            "body2": a.body2_index,
+            "type": format!("{:?}", a.aspect_type),
+            "orb": a.orb,
+            "applying": a.motion == vedaksha_astro::aspects::AspectMotion::Applying,
+            "strength": a.strength,
+        })).collect::<Vec<_>>(),
+        "ayanamsha_value": ayanamsha_value,
+        "julian_day": jd,
+        "config_summary": chart.config_summary,
+    });
+
+    serde_json::to_string(&output).map_err(|e| PyValueError::new_err(e.to_string()))
+}
+
 // --- Parser helpers ---
 
 fn parse_house_system(s: &str) -> PyResult<vedaksha_astro::houses::HouseSystem> {
@@ -249,5 +380,6 @@ fn vedaksha(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(planet_name, m)?)?;
     m.add_function(wrap_pyfunction!(sign_name, m)?)?;
     m.add_function(wrap_pyfunction!(nakshatra_name_i18n, m)?)?;
+    m.add_function(wrap_pyfunction!(compute_natal_chart, m)?)?;
     Ok(())
 }

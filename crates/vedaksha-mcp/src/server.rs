@@ -270,20 +270,123 @@ impl McpServer {
     // `EphemerisProvider` integration.
 
     fn call_compute_natal(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::coordinates;
+        use vedaksha_ephem_core::nutation;
+        use vedaksha_ephem_core::obliquity;
+        use vedaksha_ephem_core::sidereal_time;
+
         let input: crate::tools::compute_natal::ComputeNatalInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::compute_natal::validate(&input)?;
 
-        // Full chart computation requires EphemerisProvider (SPK data file).
-        // Returns validated acknowledgment; wire to SpkReader when data is embedded.
-        Ok(serde_json::json!({
-            "status": "validated",
-            "julian_day": input.julian_day,
-            "latitude": input.latitude,
-            "longitude": input.longitude,
-            "message": "Input validated. Full computation requires EphemerisProvider initialization."
-        }))
+        let provider = AnalyticalProvider;
+        let jd = input.julian_day;
+
+        // Compute positions for the 9 standard Jyotish bodies
+        let bodies = [
+            ("Sun", Body::Sun),
+            ("Moon", Body::Moon),
+            ("Mercury", Body::Mercury),
+            ("Venus", Body::Venus),
+            ("Mars", Body::Mars),
+            ("Jupiter", Body::Jupiter),
+            ("Saturn", Body::Saturn),
+            ("MeanNode", Body::MeanNode),
+            ("TrueNode", Body::TrueNode),
+        ];
+
+        let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::new();
+        for (name, body) in &bodies {
+            let pos = coordinates::apparent_position(&provider, *body, jd)
+                .map_err(|e| McpError::computation_failed(&format!("Failed to compute {name}: {e}")))?;
+            planet_data.push((
+                name.to_string(),
+                pos.ecliptic.longitude.to_degrees(),
+                pos.ecliptic.latitude.to_degrees(),
+                pos.ecliptic.distance,
+                pos.longitude_speed,
+            ));
+        }
+
+        // Sidereal time → RAMC
+        let jd_tt = vedaksha_ephem_core::delta_t::ut1_to_tt(jd);
+        let (dpsi, deps) = nutation::nutation(jd_tt);
+        let eps_true = obliquity::true_obliquity(jd_tt, deps);
+        let geo_lon_rad = input.longitude * core::f64::consts::PI / 180.0;
+        let last = sidereal_time::local_sidereal_time(jd_tt, geo_lon_rad, dpsi, eps_true);
+        let ramc_deg = last * 180.0 / core::f64::consts::PI;
+
+        // Obliquity in degrees
+        let obliquity_deg = obliquity::mean_obliquity(jd_tt) * 180.0 / core::f64::consts::PI;
+
+        // Parse house system and ayanamsha
+        let house_system = match input.house_system.as_deref() {
+            Some(s) => match s.to_lowercase().as_str() {
+                "placidus" => vedaksha_astro::houses::HouseSystem::Placidus,
+                "koch" => vedaksha_astro::houses::HouseSystem::Koch,
+                "equal" => vedaksha_astro::houses::HouseSystem::Equal,
+                "wholesign" | "whole_sign" => vedaksha_astro::houses::HouseSystem::WholeSign,
+                "campanus" => vedaksha_astro::houses::HouseSystem::Campanus,
+                "regiomontanus" => vedaksha_astro::houses::HouseSystem::Regiomontanus,
+                "porphyry" => vedaksha_astro::houses::HouseSystem::Porphyry,
+                "morinus" => vedaksha_astro::houses::HouseSystem::Morinus,
+                "alcabitius" => vedaksha_astro::houses::HouseSystem::Alcabitius,
+                "sripathi" => vedaksha_astro::houses::HouseSystem::Sripathi,
+                _ => return Err(McpError::invalid_parameter("house_system", &format!("Unknown: {s}"))),
+            },
+            None => vedaksha_astro::houses::HouseSystem::Placidus,
+        };
+
+        let ayanamsha = match input.ayanamsha.as_deref() {
+            Some(s) => match s.to_lowercase().as_str() {
+                "lahiri" => Some(vedaksha_astro::sidereal::Ayanamsha::Lahiri),
+                "faganbradley" | "fagan_bradley" => Some(vedaksha_astro::sidereal::Ayanamsha::FaganBradley),
+                "krishnamurti" => Some(vedaksha_astro::sidereal::Ayanamsha::Krishnamurti),
+                "raman" => Some(vedaksha_astro::sidereal::Ayanamsha::Raman),
+                "tropical" => None,
+                _ => return Err(McpError::invalid_parameter("ayanamsha", &format!("Unknown: {s}"))),
+            },
+            None => None, // Tropical default
+        };
+
+        let config = vedaksha_astro::chart::ChartConfig {
+            house_system,
+            ayanamsha,
+            rulership_scheme: vedaksha_astro::dignity::RulershipScheme::Traditional,
+            aspect_types: vedaksha_astro::aspects::AspectType::MAJOR.to_vec(),
+            orb_factor: 1.0,
+        };
+
+        let chart = vedaksha_astro::chart::compute_chart(
+            &planet_data, ramc_deg, input.latitude, obliquity_deg, jd, &config,
+        );
+
+        // Build output JSON
+        let output = serde_json::json!({
+            "planets": chart.planets,
+            "houses": {
+                "cusps": chart.houses.cusps,
+                "asc": chart.houses.asc,
+                "mc": chart.houses.mc,
+                "system": format!("{:?}", chart.houses.system),
+                "polar_fallback": chart.houses.polar_fallback,
+            },
+            "aspects": chart.aspects.iter().map(|a| serde_json::json!({
+                "body1": a.body1_index,
+                "body2": a.body2_index,
+                "type": format!("{:?}", a.aspect_type),
+                "orb": a.orb,
+                "applying": a.motion == vedaksha_astro::aspects::AspectMotion::Applying,
+                "strength": a.strength,
+            })).collect::<Vec<_>>(),
+            "julian_day": jd,
+            "config_summary": chart.config_summary,
+        });
+
+        Ok(output)
     }
 
     fn call_compute_dasha(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -332,50 +435,288 @@ impl McpServer {
     }
 
     fn call_compute_transit(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::coordinates;
+
         let input: crate::tools::compute_transit::ComputeTransitInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::compute_transit::validate(&input)?;
 
-        // Full computation requires EphemerisProvider.
+        let provider = AnalyticalProvider;
+
+        // 9 standard Jyotish bodies
+        let bodies = [
+            ("Sun", Body::Sun),
+            ("Moon", Body::Moon),
+            ("Mercury", Body::Mercury),
+            ("Venus", Body::Venus),
+            ("Mars", Body::Mars),
+            ("Jupiter", Body::Jupiter),
+            ("Saturn", Body::Saturn),
+            ("MeanNode", Body::MeanNode),
+            ("TrueNode", Body::TrueNode),
+        ];
+
+        // Compute natal positions
+        let mut natal_positions: Vec<serde_json::Value> = Vec::new();
+        for (name, body) in &bodies {
+            let pos = coordinates::apparent_position(&provider, *body, input.natal_jd)
+                .map_err(|e| McpError::computation_failed(&format!("Natal {name}: {e}")))?;
+            natal_positions.push(serde_json::json!({
+                "name": name,
+                "longitude": pos.ecliptic.longitude.to_degrees(),
+                "latitude": pos.ecliptic.latitude.to_degrees(),
+                "distance": pos.ecliptic.distance,
+                "speed": pos.longitude_speed,
+            }));
+        }
+
+        // Compute transit positions
+        let mut transit_positions: Vec<serde_json::Value> = Vec::new();
+        for (name, body) in &bodies {
+            let pos = coordinates::apparent_position(&provider, *body, input.transit_jd)
+                .map_err(|e| McpError::computation_failed(&format!("Transit {name}: {e}")))?;
+            transit_positions.push(serde_json::json!({
+                "name": name,
+                "longitude": pos.ecliptic.longitude.to_degrees(),
+                "latitude": pos.ecliptic.latitude.to_degrees(),
+                "distance": pos.ecliptic.distance,
+                "speed": pos.longitude_speed,
+            }));
+        }
+
+        // Compute transit-to-natal aspects using major aspect angles
+        let major_aspects: &[(&str, f64)] = &[
+            ("Conjunction", 0.0),
+            ("Sextile", 60.0),
+            ("Square", 90.0),
+            ("Trine", 120.0),
+            ("Opposition", 180.0),
+        ];
+        let max_orb = 1.0_f64;
+
+        let mut aspects: Vec<serde_json::Value> = Vec::new();
+        for (ti, t_pos) in transit_positions.iter().enumerate() {
+            let t_lon = t_pos["longitude"].as_f64().unwrap_or(0.0);
+            for (ni, n_pos) in natal_positions.iter().enumerate() {
+                let n_lon = n_pos["longitude"].as_f64().unwrap_or(0.0);
+                let raw_diff = ((t_lon - n_lon) % 360.0 + 360.0) % 360.0;
+                let sep = if raw_diff > 180.0 { 360.0 - raw_diff } else { raw_diff };
+                for (aspect_name, aspect_angle) in major_aspects {
+                    let orb = (sep - aspect_angle).abs();
+                    if orb <= max_orb {
+                        let t_speed = t_pos["speed"].as_f64().unwrap_or(0.0);
+                        aspects.push(serde_json::json!({
+                            "transit_body": t_pos["name"],
+                            "transit_body_index": ti,
+                            "natal_body": n_pos["name"],
+                            "natal_body_index": ni,
+                            "aspect_type": aspect_name,
+                            "aspect_angle": aspect_angle,
+                            "orb": orb,
+                            "applying": t_speed > 0.0,
+                        }));
+                    }
+                }
+            }
+        }
+
         Ok(serde_json::json!({
-            "status": "validated",
             "natal_jd": input.natal_jd,
             "transit_jd": input.transit_jd,
-            "message": "Input validated. Full computation requires EphemerisProvider initialization."
+            "natal_positions": natal_positions,
+            "transit_positions": transit_positions,
+            "transit_natal_aspects": aspects,
         }))
     }
 
     fn call_search_transits(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::coordinates;
+
         let input: crate::tools::search_transits::SearchTransitsInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::search_transits::validate(&input)?;
 
-        // Full computation requires EphemerisProvider.
+        let provider = AnalyticalProvider;
+
+        // Map body name strings to (name, Body) pairs for use with AnalyticalProvider.
+        let all_bodies: &[(&str, Body)] = &[
+            ("Sun", Body::Sun),
+            ("Moon", Body::Moon),
+            ("Mercury", Body::Mercury),
+            ("Venus", Body::Venus),
+            ("Mars", Body::Mars),
+            ("Jupiter", Body::Jupiter),
+            ("Saturn", Body::Saturn),
+            ("MeanNode", Body::MeanNode),
+            ("TrueNode", Body::TrueNode),
+        ];
+
+        // Determine which bodies to track.
+        let transiting_bodies: Vec<(String, usize)> = if let Some(ref requested) = input.bodies {
+            requested
+                .iter()
+                .filter_map(|req_name| {
+                    all_bodies
+                        .iter()
+                        .position(|(n, _)| n.eq_ignore_ascii_case(req_name))
+                        .map(|idx| (all_bodies[idx].0.to_owned(), idx))
+                })
+                .collect()
+        } else {
+            all_bodies
+                .iter()
+                .enumerate()
+                .map(|(idx, (name, _))| ((*name).to_owned(), idx))
+                .collect()
+        };
+
+        // Map aspect name strings to (name, angle) pairs.
+        let all_aspects: &[(&str, f64)] = &[
+            ("Conjunction", 0.0),
+            ("Sextile", 60.0),
+            ("Square", 90.0),
+            ("Trine", 120.0),
+            ("Opposition", 180.0),
+        ];
+
+        let aspect_types: Vec<(String, f64)> = if let Some(ref requested) = input.aspects {
+            requested
+                .iter()
+                .filter_map(|req_name| {
+                    all_aspects
+                        .iter()
+                        .find(|(n, _)| n.eq_ignore_ascii_case(req_name))
+                        .map(|(n, a)| ((*n).to_owned(), *a))
+                })
+                .collect()
+        } else {
+            all_aspects
+                .iter()
+                .map(|(n, a)| ((*n).to_owned(), *a))
+                .collect()
+        };
+
+        let max_orb = input.max_orb.unwrap_or(1.0);
+
+        // Build the search config for vedaksha_astro::transits.
+        let config = vedaksha_astro::transits::TransitSearchConfig {
+            natal_positions: input
+                .natal_positions
+                .iter()
+                .map(|p| (p.name.clone(), p.longitude))
+                .collect(),
+            start_jd: input.start_jd,
+            end_jd: input.end_jd,
+            transiting_bodies,
+            aspect_types,
+            max_orb,
+            step_size: 1.0, // 1-day coarse step; bisection refines to sub-minute precision
+        };
+
+        // Closure: look up body longitude from AnalyticalProvider by index.
+        let get_longitude = |body_idx: usize, jd: f64| -> Option<f64> {
+            let (_, body) = all_bodies.get(body_idx)?;
+            coordinates::apparent_position(&provider, *body, jd)
+                .ok()
+                .map(|pos| pos.ecliptic.longitude.to_degrees())
+        };
+
+        let events = vedaksha_astro::transits::search_transits(&config, &get_longitude);
+
+        let events_json: Vec<serde_json::Value> = events
+            .iter()
+            .map(|e| {
+                serde_json::json!({
+                    "transiting_body": e.transiting_body,
+                    "natal_body": e.natal_body,
+                    "aspect_type": e.aspect_type,
+                    "exact_jd": e.exact_jd,
+                    "applying": e.applying,
+                    "exact_orb": e.exact_orb,
+                })
+            })
+            .collect();
+
         Ok(serde_json::json!({
-            "status": "validated",
             "start_jd": input.start_jd,
             "end_jd": input.end_jd,
-            "natal_position_count": input.natal_positions.len(),
-            "message": "Input validated. Full transit search requires EphemerisProvider initialization."
+            "max_orb": max_orb,
+            "event_count": events_json.len(),
+            "events": events_json,
         }))
     }
 
     fn call_search_muhurta(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::coordinates;
+
         let input: crate::tools::search_muhurta::SearchMuhurtaInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::search_muhurta::validate(&input)?;
 
-        // Full computation requires EphemerisProvider.
+        let provider = AnalyticalProvider;
+        let min_quality = input.min_quality.unwrap_or(0.5);
+
+        // Muhurta needs sidereal Sun and Moon longitudes (Lahiri ayanamsha).
+        let get_moon_sidereal = |jd: f64| -> Option<f64> {
+            let pos = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
+            let tropical_lon = pos.ecliptic.longitude.to_degrees();
+            Some(vedaksha_astro::sidereal::tropical_to_sidereal(
+                tropical_lon,
+                vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                jd,
+            ))
+        };
+
+        let get_sun_sidereal = |jd: f64| -> Option<f64> {
+            let pos = coordinates::apparent_position(&provider, Body::Sun, jd).ok()?;
+            let tropical_lon = pos.ecliptic.longitude.to_degrees();
+            Some(vedaksha_astro::sidereal::tropical_to_sidereal(
+                tropical_lon,
+                vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                jd,
+            ))
+        };
+
+        let assessments = vedaksha_vedic::muhurta::search_muhurta(
+            input.start_jd,
+            input.end_jd,
+            &get_moon_sidereal,
+            &get_sun_sidereal,
+            min_quality,
+        );
+
+        let results_json: Vec<serde_json::Value> = assessments
+            .iter()
+            .map(|a| {
+                serde_json::json!({
+                    "jd": a.jd,
+                    "nakshatra": a.nakshatra.name(),
+                    "tithi_number": a.tithi.number,
+                    "tithi_name": a.tithi.name,
+                    "weekday": format!("{:?}", a.weekday),
+                    "quality_score": a.quality_score,
+                    "factors": a.factors,
+                })
+            })
+            .collect();
+
         Ok(serde_json::json!({
-            "status": "validated",
             "start_jd": input.start_jd,
             "end_jd": input.end_jd,
             "latitude": input.latitude,
             "longitude": input.longitude,
-            "message": "Input validated. Full muhurta search requires EphemerisProvider initialization."
+            "min_quality": min_quality,
+            "result_count": results_json.len(),
+            "results": results_json,
         }))
     }
 
@@ -557,7 +898,7 @@ mod tests {
     // ── compute_natal_chart ───────────────────────────────────────────────────
 
     #[test]
-    fn compute_natal_with_valid_params_returns_validated_response() {
+    fn compute_natal_with_valid_params_returns_chart() {
         let s = server();
         let resp = s.handle_request(
             r#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{
@@ -566,13 +907,16 @@ mod tests {
             }}"#,
         );
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
-        assert!(val["result"].is_object(), "expected a result");
-        // Content should be a text item.
+        assert!(val["result"].is_object(), "expected a result, got: {val}");
         let text = val["result"]["content"][0]["text"].as_str().unwrap();
-        assert!(
-            text.contains("validated"),
-            "response should mention 'validated'"
-        );
+        let chart: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert!(chart["planets"].is_array(), "expected planets array");
+        assert!(chart["houses"].is_object(), "expected houses object");
+        assert!(chart["aspects"].is_array(), "expected aspects array");
+        let planets = chart["planets"].as_array().unwrap();
+        assert_eq!(planets.len(), 9, "expected 9 planets");
+        let asc = chart["houses"]["asc"].as_f64().unwrap();
+        assert!(asc > 0.0 && asc < 360.0, "ASC out of range: {asc}");
     }
 
     #[test]
@@ -733,7 +1077,7 @@ mod tests {
     }
 
     #[test]
-    fn search_transits_valid_input_returns_validated_stub() {
+    fn search_transits_returns_actual_results() {
         let s = server();
         let resp = s.handle_request(
             r#"{"jsonrpc":"2.0","id":23,"method":"tools/call","params":{
@@ -748,7 +1092,9 @@ mod tests {
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         assert!(val["result"].is_object(), "expected a result, got: {val}");
         let text = val["result"]["content"][0]["text"].as_str().unwrap();
-        assert!(text.contains("validated"));
+        let data: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert!(data["event_count"].as_u64().is_some(), "expected event_count in response");
+        assert!(data["events"].is_array(), "expected events array in response");
     }
 
     // ── search_muhurta validation ─────────────────────────────────────────────

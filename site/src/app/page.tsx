@@ -75,6 +75,12 @@ export default function Home() {
               Get Started
             </a>
             <a
+              href="/playground"
+              className="inline-flex items-center rounded-lg border border-[#D4A843]/40 bg-[#D4A843]/5 px-6 py-2.5 text-sm font-semibold text-[#D4A843] hover:bg-[#D4A843]/10 transition-colors"
+            >
+              Try Playground
+            </a>
+            <a
               href="/ai"
               className="inline-flex items-center rounded-lg border border-[var(--color-brand-border)] px-6 py-2.5 text-sm font-semibold text-[var(--color-brand-text)] hover:bg-[var(--color-brand-bg-subtle)] transition-colors"
             >

@@ -19,9 +19,10 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 | Layer | Technology | Purpose |
 |-------|-----------|---------|
 | **Core Language** | Rust (Edition 2024) | Zero-cost abstractions, memory safety, no GC pauses |
-| **Ephemeris Data** | NASA JPL DE440/DE441 (SPK/DAF format) | Sub-arcsecond planetary positions, public domain |
-| **Math Foundation** | Clenshaw recurrence, Hermite/Lagrange interpolation | Chebyshev polynomial evaluation for JPL coefficients |
-| **Precession** | IAU 2006 (Capitaine, Wallace & Chapront) | Fukushima-Williams 4-angle parameterization |
+| **Ephemeris (SpkReader)** | NASA JPL DE440 (SPK/DAF format) | Sub-arcsecond planetary positions, public domain |
+| **Ephemeris (Analytical)** | VSOP87A (Bretagnon 1988) + ELP/MPP02 (Chapront 2002) | Zero-data-file ephemeris, <15" planets, <1" Moon, WASM/edge compatible |
+| **Math Foundation** | Clenshaw recurrence, Hermite/Lagrange interpolation, Poisson series | Chebyshev + trigonometric series evaluation |
+| **Precession** | IAU 2006 P03 (Capitaine, Wallace & Chapront), 5th-order | Fukushima-Williams 4-angle parameterization, single source of truth |
 | **Nutation** | IAU 2000B (McCarthy & Luzum, 77 terms) | Milliarcsecond-accurate nutation in longitude/obliquity |
 | **Aberration** | Annual aberration (Meeus Ch. 23) | First-order correction from Earth's velocity |
 | **Time Systems** | Delta T (Espenak & Meeus polynomials) | TT/UT1 conversion covering -500 to 2150+ CE |
@@ -40,13 +41,13 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 
 | Metric | Value |
 |--------|-------|
-| **Rust source files** | 88 |
-| **Lines of Rust** | 20,505 |
-| **Automated tests** | 606 |
-| **Public API items** | 212 (116 functions, 65 structs, 29 enums, 2 traits) |
-| **Workspace crates** | 9 |
-| **Binding targets** | 3 (native, WASM, Python) |
-| **Ayanamsha systems** | 44 |
+| **Automated tests** | 620+ |
+| **Oracle validation points** | 24,000+ (planetary positions, house cusps, ayanamsha, nutation, sidereal time) |
+| **Workspace crates** | 9 (all published to crates.io v0.2.0) |
+| **Binding targets** | 3 (native, WASM, Python) + MCP |
+| **Ephemeris providers** | 2 (SpkReader: sub-arcsecond from DE440s; AnalyticalProvider: <15" planets, zero data files) |
+| **WASM binary size** | 972 KB uncompressed (654 KB gzipped) — Cloudflare Workers compatible |
+| **Ayanamsha systems** | 44 (IAU 2006 P03 5th-order precession) |
 | **House systems** | 10 |
 | **Vedic yogas** | 50 |
 | **Divisional charts (vargas)** | 16 (D-1 through D-60) |
@@ -57,12 +58,12 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 | **Graph node types** | 10 |
 | **Graph edge types** | 13 |
 | **Graph emitter formats** | 5 (Cypher, SurrealQL, JSON-LD, JSON, RAG text) |
-| **MCP tools** | 7 |
+| **MCP tools** | 7 (all fully functional — natal, dasha, vargas, transit, search, muhurta, graph) |
 | **Localized languages** | 7 (en, hi, sa, ta, te, kn, bn) |
-| **Primary sources cited** | 15+ (Meeus, BPHS, Holden, IAU, JPL, B.V. Raman, ...) |
+| **Primary sources cited** | 15+ (Meeus, BPHS, Holden, IAU, JPL, Bretagnon, Chapront, B.V. Raman, ...) |
 | **External runtime dependencies** | 3 (serde, libm, thiserror) — no heavy frameworks |
 | **Unsafe code blocks** | 0 (enforced by `#![deny(unsafe_code)]` in every crate) |
-| **Clippy warnings** | 0 (enforced by `-D warnings` across workspace) |
+| **Published packages** | crates.io (9 crates v0.2.0) + PyPI (vedaksha v0.1.0) |
 
 ---
 

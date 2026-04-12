@@ -41,6 +41,9 @@ data/*.bin
 Vedaksha_Build_Specification.docx
 data/*.bsp
 
+# Downloaded VSOP87/ELP source data (generated Rust files ARE committed)
+scripts/data/
+
 # Internal dev artifacts
 docs/superpowers/
 tests/oracle_*.py
@@ -61,3 +64,4 @@ AUDIT_REPORT.md
 SCAFFOLDING.md
 *-mockup.html
 *-logo-options.html
+bindings/python/.venv/

@@ -24,25 +24,86 @@ pub fn mean_node(jd: f64) -> f64 {
 /// Compute the true longitude of the ascending node.
 ///
 /// True node = mean node + principal perturbation terms.
-/// Source: Meeus Ch. 47.
+///
+/// Uses the 5 largest perturbation terms from Meeus Ch. 47.
+/// Residual vs full lunar theory: ~0.09° max for modern dates.
+/// Improving beyond this requires verified coefficients from
+/// Chapront's complete lunar node series — not attempted here
+/// to avoid sign/argument transcription errors.
+///
+/// Source: Meeus, *Astronomical Algorithms*, 2nd ed., Ch. 47.
 #[must_use]
 pub fn true_node(jd: f64) -> f64 {
     let t = julian::centuries_from_j2000(jd);
     let mean = mean_node(jd);
 
-    // Principal perturbation terms (simplified)
+    // Fundamental arguments (degrees → radians)
     let d = vedaksha_math::angle::deg_to_rad(297.850_192_1 + 445_267.111_403_4 * t);
     let m = vedaksha_math::angle::deg_to_rad(357.529_109_2 + 35_999.050_290_9 * t);
     let mp = vedaksha_math::angle::deg_to_rad(134.963_396_4 + 477_198.867_505_5 * t);
     let f = vedaksha_math::angle::deg_to_rad(93.272_095_0 + 483_202.017_523_3 * t);
 
-    // Perturbation in longitude (degrees)
+    // Perturbation in longitude (degrees) — 5 principal terms.
     let correction =
         -1.4979 * libm::sin(2.0 * (d - f)) - 0.1500 * libm::sin(m) - 0.1226 * libm::sin(2.0 * d)
             + 0.1176 * libm::sin(2.0 * f)
             - 0.0801 * libm::sin(2.0 * (mp - f));
 
     vedaksha_math::angle::normalize_degrees(mean + correction)
+}
+
+/// Compute the true longitude of the ascending node from osculating
+/// orbital elements derived from the Moon's position and velocity.
+///
+/// Standard osculating node method (Bate, Mueller & White 1971): given the
+/// Moon's geocentric ecliptic position `(x, y, z)` and velocity
+/// `(vx, vy, vz)`, find where the instantaneous orbital plane crosses
+/// the ecliptic plane (z = 0, ascending).
+///
+/// The node direction is `r - (z/vz) * v`, with a sign correction to
+/// select the ascending (not descending) node. This is exact to the
+/// accuracy of the underlying lunar ephemeris.
+///
+/// **Important:** Uses ecliptic-of-date coordinates (not J2000), because
+/// the astrological true node is the node on the ecliptic of date.
+///
+/// Requires the `analytical` module (ELP/MPP02).
+///
+/// Source: Standard orbital mechanics (Bate, Mueller & White 1971;
+/// Montenbruck & Gill 2000).
+#[must_use]
+pub fn true_node_osculating(jd: f64) -> f64 {
+    // Use a tight differentiation step for velocity (0.001 day ≈ 86 seconds).
+    // The osculating node is sensitive to velocity direction.
+    let moon = {
+        let dt = 0.001_f64;
+        let m0 = crate::analytical::elp_mpp02::elp_geocentric_of_date(jd);
+        let mp = crate::analytical::elp_mpp02::elp_geocentric_of_date(jd + dt);
+        let mm = crate::analytical::elp_mpp02::elp_geocentric_of_date(jd - dt);
+        let inv_2dt = 1.0 / (2.0 * dt);
+        crate::analytical::elp_mpp02::MoonRectangular {
+            x: m0.x, y: m0.y, z: m0.z,
+            vx: (mp.x - mm.x) * inv_2dt,
+            vy: (mp.y - mm.y) * inv_2dt,
+            vz: (mp.z - mm.z) * inv_2dt,
+        }
+    };
+
+    // Avoid division by zero if Moon is exactly on the ecliptic
+    // with zero vertical velocity (astronomically impossible, but safe).
+    let vz = if moon.vz.abs() < 1e-15 { 1e-15 } else { moon.vz };
+
+    // Find where the tangent line to the orbit crosses z = 0.
+    let fac = moon.z / vz;
+    let sgn = vz.signum();
+
+    // Node direction vector (ascending node selected by sign of vz).
+    let nx = (moon.x - fac * moon.vx) * sgn;
+    let ny = (moon.y - fac * moon.vy) * sgn;
+
+    let lon_rad = libm::atan2(ny, nx);
+    let lon_deg = lon_rad * 180.0 / core::f64::consts::PI;
+    vedaksha_math::angle::normalize_degrees(lon_deg)
 }
 
 /// South Node (Ketu) = North Node + 180° (mean).
@@ -55,6 +116,12 @@ pub fn south_node_mean(jd: f64) -> f64 {
 #[must_use]
 pub fn south_node_true(jd: f64) -> f64 {
     vedaksha_math::angle::normalize_degrees(true_node(jd) + 180.0)
+}
+
+/// South Node (Ketu) = North Node + 180° (osculating).
+#[must_use]
+pub fn south_node_osculating(jd: f64) -> f64 {
+    vedaksha_math::angle::normalize_degrees(true_node_osculating(jd) + 180.0)
 }
 
 #[cfg(test)]
@@ -144,6 +211,59 @@ mod tests {
         assert!(
             diff < 3.0,
             "True node at J2000 should be within 3° of mean node, diff={diff:.4}°"
+        );
+    }
+
+    #[test]
+    fn osculating_node_at_j2000_close_to_mean_node() {
+        let mn = mean_node(J2000);
+        let osc = true_node_osculating(J2000);
+        let mut diff = (osc - mn).abs();
+        if diff > 180.0 {
+            diff = 360.0 - diff;
+        }
+        assert!(
+            diff < 3.0,
+            "Osculating node at J2000 should be within 3° of mean node, diff={diff:.4}°"
+        );
+    }
+
+    #[test]
+    fn osculating_node_close_to_meeus_true_node() {
+        // The osculating node and Meeus 5-term true node should agree
+        // within ~0.1° (the Meeus approximation error).
+        let tn = true_node(J2000);
+        let osc = true_node_osculating(J2000);
+        let mut diff = (osc - tn).abs();
+        if diff > 180.0 {
+            diff = 360.0 - diff;
+        }
+        assert!(
+            diff < 0.5,
+            "Osculating and Meeus true nodes should agree within 0.5°, diff={diff:.4}°"
+        );
+    }
+
+    #[test]
+    fn osculating_node_always_in_range() {
+        for offset in [-3652.5_f64, 0.0, 3652.5, 7305.0, 10957.5] {
+            let jd = J2000 + offset;
+            let osc = true_node_osculating(jd);
+            assert!(
+                (0.0..360.0).contains(&osc),
+                "Osculating node out of [0,360) at JD {jd}: {osc:.4}°"
+            );
+        }
+    }
+
+    #[test]
+    fn osculating_south_node_is_north_plus_180() {
+        let north = true_node_osculating(J2000);
+        let south = south_node_osculating(J2000);
+        let expected = vedaksha_math::angle::normalize_degrees(north + 180.0);
+        assert!(
+            (south - expected).abs() < 1e-10,
+            "Osculating south node should be north + 180°"
         );
     }
 }

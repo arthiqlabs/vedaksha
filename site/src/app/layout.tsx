@@ -63,6 +63,35 @@ export default function RootLayout({
       className={`${inter.variable} ${jetbrainsMono.variable} ${notoSansDevanagari.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[var(--color-brand-bg)] text-[var(--color-brand-text)]">
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              "name": "Vedākṣha",
+              "alternateName": "Vedaksha",
+              "description": "Astronomical ephemeris and Vedic astrology computation platform. Clean-room Rust implementation with sub-arcsecond precision.",
+              "url": "https://vedaksha.net",
+              "applicationCategory": "DeveloperApplication",
+              "operatingSystem": "Cross-platform",
+              "programmingLanguage": ["Rust", "Python", "WebAssembly"],
+              "offers": {
+                "@type": "Offer",
+                "price": "500",
+                "priceCurrency": "USD",
+                "description": "Commercial license — one-time per organization"
+              },
+              "author": {
+                "@type": "Organization",
+                "name": "ArthIQ Labs LLC",
+                "url": "https://vedaksha.net",
+                "email": "info@arthiq.net"
+              },
+              "license": "https://vedaksha.net/legal/bsl"
+            })
+          }}
+        />
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />

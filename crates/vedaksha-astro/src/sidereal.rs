@@ -14,19 +14,17 @@
 //! For most systems, the ayanamsha at any Julian Day is computed as:
 //!
 //! ```text
-//! ayanamsha(jd) = ref_value_at_j2000
-//!               + rate * t
-//!               + 0.5 * accel * t²
+//! ayanamsha(jd) = ref_value_at_j2000 + ψ_A(jd) / 3600
 //! ```
 //!
-//! where `t` is years from J2000.0, the IAU general precession rate at J2000.0
-//! is 50.2875 arcseconds/year (≈ 0.013968750°/year), and the quadratic
-//! acceleration term is 0.000222 arcseconds/year² (IAU 2006 P03 model).
-//! The quadratic term reduces long-span errors from ~5° (linear) to <0.5°.
+//! where `ref_value_at_j2000` is the tradition-specific reference value in degrees
+//! and `ψ_A(jd)` is the IAU 2006 P03 general precession in longitude in arcseconds
+//! (5th-order polynomial from Capitaine, Wallace & Chapront 2003, A&A 412, 567-586),
+//! evaluated by [`vedaksha_ephem_core::precession::general_precession_in_longitude`].
 //!
 //! Sources:
 //! - Lahiri: Indian Calendar Reform Committee (1955); IAE polynomial.
-//! - Fagan–Bradley: Cyril Fagan & Donald Bradley, *Primer of Sidereal Astrology* (1967).
+//! - Fagan-Bradley: Cyril Fagan & Donald Bradley, *Primer of Sidereal Astrology* (1967).
 //! - Raman: B. V. Raman, *A Manual of Hindu Astrology* (1935 revised).
 //! - Others: Published reference values from respective traditions.
 
@@ -233,42 +231,6 @@ impl Ayanamsha {
     }
 }
 
-/// General precession rate: IAU value of 50.2875 arcseconds per year,
-/// converted to degrees per year (at J2000.0).
-///
-/// Source: IAU 2006 precession model (Lieske et al., improved by Capitaine et al.).
-const PRECESSION_RATE: f64 = 50.2875 / 3600.0;
-
-/// Precession acceleration: IAU 2006 quadratic coefficient.
-///
-/// The actual precession rate changes slightly over time. The IAU 2006
-/// precession model includes a quadratic term of ~0.000222 arcseconds/year².
-/// Over 200 years, ignoring this term causes errors up to ~5 degrees.
-///
-/// Source: Capitaine et al. 2003 / IAU 2006 P03 precession polynomial.
-const PRECESSION_ACCEL: f64 = 0.000222 / 3600.0;
-
-/// Julian Day Number for J2000.0 (2000 January 1, 12:00 TT).
-const J2000: f64 = 2_451_545.0;
-
-/// Julian days per Julian year (exactly 365.25).
-const DAYS_PER_YEAR: f64 = 365.25;
-
-/// Compute the precession offset in degrees from J2000.0.
-///
-/// Uses a quadratic model derived from the IAU 2006 precession polynomial:
-///
-/// ```text
-/// offset(t) = rate * t + 0.5 * accel * t²
-/// ```
-///
-/// where `t` is years from J2000.0 (negative for past dates).
-/// The quadratic term reduces long-span error from ~5° (linear) to <0.5°.
-#[inline]
-fn precession_offset(t_years: f64) -> f64 {
-    PRECESSION_RATE * t_years + 0.5 * PRECESSION_ACCEL * t_years * t_years
-}
-
 /// Compute the ayanamsha value in decimal degrees for a given Julian Day.
 ///
 /// The returned value represents how many degrees the sidereal zero point
@@ -286,12 +248,10 @@ fn precession_offset(t_years: f64) -> f64 {
 /// # Sources
 ///
 /// Reference values at J2000.0 are taken from published tradition-specific
-/// tables. Precession rate: IAU 2006, ~50.2875 arcseconds/year.
+/// tables. Precession: IAU 2006 P03 5th-order polynomial
+/// (Capitaine, Wallace & Chapront 2003, A&A 412, 567-586).
 #[must_use]
 pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
-    // Years elapsed since J2000.0 (negative = before J2000).
-    let t_years = (jd - J2000) / DAYS_PER_YEAR;
-
     // Reference ayanamsha at J2000.0 for each system (decimal degrees).
     //
     // INDEPENDENTLY DERIVED VALUES:
@@ -316,15 +276,19 @@ pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
         // ~23°51'22" at J2000.0 from IAE polynomial.
         Ayanamsha::Lahiri | Ayanamsha::LahiriVp285 | Ayanamsha::AyanamshaOfDate => 23.856,
         // Raman: B.V. Raman, "A Manual of Hindu Astrology" (1935 revised).
-        Ayanamsha::Raman => 22.375,
+        // Anchor: vernal equinox at 0° Aries in 397 CE. J2000 value ≈ 22.411°.
+        // Derived from Raman's anchor: vernal equinox at 0° Aries in 397 CE.
+        Ayanamsha::Raman => 22.411,
         // Krishnamurti: K.S. Krishnamurti, "Krishnamurti Paddhati" series.
         Ayanamsha::Krishnamurti => 23.763,
         // Fagan-Bradley: Cyril Fagan & Donald Bradley, "Primer of Sidereal Astrology" (1967).
-        Ayanamsha::FaganBradley => 24.736,
+        // Anchor: sidereal longitude of vernal point at B1950.0 = 24°02'31.36".
+        // J2000 value ≈ 24.742°, projected from B1950.0 anchor via IAU 2006 precession.
+        Ayanamsha::FaganBradley => 24.742,
         // Yukteshwar: Sri Yukteshwar, "The Holy Science" (1894).
         Ayanamsha::Yukteshwar => 22.461,
-        // B.V. Raman mean ayanamsha (alternate computation).
-        Ayanamsha::BvRamanMean => 22.374,
+        // B.V. Raman mean ayanamsha (alternate computation, same anchor).
+        Ayanamsha::BvRamanMean => 22.410,
 
         // --- Star-based systems (derived from Hipparcos J2000 star positions) ---
         // TrueChitrapaksha: Spica (alpha Vir) at exactly 180° sidereal.
@@ -394,7 +358,9 @@ pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
         Ayanamsha::ValensMoon => 24.433,
     };
 
-    ref_value + precession_offset(t_years)
+    let precession_deg =
+        vedaksha_ephem_core::precession::general_precession_in_longitude(jd) / 3600.0;
+    ref_value + precession_deg
 }
 
 /// Convert a tropical ecliptic longitude to sidereal longitude.
@@ -440,6 +406,7 @@ pub fn sidereal_to_tropical(sidereal_longitude_deg: f64, system: Ayanamsha, jd: 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use vedaksha_ephem_core::julian::J2000;
 
     /// Julian Day for J1950.0 (1950 January 0.923, i.e. Jan 0.923 TT).
     /// Standard value: 2433282.5
@@ -458,7 +425,7 @@ mod tests {
 
     #[test]
     fn lahiri_at_j1950_approx_23_16() {
-        // 50 years earlier: 50 × 0.013968750 ≈ 0.6984° less → ~23.158°
+        // ~50 years before J2000: IAU 2006 P03 gives ~0.70° less → ~23.16°
         let v = ayanamsha_value(Ayanamsha::Lahiri, J1950);
         assert!(
             (v - 23.16).abs() < 0.20,
@@ -478,11 +445,11 @@ mod tests {
     }
 
     #[test]
-    fn fagan_bradley_at_j2000_approx_24_736() {
+    fn fagan_bradley_at_j2000_approx_24_742() {
         let v = ayanamsha_value(Ayanamsha::FaganBradley, J2000);
         assert!(
-            (v - 24.736).abs() < 0.001,
-            "Fagan-Bradley at J2000 should be ~24.736°, got {v}"
+            (v - 24.742).abs() < 0.001,
+            "Fagan-Bradley at J2000 should be ~24.742°, got {v}"
         );
     }
 
@@ -601,6 +568,64 @@ mod tests {
         assert!(
             (0.0..360.0).contains(&result),
             "Result {result} is outside [0, 360)"
+        );
+    }
+
+    #[test]
+    fn precession_upgrade_vs_quadratic_modern() {
+        let old_rate: f64 = 50.2875 / 3600.0;
+        let old_accel: f64 = 0.000222 / 3600.0;
+        let j2000: f64 = 2_451_545.0;
+        let days_per_year: f64 = 365.25;
+
+        let test_dates_jd: [f64; 10] = [
+            2_415_020.5, 2_421_639.5, 2_428_258.5, 2_434_877.5, 2_441_496.5,
+            2_448_115.5, 2_451_545.0, 2_455_197.5, 2_462_867.5, 2_488_069.5,
+        ];
+
+        for &jd in &test_dates_jd {
+            let t_yr = (jd - j2000) / days_per_year;
+            let old_offset_deg = old_rate * t_yr + 0.5 * old_accel * t_yr * t_yr;
+            let new_offset_deg =
+                vedaksha_ephem_core::precession::general_precession_in_longitude(jd) / 3600.0;
+
+            let diff = (new_offset_deg - old_offset_deg).abs();
+            assert!(
+                diff < 0.02,
+                "Modern-date divergence too large at JD {jd}: old={old_offset_deg:.6}°, \
+                 new={new_offset_deg:.6}°, diff={diff:.6}°"
+            );
+        }
+    }
+
+    #[test]
+    fn precession_upgrade_diverges_at_historical_dates() {
+        let old_rate: f64 = 50.2875 / 3600.0;
+        let old_accel: f64 = 0.000222 / 3600.0;
+        let j2000: f64 = 2_451_545.0;
+        let days_per_year: f64 = 365.25;
+
+        // Ancient dates (pre-1700 BCE) where the 5th-order polynomial
+        // diverges measurably (>0.05°) from the truncated quadratic.
+        let historical_dates_jd: [f64; 4] = [
+            625_295.0, 990_545.0, 1_063_295.0, 1_100_345.0,
+        ];
+
+        let mut any_diverged = false;
+        for &jd in &historical_dates_jd {
+            let t_yr = (jd - j2000) / days_per_year;
+            let old_offset_deg = old_rate * t_yr + 0.5 * old_accel * t_yr * t_yr;
+            let new_offset_deg =
+                vedaksha_ephem_core::precession::general_precession_in_longitude(jd) / 3600.0;
+
+            let diff = (new_offset_deg - old_offset_deg).abs();
+            if diff > 0.05 {
+                any_diverged = true;
+            }
+        }
+        assert!(
+            any_diverged,
+            "Expected measurable divergence at historical dates, but models agreed too closely"
         );
     }
 }
