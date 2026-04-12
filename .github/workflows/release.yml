@@ -130,9 +130,30 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/* --skip-existing
 
+  docker:
+    name: Push Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/arthiqlabs/vedaksha-mcp:latest
+            ghcr.io/arthiqlabs/vedaksha-mcp:${{ github.ref_name }}
+
   github-release:
     name: Create GitHub Release
-    needs: [build-mcp, wasm, publish-crates, publish-npm, upload-pypi]
+    needs: [build-mcp, wasm, publish-crates, publish-npm, upload-pypi, docker]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
