@@ -82,6 +82,7 @@ First-class Jyotish support — not a Western afterthought.
 - **Yogas:** 50 classical combinations (Pancha Mahapurusha, Dhana, Raja, Daridra, etc.)
 - **Shadbala:** Complete 6-component planetary strength
 - **Ayanamsha:** 44 sidereal systems (Lahiri, Raman, KP, Fagan-Bradley, and 40 more)
+- **Lunar nodes:** Mean, True (Meeus 5-term, ~0.09°), and Osculating (<0.03° vs JPL DE441) — KP sub-lord ready
 
 ## AI-First Architecture
 

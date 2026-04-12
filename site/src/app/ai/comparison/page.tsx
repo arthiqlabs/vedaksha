@@ -5,7 +5,7 @@ const rows = [
   { capability: "Semantic types", trad: false, python: false, rest: false, vedaksha: true, note: "Body::Jupiter, not integer 5." },
   { capability: "Embedding output (RAG)", trad: false, python: false, rest: false, vedaksha: true, note: "Text optimized for vector stores." },
   { capability: "PII-blind", trad: false, python: false, rest: false, vedaksha: true, note: "Julian Day + coordinates only." },
-  { capability: "Vedic first-class", trad: false, python: false, rest: false, vedaksha: true, note: "50 yogas, 3 dashas, 16 vargas." },
+  { capability: "Vedic first-class", trad: false, python: false, rest: false, vedaksha: true, note: "50 yogas, 3 dashas, 16 vargas, osculating node." },
   { capability: "Neo4j / SurrealDB emit", trad: false, python: false, rest: false, vedaksha: true, note: "Direct Cypher and SurrealQL." },
   { capability: "WASM browser", trad: false, python: false, rest: false, vedaksha: true, note: "Full computation client-side." },
   { capability: "44 ayanamsha", trad: false, python: false, rest: false, vedaksha: true, note: "Every major tradition." },

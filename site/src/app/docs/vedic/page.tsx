@@ -50,6 +50,12 @@ export default function VedicPage() {
     },
     {
       num: "09",
+      title: "Lunar Nodes",
+      subtitle: "Mean · True · Osculating",
+      desc: "Three node computation methods. Mean node (polynomial), True node (Meeus 5-term, ~0.09°), and Osculating node from ELP/MPP02 orbital mechanics (<0.03° vs JPL DE441). KP sub-lord ready.",
+    },
+    {
+      num: "10",
       title: "7-Language Localization",
       subtitle: "All Names Translated",
       desc: "Planet, sign, nakshatra, and yoga names in English, Hindi, Sanskrit, Tamil, Telugu, Kannada, and Bengali. Switch locale per request.",

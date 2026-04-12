@@ -282,7 +282,7 @@ export default function Home() {
           <div className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-border)] grid grid-cols-1 md:grid-cols-3 gap-px overflow-hidden">
             {[
               { num: "01", first: "Planetary", rest: "Engine", desc: "Sub-arcsecond positions from NASA JPL DE440/441. Full IAU precession, nutation, aberration pipeline." },
-              { num: "02", first: "Vedic", rest: "Astrology", desc: "27 nakshatras, 3 dasha systems, 50 yogas, 16 vargas, complete Shadbala — not a plugin." },
+              { num: "02", first: "Vedic", rest: "Astrology", desc: "27 nakshatras, 3 dasha systems, 50 yogas, 16 vargas, Shadbala, osculating node (<0.03° vs JPL) — not a plugin." },
               { num: "03", first: "House", rest: "Systems", desc: "Placidus, Koch, Whole Sign, Equal, Campanus, Regiomontanus, Porphyry, Morinus, Alcabitius, Sripathi." },
               { num: "04", first: "MCP", rest: "Server", desc: "7 typed tools for AI agents. JSON-RPC 2.0 with structured errors and self-correction hints." },
               { num: "05", first: "Graph", rest: "Emitters", desc: "Output to Neo4j Cypher, SurrealDB, JSON-LD, or RAG-optimized text for vector embedding." },

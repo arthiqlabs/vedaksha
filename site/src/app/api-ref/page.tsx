@@ -7,7 +7,7 @@ const crates = [
   {
     name: "vedaksha-ephem-core",
     description: "Astronomy engine — JPL SPK reader, coordinate transforms, precession, nutation",
-    items: ["apparent_position()", "SpkReader", "precession_matrix()", "nutation()", "delta_t()", "mean_node() / true_node()"],
+    items: ["apparent_position()", "SpkReader", "precession_matrix()", "nutation()", "delta_t()", "mean_node() / true_node() / true_node_osculating()"],
   },
   {
     name: "vedaksha-astro",

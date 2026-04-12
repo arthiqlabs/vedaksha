@@ -53,6 +53,7 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 | **Divisional charts (vargas)** | 16 (D-1 through D-60) |
 | **Dasha systems** | 3 (Vimshottari, Yogini, Chara) |
 | **Nakshatras** | 27 (with 108 padas) |
+| **Lunar node methods** | 3 (Mean, True/Meeus ~0.09°, Osculating <0.03° vs JPL DE441) |
 | **Aspect types** | 11 (5 major + 6 minor) |
 | **Aspect patterns** | 5 (Grand Trine, T-Square, Yod, Grand Cross, Stellium) |
 | **Graph node types** | 10 |
