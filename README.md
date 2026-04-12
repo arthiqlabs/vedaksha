@@ -96,6 +96,16 @@ Every chart computation produces a **property graph** — not flat structs. AI a
 - `search_muhurta` — Find auspicious times with quality scoring
 - `emit_graph` — Emit chart as Cypher, SurrealQL, JSON-LD, or embedding text
 
+**Run the MCP server:**
+
+```bash
+cargo install vedaksha-mcp          # install
+vedaksha-mcp                        # stdio (Claude Desktop, VS Code, Cursor)
+vedaksha-mcp --http                 # HTTP on port 3100 (Smithery, remote)
+vedaksha-mcp --http --port 8080     # custom port
+docker run -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp  # Docker
+```
+
 ## Accuracy
 
 Validated against independent reference ephemerides across 24,000+ oracle data points:
@@ -116,12 +126,13 @@ Validated against independent reference ephemerides across 24,000+ oracle data p
 | Rust | `cargo add vedaksha-astro vedaksha-ephem-core` | Full pipeline |
 | Python | `pip install vedaksha` | `vedaksha.compute_natal_chart(...)` |
 | WASM | `wasm-pack build crates/vedaksha-wasm` | 972 KB, zero data files |
-| MCP | stdio transport | 7 tools, JSON-RPC 2.0 |
+| MCP | stdio + HTTP transport | 7 tools, JSON-RPC 2.0 |
+| Docker | `docker run -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp` | HTTP on port 3100 |
 
 ## Published Packages
 
-- **crates.io:** 9 crates at v1.3.0
-- **PyPI:** `vedaksha` v1.3.0 (source + macOS arm64 wheel)
+- **crates.io:** 9 crates at v1.4.0
+- **PyPI:** `vedaksha` v1.4.0 (source + macOS arm64 wheel)
 
 ## License
 

@@ -10,7 +10,7 @@ rust-version.workspace = true
 description = "Graph emitters: Neo4j Cypher, SurrealDB, JSON-LD, embedding text"
 
 [dependencies]
-vedaksha-graph = { version = "1.3.0", path = "../vedaksha-graph" }
+vedaksha-graph = { version = "1.4.0", path = "../vedaksha-graph" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
