@@ -8,6 +8,38 @@ permissions:
   contents: write
 
 jobs:
+  build-mcp:
+    name: Build MCP binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: vedaksha-mcp
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: vedaksha-mcp
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: vedaksha-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }} -p vedaksha-mcp
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/vedaksha-mcp-${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-${{ matrix.target }}
+          path: dist/
+
   wasm:
     name: Build WASM
     runs-on: ubuntu-latest
@@ -100,7 +132,7 @@ jobs:
 
   github-release:
     name: Create GitHub Release
-    needs: [wasm, publish-crates, publish-npm, upload-pypi]
+    needs: [build-mcp, wasm, publish-crates, publish-npm, upload-pypi]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -110,5 +142,6 @@ jobs:
         with:
           generate_release_notes: true
           files: |
+            mcp-*/**/*
             vedaksha-wasm/**/*
             wheels/**/*
