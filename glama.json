@@ -1,0 +1,27 @@
+{
+  "name": "vedaksha",
+  "description": "Astronomical ephemeris and Vedic astrology MCP server. 7 tools for AI agents: natal charts, dashas, vargas, transits, muhurta, graph emit, and chart descriptions. Sub-arcsecond precision, 44 ayanamsha systems, clean-room Rust.",
+  "repository": "https://github.com/arthiqlabs/vedaksha",
+  "homepage": "https://vedaksha.net",
+  "author": "ArthIQ Labs",
+  "license": "BSL-1.1",
+  "tools": [
+    "compute_natal_chart",
+    "compute_dasha",
+    "compute_vargas",
+    "emit_graph",
+    "search_transits",
+    "search_muhurta",
+    "describe_chart"
+  ],
+  "install": {
+    "command": "cargo install vedaksha-mcp"
+  },
+  "config": {
+    "mcpServers": {
+      "vedaksha": {
+        "command": "vedaksha-mcp"
+      }
+    }
+  }
+}
