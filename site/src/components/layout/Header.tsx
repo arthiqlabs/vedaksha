@@ -44,6 +44,12 @@ export function Header() {
             Docs
           </a>
           <a
+            href="/ontology"
+            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
+          >
+            Ontology
+          </a>
+          <a
             href="/pricing"
             className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
           >
@@ -108,6 +114,13 @@ export function Header() {
             onClick={() => setMenuOpen(false)}
           >
             Docs
+          </a>
+          <a
+            href="/ontology"
+            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
+            onClick={() => setMenuOpen(false)}
+          >
+            Ontology
           </a>
           <a
             href="/pricing"

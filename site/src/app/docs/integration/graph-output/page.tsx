@@ -264,8 +264,8 @@ INSERT OR IGNORE INTO sign {
   id: sign:⟨pisces⟩, name: "Pisces", element: "Water"
 };
 
-RELATE chart:⟨2j5k9x⟩->has_planet->planet:⟨sun_2j5k9x⟩;
-RELATE planet:⟨sun_2j5k9x⟩->in_sign->sign:⟨pisces⟩;`}
+RELATE planet:⟨sun_2j5k9x⟩->belongs_to->chart:⟨2j5k9x⟩;
+RELATE planet:⟨sun_2j5k9x⟩->placed_in->sign:⟨pisces⟩;`}
             </code>
           </pre>
         </div>
