@@ -212,8 +212,8 @@ MERGE (p:Planet {id: "planet_sun_2j5k9x"})
 MERGE (s:Sign {id: "sign_pisces"})
   ON CREATE SET s.name = "Pisces", s.element = "Water"
 
-MERGE (c)-[:HAS_PLANET]->(p)
-MERGE (p)-[:IN_SIGN]->(s)`}
+MERGE (p)-[:BelongsTo]->(c)
+MERGE (p)-[:PlacedIn]->(s)`}
             </code>
           </pre>
         </div>
