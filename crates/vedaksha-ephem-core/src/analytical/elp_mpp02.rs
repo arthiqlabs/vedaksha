@@ -421,15 +421,9 @@ fn precess_to_j2000(t: f64, x0: f64, y0: f64, z0: f64) -> (f64, f64, f64) {
     )
 }
 
-/// Compute the Moon's geocentric rectangular coordinates in J2000 ecliptic frame.
-///
-/// # Arguments
-/// * `jd` — Julian Date (TT/TDB)
-///
-/// # Returns
-/// A [`MoonRectangular`] with position in km and velocity in km/day,
-/// referred to J2000.0 mean ecliptic and equinox.
-/// Compute Moon's geocentric rectangular coordinates in the **ecliptic of date**
+
+
+/// Compute the Moon's geocentric rectangular coordinates in the **ecliptic of date**
 /// (before precession to J2000). Used for osculating node computation, where the
 /// node must be on the ecliptic of date — not the J2000 ecliptic.
 ///
