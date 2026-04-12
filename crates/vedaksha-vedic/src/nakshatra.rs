@@ -97,6 +97,24 @@ pub enum Gana {
     Rakshasa,
 }
 
+/// Yoni (animal symbol) for Ashtakoota compatibility matching.
+/// Source: BPHS Ch. 20.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Yoni {
+    Horse, Elephant, Goat, Serpent, Dog, Cat, Rat, Cow,
+    Buffalo, Tiger, Deer, Monkey, Mongoose, Lion,
+}
+
+/// Yoni gender for compatibility.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum YoniGender { Male, Female }
+
+/// Nadi (pulse/constitution) for Ashtakoota matching.
+/// Nadi dosha is the highest-weighted koota (8 points).
+/// Source: BPHS Ch. 20.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum Nadi { Aadi, Madhya, Antya }
+
 impl Nakshatra {
     /// Span of each nakshatra in degrees (13°20').
     pub const SPAN: f64 = 13.333_333_333_333_334;
@@ -341,6 +359,52 @@ impl Nakshatra {
     pub fn end_longitude(&self) -> f64 {
         (f64::from(self.index()) + 1.0) * Self::SPAN
     }
+
+    /// Presiding deity (Adhidevata) per BPHS Ch. 3.
+    #[must_use]
+    pub fn deity(&self) -> &'static str {
+        const DEITIES: [&str; 27] = [
+            "Ashwini Kumaras", "Yama", "Agni", "Brahma", "Soma",
+            "Rudra", "Aditi", "Brihaspati", "Sarpas", "Pitrs",
+            "Bhaga", "Aryaman", "Savitar", "Tvashtar", "Vayu",
+            "Indragni", "Mitra", "Indra", "Nirrti", "Apas",
+            "Vishvedeva", "Vishnu", "Vasu", "Varuna", "Ajaikapada",
+            "Ahirbudhnya", "Pushan",
+        ];
+        DEITIES[*self as usize]
+    }
+
+    /// Yoni (animal symbol) and gender for Ashtakoota matching.
+    /// Source: BPHS Ch. 20.
+    #[must_use]
+    pub fn yoni(&self) -> (Yoni, YoniGender) {
+        use Yoni::*;
+        use YoniGender::*;
+        const YONIS: [(Yoni, YoniGender); 27] = [
+            (Horse, Male), (Elephant, Male), (Goat, Female),
+            (Serpent, Male), (Serpent, Female), (Dog, Female),
+            (Cat, Female), (Goat, Male), (Cat, Male),
+            (Rat, Male), (Rat, Female), (Cow, Male),
+            (Buffalo, Female), (Tiger, Female), (Buffalo, Male),
+            (Tiger, Male), (Deer, Female), (Deer, Male),
+            (Dog, Male), (Monkey, Male), (Mongoose, Male),
+            (Monkey, Female), (Lion, Female), (Horse, Female),
+            (Lion, Male), (Cow, Female), (Elephant, Female),
+        ];
+        YONIS[*self as usize]
+    }
+
+    /// Nadi (pulse/constitution) for Ashtakoota matching.
+    /// Cycles: Aadi, Madhya, Antya through the 27 nakshatras.
+    /// Source: BPHS Ch. 20.
+    #[must_use]
+    pub fn nadi(&self) -> Nadi {
+        match *self as u8 % 3 {
+            0 => Nadi::Aadi,
+            1 => Nadi::Madhya,
+            _ => Nadi::Antya,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -486,5 +550,42 @@ mod tests {
     #[test]
     fn gana_krittika_is_rakshasa() {
         assert_eq!(Nakshatra::Krittika.gana(), Gana::Rakshasa);
+    }
+
+    // --- deity ---
+
+    #[test]
+    fn ashwini_deity_is_ashwini_kumaras() {
+        assert_eq!(Nakshatra::Ashwini.deity(), "Ashwini Kumaras");
+    }
+
+    #[test]
+    fn revati_deity_is_pushan() {
+        assert_eq!(Nakshatra::Revati.deity(), "Pushan");
+    }
+
+    #[test]
+    fn all_27_have_deities() {
+        for i in 0..27 {
+            let n = Nakshatra::from_index(i);
+            assert!(!n.deity().is_empty());
+        }
+    }
+
+    // --- yoni ---
+
+    #[test]
+    fn ashwini_yoni_is_horse_male() {
+        assert_eq!(Nakshatra::Ashwini.yoni(), (Yoni::Horse, YoniGender::Male));
+    }
+
+    // --- nadi ---
+
+    #[test]
+    fn nadi_cycles_through_27() {
+        assert_eq!(Nakshatra::Ashwini.nadi(), Nadi::Aadi);
+        assert_eq!(Nakshatra::Bharani.nadi(), Nadi::Madhya);
+        assert_eq!(Nakshatra::Krittika.nadi(), Nadi::Antya);
+        assert_eq!(Nakshatra::Rohini.nadi(), Nadi::Aadi);
     }
 }
