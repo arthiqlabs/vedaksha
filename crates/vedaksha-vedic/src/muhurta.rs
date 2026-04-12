@@ -68,6 +68,54 @@ pub enum Weekday {
     Saturday,
 }
 
+impl Weekday {
+    /// Vara lord — ruling planet of the weekday.
+    /// Source: standard Vedic weekday rulership.
+    #[must_use]
+    pub fn lord(&self) -> &'static str {
+        match self {
+            Self::Sunday => "Sun",
+            Self::Monday => "Moon",
+            Self::Tuesday => "Mars",
+            Self::Wednesday => "Mercury",
+            Self::Thursday => "Jupiter",
+            Self::Friday => "Venus",
+            Self::Saturday => "Saturn",
+        }
+    }
+
+    /// Rahu Kalam slot — which 1/8th of daytime is inauspicious.
+    /// Returns 1-8 where 1 is the first 1/8th after sunrise.
+    /// Source: Kalaprakashika.
+    #[must_use]
+    pub fn rahu_kalam_slot(&self) -> u8 {
+        match self {
+            Self::Sunday => 8,
+            Self::Monday => 2,
+            Self::Tuesday => 7,
+            Self::Wednesday => 5,
+            Self::Thursday => 6,
+            Self::Friday => 4,
+            Self::Saturday => 3,
+        }
+    }
+
+    /// Gulika Kalam slot — which 1/8th of daytime is ruled by Saturn's son.
+    /// Source: Muhurtha Chintamani.
+    #[must_use]
+    pub fn gulika_kalam_slot(&self) -> u8 {
+        match self {
+            Self::Sunday => 7,
+            Self::Monday => 6,
+            Self::Tuesday => 5,
+            Self::Wednesday => 4,
+            Self::Thursday => 3,
+            Self::Friday => 2,
+            Self::Saturday => 1,
+        }
+    }
+}
+
 /// Muhurta quality assessment for a given moment.
 #[derive(Debug, Clone)]
 pub struct MuhurtaAssessment {
@@ -541,5 +589,39 @@ mod tests {
     fn tithi_remaining_degrees_positive() {
         let r = Tithi::remaining_degrees(45.0, 0.0);
         assert!(r > 0.0 && r <= 12.0);
+    }
+
+    // --- Weekday lord, Rahu Kalam, Gulika Kalam ---
+
+    #[test]
+    fn sunday_lord_is_sun() {
+        assert_eq!(Weekday::Sunday.lord(), "Sun");
+    }
+
+    #[test]
+    fn saturday_lord_is_saturn() {
+        assert_eq!(Weekday::Saturday.lord(), "Saturn");
+    }
+
+    #[test]
+    fn monday_rahu_kalam_is_slot_2() {
+        assert_eq!(Weekday::Monday.rahu_kalam_slot(), 2);
+    }
+
+    #[test]
+    fn saturday_gulika_kalam_is_slot_1() {
+        assert_eq!(Weekday::Saturday.gulika_kalam_slot(), 1);
+    }
+
+    #[test]
+    fn all_weekdays_have_lords() {
+        let days = [
+            Weekday::Sunday, Weekday::Monday, Weekday::Tuesday,
+            Weekday::Wednesday, Weekday::Thursday, Weekday::Friday,
+            Weekday::Saturday,
+        ];
+        for d in &days {
+            assert!(!d.lord().is_empty());
+        }
     }
 }
