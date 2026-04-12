@@ -50,16 +50,22 @@ export function Header() {
             Ontology
           </a>
           <a
+            href="/playground"
+            className="text-base font-medium text-[#D4A843] hover:text-[#D4A843]/80 transition-colors"
+          >
+            Playground
+          </a>
+          <a
             href="/pricing"
             className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
           >
             Pricing
           </a>
           <a
-            href="/playground"
-            className="text-base font-medium text-[#D4A843] hover:text-[#D4A843]/80 transition-colors"
+            href="/about"
+            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
           >
-            Playground
+            About
           </a>
         </nav>
 
@@ -123,6 +129,13 @@ export function Header() {
             Ontology
           </a>
           <a
+            href="/playground"
+            className="text-base font-medium text-[#D4A843] hover:text-[#D4A843]/80 transition-colors"
+            onClick={() => setMenuOpen(false)}
+          >
+            Playground
+          </a>
+          <a
             href="/pricing"
             className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
             onClick={() => setMenuOpen(false)}
@@ -130,11 +143,11 @@ export function Header() {
             Pricing
           </a>
           <a
-            href="/playground"
-            className="text-base font-medium text-[#D4A843] hover:text-[#D4A843]/80 transition-colors"
+            href="/about"
+            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
             onClick={() => setMenuOpen(false)}
           >
-            Playground
+            About
           </a>
           <a
             href="/docs"
