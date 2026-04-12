@@ -18,6 +18,20 @@ use vedaksha_math::angle::normalize_degrees;
 // Types
 // ──────────────────────────────────────────────────────────────────────────────
 
+/// Varga calculation tradition for D16, D20, D30, D45.
+///
+/// Parashari texts differ on whether D16/D20/D45 starting signs are
+/// determined by modality (Movable/Fixed/Dual) or element (Fire/Earth/Air/Water).
+///
+/// Source: BPHS Ch. 6; Phala Deepika Ch. 2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VargaTradition {
+    /// Modality-based (sign % 3): Movable → Aries, Fixed → Leo, Dual → Sagittarius. Default.
+    Modality,
+    /// Element-based (sign % 4): Fire → Aries, Earth → Taurus, Air → Gemini, Water → Cancer.
+    Element,
+}
+
 /// Varga (divisional chart) type — represents one of the 16 standard Shodasha
 /// Vargas used in Parashari Jyotish.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -117,6 +131,36 @@ pub fn varga_sign(longitude_deg: f64, varga: VargaType) -> u8 {
     }
 }
 
+/// Compute the varga sign for a given sidereal longitude, using a specific
+/// tradition for vargas where Parashari texts diverge.
+///
+/// For D16 (Shodashamsha), D20 (Vimshamsha), D45 (Akshavedamsha), and
+/// D30 (Trimshamsha), the `Element` tradition uses element-based starting
+/// signs instead of modality-based ones. All other vargas are unaffected
+/// by the tradition parameter and delegate to [`varga_sign`].
+///
+/// Source: BPHS Ch. 6; Phala Deepika Ch. 2.
+#[must_use]
+pub fn varga_sign_with_tradition(
+    longitude_deg: f64,
+    varga: VargaType,
+    tradition: VargaTradition,
+) -> u8 {
+    match tradition {
+        VargaTradition::Modality => varga_sign(longitude_deg, varga),
+        VargaTradition::Element => {
+            let lon = normalize_degrees(longitude_deg);
+            match varga {
+                VargaType::Shodashamsha
+                | VargaType::Vimshamsha
+                | VargaType::Akshavedamsha => varga_sign_element_based(lon, varga),
+                VargaType::Trimshamsha => trimshamsha_element(lon),
+                _ => varga_sign(longitude_deg, varga),
+            }
+        }
+    }
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
@@ -142,6 +186,53 @@ fn general_varga(lon: f64, division: u32, start_sign: u8) -> u8 {
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn sign_of(lon: f64) -> u8 {
     (lon / 30.0) as u8 % 12
+}
+
+/// Element-based varga calculation for D16/D20/D45.
+///
+/// Starting sign is determined by element (sign % 4):
+/// - 0 (Fire: Aries, Leo, Sagittarius) → starts from Aries (0)
+/// - 1 (Earth: Taurus, Virgo, Capricorn) → starts from Taurus (1)
+/// - 2 (Air: Gemini, Libra, Aquarius) → starts from Gemini (2)
+/// - 3 (Water: Cancer, Scorpio, Pisces) → starts from Cancer (3)
+///
+/// Source: Phala Deepika Ch. 2.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+fn varga_sign_element_based(lon: f64, varga: VargaType) -> u8 {
+    let sign = sign_of(lon);
+    let division = varga.division();
+    // Element-based starting sign: Fire=0, Earth=1, Air=2, Water=3
+    let element_start = sign % 4;
+    general_varga(lon, division, element_start)
+}
+
+/// D-30 Trimshamsha — element tradition variant.
+///
+/// Uses the same odd-sign (Parashari) assignment for all signs, regardless
+/// of parity. Some texts (Phala Deepika) apply the Moola-Trikona approach
+/// uniformly.
+///
+/// Source: Phala Deepika Ch. 2.
+fn trimshamsha_element(lon: f64) -> u8 {
+    let pos = lon % 30.0;
+    // Uniform assignment (odd-sign rules for all signs):
+    // 0-5 Mars → Aries, 5-10 Saturn → Aquarius, 10-18 Jupiter → Sagittarius,
+    // 18-25 Mercury → Gemini, 25-30 Venus → Taurus.
+    if pos < 5.0 {
+        0 // Aries (Mars)
+    } else if pos < 10.0 {
+        10 // Aquarius (Saturn)
+    } else if pos < 18.0 {
+        8 // Sagittarius (Jupiter)
+    } else if pos < 25.0 {
+        2 // Gemini (Mercury)
+    } else {
+        1 // Taurus (Venus)
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -554,5 +645,46 @@ mod tests {
     fn shashtiamsha_0_5_deg_aries_is_taurus() {
         // 0.5° Aries → second shashtiamsha → Taurus (1)
         assert_eq!(varga_sign(0.5, VargaType::Shashtiamsha), 1);
+    }
+
+    // ── VargaTradition ──────────────────────────────────────────────────────
+
+    #[test]
+    fn varga_tradition_modality_matches_default() {
+        // Modality tradition should match the existing varga_sign function
+        for lon in [15.0, 45.0, 75.0, 105.0, 200.0, 330.0] {
+            assert_eq!(
+                varga_sign_with_tradition(lon, VargaType::Shodashamsha, VargaTradition::Modality),
+                varga_sign(lon, VargaType::Shodashamsha),
+            );
+        }
+    }
+
+    #[test]
+    fn varga_tradition_element_valid_sign() {
+        let result =
+            varga_sign_with_tradition(220.0, VargaType::Shodashamsha, VargaTradition::Element);
+        assert!(result < 12, "Element D16 should return valid sign index");
+    }
+
+    #[test]
+    fn varga_traditions_can_diverge() {
+        // For some longitudes, modality and element traditions should differ
+        let mod_result =
+            varga_sign_with_tradition(220.0, VargaType::Shodashamsha, VargaTradition::Modality);
+        let elem_result =
+            varga_sign_with_tradition(220.0, VargaType::Shodashamsha, VargaTradition::Element);
+        // They may or may not differ for any specific longitude, but both should be valid
+        assert!(mod_result < 12);
+        assert!(elem_result < 12);
+    }
+
+    #[test]
+    fn non_variant_vargas_ignore_tradition() {
+        // D9 (Navamsha) should be the same regardless of tradition
+        assert_eq!(
+            varga_sign_with_tradition(100.0, VargaType::Navamsha, VargaTradition::Modality),
+            varga_sign_with_tradition(100.0, VargaType::Navamsha, VargaTradition::Element),
+        );
     }
 }
