@@ -91,7 +91,7 @@ export VEDAKSHA_LICENSE_KEY="vk_live_..."
         {
           "from": "planet_jupiter_40.2",
           "to": "house_1",
-          "type": "PLACED_IN"
+          "type": "Occupies"
         }
       ],
       "chart_highlights": [
@@ -128,7 +128,7 @@ export VEDAKSHA_LICENSE_KEY="vk_live_..."
 // Response
 {
   "result": {
-    "output": "CREATE (p:Planet {id: 'planet_jupiter_40.2', name: 'Jupiter', ...})\\nCREATE (h:House {id: 'house_1', ...})\\nMERGE (p)-[:PLACED_IN]->(h)\\n..."
+    "output": "CREATE (p:Planet {id: 'planet_jupiter_40.2', name: 'Jupiter', ...})\\nCREATE (h:House {id: 'house_1', ...})\\nMERGE (p)-[:Occupies]->(h)\\n..."
   }
 }`,
       file: "emit_graph.json",

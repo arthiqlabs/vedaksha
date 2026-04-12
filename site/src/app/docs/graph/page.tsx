@@ -13,19 +13,19 @@ export default function GraphPage() {
   ];
 
   const edgeTypes = [
-    { from: "Planet", rel: "IN_SIGN", to: "Sign" },
-    { from: "Planet", rel: "IN_HOUSE", to: "House" },
-    { from: "Planet", rel: "IN_NAKSHATRA", to: "Nakshatra" },
-    { from: "Planet", rel: "IN_PADA", to: "Pada" },
-    { from: "Planet", rel: "ASPECTS", to: "Planet" },
-    { from: "Planet", rel: "RULES", to: "Sign" },
-    { from: "Planet", rel: "PARTICIPATES_IN", to: "Yoga" },
-    { from: "House", rel: "STARTS_IN", to: "Sign" },
-    { from: "Chart", rel: "HAS_PLANET", to: "Planet" },
-    { from: "Chart", rel: "HAS_PATTERN", to: "Pattern" },
-    { from: "Chart", rel: "HAS_DASHA", to: "DashaPeriod" },
-    { from: "DashaPeriod", rel: "HAS_ANTARDASHA", to: "DashaPeriod" },
-    { from: "Chart", rel: "CONTAINS_FIXED_STAR", to: "FixedStar" },
+    { from: "Planet", rel: "PlacedIn", to: "Sign" },
+    { from: "Planet", rel: "Occupies", to: "House" },
+    { from: "Planet", rel: "InNakshatra", to: "Nakshatra" },
+    { from: "Planet", rel: "Aspects", to: "Planet" },
+    { from: "Planet", rel: "Rules", to: "Sign" },
+    { from: "Planet", rel: "Disposits", to: "Planet" },
+    { from: "House", rel: "CuspOf", to: "Sign" },
+    { from: "Planet", rel: "BelongsTo", to: "Chart" },
+    { from: "Planet", rel: "PartOfPattern", to: "Pattern" },
+    { from: "Planet", rel: "ConjunctStar", to: "FixedStar" },
+    { from: "DashaPeriod", rel: "DashaLord", to: "Planet" },
+    { from: "DashaPeriod", rel: "ContainsPeriod", to: "DashaPeriod" },
+    { from: "Chart", rel: "HasYoga", to: "Yoga" },
   ];
 
   const emitters = [

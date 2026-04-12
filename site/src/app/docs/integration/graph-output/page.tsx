@@ -43,19 +43,19 @@ export default function GraphOutputPage() {
   ];
 
   const edgeTypes = [
-    { from: "Planet", rel: "IN_SIGN", to: "Sign", desc: "Connects a planet to the zodiac sign it occupies at the chart moment." },
-    { from: "Planet", rel: "IN_HOUSE", to: "House", desc: "Connects a planet to its house placement in the selected house system." },
-    { from: "Planet", rel: "IN_NAKSHATRA", to: "Nakshatra", desc: "Connects a planet to its lunar mansion." },
-    { from: "Planet", rel: "IN_PADA", to: "Pada", desc: "Connects a planet to its specific nakshatra quarter (1–4)." },
-    { from: "Planet", rel: "ASPECTS", to: "Planet", desc: "Carries orb (degrees), applying/separating flag, aspect type, and strength score." },
-    { from: "Planet", rel: "RULES", to: "Sign", desc: "Encodes planetary rulership. Each sign has a traditional lord and an optional modern co-ruler." },
-    { from: "Planet", rel: "PARTICIPATES_IN", to: "Yoga", desc: "Connects a planet to every yoga it contributes to, with its specific role in the formation." },
-    { from: "House", rel: "STARTS_IN", to: "Sign", desc: "Connects a house cusp to the sign where it falls. Enables sign-based house analysis." },
-    { from: "Chart", rel: "HAS_PLANET", to: "Planet", desc: "Enumerates all computed bodies in this chart." },
-    { from: "Chart", rel: "HAS_PATTERN", to: "Pattern", desc: "Enumerates all multi-body patterns detected at the chart moment." },
-    { from: "Chart", rel: "HAS_DASHA", to: "DashaPeriod", desc: "The top-level Mahadasha nodes for this chart's dasha tree." },
-    { from: "DashaPeriod", rel: "HAS_ANTARDASHA", to: "DashaPeriod", desc: "Recursive edge building the full dasha tree (up to 5 levels)." },
-    { from: "Chart", rel: "CONTAINS_FIXED_STAR", to: "FixedStar", desc: "Stars within the configured orb of any planet or house cusp in this chart." },
+    { from: "Planet", rel: "PlacedIn", to: "Sign", desc: "Connects a planet to the zodiac sign it occupies at the chart moment." },
+    { from: "Planet", rel: "Occupies", to: "House", desc: "Connects a planet to its house placement in the selected house system." },
+    { from: "Planet", rel: "InNakshatra", to: "Nakshatra", desc: "Connects a planet to its lunar mansion." },
+    { from: "Planet", rel: "Aspects", to: "Planet", desc: "Carries orb (degrees), applying/separating flag, aspect type, and strength score." },
+    { from: "Planet", rel: "Rules", to: "Sign", desc: "Encodes planetary rulership. Each sign has a traditional lord." },
+    { from: "Planet", rel: "Disposits", to: "Planet", desc: "Sign-lord chain — planet A rules the sign of planet B." },
+    { from: "House", rel: "CuspOf", to: "Sign", desc: "Connects a house cusp to the sign where it falls. Enables sign-based house analysis." },
+    { from: "Planet", rel: "BelongsTo", to: "Chart", desc: "Connects a node to the chart it belongs to." },
+    { from: "Planet", rel: "PartOfPattern", to: "Pattern", desc: "Connects a planet to a multi-body geometric pattern it participates in." },
+    { from: "Planet", rel: "ConjunctStar", to: "FixedStar", desc: "Connects a planet to a fixed star within the configured orb." },
+    { from: "DashaPeriod", rel: "DashaLord", to: "Planet", desc: "Connects a dasha period to the planet that lords it." },
+    { from: "DashaPeriod", rel: "ContainsPeriod", to: "DashaPeriod", desc: "Recursive edge building the full dasha tree (up to 5 levels)." },
+    { from: "Chart", rel: "HasYoga", to: "Yoga", desc: "Connects a chart to a detected yoga formation." },
   ];
 
   const dataClasses = [

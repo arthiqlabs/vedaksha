@@ -60,12 +60,12 @@ export default function ChartsAsGraphsPage() {
                   { node: "Planet", desc: "Any graha: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu, Ketu, plus Ascendant." },
                   { node: "Sign", desc: "One of 12 rasis. Carries modality, element, direction, ruler." },
                   { node: "House", desc: "One of 12 bhavas. Carries cusp longitude, natural karakatwa." },
-                  { node: "Nakshatra", desc: "One of 27 lunar mansions. Carries pada, lord, deity, shakti." },
-                  { node: "Aspect", desc: "A computed aspect event with orb, exactness, applying/separating flag." },
+                  { node: "Nakshatra", desc: "One of 27 lunar mansions. Carries lord, deity, shakti." },
+                  { node: "Pada", desc: "One of 108 nakshatra quarters. Carries pada number, Navamsha sign, start longitude." },
+                  { node: "Pattern", desc: "A multi-body geometric pattern — Grand Trine, T-Square, Yod, Grand Cross, Stellium." },
+                  { node: "DashaPeriod", desc: "A dasha period — mahadasha, antardasha, or deeper sub-period with start/end dates." },
                   { node: "Yoga", desc: "A detected yoga rule with its component planets and activation status." },
-                  { node: "Dasha", desc: "A dasha period — mahadasha, antardasha, or deeper sub-period." },
-                  { node: "Dignity", desc: "Shadbala component — exaltation, moolatrikona, own, friend, neutral, enemy, debilitation." },
-                  { node: "Varga", desc: "A divisional chart — D1 through D60 — as a subgraph of the root chart." },
+                  { node: "FixedStar", desc: "A notable fixed star within orb of a planet or cusp. Carries magnitude and signification." },
                 ].map((item) => (
                   <div key={item.node} className="bg-[var(--color-brand-bg)] p-4 hover:bg-[var(--color-brand-bg-subtle)] transition-colors">
                     <code className="text-xs font-mono text-[#D4A843] block mb-1">
@@ -90,19 +90,19 @@ export default function ChartsAsGraphsPage() {
 
               <div className="mt-5 space-y-2">
                 {[
-                  { rel: "PLACED_IN_SIGN", from: "Planet", to: "Sign", desc: "Planet occupies a rasi." },
-                  { rel: "PLACED_IN_HOUSE", from: "Planet", to: "House", desc: "Planet occupies a bhava." },
-                  { rel: "OCCUPIES_NAKSHATRA", from: "Planet", to: "Nakshatra", desc: "Planet falls in a nakshatra pada." },
-                  { rel: "RULES", from: "Planet", to: "Sign", desc: "Natural rulership (e.g. Mars rules Aries and Scorpio)." },
-                  { rel: "LORDS", from: "Planet", to: "House", desc: "Owns the house whose cusp falls in its sign." },
-                  { rel: "ASPECTS", from: "Planet", to: "Planet", desc: "Computed aspect with orb, type, and applying/separating." },
-                  { rel: "ASPECTS_HOUSE", from: "Planet", to: "House", desc: "Vedic drishti — whole-sign aspect onto a bhava." },
-                  { rel: "CONJOINS", from: "Planet", to: "Planet", desc: "Within-orb conjunction, directional flag." },
-                  { rel: "ACTIVATES_YOGA", from: "Planet", to: "Yoga", desc: "Planet is a required component of this yoga formation." },
-                  { rel: "HAS_DIGNITY", from: "Planet", to: "Dignity", desc: "Shadbala dignity score for this planet in this chart." },
-                  { rel: "PART_OF_DASHA", from: "Planet", to: "Dasha", desc: "Planet is the lord of this dasha period." },
-                  { rel: "DISPOSITOR_OF", from: "Planet", to: "Planet", desc: "Sign-lord chain — planet A rules the sign of planet B." },
-                  { rel: "VARGA_PLACEMENT", from: "Planet", to: "Sign", desc: "Divisional chart placement, with varga label as a property." },
+                  { rel: "PlacedIn", from: "Planet", to: "Sign", desc: "Planet occupies a rasi." },
+                  { rel: "Occupies", from: "Planet", to: "House", desc: "Planet occupies a bhava." },
+                  { rel: "InNakshatra", from: "Planet", to: "Nakshatra", desc: "Planet falls in a lunar mansion." },
+                  { rel: "Rules", from: "Planet", to: "Sign", desc: "Natural rulership (e.g. Mars rules Aries and Scorpio)." },
+                  { rel: "Disposits", from: "Planet", to: "Planet", desc: "Sign-lord chain — planet A rules the sign of planet B." },
+                  { rel: "Aspects", from: "Planet", to: "Planet", desc: "Computed aspect with orb, type, and applying/separating." },
+                  { rel: "CuspOf", from: "House", to: "Sign", desc: "House cusp falls in a sign." },
+                  { rel: "BelongsTo", from: "Planet", to: "Chart", desc: "Node belongs to a chart." },
+                  { rel: "PartOfPattern", from: "Planet", to: "Pattern", desc: "Planet participates in a geometric pattern." },
+                  { rel: "ConjunctStar", from: "Planet", to: "FixedStar", desc: "Planet is conjunct a notable fixed star within orb." },
+                  { rel: "DashaLord", from: "DashaPeriod", to: "Planet", desc: "Planet is the lord of this dasha period." },
+                  { rel: "ContainsPeriod", from: "DashaPeriod", to: "DashaPeriod", desc: "Parent period contains a child sub-period." },
+                  { rel: "HasYoga", from: "Chart", to: "Yoga", desc: "Chart contains a detected yoga formation." },
                 ].map((item) => (
                   <div key={item.rel} className="flex items-start gap-4 border border-[var(--color-brand-border)] rounded-lg px-4 py-3 bg-[var(--color-brand-bg-subtle)]">
                     <code className="text-xs font-mono text-[#D4A843] shrink-0 pt-0.5 w-44">
@@ -178,7 +178,7 @@ export default function ChartsAsGraphsPage() {
                 </div>
                 <pre className="p-4 overflow-x-auto text-sm leading-6 font-mono bg-[var(--color-brand-bg-code)]">
                   <code>
-                    <span className="text-purple-600">MATCH</span> (p:Planet)-[:LORDS]-&gt;(h:House {"{"}<span className="text-blue-700">number</span>: <span className="text-blue-700">7</span>{"}"}){")"}{"\n"}
+                    <span className="text-purple-600">MATCH</span> (p:Planet)-[:Occupies]-&gt;(h:House {"{"}<span className="text-blue-700">number</span>: <span className="text-blue-700">7</span>{"}"}{"}"}){"\n"}
                     <span className="text-purple-600">MATCH</span> (aspector:Planet)-[:ASPECTS]-&gt;(p){"\n"}
                     <span className="text-purple-600">RETURN</span> aspector.name, aspector.sign, p.name{"\n"}
                   </code>

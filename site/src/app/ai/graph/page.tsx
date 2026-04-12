@@ -1,31 +1,31 @@
 export default function GraphPage() {
   const nodeTypes = [
-    { name: "Planet", desc: "A celestial body with longitude, sign, nakshatra, and dignity" },
-    { name: "House", desc: "A house cusp with degree, sign, and ruling planet" },
+    { name: "Chart", desc: "The root node — metadata, ayanamsha, house system, epoch" },
+    { name: "Planet", desc: "A celestial body with longitude, sign, nakshatra, and speed" },
     { name: "Sign", desc: "A zodiac sign with element, modality, and ruling planet" },
-    { name: "Nakshatra", desc: "A lunar mansion with pada, deity, and ruling planet" },
-    { name: "Aspect", desc: "A geometric relationship between two planets" },
+    { name: "House", desc: "A house cusp with degree, sign, and ruling planet" },
+    { name: "Nakshatra", desc: "A lunar mansion with lord, deity, and ruling planet" },
+    { name: "Pada", desc: "One of 108 nakshatra quarters with Navamsha sign" },
+    { name: "Pattern", desc: "A multi-body geometric pattern — Grand Trine, T-Square, Yod" },
+    { name: "DashaPeriod", desc: "A planetary period node in the dasha tree" },
     { name: "Yoga", desc: "A Vedic combination pattern with participating planets" },
-    { name: "Dignity", desc: "A planet's strength state — exaltation, own sign, debilitation" },
-    { name: "Dasha", desc: "A planetary period node in the dasha tree" },
-    { name: "Transit", desc: "A planetary position at a specific moment" },
-    { name: "Chart", desc: "The root node tying all elements together" },
+    { name: "FixedStar", desc: "A notable fixed star within orb of a planet or cusp" },
   ];
 
   const edgeTypes = [
-    { name: "PLACED_IN", from: "Planet", to: "House", desc: "Planet occupies a house" },
-    { name: "IN_SIGN", from: "Planet", to: "Sign", desc: "Planet is positioned in a zodiac sign" },
-    { name: "IN_NAKSHATRA", from: "Planet", to: "Nakshatra", desc: "Planet occupies a lunar mansion" },
-    { name: "RULES", from: "Planet", to: "Sign", desc: "Planet is the ruler of a sign" },
-    { name: "ASPECTS", from: "Planet", to: "Planet", desc: "Geometric aspect between two planets" },
-    { name: "CONJOINS", from: "Planet", to: "Planet", desc: "Two planets share the same degree region" },
-    { name: "HAS_DIGNITY", from: "Planet", to: "Dignity", desc: "Planet holds a dignity state" },
-    { name: "FORMS_YOGA", from: "Planet", to: "Yoga", desc: "Planet participates in a yoga combination" },
-    { name: "CUSP_IN", from: "House", to: "Sign", desc: "House cusp falls in a sign" },
-    { name: "DISPOSITS", from: "Planet", to: "Planet", desc: "Dispositorship (sign lord) chain" },
-    { name: "CONTAINS", from: "Chart", to: "Planet", desc: "Chart contains a planet" },
-    { name: "HAS_HOUSE", from: "Chart", to: "House", desc: "Chart contains a house" },
-    { name: "TRANSITS", from: "Transit", to: "Planet", desc: "Transit activates a natal planet" },
+    { name: "PlacedIn", from: "Planet", to: "Sign", desc: "Planet occupies a zodiac sign" },
+    { name: "Occupies", from: "Planet", to: "House", desc: "Planet occupies a house" },
+    { name: "Aspects", from: "Planet", to: "Planet", desc: "Geometric aspect with orb and type" },
+    { name: "Rules", from: "Planet", to: "Sign", desc: "Planet is the ruler of a sign" },
+    { name: "Disposits", from: "Planet", to: "Planet", desc: "Dispositorship (sign lord) chain" },
+    { name: "CuspOf", from: "House", to: "Sign", desc: "House cusp falls in a sign" },
+    { name: "BelongsTo", from: "Planet", to: "Chart", desc: "Node belongs to a chart" },
+    { name: "PartOfPattern", from: "Planet", to: "Pattern", desc: "Planet participates in a pattern" },
+    { name: "InNakshatra", from: "Planet", to: "Nakshatra", desc: "Planet occupies a lunar mansion" },
+    { name: "ConjunctStar", from: "Planet", to: "FixedStar", desc: "Planet is conjunct a fixed star" },
+    { name: "DashaLord", from: "DashaPeriod", to: "Planet", desc: "Planet lords a dasha period" },
+    { name: "ContainsPeriod", from: "DashaPeriod", to: "DashaPeriod", desc: "Parent contains child period" },
+    { name: "HasYoga", from: "Chart", to: "Yoga", desc: "Chart contains a detected yoga" },
   ];
 
   const formats = [
@@ -34,25 +34,24 @@ export default function GraphPage() {
       desc: "CREATE statements for nodes and MERGE for relationships. Load directly into Neo4j with a single query batch.",
       example: `CREATE (p:Planet {id: "planet_jupiter_40.2", name: "Jupiter", longitude: 40.2, sign: "Taurus"})
 CREATE (h:House {id: "house_1_15.7", number: 1, degree: 15.7, sign: "Aries"})
-MERGE (p)-[:PLACED_IN]->(h)`,
+MERGE (p)-[:Occupies]->(h)`,
     },
     {
       name: "SurrealQL (SurrealDB)",
       desc: "INSERT statements with typed record links. Native graph traversal with SurrealDB's RELATE syntax.",
       example: `INSERT INTO planet {id: planet:jupiter_40_2, name: "Jupiter", longitude: 40.2, sign: "Taurus"};
-RELATE planet:jupiter_40_2->placed_in->house:1_15_7;`,
+RELATE planet:jupiter_40_2->occupies->house:1_15_7;`,
     },
     {
       name: "JSON-LD",
       desc: "Linked data format with schema.org-compatible context. Interoperable with knowledge graph standards.",
       example: `{
-  "@context": "https://vedaksha.net/schema/v1",
-  "@type": "NatalChart",
-  "planets": [{
+  "@context": {"vedaksha": "https://vedaksha.net/ontology/"},
+  "@graph": [{
     "@type": "Planet",
+    "@id": "planet_jupiter_40.2",
     "name": "Jupiter",
-    "longitude": 40.2,
-    "sign": "Taurus"
+    "longitude": 40.2
   }]
 }`,
     },
@@ -61,7 +60,7 @@ RELATE planet:jupiter_40_2->placed_in->house:1_15_7;`,
       desc: "Standard JSON with typed fields. The default output format for all MCP tool responses.",
       example: `{
   "nodes": [{"id": "planet_jupiter", "type": "Planet", "longitude": 40.2}],
-  "edges": [{"from": "planet_jupiter", "to": "house_1", "type": "PLACED_IN"}]
+  "edges": [{"from": "planet_jupiter", "to": "house_1", "type": "Occupies"}]
 }`,
     },
     {
