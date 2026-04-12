@@ -115,12 +115,12 @@ Every other library treats Vedic (Jyotish) astrology as an afterthought plugin. 
 No other ephemeris library produces graph-structured output. This matters because astrological relationships ARE a graph:
 
 ```
-Planet → PLACED_IN → Sign
-Planet → OCCUPIES → House
-Planet → ASPECTS → Planet
-Planet → IN_NAKSHATRA → Nakshatra
-DashaPeriod → CONTAINS_PERIOD → DashaPeriod
-Chart → HAS_YOGA → Yoga
+Planet → PlacedIn → Sign
+Planet → Occupies → House
+Planet → Aspects → Planet
+Planet → InNakshatra → Nakshatra
+DashaPeriod → ContainsPeriod → DashaPeriod
+Chart → HasYoga → Yoga
 ```
 
 Vedaksha produces a `ChartGraph` with **10 node types and 13 edge types**, emittable directly to:
