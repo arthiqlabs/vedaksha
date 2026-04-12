@@ -43,7 +43,7 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 |--------|-------|
 | **Automated tests** | 620+ |
 | **Oracle validation points** | 24,000+ (planetary positions, house cusps, ayanamsha, nutation, sidereal time) |
-| **Workspace crates** | 9 (all published to crates.io v1.3.0) |
+| **Workspace crates** | 9 (all published to crates.io v1.4.0) |
 | **Binding targets** | 3 (native, WASM, Python) + MCP |
 | **Ephemeris providers** | 2 (SpkReader: sub-arcsecond from DE440s; AnalyticalProvider: <15" planets, zero data files) |
 | **WASM binary size** | 972 KB uncompressed (654 KB gzipped) — Cloudflare Workers compatible |
@@ -60,11 +60,13 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 | **Graph edge types** | 13 |
 | **Graph emitter formats** | 5 (Cypher, SurrealQL, JSON-LD, JSON, RAG text) |
 | **MCP tools** | 7 (all fully functional — natal, dasha, vargas, transit, search, muhurta, graph) |
+| **MCP transports** | 2 (stdio for local, Streamable HTTP for remote) |
+| **Docker image** | ghcr.io/arthiqlabs/vedaksha-mcp |
 | **Localized languages** | 7 (en, hi, sa, ta, te, kn, bn) |
 | **Primary sources cited** | 15+ (Meeus, BPHS, Holden, IAU, JPL, Bretagnon, Chapront, B.V. Raman, ...) |
 | **External runtime dependencies** | 3 (serde, libm, thiserror) — no heavy frameworks |
 | **Unsafe code blocks** | 0 (enforced by `#![deny(unsafe_code)]` in every crate) |
-| **Published packages** | crates.io (9 crates v1.3.0) + PyPI (vedaksha v1.3.0) + npm (vedaksha-wasm v1.3.0) |
+| **Published packages** | crates.io (9 crates v1.4.0) + PyPI (vedaksha v1.4.0) + npm (vedaksha-wasm v1.4.0) |
 
 ---
 

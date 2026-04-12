@@ -50,11 +50,20 @@ export default function McpPage() {
         Every tool has a JSON schema — so any MCP-compatible agent can call them
         without custom prompting or output parsing.
       </p>
-      <p className="text-sm text-[var(--color-brand-text-muted)] mb-12 max-w-2xl">
-        Transport: JSON-RPC 2.0. Auth: OAuth 2.1. Errors are structured with
-        machine-readable codes and self-correction hints so your agent can
-        retry intelligently.
+      <p className="text-sm text-[var(--color-brand-text-muted)] mb-4 max-w-2xl">
+        Transport: stdio (local) or Streamable HTTP (remote). JSON-RPC 2.0.
+        Errors are structured with machine-readable codes and self-correction
+        hints so your agent can retry intelligently.
       </p>
+      <div className="rounded-xl border border-[var(--color-brand-border)] p-5 bg-[var(--color-brand-bg-subtle)] mb-12 max-w-2xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#D4A843] mb-3">Quick start</p>
+        <pre className="text-xs font-mono leading-relaxed text-[var(--color-brand-text-secondary)]">
+{`cargo install vedaksha-mcp
+vedaksha-mcp              # stdio (Claude Desktop, VS Code)
+vedaksha-mcp --http       # HTTP on port 3100 (remote)
+docker run -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp`}
+        </pre>
+      </div>
 
       {/* Tool list */}
       <div className="space-y-3 mb-14">
