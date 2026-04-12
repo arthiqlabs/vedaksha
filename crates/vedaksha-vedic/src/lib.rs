@@ -20,3 +20,4 @@ pub mod nakshatra;
 pub mod shadbala;
 pub mod varga;
 pub mod yoga;
+pub mod panchanga;
