@@ -43,7 +43,7 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 |--------|-------|
 | **Automated tests** | 620+ |
 | **Oracle validation points** | 24,000+ (planetary positions, house cusps, ayanamsha, nutation, sidereal time) |
-| **Workspace crates** | 9 (all published to crates.io v1.1.0) |
+| **Workspace crates** | 9 (all published to crates.io v1.2.0) |
 | **Binding targets** | 3 (native, WASM, Python) + MCP |
 | **Ephemeris providers** | 2 (SpkReader: sub-arcsecond from DE440s; AnalyticalProvider: <15" planets, zero data files) |
 | **WASM binary size** | 972 KB uncompressed (654 KB gzipped) — Cloudflare Workers compatible |
@@ -63,7 +63,7 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 | **Primary sources cited** | 15+ (Meeus, BPHS, Holden, IAU, JPL, Bretagnon, Chapront, B.V. Raman, ...) |
 | **External runtime dependencies** | 3 (serde, libm, thiserror) — no heavy frameworks |
 | **Unsafe code blocks** | 0 (enforced by `#![deny(unsafe_code)]` in every crate) |
-| **Published packages** | crates.io (9 crates v1.1.0) + PyPI (vedaksha v1.1.0) + npm (vedaksha-wasm v1.1.0) |
+| **Published packages** | crates.io (9 crates v1.2.0) + PyPI (vedaksha v1.2.0) + npm (vedaksha-wasm v1.2.0) |
 
 ---
 

@@ -119,8 +119,8 @@ Validated against independent reference ephemerides across 24,000+ oracle data p
 
 ## Published Packages
 
-- **crates.io:** 9 crates at v1.1.0
-- **PyPI:** `vedaksha` v1.1.0 (source + macOS arm64 wheel)
+- **crates.io:** 9 crates at v1.2.0
+- **PyPI:** `vedaksha` v1.2.0 (source + macOS arm64 wheel)
 
 ## License
 
