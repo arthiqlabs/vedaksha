@@ -21,7 +21,7 @@ let chart = compute_chart(
 ```
 
 ```bash
-cargo add vedaksha
+cargo add vedaksha-astro vedaksha-ephem-core
 ```
 
 ```bash
@@ -33,27 +33,44 @@ pip install vedaksha
 | Crate | Description |
 |-------|-------------|
 | [vedaksha-math](crates/vedaksha-math) | Chebyshev polynomials, angle arithmetic, interpolation, rotation matrices |
-| [vedaksha-ephem-core](crates/vedaksha-ephem-core) | JPL DE440/441 SPK reader, coordinate pipeline, precession, nutation, Delta T |
-| [vedaksha-astro](crates/vedaksha-astro) | 10 house systems, 44 ayanamsha systems, aspects, dignities, transits |
+| [vedaksha-ephem-core](crates/vedaksha-ephem-core) | JPL DE440 SPK reader, **AnalyticalProvider** (VSOP87A + ELP/MPP02), coordinate pipeline, precession, nutation, Delta T |
+| [vedaksha-astro](crates/vedaksha-astro) | 10 house systems, 44 ayanamsha systems (IAU 2006 P03 5th-order precession), aspects, dignities, transits |
 | [vedaksha-vedic](crates/vedaksha-vedic) | 27 nakshatras, 3 dasha systems, 16 vargas, 50 yogas, Shadbala |
 | [vedaksha-graph](crates/vedaksha-graph) | Property graph ontology — 10 node types, 13 edge types |
 | [vedaksha-emit](crates/vedaksha-emit) | Cypher, SurrealQL, JSON-LD, JSON, embedding text emitters |
-| [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 7 JSON-RPC tools for AI agents |
-| [vedaksha-locale](crates/vedaksha-locale) | 7-language localization (English, Hindi, Sanskrit, Tamil, Telugu, Kannada, Malayalam) |
-| [vedaksha-wasm](crates/vedaksha-wasm) | WebAssembly bindings via wasm-bindgen |
+| [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 7 fully functional JSON-RPC tools for AI agents |
+| [vedaksha-locale](crates/vedaksha-locale) | 7-language localization (English, Hindi, Sanskrit, Tamil, Telugu, Kannada, Bengali) |
+| [vedaksha-wasm](crates/vedaksha-wasm) | WebAssembly bindings — 972 KB binary, full chart computation in browser |
 
-Plus [Python bindings](bindings/python) via PyO3.
+Plus [Python bindings](bindings/python) via PyO3 (`pip install vedaksha`).
+
+## Two Ephemeris Providers
+
+| Provider | Accuracy | Data | Use Case |
+|----------|----------|------|----------|
+| **SpkReader** | Sub-arcsecond | DE440s (31 MB on disk) | Servers, containers |
+| **AnalyticalProvider** | <15" planets, <1" Moon | Zero files (compiled constants) | WASM, Cloudflare Workers, edge, `no_std` |
+
+The AnalyticalProvider uses VSOP87A (Bretagnon & Francou 1988) for planets and ELP/MPP02 (Chapront 2002) for the Moon. All coefficients are compile-time constants — no runtime data files needed.
 
 ## Computation Pipeline
 
 ```
 JPL DE440 SPK → Chebyshev evaluation → ICRS barycentric
-  → light-time correction → precession (IAU 2006)
+  → light-time correction → precession (IAU 2006 P03, 5th-order)
   → nutation (IAU 2000B) → frame bias (ICRS→J2000)
   → aberration → ecliptic coordinates
 ```
 
-**Delta T:** IERS measured table (1620–2025) + Espenak-Meeus predictions to 2050.
+Or for zero-data environments:
+
+```
+VSOP87A/ELP coefficients (compiled) → Poisson series evaluation
+  → heliocentric ecliptic → equatorial rotation → barycentric ICRS
+  → same downstream pipeline as above
+```
+
+**Delta T:** IERS measured table (1620-2025) + Espenak-Meeus predictions to 2050.
 
 ## Vedic Astrology
 
@@ -68,35 +85,42 @@ First-class Jyotish support — not a Western afterthought.
 
 ## AI-First Architecture
 
-Every chart computation produces a **property graph** — not flat structs. AI agents query chart data with Cypher, SurrealQL, or JSON-LD. The MCP server exposes 7 tools:
+Every chart computation produces a **property graph** — not flat structs. AI agents query chart data with Cypher, SurrealQL, or JSON-LD. The MCP server exposes 7 fully functional tools:
 
-- `compute_natal_chart` — Full natal chart with houses, planets, aspects
+- `compute_natal_chart` — Full natal chart with houses, planets, aspects, dignities
 - `compute_dasha` — Vimshottari dasha periods to any depth
 - `compute_vargas` — Divisional chart positions
-- `compute_transit` — Current transits against natal positions
+- `compute_transit` — Transit positions against natal with aspects
 - `search_transits` — Find exact transit events in a date range
-- `search_muhurta` — Find auspicious times for activities
+- `search_muhurta` — Find auspicious times with quality scoring
 - `emit_graph` — Emit chart as Cypher, SurrealQL, JSON-LD, or embedding text
 
 ## Accuracy
 
-Validated against independent reference ephemerides across 55,000+ data points:
+Validated against independent reference ephemerides across 24,000+ oracle data points:
 
-| Metric | Result |
-|--------|--------|
-| Planetary longitude | Sub-arcsecond (avg 1.24″) |
-| House cusps (10 systems) | Sub-0.001° |
-| Ayanamsha (44 systems) | Matches reference values |
-| Dasha periods | Sum to 120 years ± 0.01 days |
-| MCP layer | 100% consistency with direct computation |
+| Metric | SpkReader (DE440s) | AnalyticalProvider |
+|--------|-------------------|-------------------|
+| Planetary longitude | Sub-arcsecond (avg 1.7") | <15" (avg 3.8") |
+| Moon longitude | Sub-arcsecond | <1" (0.36") |
+| House cusps (10 systems) | Sub-0.001° | Sub-0.01° |
+| Ayanamsha (44 systems) | avg 0.005° | Same (pure math) |
+| Dasha periods | Sum to 120 years ± 0.01 days | Same |
+| Nakshatra boundaries | Reference-accurate | Matches SpkReader at all tested boundaries |
 
 ## Bindings
 
-| Platform | Install |
-|----------|---------|
-| Rust | `cargo add vedaksha-astro` |
-| Python | `pip install vedaksha` |
-| WASM | `npm install vedaksha-wasm` |
+| Platform | Install | Chart Computation |
+|----------|---------|-------------------|
+| Rust | `cargo add vedaksha-astro vedaksha-ephem-core` | Full pipeline |
+| Python | `pip install vedaksha` | `vedaksha.compute_natal_chart(...)` |
+| WASM | `wasm-pack build crates/vedaksha-wasm` | 972 KB, zero data files |
+| MCP | stdio transport | 7 tools, JSON-RPC 2.0 |
+
+## Published Packages
+
+- **crates.io:** 9 crates at v1.0.0
+- **PyPI:** `vedaksha` v1.0.0 (source + macOS arm64 wheel)
 
 ## License
 
@@ -113,7 +137,8 @@ See [LICENSE](LICENSE) for full terms.
 - Website: [vedaksha.net](https://vedaksha.net)
 - Documentation: [vedaksha.net/docs](https://vedaksha.net/docs)
 - AI Integration: [vedaksha.net/ai](https://vedaksha.net/ai)
-- Playground: [vedaksha.net/playground](https://vedaksha.net/playground)
+- crates.io: [crates.io/crates/vedaksha-ephem-core](https://crates.io/crates/vedaksha-ephem-core)
+- PyPI: [pypi.org/project/vedaksha](https://pypi.org/project/vedaksha)
 
 ---
 

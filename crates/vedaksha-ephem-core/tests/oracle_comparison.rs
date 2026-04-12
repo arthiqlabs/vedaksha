@@ -21,9 +21,13 @@ struct OracleDataPoint {
     description: String,
     jd: f64,
     body: String,
+    #[serde(alias = "swe_longitude")]
     ref_longitude: f64,
+    #[serde(alias = "swe_latitude")]
     ref_latitude: f64,
+    #[serde(alias = "swe_distance")]
     ref_distance: f64,
+    #[serde(alias = "swe_speed")]
     ref_speed: f64,
 }
 

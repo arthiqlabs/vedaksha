@@ -20,6 +20,7 @@
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
+pub mod analytical;
 pub mod aberration;
 pub mod bodies;
 pub mod coordinates;

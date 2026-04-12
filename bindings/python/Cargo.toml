@@ -2,7 +2,7 @@
 
 [package]
 name = "vedaksha-python"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
 description = "Python bindings for Vedākṣa astronomical computation"
@@ -14,6 +14,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 vedaksha-math = { path = "../../crates/vedaksha-math" }
+vedaksha-ephem-core = { path = "../../crates/vedaksha-ephem-core" }
 vedaksha-astro = { path = "../../crates/vedaksha-astro" }
 vedaksha-vedic = { path = "../../crates/vedaksha-vedic" }
 vedaksha-graph = { path = "../../crates/vedaksha-graph" }

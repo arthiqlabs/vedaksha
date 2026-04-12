@@ -292,7 +292,7 @@ checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
 name = "vedaksha-astro"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "libm",
  "serde",
@@ -302,7 +302,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-emit"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -311,17 +311,19 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-ephem-core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "libm",
  "serde",
  "serde_json",
+ "vedaksha-astro",
  "vedaksha-math",
+ "vedaksha-vedic",
 ]
 
 [[package]]
 name = "vedaksha-graph"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -329,18 +331,18 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-locale"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "vedaksha-math"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "libm",
 ]
 
 [[package]]
 name = "vedaksha-mcp"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -355,7 +357,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-vedic"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "vedaksha-astro",
@@ -365,13 +367,14 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-wasm"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
  "vedaksha-astro",
  "vedaksha-emit",
+ "vedaksha-ephem-core",
  "vedaksha-graph",
  "vedaksha-locale",
  "vedaksha-math",

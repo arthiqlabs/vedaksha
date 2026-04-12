@@ -110,25 +110,47 @@ impl Nakshatra {
     #[must_use]
     pub fn from_longitude(sidereal_lon_deg: f64) -> Self {
         let normalized = vedaksha_math::angle::normalize_degrees(sidereal_lon_deg);
+        let raw = normalized / Self::SPAN;
+        // Epsilon guard: when the raw quotient is within ε of an integer,
+        // snap to that integer. This makes boundary assignment deterministic
+        // regardless of upstream floating-point accumulation.
+        // Convention: [lower, upper) — exact boundaries start the NEXT nakshatra.
+        // So snapping 12.9999999999 → 13 puts it in Bharani (index 1), and
+        // snapping 13.0000000001 → 13 also puts it in Bharani.
+        // 1e-10° ≈ 0.0000004 arcseconds — well below any ephemeris precision.
+        let snapped = if (raw - raw.round()).abs() < 1e-10 {
+            raw.round()
+        } else {
+            raw
+        };
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let index = (normalized / Self::SPAN) as u8;
-        let index = index.min(26);
+        let index = (snapped.floor() as u8) % 27;
         Self::from_index(index)
     }
 
     /// Get the pada (1–4) for a sidereal longitude.
+    ///
+    /// BPHS convention: exact pada boundaries (3°20', 6°40', 10°) close
+    /// the preceding pada. So 10.0° within a nakshatra → pada 3 (not 4).
     #[must_use]
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub fn pada_from_longitude(sidereal_lon_deg: f64) -> u8 {
         let normalized = vedaksha_math::angle::normalize_degrees(sidereal_lon_deg);
         let within_nakshatra = normalized % Self::SPAN;
-        // Subtract a sub-arcsecond epsilon (1e-9°) so that exact pada boundaries
-        // (0°, 3°20', 6°40', 10°, 13°20') belong to the lower pada, matching
-        // the BPHS convention that boundaries close the preceding pada.
+        // Epsilon guard: subtract ε so values at exact boundaries belong
+        // to the preceding pada. 1e-9° ≈ 0.004 arcseconds — well below
+        // any ephemeris precision, consistent with BPHS boundary convention.
         let adjusted = (within_nakshatra - 1e-9).max(0.0);
+        let raw = adjusted / Self::PADA_SPAN;
+        // Additional epsilon snap: if raw is within 1e-10 of an integer
+        // after the adjustment, snap to floor deterministically.
+        let snapped = if (raw - raw.round()).abs() < 1e-10 {
+            raw.round()
+        } else {
+            raw
+        };
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let pada = (adjusted / Self::PADA_SPAN) as u8 + 1;
-        pada.min(4)
+        let pada_index = (snapped.floor() as u8) % 4;
+        pada_index + 1
     }
 
     /// Create from 0-based index (0 = Ashwini … 26 = Revati).

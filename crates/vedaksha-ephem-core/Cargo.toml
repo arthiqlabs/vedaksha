@@ -11,11 +11,13 @@ description = "Astronomy engine: JPL DE441 reader, coordinate transformations, p
 
 [dependencies]
 libm = "0.2"
-vedaksha-math = { version = "0.1.0", path = "../vedaksha-math" }
+vedaksha-math = { version = "1.0.0", path = "../vedaksha-math" }
 
 [dev-dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+vedaksha-astro = { version = "1.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "1.0.0", path = "../vedaksha-vedic" }
 
 [features]
 default = ["std"]

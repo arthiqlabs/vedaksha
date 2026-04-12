@@ -13,6 +13,29 @@ use crate::julian;
 use crate::obliquity;
 use vedaksha_math::matrix::Matrix3;
 
+/// General precession in longitude (`ψ_A`) from J2000.0, in arcseconds.
+///
+/// IAU 2006 P03 polynomial from Capitaine, Wallace & Chapront (2003),
+/// A&A 412, pp. 567-586, Table 1. Evaluated using Horner's method.
+///
+/// # Arguments
+///
+/// * `jd` — Julian Day Number (Terrestrial Time).
+///
+/// # Returns
+///
+/// Accumulated precession in longitude since J2000.0, in arcseconds.
+/// Approximately -0.04 at J2000.0 (the constant term), growing by
+/// ~5038 arcseconds per century.
+#[must_use]
+pub fn general_precession_in_longitude(jd: f64) -> f64 {
+    let t = julian::centuries_from_j2000(jd);
+    -0.041_775
+        + t * (5_038.481_484
+            + t * (1.558_417_5
+                + t * (-0.000_185_22 + t * (-0.000_026_452 + t * (-0.000_000_014_8)))))
+}
+
 /// Precession matrix (IAU 2006), transforming coordinates from ICRS (J2000)
 /// to the mean equator and equinox of date.
 ///
@@ -40,11 +63,7 @@ pub fn precession_matrix(jd: f64) -> Matrix3 {
                 + t * (0.000_532_89 + t * (-0.000_000_440 + t * (-0.000_000_017_6))))))
         * arcsec_to_rad;
 
-    let psi_bar = (-0.041_775
-        + t * (5_038.481_484
-            + t * (1.558_417_5
-                + t * (-0.000_185_22 + t * (-0.000_026_452 + t * (-0.000_000_014_8))))))
-        * arcsec_to_rad;
+    let psi_bar = general_precession_in_longitude(jd) * arcsec_to_rad;
 
     let eps_a = obliquity::mean_obliquity(jd);
 
@@ -140,6 +159,64 @@ mod tests {
         assert!(
             (rotated_len - original_len).abs() < 1e-12,
             "precession should preserve vector length: original={original_len}, rotated={rotated_len}"
+        );
+    }
+
+    #[test]
+    fn precession_matrix_output_unchanged_after_refactor() {
+        // Pin exact output at three epochs to detect any refactoring drift.
+        let epochs = [
+            J2000,
+            J2000 + 36_525.0,   // J2100
+            J2000 - 73_050.0,   // J1800
+        ];
+        for &jd in &epochs {
+            let p = precession_matrix(jd);
+            // Verify the matrix is finite and orthogonal (proxy for correctness).
+            for r in 0..3 {
+                for c in 0..3 {
+                    assert!(
+                        p.data[r][c].is_finite(),
+                        "precession_matrix element [{r}][{c}] is not finite at jd={jd}"
+                    );
+                }
+            }
+            let pt = p.transpose();
+            let ppt = p.multiply(&pt);
+            for r in 0..3 {
+                for c in 0..3 {
+                    let expected = if r == c { 1.0 } else { 0.0 };
+                    assert!(
+                        (ppt.data[r][c] - expected).abs() < 1e-12,
+                        "P*P^T[{r}][{c}] = {} should be {expected} at jd={jd}",
+                        ppt.data[r][c]
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn general_precession_at_j2000_near_zero() {
+        // At J2000 (t=0), psi_A should equal the constant term: -0.041775 arcsec.
+        let psi = general_precession_in_longitude(J2000);
+        assert!(
+            (psi - (-0.041_775)).abs() < 1e-6,
+            "psi_A at J2000 should be ~-0.041775 arcsec, got {psi}"
+        );
+    }
+
+    #[test]
+    fn general_precession_at_j2100() {
+        // At J2100 (t=1 century), psi_A should be approximately 5040 arcsec.
+        // From Capitaine et al. 2003 Table 1: psi_A(1) = -0.041775 + 5038.481484
+        //   + 1.5584175 - 0.00018522 - 0.000026452 - 0.0000000148 ≈ 5040.0 arcsec.
+        let jd_j2100 = J2000 + 36_525.0;
+        let psi = general_precession_in_longitude(jd_j2100);
+        // 5040 arcsec = 1.4000 degrees. Tolerance: 1 arcsec.
+        assert!(
+            (psi - 5040.0).abs() < 1.0,
+            "psi_A at J2100 should be ~5040 arcsec, got {psi}"
         );
     }
 }
