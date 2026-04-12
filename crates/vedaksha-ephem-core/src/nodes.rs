@@ -257,6 +257,40 @@ mod tests {
     }
 
     #[test]
+    fn osculating_node_vs_jpl_horizons() {
+        // Oracle data: JPL Horizons DE441 osculating node longitude (J2000 ecliptic).
+        // Query: COMMAND='301', CENTER='500@399', EPHEM_TYPE='ELEMENTS'.
+        // The OM (longitude of ascending node) values are osculating orbital
+        // elements from the DE441 numerical integration.
+        //
+        // Our osculating node uses ecliptic-of-date (for astrological use),
+        // so small differences (~0.02°) are expected from the J2000↔date
+        // frame rotation. Tolerance: 0.05°.
+        //
+        // Source: NASA/JPL Horizons System (https://ssd.jpl.nasa.gov/horizons/).
+        let oracle = [
+            (2451545.0, 123.984, "J2000"),       // 2000-01-01
+            (2453006.0, 49.237,  "2004-01-01"),   // JD from Horizons
+            (2455197.5, 290.923, "2010-01-01"),
+            (2457388.5, 174.656, "2016-01-01"),
+            (2459580.5, 60.937,  "2022-01-01"),
+        ];
+
+        for (jd, jpl_node, label) in &oracle {
+            let osc = true_node_osculating(*jd);
+
+            let mut diff = (osc - jpl_node).abs();
+            if diff > 180.0 { diff = 360.0 - diff; }
+
+            assert!(
+                diff < 0.05,
+                "{label}: osculating vs JPL DE441 diff too large: {diff:.4}° \
+                 (ours={osc:.4}°, JPL={jpl_node:.3}°)"
+            );
+        }
+    }
+
+    #[test]
     fn osculating_node_multi_epoch_sanity() {
         // The osculating node is the Moon's instantaneous ascending node
         // derived from position + velocity. It differs from the Meeus
