@@ -257,6 +257,61 @@ mod tests {
     }
 
     #[test]
+    fn osculating_node_multi_epoch_sanity() {
+        // The osculating node is the Moon's instantaneous ascending node
+        // derived from position + velocity. It differs from the Meeus
+        // 5-term "true node" because:
+        //   - Meeus smooths perturbations into 5 terms (~0.09° residual)
+        //   - Osculating captures the full instantaneous orbital plane
+        //
+        // The two methods can differ by up to ~0.5° at any given moment.
+        // This is NOT an error — it's the inherent difference between
+        // a smoothed series and an instantaneous orbital element.
+        //
+        // For validation, we check:
+        // 1. Values are in [0°, 360°)
+        // 2. Osculating is within 3° of mean node (sanity bound)
+        // 3. Osculating and Meeus agree within 0.5° (expected divergence)
+        let epochs = [
+            (2451545.0, "J2000"),
+            (2453006.0, "2004-01-01"),
+            (2455197.5, "2010-01-01"),
+            (2457388.5, "2016-01-01"),
+            (2459580.5, "2022-01-01"),
+            (2461041.5, "2026-01-01"),
+            (2461142.5, "2026-04-12"),
+        ];
+
+        for (jd, label) in &epochs {
+            let mean = mean_node(*jd);
+            let true_m = true_node(*jd);
+            let osc = true_node_osculating(*jd);
+
+            // Valid range
+            assert!(
+                (0.0..360.0).contains(&osc),
+                "{label}: osculating out of range: {osc:.4}°"
+            );
+
+            // Osculating vs Meeus: within 0.5° (inherent method difference)
+            let mut diff_meeus = (osc - true_m).abs();
+            if diff_meeus > 180.0 { diff_meeus = 360.0 - diff_meeus; }
+            assert!(
+                diff_meeus < 0.5,
+                "{label}: osculating vs Meeus diff too large: {diff_meeus:.4}°"
+            );
+
+            // Osculating vs mean: within 3° (sanity)
+            let mut diff_mean = (osc - mean).abs();
+            if diff_mean > 180.0 { diff_mean = 360.0 - diff_mean; }
+            assert!(
+                diff_mean < 3.0,
+                "{label}: osculating vs mean diff too large: {diff_mean:.4}°"
+            );
+        }
+    }
+
+    #[test]
     fn osculating_south_node_is_north_plus_180() {
         let north = true_node_osculating(J2000);
         let south = south_node_osculating(J2000);
