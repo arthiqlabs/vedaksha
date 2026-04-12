@@ -7,7 +7,7 @@ name = "vedaksha"
 version = "1.1.0"
 description = "Vedākṣa — Astronomical ephemeris and astrological computation"
 requires-python = ">=3.10"
-license = "BSL-1.1"
+license = "LicenseRef-BSL-1.1"
 authors = [{name = "ArthIQ Labs LLC", email = "info@arthiq.net"}]
 classifiers = [
     "Development Status :: 3 - Alpha",
