@@ -1,0 +1,5 @@
+target/
+site/
+.git/
+*.md
+LICENSE
