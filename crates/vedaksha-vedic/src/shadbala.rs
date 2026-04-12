@@ -115,26 +115,40 @@ pub fn dig_bala(planet: YogaPlanet, bhava: u8) -> f64 {
 
 // ── Sthana Bala (positional strength) ───────────────────────────────
 
-/// Simplified positional strength in virupas.
+/// Exaltation longitude for each planet in degrees (0-360).
 ///
-/// - Exalted: 60
-/// - Own sign: 30
-/// - Friendly sign: 15
-/// - Neutral: 7.5
-/// - Debilitated: 0
-#[must_use]
-pub fn sthana_bala(planet: YogaPlanet, sign: u8) -> f64 {
-    if is_exalted(planet, sign) {
-        60.0
-    } else if is_in_own_sign(planet, sign) {
-        30.0
-    } else if is_debilitated(planet, sign) {
-        0.0
-    } else if is_friendly_sign(planet, sign) {
-        15.0
-    } else {
-        7.5 // neutral
+/// Source: BPHS Ch. 3 Sl. 18.
+fn exaltation_longitude(planet: YogaPlanet) -> f64 {
+    match planet {
+        YogaPlanet::Sun => 10.0,      // 10° Aries
+        YogaPlanet::Moon => 33.0,     // 3° Taurus
+        YogaPlanet::Mars => 298.0,    // 28° Capricorn
+        YogaPlanet::Mercury => 165.0, // 15° Virgo
+        YogaPlanet::Jupiter => 95.0,  // 5° Cancer
+        YogaPlanet::Venus => 357.0,   // 27° Pisces
+        YogaPlanet::Saturn => 200.0,  // 20° Libra
+        YogaPlanet::Rahu => 50.0,     // 20° Taurus
+        YogaPlanet::Ketu => 230.0,    // 20° Scorpio
     }
+}
+
+/// Degree-precise Uccha Bala (exaltation strength) in virupas (0-60).
+///
+/// Formula (BPHS Ch. 27 Sl. 3-6):
+///   uccha_bala = (180 - arc) / 3
+/// where arc = min(|longitude - exaltation_longitude|, 360 - |longitude - exaltation_longitude|).
+///
+/// Yields 60 virupas at exact exaltation, 0 at exact debilitation (180° away).
+#[must_use]
+pub fn sthana_bala(planet: YogaPlanet, _sign: u8, longitude: f64) -> f64 {
+    let exalt_lon = exaltation_longitude(planet);
+    let raw_diff = (longitude - exalt_lon).abs();
+    let arc = if raw_diff > 180.0 {
+        360.0 - raw_diff
+    } else {
+        raw_diff
+    };
+    ((180.0 - arc) / 3.0).max(0.0)
 }
 
 // ── Kala Bala (temporal strength) ───────────────────────────────────
@@ -336,7 +350,7 @@ pub fn compute_shadbala(positions: &[PlanetPosition], _lagna_sign: u8) -> Vec<Sh
         .map(|pos| {
             let naisargika = naisargika_bala(pos.planet);
             let dig = dig_bala(pos.planet, pos.bhava);
-            let sthana = sthana_bala(pos.planet, pos.sign);
+            let sthana = sthana_bala(pos.planet, pos.sign, pos.longitude);
             let total = naisargika + dig + sthana;
             Shadbala {
                 planet: pos.planet,
@@ -370,7 +384,7 @@ pub fn compute_shadbala_full(
             let pos = &data.position;
             let naisargika = naisargika_bala(pos.planet);
             let dig = dig_bala(pos.planet, pos.bhava);
-            let sthana = sthana_bala(pos.planet, pos.sign);
+            let sthana = sthana_bala(pos.planet, pos.sign, pos.longitude);
             let kala = kala_bala(pos.planet, is_daytime, moon_phase_waxing);
             let cheshta = cheshta_bala(pos.planet, data.speed, data.average_speed);
             let drik = drik_bala(data.benefic_aspect_count, data.malefic_aspect_count);
@@ -467,30 +481,35 @@ mod tests {
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
-    // ── Sthana Bala tests ───────────────────────────────────────────
+    // ── Sthana Bala (Uccha Bala) tests ───────────────────────────────
 
     #[test]
-    fn mars_exalted_sthana_bala_is_60() {
-        let bala = sthana_bala(YogaPlanet::Mars, 9);
+    fn sthana_bala_exact_exaltation_is_60() {
+        // Sun exalted at 10° Aries → 60 virupas
+        let bala = sthana_bala(YogaPlanet::Sun, 0, 10.0);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn mars_debilitated_sthana_bala_is_0() {
-        let bala = sthana_bala(YogaPlanet::Mars, 3);
+    fn sthana_bala_exact_debilitation_is_0() {
+        // Sun debilitated at 190° (10+180) → 0 virupas
+        let bala = sthana_bala(YogaPlanet::Sun, 6, 190.0);
         assert!((bala - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn mars_own_sign_sthana_bala_is_30() {
-        let bala = sthana_bala(YogaPlanet::Mars, 0);
+    fn sthana_bala_midpoint_is_30() {
+        // Sun at 100° → 90° from exaltation (10°) → (180-90)/3 = 30 virupas
+        let bala = sthana_bala(YogaPlanet::Sun, 3, 100.0);
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn friendly_sign_sthana_bala() {
-        let bala = sthana_bala(YogaPlanet::Sun, 8);
-        assert!((bala - 15.0).abs() < f64::EPSILON);
+    fn sthana_bala_gradient_is_continuous() {
+        // Jupiter at exact exaltation (95°) should be stronger than at 100°
+        let at_exalt = sthana_bala(YogaPlanet::Jupiter, 3, 95.0);
+        let near_exalt = sthana_bala(YogaPlanet::Jupiter, 3, 100.0);
+        assert!(at_exalt > near_exalt);
     }
 
     // ── Kala Bala tests ─────────────────────────────────────────────
@@ -640,8 +659,10 @@ mod tests {
         assert_eq!(results.len(), 1);
         let sb = &results[0];
 
-        // Sthana: exalted (Cancer) = 60
-        assert!((sb.sthana_bala - 60.0).abs() < f64::EPSILON);
+        // Sthana: Uccha Bala for Jupiter at 105° (sign 3, lon 3*30+15),
+        // exaltation at 95°. arc=10, (180-10)/3 ≈ 56.67 virupas.
+        let expected_sthana = (180.0 - 10.0) / 3.0;
+        assert!((sb.sthana_bala - expected_sthana).abs() < 0.01);
         // Dig: house 4, strong house 1, dist 3 -> 60 - 30 = 30
         assert!((sb.dig_bala - 30.0).abs() < f64::EPSILON);
         // Naisargika: Jupiter = 34.29
@@ -654,7 +675,7 @@ mod tests {
         assert!((sb.drik_bala - 15.0).abs() < f64::EPSILON);
 
         // Total
-        let expected = 60.0 + 30.0 + 34.29 + 60.0 + 60.0 + 15.0;
+        let expected = expected_sthana + 30.0 + 34.29 + 60.0 + 60.0 + 15.0;
         assert!((sb.total - expected).abs() < 0.01);
     }
 
@@ -696,8 +717,10 @@ mod tests {
         let results = compute_shadbala_full(&data, false, false);
         let sb = &results[0];
 
-        // Sthana: own sign = 30
-        assert!((sb.sthana_bala - 30.0).abs() < f64::EPSILON);
+        // Sthana: Uccha Bala for Saturn at 285° (sign 9, lon 9*30+15),
+        // exaltation at 200°. arc=85, (180-85)/3 ≈ 31.67 virupas.
+        let expected_sthana = (180.0 - 85.0) / 3.0;
+        assert!((sb.sthana_bala - expected_sthana).abs() < 0.01);
         // Dig: house 7 = max = 60
         assert!((sb.dig_bala - 60.0).abs() < f64::EPSILON);
         // Kala: night + waning non-benefic = 30 + 30 = 60
