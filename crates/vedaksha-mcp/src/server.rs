@@ -296,6 +296,7 @@ impl McpServer {
             ("Saturn", Body::Saturn),
             ("MeanNode", Body::MeanNode),
             ("TrueNode", Body::TrueNode),
+            ("TrueNodeOsculating", Body::TrueNodeOsculating),
         ];
 
         let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::new();
@@ -457,6 +458,7 @@ impl McpServer {
             ("Saturn", Body::Saturn),
             ("MeanNode", Body::MeanNode),
             ("TrueNode", Body::TrueNode),
+            ("TrueNodeOsculating", Body::TrueNodeOsculating),
         ];
 
         // Compute natal positions
@@ -555,6 +557,7 @@ impl McpServer {
             ("Saturn", Body::Saturn),
             ("MeanNode", Body::MeanNode),
             ("TrueNode", Body::TrueNode),
+            ("TrueNodeOsculating", Body::TrueNodeOsculating),
         ];
 
         // Determine which bodies to track.
@@ -914,7 +917,7 @@ mod tests {
         assert!(chart["houses"].is_object(), "expected houses object");
         assert!(chart["aspects"].is_array(), "expected aspects array");
         let planets = chart["planets"].as_array().unwrap();
-        assert_eq!(planets.len(), 9, "expected 9 planets");
+        assert_eq!(planets.len(), 10, "expected 10 planets");
         let asc = chart["houses"]["asc"].as_f64().unwrap();
         assert!(asc > 0.0 && asc < 360.0, "ASC out of range: {asc}");
     }

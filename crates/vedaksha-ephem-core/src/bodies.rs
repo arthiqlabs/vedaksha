@@ -32,8 +32,11 @@ pub enum Body {
     Pluto,
     /// Mean ascending lunar node.
     MeanNode,
-    /// True ascending lunar node.
+    /// True ascending lunar node (Meeus 5-term approximation, ~0.09° accuracy).
     TrueNode,
+    /// True ascending lunar node from osculating orbital elements (~0.01° accuracy).
+    /// Derived from Moon position/velocity via ELP/MPP02. Suitable for KP sub-lord work.
+    TrueNodeOsculating,
 }
 
 impl Body {
@@ -56,7 +59,7 @@ impl Body {
             Self::Pluto => Some(8),
             Self::Moon => Some(9),
             Self::Sun => Some(10),
-            Self::MeanNode | Self::TrueNode => None,
+            Self::MeanNode | Self::TrueNode | Self::TrueNodeOsculating => None,
         }
     }
 
@@ -81,6 +84,7 @@ impl Body {
             Self::Sun => 10,
             Self::MeanNode => 10000,
             Self::TrueNode => 10001,
+            Self::TrueNodeOsculating => 10002,
         }
     }
 
@@ -107,6 +111,7 @@ impl Body {
             Self::Pluto => "Pluto",
             Self::MeanNode => "Mean Node",
             Self::TrueNode => "True Node",
+            Self::TrueNodeOsculating => "True Node (Osculating)",
         }
     }
 
@@ -140,6 +145,7 @@ mod tests {
     fn nodes_have_no_de441_data() {
         assert!(!Body::MeanNode.has_de441_data());
         assert!(!Body::TrueNode.has_de441_data());
+        assert!(!Body::TrueNodeOsculating.has_de441_data());
     }
 
     #[test]
@@ -182,6 +188,7 @@ mod tests {
             Body::Pluto,
             Body::MeanNode,
             Body::TrueNode,
+            Body::TrueNodeOsculating,
         ];
         for body in &all {
             assert_eq!(
