@@ -5,6 +5,8 @@
 
 //! Dasha (planetary period) systems.
 
+pub mod ashtottari;
 pub mod chara;
+pub mod narayana;
 pub mod vimshottari;
 pub mod yogini;
