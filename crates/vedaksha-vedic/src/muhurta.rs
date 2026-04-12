@@ -19,6 +19,43 @@ pub struct Tithi {
     pub name: &'static str,
 }
 
+/// Lunar fortnight — Shukla (waxing) or Krishna (waning).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Paksha {
+    Shukla,
+    Krishna,
+}
+
+impl Tithi {
+    /// Which paksha (fortnight) this tithi belongs to.
+    #[must_use]
+    pub fn paksha(&self) -> Paksha {
+        if self.number <= 15 {
+            Paksha::Shukla
+        } else {
+            Paksha::Krishna
+        }
+    }
+
+    /// Tithi lord (ruling planet). Source: Muhurtha Chintamani.
+    #[must_use]
+    pub fn lord(&self) -> &'static str {
+        const LORDS: [&str; 15] = [
+            "Sun", "Moon", "Mars", "Mercury", "Jupiter",
+            "Venus", "Saturn", "Rahu", "Sun", "Moon",
+            "Mars", "Mercury", "Jupiter", "Venus", "Saturn",
+        ];
+        LORDS[((self.number - 1) % 15) as usize]
+    }
+
+    /// Remaining degrees before the next tithi begins.
+    #[must_use]
+    pub fn remaining_degrees(moon_lon: f64, sun_lon: f64) -> f64 {
+        let diff = vedaksha_math::angle::normalize_degrees(moon_lon - sun_lon);
+        12.0 - (diff % 12.0)
+    }
+}
+
 /// Day of the week.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Weekday {
@@ -209,21 +246,35 @@ pub fn search_muhurta(
 
 fn tithi_name(number: u8) -> &'static str {
     match number {
-        1 | 16 => "Pratipada",
-        2 | 17 => "Dwitiya",
-        3 | 18 => "Tritiya",
-        4 | 19 => "Chaturthi",
-        5 | 20 => "Panchami",
-        6 | 21 => "Shashthi",
-        7 | 22 => "Saptami",
-        8 | 23 => "Ashtami",
-        9 | 24 => "Navami",
-        10 | 25 => "Dashami",
-        11 | 26 => "Ekadashi",
-        12 | 27 => "Dwadashi",
-        13 | 28 => "Trayodashi",
-        14 | 29 => "Chaturdashi",
+        1 => "Shukla Pratipada",
+        2 => "Shukla Dwitiya",
+        3 => "Shukla Tritiya",
+        4 => "Shukla Chaturthi",
+        5 => "Shukla Panchami",
+        6 => "Shukla Shashthi",
+        7 => "Shukla Saptami",
+        8 => "Shukla Ashtami",
+        9 => "Shukla Navami",
+        10 => "Shukla Dashami",
+        11 => "Shukla Ekadashi",
+        12 => "Shukla Dwadashi",
+        13 => "Shukla Trayodashi",
+        14 => "Shukla Chaturdashi",
         15 => "Purnima",
+        16 => "Krishna Pratipada",
+        17 => "Krishna Dwitiya",
+        18 => "Krishna Tritiya",
+        19 => "Krishna Chaturthi",
+        20 => "Krishna Panchami",
+        21 => "Krishna Shashthi",
+        22 => "Krishna Saptami",
+        23 => "Krishna Ashtami",
+        24 => "Krishna Navami",
+        25 => "Krishna Dashami",
+        26 => "Krishna Ekadashi",
+        27 => "Krishna Dwadashi",
+        28 => "Krishna Trayodashi",
+        29 => "Krishna Chaturdashi",
         30 => "Amavasya",
         _ => "Unknown",
     }
@@ -242,7 +293,7 @@ mod tests {
         // diff = 30°, 30/12 = 2.5 → floor = 2 → number = 3 (Tritiya)
         let tithi = compute_tithi(30.0, 0.0);
         assert_eq!(tithi.number, 3, "Expected tithi 3 (Tritiya)");
-        assert_eq!(tithi.name, "Tritiya");
+        assert_eq!(tithi.name, "Shukla Tritiya");
     }
 
     #[test]
@@ -250,7 +301,7 @@ mod tests {
         // diff = 0°, 0/12 = 0 → number = 1 (Pratipada)
         let tithi = compute_tithi(0.0, 0.0);
         assert_eq!(tithi.number, 1, "Expected tithi 1 (Pratipada)");
-        assert_eq!(tithi.name, "Pratipada");
+        assert_eq!(tithi.name, "Shukla Pratipada");
     }
 
     #[test]
@@ -444,5 +495,51 @@ mod tests {
         drop(count); // suppress unused warning
         count = results.len();
         assert_eq!(count, 3);
+    }
+
+    // --- paksha, lord, remaining_degrees ---
+
+    #[test]
+    fn tithi_paksha_shukla() {
+        let t = compute_tithi(24.0, 0.0);
+        assert_eq!(t.paksha(), Paksha::Shukla);
+    }
+
+    #[test]
+    fn tithi_paksha_krishna() {
+        let t = compute_tithi(200.0, 0.0);
+        assert_eq!(t.paksha(), Paksha::Krishna);
+    }
+
+    #[test]
+    fn tithi_has_paksha_name() {
+        let t = compute_tithi(15.0, 0.0);
+        assert!(t.name.starts_with("Shukla"));
+    }
+
+    #[test]
+    fn purnima_name() {
+        // diff=174° → floor(174/12)+1 = 15
+        let t = compute_tithi(174.0, 0.0);
+        assert_eq!(t.name, "Purnima");
+    }
+
+    #[test]
+    fn amavasya_name() {
+        // diff=354° → floor(354/12)+1 = 30
+        let t = compute_tithi(354.0, 0.0);
+        assert_eq!(t.name, "Amavasya");
+    }
+
+    #[test]
+    fn tithi_lord_exists() {
+        let t = compute_tithi(15.0, 0.0);
+        assert!(!t.lord().is_empty());
+    }
+
+    #[test]
+    fn tithi_remaining_degrees_positive() {
+        let r = Tithi::remaining_degrees(45.0, 0.0);
+        assert!(r > 0.0 && r <= 12.0);
     }
 }
