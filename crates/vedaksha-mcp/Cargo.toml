@@ -14,12 +14,12 @@ name = "vedaksha-mcp"
 path = "src/main.rs"
 
 [dependencies]
-vedaksha-math = { version = "1.2.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "1.2.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "1.2.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "1.2.0", path = "../vedaksha-vedic" }
-vedaksha-graph = { version = "1.2.0", path = "../vedaksha-graph" }
-vedaksha-emit = { version = "1.2.0", path = "../vedaksha-emit" }
+vedaksha-math = { version = "1.3.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "1.3.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "1.3.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "1.3.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "1.3.0", path = "../vedaksha-graph" }
+vedaksha-emit = { version = "1.3.0", path = "../vedaksha-emit" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
