@@ -11,7 +11,11 @@
 //! Aspects are sign-based (whole-sign), not degree-based. A planet in sign X
 //! aspects the entire sign that is N houses away.
 //!
-//! Source: BPHS Ch. 26; B.V. Raman, "Hindu Predictive Astrology".
+//! All planets also have graded aspects on houses 3,10 (Quarter/25%),
+//! 4,8 (ThreeQuarter/75%), and 5,9 (Half/50%). Mars, Jupiter, and Saturn
+//! override their special houses to Full (100%).
+//!
+//! Source: BPHS Ch. 26 Sl. 2-7.
 
 /// Vedic aspect strength.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -75,23 +79,27 @@ pub struct VedicAspect {
 /// Source: BPHS Ch. 26.
 #[must_use]
 pub fn aspect_strength(planet: VedicPlanet, houses_away: u8) -> AspectStrength {
-    // Standard 7th house aspect for all planets
+    // Standard 7th house aspect for all planets (BPHS Ch. 26 Sl. 2)
     if houses_away == 7 {
         return AspectStrength::Full;
     }
 
-    match planet {
-        VedicPlanet::Mars => match houses_away {
-            4 | 8 => AspectStrength::Full,
-            _ => AspectStrength::None,
+    // Graded aspects per BPHS Ch. 26 Sl. 2-7:
+    // Houses 3,10 → Quarter (25%); Saturn overrides to Full
+    // Houses 4,8  → ThreeQuarter (75%); Mars overrides to Full
+    // Houses 5,9  → Half (50%); Jupiter overrides to Full
+    match houses_away {
+        3 | 10 => match planet {
+            VedicPlanet::Saturn => AspectStrength::Full,
+            _ => AspectStrength::Quarter,
         },
-        VedicPlanet::Jupiter => match houses_away {
-            5 | 9 => AspectStrength::Full,
-            _ => AspectStrength::None,
+        4 | 8 => match planet {
+            VedicPlanet::Mars => AspectStrength::Full,
+            _ => AspectStrength::ThreeQuarter,
         },
-        VedicPlanet::Saturn => match houses_away {
-            3 | 10 => AspectStrength::Full,
-            _ => AspectStrength::None,
+        5 | 9 => match planet {
+            VedicPlanet::Jupiter => AspectStrength::Full,
+            _ => AspectStrength::Half,
         },
         _ => AspectStrength::None,
     }
@@ -152,9 +160,11 @@ mod tests {
         assert_eq!(aspect_strength(VedicPlanet::Mars, 4), AspectStrength::Full);
         assert_eq!(aspect_strength(VedicPlanet::Mars, 7), AspectStrength::Full);
         assert_eq!(aspect_strength(VedicPlanet::Mars, 8), AspectStrength::Full);
-        // Non-special houses
+        // Graded aspects on non-special houses
+        assert_eq!(aspect_strength(VedicPlanet::Mars, 3), AspectStrength::Quarter);
+        assert_eq!(aspect_strength(VedicPlanet::Mars, 5), AspectStrength::Half);
+        // No aspect on unaspected houses
         assert_eq!(aspect_strength(VedicPlanet::Mars, 1), AspectStrength::None);
-        assert_eq!(aspect_strength(VedicPlanet::Mars, 5), AspectStrength::None);
     }
 
     #[test]
@@ -171,14 +181,14 @@ mod tests {
             aspect_strength(VedicPlanet::Jupiter, 9),
             AspectStrength::Full
         );
-        // Non-special houses
+        // Graded aspects on non-special houses
         assert_eq!(
             aspect_strength(VedicPlanet::Jupiter, 4),
-            AspectStrength::None
+            AspectStrength::ThreeQuarter
         );
         assert_eq!(
             aspect_strength(VedicPlanet::Jupiter, 8),
-            AspectStrength::None
+            AspectStrength::ThreeQuarter
         );
     }
 
@@ -196,38 +206,100 @@ mod tests {
             aspect_strength(VedicPlanet::Saturn, 10),
             AspectStrength::Full
         );
-        // Non-special houses
+        // Graded aspects on non-special houses
         assert_eq!(
             aspect_strength(VedicPlanet::Saturn, 4),
-            AspectStrength::None
+            AspectStrength::ThreeQuarter
         );
         assert_eq!(
             aspect_strength(VedicPlanet::Saturn, 9),
-            AspectStrength::None
+            AspectStrength::Half
         );
     }
 
     #[test]
-    fn sun_has_no_special_aspects() {
-        // Sun only aspects 7th; all other houses should be None
-        for houses in 1_u8..=12 {
-            let expected = if houses == 7 {
-                AspectStrength::Full
-            } else {
-                AspectStrength::None
-            };
-            assert_eq!(aspect_strength(VedicPlanet::Sun, houses), expected);
+    fn sun_graded_aspects() {
+        // Sun has graded aspects per BPHS Ch. 26
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 7), AspectStrength::Full);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 3), AspectStrength::Quarter);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 10), AspectStrength::Quarter);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 4), AspectStrength::ThreeQuarter);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 8), AspectStrength::ThreeQuarter);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 5), AspectStrength::Half);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 9), AspectStrength::Half);
+        // No aspect on remaining houses
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 1), AspectStrength::None);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 2), AspectStrength::None);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 6), AspectStrength::None);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 11), AspectStrength::None);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 12), AspectStrength::None);
+    }
+
+    #[test]
+    fn all_planets_full_on_7th() {
+        let planets = [
+            VedicPlanet::Sun,
+            VedicPlanet::Moon,
+            VedicPlanet::Mars,
+            VedicPlanet::Mercury,
+            VedicPlanet::Jupiter,
+            VedicPlanet::Venus,
+            VedicPlanet::Saturn,
+        ];
+        for planet in planets {
+            assert_eq!(
+                aspect_strength(planet, 7),
+                AspectStrength::Full,
+                "{planet:?} should have Full strength on 7th house"
+            );
         }
     }
 
     #[test]
-    fn find_vedic_aspects_mars_produces_three_aspects() {
+    fn mars_full_on_4th_and_8th() {
+        assert_eq!(aspect_strength(VedicPlanet::Mars, 4), AspectStrength::Full);
+        assert_eq!(aspect_strength(VedicPlanet::Mars, 8), AspectStrength::Full);
+    }
+
+    #[test]
+    fn jupiter_full_on_5th_and_9th() {
+        assert_eq!(aspect_strength(VedicPlanet::Jupiter, 5), AspectStrength::Full);
+        assert_eq!(aspect_strength(VedicPlanet::Jupiter, 9), AspectStrength::Full);
+    }
+
+    #[test]
+    fn saturn_full_on_3rd_and_10th() {
+        assert_eq!(aspect_strength(VedicPlanet::Saturn, 3), AspectStrength::Full);
+        assert_eq!(aspect_strength(VedicPlanet::Saturn, 10), AspectStrength::Full);
+    }
+
+    #[test]
+    fn generic_planet_quarter_on_3rd_10th() {
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 3), AspectStrength::Quarter);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 10), AspectStrength::Quarter);
+    }
+
+    #[test]
+    fn generic_planet_threequarter_on_4th_8th() {
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 4), AspectStrength::ThreeQuarter);
+        assert_eq!(aspect_strength(VedicPlanet::Sun, 8), AspectStrength::ThreeQuarter);
+    }
+
+    #[test]
+    fn generic_planet_half_on_5th_9th() {
+        assert_eq!(aspect_strength(VedicPlanet::Venus, 9), AspectStrength::Half);
+        assert_eq!(aspect_strength(VedicPlanet::Venus, 5), AspectStrength::Half);
+    }
+
+    #[test]
+    fn find_vedic_aspects_mars_produces_seven_aspects() {
+        // Mars now casts 7 aspects: 3(Q),4(F),5(H),7(F),8(F),9(H),10(Q)
         let planets = [(VedicPlanet::Mars, 0_u8)];
         let aspects = find_vedic_aspects(&planets);
         assert_eq!(
             aspects.len(),
-            3,
-            "Mars should cast exactly 3 aspects (4th, 7th, 8th)"
+            7,
+            "Mars should cast exactly 7 non-None aspects"
         );
         let houses: Vec<u8> = aspects.iter().map(|a| a.houses_away).collect();
         assert!(houses.contains(&4));
@@ -236,33 +308,32 @@ mod tests {
     }
 
     #[test]
-    fn find_vedic_aspects_jupiter_produces_three_aspects() {
+    fn find_vedic_aspects_jupiter_produces_seven_aspects() {
         let planets = [(VedicPlanet::Jupiter, 2_u8)];
         let aspects = find_vedic_aspects(&planets);
         assert_eq!(
             aspects.len(),
-            3,
-            "Jupiter should cast exactly 3 aspects (5th, 7th, 9th)"
+            7,
+            "Jupiter should cast exactly 7 non-None aspects"
         );
     }
 
     #[test]
-    fn find_vedic_aspects_sun_produces_one_aspect() {
+    fn find_vedic_aspects_sun_produces_seven_aspects() {
+        // Sun now casts 7 aspects: 3(Q),4(TQ),5(H),7(F),8(TQ),9(H),10(Q)
         let planets = [(VedicPlanet::Sun, 3_u8)];
         let aspects = find_vedic_aspects(&planets);
         assert_eq!(
             aspects.len(),
-            1,
-            "Sun should cast exactly 1 aspect (7th only)"
+            7,
+            "Sun should cast exactly 7 non-None aspects"
         );
-        assert_eq!(aspects[0].houses_away, 7);
-        // Sun in sign 3, 7th house away: (3 + 7) % 12 = 10
-        assert_eq!(aspects[0].aspected_sign, 10);
     }
 
     #[test]
     fn find_vedic_aspects_aspected_sign_wraps_correctly() {
-        // Mars in sign 10, aspects 4th (10+4=14 → 14%12=2), 7th (17%12=5), 8th (18%12=6)
+        // Mars in sign 10, aspects 7 houses including 4th (10+4=14 → 14%12=2),
+        // 7th (17%12=5), 8th (18%12=6)
         let planets = [(VedicPlanet::Mars, 10_u8)];
         let aspects = find_vedic_aspects(&planets);
         let aspected: Vec<u8> = aspects.iter().map(|a| a.aspected_sign).collect();
