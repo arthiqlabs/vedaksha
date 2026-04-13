@@ -38,16 +38,16 @@ export function Header() {
         {/* Center: nav links (desktop) */}
         <nav className="hidden sm:flex items-center gap-6">
           <a
+            href="/why"
+            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
+          >
+            Why
+          </a>
+          <a
             href="/docs"
             className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
           >
             Docs
-          </a>
-          <a
-            href="/ontology"
-            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
-          >
-            Ontology
           </a>
           <a
             href="/playground"
@@ -115,18 +115,18 @@ export function Header() {
       {menuOpen ? (
         <nav className="sm:hidden border-t border-[var(--color-brand-border)] px-6 py-4 flex flex-col gap-3">
           <a
+            href="/why"
+            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
+            onClick={() => setMenuOpen(false)}
+          >
+            Why Vedaksha
+          </a>
+          <a
             href="/docs"
             className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
             onClick={() => setMenuOpen(false)}
           >
             Docs
-          </a>
-          <a
-            href="/ontology"
-            className="text-base font-medium text-[var(--color-brand-text-secondary)] hover:text-[var(--color-brand-text)] transition-colors"
-            onClick={() => setMenuOpen(false)}
-          >
-            Ontology
           </a>
           <a
             href="/playground"
