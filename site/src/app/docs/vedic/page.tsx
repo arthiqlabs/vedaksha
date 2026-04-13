@@ -8,9 +8,9 @@ export default function VedicPage() {
     },
     {
       num: "02",
-      title: "3 Dasha Systems",
-      subtitle: "Vimshottari · Yogini · Chara",
-      desc: "Full dasha trees to 5 levels of sub-periods. Vimshottari (120-year), Yogini (36-year), and Chara (sign-based) with exact start and end dates.",
+      title: "5 Dasha Systems",
+      subtitle: "Vimshottari · Yogini · Chara · Ashtottari · Narayana",
+      desc: "Full dasha trees to 5 levels of sub-periods. Vimshottari (120-year), Yogini (36-year), Chara (sign-based), Ashtottari (108-year), and Narayana (Jaimini sign-based).",
     },
     {
       num: "03",

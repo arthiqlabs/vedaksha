@@ -20,7 +20,7 @@ export default function VedicAstrologyPage() {
             Vedic Astrology Deserves Better Software
           </h1>
           <p className="text-base leading-relaxed text-[var(--color-brand-text-secondary)] mb-6">
-            27 nakshatras, 50 yogas, 3 dasha systems, 16 vargas, 44 ayanamshas, 7 languages. Why we made Jyotish a first-class citizen in the type system — not a plugin, not a flag, not a translation table bolted on at the end.
+            27 nakshatras, 50 yogas, 5 dasha systems, 16 vargas, 44 ayanamshas, 7 languages. Why we made Jyotish a first-class citizen in the type system — not a plugin, not a flag, not a translation table bolted on at the end.
           </p>
           <div className="flex items-center gap-3 text-xs text-[var(--color-brand-text-muted)]">
             <span>January 22, 2026</span>
@@ -105,7 +105,7 @@ export default function VedicAstrologyPage() {
             {/* Section: Dasha systems */}
             <div>
               <h2 className="text-xl font-semibold uppercase tracking-wide text-[var(--color-brand-text)] mb-4">
-                Three dasha systems, five levels deep
+                Five dasha systems, five levels deep
               </h2>
               <p className="text-base">
                 Dasha systems are the temporal dimension of Vedic astrology — they partition a lifetime into periods ruled by different planets. All three implemented systems produce a tree of periods, each node carrying its start date, end date, duration, and ruling planet.

@@ -25,7 +25,7 @@ const posts = [
     date: "2026-01-22",
     readingTime: "11 min read",
     summary:
-      "27 nakshatras, 50 yogas, 3 dasha systems, 16 vargas, 44 ayanamshas, 7 languages. Why we made Jyotish a first-class citizen in the type system — not a plugin, not a flag, not a translation table bolted on at the end.",
+      "27 nakshatras, 50 yogas, 5 dasha systems, 16 vargas, 44 ayanamshas, 7 languages. Why we made Jyotish a first-class citizen in the type system — not a plugin, not a flag, not a translation table bolted on at the end.",
     tags: ["Jyotish", "Vedic", "Localization"],
   },
 ];

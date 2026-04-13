@@ -11,7 +11,7 @@ const features = [
     number: "02",
     title: "Vedic First-Class",
     description:
-      "27 nakshatras, 3 dasha systems, 50 yogas, 16 vargas, Shadbala, osculating node (<0.03\u00b0 vs JPL) \u2014 in the core type system, not a plugin.",
+      "Complete 5-limb panchanga, 5 dasha systems, 50 yogas, 16 vargas, degree-precise Shadbala, graded drishti, Ashtakoota matching \u2014 not a plugin.",
   },
   {
     number: "03",

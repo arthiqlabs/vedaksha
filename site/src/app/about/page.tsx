@@ -74,9 +74,11 @@ export default function AboutPage() {
             </p>
             <p>
               9 Rust crates. Sub-arcsecond precision. 44 ayanamsha systems. 10 house
-              systems. 50 yogas. 27 nakshatras. 3 dasha systems. 16 vargas. A property
-              graph ontology with 10 node types and 13 edge types. 7 MCP tools for AI
-              agents. WASM for browsers. Python bindings via PyO3.
+              systems. 50 yogas. 27 nakshatras with deity, yoni, nadi. 5 dasha systems.
+              16 vargas with school-variant support. Complete 5-limb panchanga. Graded
+              drishti. Degree-precise Shadbala. A property graph ontology with 10 node
+              types and 13 edge types. 7 MCP tools for AI agents. WASM for browsers.
+              Python bindings via PyO3.
             </p>
             <p>
               Built for the age of AI agents — every chart is a graph waiting to be queried.

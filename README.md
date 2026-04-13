@@ -77,12 +77,14 @@ VSOP87A/ELP coefficients (compiled) → Poisson series evaluation
 First-class Jyotish support — not a Western afterthought.
 
 - **Nakshatras:** 27 lunar mansions with padas, lords, symbols, deities
-- **Dashas:** Vimshottari (120-year), Yogini (36-year), Chara (sign-based)
+- **Dashas:** Vimshottari (120-year), Yogini (36-year), Chara (sign-based), Ashtottari (108-year), Narayana (Jaimini)
 - **Vargas:** All 16 divisional charts (Rashi through Shashtiamsha)
 - **Yogas:** 50 classical combinations (Pancha Mahapurusha, Dhana, Raja, Daridra, etc.)
 - **Shadbala:** Complete 6-component planetary strength
 - **Ayanamsha:** 44 sidereal systems (Lahiri, Raman, KP, Fagan-Bradley, and 40 more)
 - **Lunar nodes:** Mean, True (Meeus 5-term, ~0.09°), and Osculating (<0.03° vs JPL DE441) — KP sub-lord ready
+- **Panchanga:** Complete 5-limb day — Tithi (with paksha, lord), Vara (with Rahu/Gulika Kalam), Nakshatra (with deity, yoni, nadi), Yoga (27 astronomical), Karana (60 half-tithis)
+- **Drishti:** Graded aspect strengths — Full, ThreeQuarter (75%), Half (50%), Quarter (25%) per BPHS Ch. 26
 
 ## AI-First Architecture
 
@@ -131,8 +133,8 @@ Validated against independent reference ephemerides across 24,000+ oracle data p
 
 ## Published Packages
 
-- **crates.io:** 9 crates at v1.4.0
-- **PyPI:** `vedaksha` v1.4.0 (source + macOS arm64 wheel)
+- **crates.io:** 9 crates at v1.5.0
+- **PyPI:** `vedaksha` v1.5.0 (source + macOS arm64 wheel)
 
 ## License
 

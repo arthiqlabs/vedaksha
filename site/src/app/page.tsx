@@ -127,14 +127,14 @@ export default function Home() {
               Jyotish in the type system.
             </h2>
             <p className="text-base leading-relaxed text-[var(--color-brand-text-secondary)] mb-5">
-              27 nakshatras, 50 yogas, 3 dasha systems, and 16 divisional charts — all with 7-language localization in English, Hindi, Sanskrit, Tamil, Telugu, Kannada, and Bengali.
+              Complete 5-limb panchanga, 50 yogas, 5 dasha systems, 16 vargas, degree-precise Shadbala, graded drishti — all with 7-language localization.
             </p>
             <div className="space-y-3">
               {[
-                "Vimshottari, Yogini, and Chara dashas",
-                "Complete Shadbala (all 6 components)",
-                "44 ayanamsha systems",
-                "Muhurta search with tithi scoring",
+                "5 dashas: Vimshottari, Yogini, Chara, Ashtottari, Narayana",
+                "Panchanga: tithi, vara, nakshatra, yoga, karana",
+                "44 ayanamsha, osculating node (<0.03° vs JPL)",
+                "Nakshatra deity, yoni, nadi for Ashtakoota matching",
               ].map((item) => (
                 <div key={item} className="flex items-start gap-2">
                   <span className="mt-1.5 size-1.5 rounded-full bg-[#D4A843] shrink-0" />
@@ -282,7 +282,7 @@ export default function Home() {
           <div className="rounded-xl border border-[var(--color-brand-border)] bg-[var(--color-brand-border)] grid grid-cols-1 md:grid-cols-3 gap-px overflow-hidden">
             {[
               { num: "01", first: "Planetary", rest: "Engine", desc: "Sub-arcsecond positions from NASA JPL DE440/441. Full IAU precession, nutation, aberration pipeline." },
-              { num: "02", first: "Vedic", rest: "Astrology", desc: "27 nakshatras, 3 dasha systems, 50 yogas, 16 vargas, Shadbala, osculating node (<0.03° vs JPL) — not a plugin." },
+              { num: "02", first: "Vedic", rest: "Astrology", desc: "5-limb panchanga, 5 dasha systems, 50 yogas, 16 vargas, degree-precise Shadbala, graded drishti, Ashtakoota attributes — not a plugin." },
               { num: "03", first: "House", rest: "Systems", desc: "Placidus, Koch, Whole Sign, Equal, Campanus, Regiomontanus, Porphyry, Morinus, Alcabitius, Sripathi." },
               { num: "04", first: "MCP", rest: "Server", desc: "7 typed tools for AI agents. JSON-RPC 2.0 with structured errors and self-correction hints." },
               { num: "05", first: "Graph", rest: "Emitters", desc: "Output to Neo4j Cypher, SurrealDB, JSON-LD, or RAG-optimized text for vector embedding." },
