@@ -42,6 +42,7 @@ const sections = [
     label: "Output & Errors",
     items: [
       { title: "Graph Output", desc: "10 node types, 13 edge types. Cypher, SurrealQL, JSON-LD, RAG text.", href: "/docs/integration/graph-output" },
+      { title: "Ontology", desc: "Full type reference — all node types, edge types, and JSON-LD context.", href: "/ontology" },
       { title: "Error Handling", desc: "Structured errors, polar fallback, AI agent self-correction.", href: "/docs/integration/error-handling" },
     ],
   },
