@@ -41,9 +41,9 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 
 | Metric | Value |
 |--------|-------|
-| **Automated tests** | 620+ |
+| **Automated tests** | 528+ |
 | **Oracle validation points** | 24,000+ (planetary positions, house cusps, ayanamsha, nutation, sidereal time) |
-| **Workspace crates** | 9 (all published to crates.io v1.4.0) |
+| **Workspace crates** | 9 (all published to crates.io v1.5.0) |
 | **Binding targets** | 3 (native, WASM, Python) + MCP |
 | **Ephemeris providers** | 2 (SpkReader: sub-arcsecond from DE440s; AnalyticalProvider: <15" planets, zero data files) |
 | **WASM binary size** | 972 KB uncompressed (654 KB gzipped) — Cloudflare Workers compatible |
@@ -51,7 +51,7 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 | **House systems** | 10 |
 | **Vedic yogas** | 50 |
 | **Divisional charts (vargas)** | 16 (D-1 through D-60) |
-| **Dasha systems** | 3 (Vimshottari, Yogini, Chara) |
+| **Dasha systems** | 5 (Vimshottari, Yogini, Chara, Ashtottari, Narayana) |
 | **Nakshatras** | 27 (with 108 padas) |
 | **Lunar node methods** | 3 (Mean, True/Meeus ~0.09°, Osculating <0.03° vs JPL DE441) |
 | **Aspect types** | 11 (5 major + 6 minor) |
@@ -66,7 +66,7 @@ It is a clean-room Rust implementation of planetary ephemeris and astrological c
 | **Primary sources cited** | 15+ (Meeus, BPHS, Holden, IAU, JPL, Bretagnon, Chapront, B.V. Raman, ...) |
 | **External runtime dependencies** | 3 (serde, libm, thiserror) — no heavy frameworks |
 | **Unsafe code blocks** | 0 (enforced by `#![deny(unsafe_code)]` in every crate) |
-| **Published packages** | crates.io (9 crates v1.4.0) + PyPI (vedaksha v1.4.0) + npm (vedaksha-wasm v1.4.0) |
+| **Published packages** | crates.io (9 crates v1.5.0) + PyPI (vedaksha v1.5.0) + npm (vedaksha-wasm v1.5.0) |
 
 ---
 
