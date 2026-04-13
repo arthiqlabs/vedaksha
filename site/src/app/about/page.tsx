@@ -64,7 +64,7 @@ export default function AboutPage() {
             Vedaksha
           </p>
           <h2 className="text-2xl font-bold tracking-tight uppercase text-[var(--color-brand-text)] mb-6">
-            The Axis of Wisdom.
+            The Vision from Vedas.
           </h2>
           <div className="space-y-4 text-sm leading-relaxed text-[var(--color-brand-text-secondary)]">
             <p>

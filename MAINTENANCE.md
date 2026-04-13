@@ -239,5 +239,5 @@ If Vedākṣa is abandoned entirely, here is the degradation timeline:
 ---
 
 *© 2026 ArthIQ Labs LLC. All rights reserved.*
-*Vedākṣa — Axis of Wisdom*
+*Vedākṣa — Vision from Vedas*
 *Contact: info@arthiq.net | https://vedaksha.net*

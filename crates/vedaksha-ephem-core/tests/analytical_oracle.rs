@@ -1,5 +1,5 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣa — Axis of Wisdom
+// Vedākṣa — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 
 //! Oracle regression: AnalyticalProvider vs independent reference data.

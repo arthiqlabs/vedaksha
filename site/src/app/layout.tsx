@@ -28,7 +28,7 @@ const DESCRIPTION =
   "The astronomical ephemeris for the agentic age. Clean-room Rust implementation with sub-arcsecond planetary precision.";
 
 export const metadata: Metadata = {
-  title: "Vedākṣha — Axis of Wisdom",
+  title: "Vedākṣha — Vision from Vedas",
   description: DESCRIPTION,
   metadataBase: new URL(SITE_URL),
   icons: {
@@ -38,13 +38,13 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE_URL,
     siteName: "Vedākṣha",
-    title: "Vedākṣha — Axis of Wisdom",
+    title: "Vedākṣha — Vision from Vedas",
     description: DESCRIPTION,
     locale: "en_US",
   },
   twitter: {
     card: "summary",
-    title: "Vedākṣha — Axis of Wisdom",
+    title: "Vedākṣha — Vision from Vedas",
     description: DESCRIPTION,
     site: "@vedaksha",
   },

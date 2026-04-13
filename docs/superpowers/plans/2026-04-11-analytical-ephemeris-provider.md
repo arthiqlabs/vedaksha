@@ -354,7 +354,7 @@ Create minimal scaffolding to ensure the generated files compile. Create `crates
 
 ```rust
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣa — Axis of Wisdom
+// Vedākṣa — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
@@ -510,7 +510,7 @@ mod tests {
 
 ```rust
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣa — Axis of Wisdom
+// Vedākṣa — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
@@ -743,7 +743,7 @@ Create `crates/vedaksha-ephem-core/src/analytical/elp_mpp02.rs` with:
 
 ```rust
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣa — Axis of Wisdom
+// Vedākṣa — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
@@ -959,7 +959,7 @@ Update `crates/vedaksha-ephem-core/src/analytical/mod.rs`:
 
 ```rust
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣa — Axis of Wisdom
+// Vedākṣa — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 

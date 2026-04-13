@@ -1,5 +1,5 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedaksha -- Axis of Wisdom
+// Vedaksha -- Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
