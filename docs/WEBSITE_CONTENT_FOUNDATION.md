@@ -373,5 +373,5 @@ Zero custom integration code. Zero prompt engineering for output parsing. The ty
 ---
 
 *© 2026 ArthIQ Labs LLC. All rights reserved.*
-*Vedaksha — Axis of Wisdom*
+*Vedaksha — Vision from Vedas*
 *info@arthiq.net | vedaksha.net*

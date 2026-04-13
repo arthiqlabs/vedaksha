@@ -1,4 +1,4 @@
-# Vedākṣha — Axis of Wisdom
+# Vedākṣha — Vision from Vedas
 
 Astronomical ephemeris and Vedic astrology platform. Clean-room Rust implementation with sub-arcsecond planetary precision.
 
