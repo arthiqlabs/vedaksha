@@ -24,9 +24,12 @@
 
 pub mod aspects;
 pub mod dashas;
+pub mod deities;
 pub mod dignities;
 pub mod houses;
+pub mod karanas;
 pub mod nakshatras;
+pub mod panchanga_yogas;
 pub mod planets;
 pub mod signs;
 pub mod yogas;
@@ -88,7 +91,10 @@ impl Language {
 mod tests {
     use super::*;
     use aspects::ASPECT_COUNT;
+    use deities::DEITY_COUNT;
+    use karanas::KARANA_COUNT;
     use nakshatras::NAKSHATRA_COUNT;
+    use panchanga_yogas::PANCHANGA_YOGA_COUNT;
     use planets::PLANET_COUNT;
     use signs::SIGN_COUNT;
 
@@ -246,6 +252,105 @@ mod tests {
                 assert!(
                     !name.is_empty(),
                     "Empty dasha lord name: lang={:?}, index={i}",
+                    lang
+                );
+            }
+        }
+    }
+
+    // ── Deity names ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn deity_count_is_twenty_seven() {
+        assert_eq!(DEITY_COUNT, 27);
+    }
+
+    #[test]
+    fn deity_name_english_first() {
+        assert_eq!(deities::deity_name(0, Language::English), "Ashwini Kumaras");
+    }
+
+    #[test]
+    fn deity_name_hindi_first() {
+        assert_eq!(deities::deity_name(0, Language::Hindi), "अश्विनी कुमार");
+    }
+
+    #[test]
+    fn all_languages_all_deities_non_empty() {
+        for lang in Language::ALL {
+            for i in 0..DEITY_COUNT {
+                let name = deities::deity_name(i, *lang);
+                assert!(
+                    !name.is_empty(),
+                    "Empty deity name: lang={:?}, index={i}",
+                    lang
+                );
+            }
+        }
+    }
+
+    // ── Karana names ────────────────────────────────────────────────────────
+
+    #[test]
+    fn karana_count_is_eleven() {
+        assert_eq!(KARANA_COUNT, 11);
+    }
+
+    #[test]
+    fn karana_name_english_first() {
+        assert_eq!(karanas::karana_name(0, Language::English), "Bava");
+    }
+
+    #[test]
+    fn karana_name_sanskrit_vishti() {
+        assert_eq!(karanas::karana_name(6, Language::Sanskrit), "Viṣṭi");
+    }
+
+    #[test]
+    fn all_languages_all_karanas_non_empty() {
+        for lang in Language::ALL {
+            for i in 0..KARANA_COUNT {
+                let name = karanas::karana_name(i, *lang);
+                assert!(
+                    !name.is_empty(),
+                    "Empty karana name: lang={:?}, index={i}",
+                    lang
+                );
+            }
+        }
+    }
+
+    // ── Panchanga yoga names ────────────────────────────────────────────────
+
+    #[test]
+    fn panchanga_yoga_count_is_twenty_seven() {
+        assert_eq!(PANCHANGA_YOGA_COUNT, 27);
+    }
+
+    #[test]
+    fn panchanga_yoga_name_english_first() {
+        assert_eq!(
+            panchanga_yogas::panchanga_yoga_name(0, Language::English),
+            "Vishkambha"
+        );
+    }
+
+    #[test]
+    fn panchanga_yoga_name_hindi_last() {
+        assert_eq!(
+            panchanga_yogas::panchanga_yoga_name(26, Language::Hindi),
+            "वैधृति"
+        );
+    }
+
+    #[test]
+    fn all_languages_all_panchanga_yogas_non_empty() {
+        for lang in Language::ALL {
+            for i in 0..PANCHANGA_YOGA_COUNT {
+                let name = panchanga_yogas::panchanga_yoga_name(i, *lang);
+                assert!(
+                    !name.is_empty(),
+                    "Empty panchanga yoga name: lang={:?}, index={i}",
                     lang
                 );
             }
