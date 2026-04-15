@@ -26,7 +26,7 @@ use super::{CONVERGENCE_THRESHOLD, HouseCusps, HouseSystem, MAX_ITERATIONS, POLA
 /// Compute right ascension of an ecliptic longitude.
 ///
 /// `RA = atan2(sin(λ)*cos(ε), cos(λ))`
-fn ecliptic_ra(lon_deg: f64, eps_deg: f64) -> f64 {
+fn _ecliptic_ra(lon_deg: f64, eps_deg: f64) -> f64 {
     let lon = deg_to_rad(lon_deg);
     let eps = deg_to_rad(eps_deg);
     normalize_degrees(rad_to_deg(libm::atan2(

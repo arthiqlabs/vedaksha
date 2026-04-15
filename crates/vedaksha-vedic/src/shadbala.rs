@@ -249,6 +249,7 @@ pub fn drik_bala(benefic_aspect_count: u32, malefic_aspect_count: u32) -> f64 {
 
 // ── Planet-sign helpers (reuse from yoga.rs logic) ──────────────────
 
+#[allow(dead_code)]
 fn own_signs(planet: YogaPlanet) -> &'static [u8] {
     match planet {
         YogaPlanet::Sun => &[4],
@@ -262,6 +263,7 @@ fn own_signs(planet: YogaPlanet) -> &'static [u8] {
     }
 }
 
+#[allow(dead_code)]
 fn exaltation_sign(planet: YogaPlanet) -> Option<u8> {
     match planet {
         YogaPlanet::Sun => Some(0),
@@ -275,23 +277,28 @@ fn exaltation_sign(planet: YogaPlanet) -> Option<u8> {
     }
 }
 
+#[allow(dead_code)]
 fn debilitation_sign(planet: YogaPlanet) -> Option<u8> {
     exaltation_sign(planet).map(|s| (s + 6) % 12)
 }
 
+#[allow(dead_code)]
 fn is_in_own_sign(planet: YogaPlanet, sign: u8) -> bool {
     own_signs(planet).contains(&sign)
 }
 
+#[allow(dead_code)]
 fn is_exalted(planet: YogaPlanet, sign: u8) -> bool {
     exaltation_sign(planet) == Some(sign)
 }
 
+#[allow(dead_code)]
 fn is_debilitated(planet: YogaPlanet, sign: u8) -> bool {
     debilitation_sign(planet) == Some(sign)
 }
 
 /// Sign lord (ruler).
+#[allow(dead_code)]
 fn sign_lord(sign: u8) -> YogaPlanet {
     match sign {
         0 | 7 => YogaPlanet::Mars,
@@ -307,6 +314,7 @@ fn sign_lord(sign: u8) -> YogaPlanet {
 /// Simplified friendly sign check based on traditional friendships.
 ///
 /// Uses the natural friendship table (naisargika maitri).
+#[allow(dead_code)]
 fn is_friendly_sign(planet: YogaPlanet, sign: u8) -> bool {
     let lord = sign_lord(sign);
     if lord == planet {
