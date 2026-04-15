@@ -65,3 +65,4 @@ SCAFFOLDING.md
 *-mockup.html
 *-logo-options.html
 bindings/python/.venv/
+.vercel

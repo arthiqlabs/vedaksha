@@ -217,7 +217,7 @@ fn nakshatra_from_longitude_covers_full_circle() {
 fn dasha_period_sums_equal_120_years() {
     let dasha_year_days = 365.25;
     let total_years = 120.0;
-    let total_days = total_years * dasha_year_days;
+    let _total_days = total_years * dasha_year_days;
 
     let mut test_total = 0;
     let mut pass = 0;

@@ -319,6 +319,7 @@ fn mcp_emit_graph_roundtrip() {
     );
 }
 
+#[allow(dead_code)]
 fn fail_count(_a: &str, _b: &str) -> bool {
     // For now, exact match required
     false

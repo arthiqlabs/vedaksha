@@ -18,16 +18,20 @@ use vedaksha_ephem_core::jpl::EphemerisProvider;
 struct OracleDataPoint {
     date: String,
     #[serde(default)]
+    #[allow(dead_code)]
     description: String,
     jd: f64,
     body: String,
     #[serde(alias = "swe_longitude")]
     ref_longitude: f64,
     #[serde(alias = "swe_latitude")]
+    #[allow(dead_code)]
     ref_latitude: f64,
     #[serde(alias = "swe_distance")]
+    #[allow(dead_code)]
     ref_distance: f64,
     #[serde(alias = "swe_speed")]
+    #[allow(dead_code)]
     ref_speed: f64,
 }
 
