@@ -1,0 +1,6 @@
+target/
+bindings/
+crates/
+data/
+docs/
+*.bsp

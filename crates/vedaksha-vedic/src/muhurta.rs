@@ -332,6 +332,7 @@ fn tithi_name(number: u8) -> &'static str {
 mod tests {
     use super::*;
 
+    #[allow(dead_code)]
     const EPS: f64 = 1e-9;
 
     // --- compute_tithi ---
@@ -540,7 +541,7 @@ mod tests {
             3,
             "Expected 3 samples over a 1-day range with 0.5-day step"
         );
-        drop(count); // suppress unused warning
+        let _ = count;
         count = results.len();
         assert_eq!(count, 3);
     }
