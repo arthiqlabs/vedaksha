@@ -120,7 +120,7 @@ fn main() -> Result<(), VedakshaError> {
     let eph = EphemerisProvider::new()?;
 
     // Julian Day for 20 March 2024, 12:00 UT
-    let jd = calendar_to_jd(2024, 3, 20, 12.0);
+    let jd = calendar_to_jd(2024, 3, 20.5);
 
     let pos = eph.compute(Body::Moon, jd)?;
 
@@ -136,10 +136,10 @@ fn main() -> Result<(), VedakshaError> {
         </div>
       </div>
 
-      {/* All 10 bodies */}
+      {/* All 7 bodies */}
       <div className="mb-14">
         <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-[#D4A843] mb-4">
-          All 10 Major Bodies at Once
+          All 7 Classical Bodies at Once
         </h2>
         <p className="text-sm text-[var(--color-brand-text-secondary)] mb-5">
           <code className="font-mono text-xs bg-[var(--color-brand-bg-subtle)] border border-[var(--color-brand-border)] rounded px-1.5 py-0.5 text-[#D4A843]">compute_all</code>
@@ -168,16 +168,13 @@ for pos in &positions {
     );
 }
 
-// Sun           29.9841°
-// Moon         159.3012°
-// Mercury       11.7234° (R)
-// Venus         23.4401°
-// Mars         286.1047°
-// Jupiter       15.8892°
-// Saturn       348.7113°
-// Uranus        51.9234°
-// Neptune      357.0981°
-// Pluto        301.7654°`}</code>
+// Sun            0.3696°
+// Moon         128.2918°
+// Mercury       17.9757°
+// Venus        340.6307°
+// Mars         328.0622°
+// Jupiter       44.9606°
+// Saturn       342.2695°`}</code>
           </pre>
         </div>
       </div>

@@ -91,7 +91,7 @@ export default function HouseSystemsPage() {
             <code>{`use vedaksha::prelude::*;
 
 fn main() -> Result<(), VedakshaError> {
-    let jd = calendar_to_jd(2024, 3, 20, 12.0);
+    let jd = calendar_to_jd(2024, 3, 20.5);
 
     // Geographic coordinates: New Delhi
     let latitude  = 28.6139_f64;

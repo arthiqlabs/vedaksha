@@ -100,7 +100,7 @@ export default function CoordinateSystemsPage() {
             <code>{`use vedaksha::prelude::*;
 use vedaksha::coords::*;
 
-let jd = calendar_to_jd(2024, 3, 20, 12.0);
+let jd = calendar_to_jd(2024, 3, 20.5);
 
 // Step 1–2: barycentric → geocentric ICRS vector
 let geo_icrs = geocentric_icrs(Body::Mars, jd)?;
@@ -182,7 +182,7 @@ println!("β = {:.6}°", lat);`}</code>
             <span className="text-[10px] font-mono text-[var(--color-brand-text-muted)]">sidereal_time.rs</span>
           </div>
           <pre className="p-5 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)] text-[var(--color-brand-text-secondary)]">
-            <code>{`let jd       = calendar_to_jd(2024, 3, 20, 12.0);
+            <code>{`let jd       = calendar_to_jd(2024, 3, 20.5);
 let lon_deg  = 77.2090; // observer's geographic longitude
 
 let gmst  = greenwich_mean_sidereal_time(jd)?;   // hours

@@ -148,8 +148,8 @@ for planet in chart.planets:
     sign = vk.sign_name(planet.sign, locale=Locale.EN)
     print(f"{name:8s}  {planet.longitude:8.3f}°  {sign:12s}  H{planet.house}")
 
-# → Sun       336.142°  Pisces        H12
-# → Moon       45.231°  Taurus        H1
+# → Sun        60.4°  Taurus        H10
+# → Moon      320.8°  Aquarius      H6
 # ...
 
 # 4. Dashas — no ephemeris file needed for this

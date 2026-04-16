@@ -74,12 +74,12 @@ export default function TransitSearchPage() {
           <pre className="p-5 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)] text-[var(--color-brand-text-secondary)]">
             <code>{`use vedaksha::prelude::*;
 
-let birth_jd = calendar_to_jd(1990, 6, 15, 6.0);
+let birth_jd = calendar_to_jd(1990, 6, 15.25);
 let natal    = compute_chart(birth_jd, 28.6139, 77.2090, &ChartConfig::tropical())?;
 
 // Search window: 2024 calendar year
-let start_jd = calendar_to_jd(2024, 1, 1, 0.0);
-let end_jd   = calendar_to_jd(2024, 12, 31, 23.99);
+let start_jd = calendar_to_jd(2024, 1, 1.0);
+let end_jd   = calendar_to_jd(2024, 12, 31.999);
 
 let search = TransitSearch::new(&natal)
     .date_range(start_jd, end_jd)

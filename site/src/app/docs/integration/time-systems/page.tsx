@@ -66,10 +66,10 @@ export default function TimeSystemsPage() {
           <pre className="p-5 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)] text-[var(--color-brand-text-secondary)]">
             <code>{`use vedaksha::prelude::*;
 
-// calendar_to_jd(year, month, day, hour_ut)
-// hour_ut is decimal hours in Universal Time
-let jd = calendar_to_jd(2024, 3, 20, 6.5);
-// 6.5 = 06:30 UT
+// calendar_to_jd(year, month, day_fraction)
+// day_fraction includes the time: 20.271 = day 20, 06:30 UT
+let jd = calendar_to_jd(2024, 3, 20.271);
+// 0.271 ≈ 6.5h / 24
 // → 2460388.771
 
 // jd_to_calendar(jd) → CalendarDate
@@ -82,7 +82,7 @@ println!("{}-{:02}-{:02} {:05.2}h UT",
 let local_hour = 12.0_f64;  // noon local
 let utc_offset = 5.5_f64;   // IST = UTC+5:30
 let ut = local_hour - utc_offset;
-let jd_local = calendar_to_jd(2024, 3, 20, ut);`}</code>
+let jd_local = calendar_to_jd(2024, 3, 20.0 + ut / 24.0);`}</code>
           </pre>
         </div>
         <div className="border border-[var(--color-brand-border)] rounded-xl p-5 bg-[var(--color-brand-bg-subtle)]">
@@ -168,7 +168,7 @@ let jd_local = calendar_to_jd(2024, 3, 20, ut);`}</code>
           </div>
           <pre className="p-5 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)] text-[var(--color-brand-text-secondary)]">
             <code>{`// Query ΔT for any Julian Day
-let jd  = calendar_to_jd(2024, 3, 20, 12.0);
+let jd  = calendar_to_jd(2024, 3, 20.5);
 let dt  = delta_t(jd)?;
 println!("ΔT = {:.2} seconds", dt);  // ≈ 69.18 s
 
@@ -210,7 +210,7 @@ let jd_tt2 = ut_to_tt_with_config(jd, &custom)?;`}</code>
             <span className="text-[10px] font-mono text-[var(--color-brand-text-muted)]">sidereal.rs</span>
           </div>
           <pre className="p-5 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)] text-[var(--color-brand-text-secondary)]">
-            <code>{`let jd      = calendar_to_jd(2024, 3, 20, 12.0);
+            <code>{`let jd      = calendar_to_jd(2024, 3, 20.5);
 let geo_lon = 77.2090; // New Delhi, degrees east
 
 // Greenwich Mean Sidereal Time (hours)

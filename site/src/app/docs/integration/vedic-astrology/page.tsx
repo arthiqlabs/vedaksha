@@ -87,7 +87,7 @@ println!("Gana      : {}", nak.gana);       // Deva`}</code>
             <span className="text-[10px] font-mono text-[var(--color-brand-text-muted)]">dasha.rs</span>
           </div>
           <pre className="p-5 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)] text-[var(--color-brand-text-secondary)]">
-            <code>{`let birth_jd = calendar_to_jd(1990, 6, 15, 6.0);
+            <code>{`let birth_jd = calendar_to_jd(1990, 6, 15.25);
 let moon_sidereal = 113.45; // Moon's sidereal longitude at birth
 
 let tree = vimshottari_dasha(moon_sidereal, birth_jd)?;

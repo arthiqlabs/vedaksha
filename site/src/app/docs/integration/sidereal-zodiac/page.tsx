@@ -85,7 +85,7 @@ export default function SiderealZodiacPage() {
           <pre className="p-5 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)] text-[var(--color-brand-text-secondary)]">
             <code>{`use vedaksha::prelude::*;
 
-let jd = calendar_to_jd(2024, 3, 20, 12.0);
+let jd = calendar_to_jd(2024, 3, 20.5);
 
 // Vedic chart with Lahiri ayanamsha
 let config = ChartConfig {
