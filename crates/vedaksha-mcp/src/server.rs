@@ -301,8 +301,9 @@ impl McpServer {
 
         let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::new();
         for (name, body) in &bodies {
-            let pos = coordinates::apparent_position(&provider, *body, jd)
-                .map_err(|e| McpError::computation_failed(&format!("Failed to compute {name}: {e}")))?;
+            let pos = coordinates::apparent_position(&provider, *body, jd).map_err(|e| {
+                McpError::computation_failed(&format!("Failed to compute {name}: {e}"))
+            })?;
             planet_data.push((
                 name.to_string(),
                 pos.ecliptic.longitude.to_degrees(),
@@ -336,7 +337,12 @@ impl McpServer {
                 "morinus" => vedaksha_astro::houses::HouseSystem::Morinus,
                 "alcabitius" => vedaksha_astro::houses::HouseSystem::Alcabitius,
                 "sripathi" => vedaksha_astro::houses::HouseSystem::Sripathi,
-                _ => return Err(McpError::invalid_parameter("house_system", &format!("Unknown: {s}"))),
+                _ => {
+                    return Err(McpError::invalid_parameter(
+                        "house_system",
+                        &format!("Unknown: {s}"),
+                    ));
+                }
             },
             None => vedaksha_astro::houses::HouseSystem::Placidus,
         };
@@ -344,11 +350,18 @@ impl McpServer {
         let ayanamsha = match input.ayanamsha.as_deref() {
             Some(s) => match s.to_lowercase().as_str() {
                 "lahiri" => Some(vedaksha_astro::sidereal::Ayanamsha::Lahiri),
-                "faganbradley" | "fagan_bradley" => Some(vedaksha_astro::sidereal::Ayanamsha::FaganBradley),
+                "faganbradley" | "fagan_bradley" => {
+                    Some(vedaksha_astro::sidereal::Ayanamsha::FaganBradley)
+                }
                 "krishnamurti" => Some(vedaksha_astro::sidereal::Ayanamsha::Krishnamurti),
                 "raman" => Some(vedaksha_astro::sidereal::Ayanamsha::Raman),
                 "tropical" => None,
-                _ => return Err(McpError::invalid_parameter("ayanamsha", &format!("Unknown: {s}"))),
+                _ => {
+                    return Err(McpError::invalid_parameter(
+                        "ayanamsha",
+                        &format!("Unknown: {s}"),
+                    ));
+                }
             },
             None => None, // Tropical default
         };
@@ -362,7 +375,12 @@ impl McpServer {
         };
 
         let chart = vedaksha_astro::chart::compute_chart(
-            &planet_data, ramc_deg, input.latitude, obliquity_deg, jd, &config,
+            &planet_data,
+            ramc_deg,
+            input.latitude,
+            obliquity_deg,
+            jd,
+            &config,
         );
 
         // Build output JSON
@@ -505,7 +523,11 @@ impl McpServer {
             for (ni, n_pos) in natal_positions.iter().enumerate() {
                 let n_lon = n_pos["longitude"].as_f64().unwrap_or(0.0);
                 let raw_diff = ((t_lon - n_lon) % 360.0 + 360.0) % 360.0;
-                let sep = if raw_diff > 180.0 { 360.0 - raw_diff } else { raw_diff };
+                let sep = if raw_diff > 180.0 {
+                    360.0 - raw_diff
+                } else {
+                    raw_diff
+                };
                 for (aspect_name, aspect_angle) in major_aspects {
                     let orb = (sep - aspect_angle).abs();
                     if orb <= max_orb {
@@ -1096,8 +1118,14 @@ mod tests {
         assert!(val["result"].is_object(), "expected a result, got: {val}");
         let text = val["result"]["content"][0]["text"].as_str().unwrap();
         let data: serde_json::Value = serde_json::from_str(text).unwrap();
-        assert!(data["event_count"].as_u64().is_some(), "expected event_count in response");
-        assert!(data["events"].is_array(), "expected events array in response");
+        assert!(
+            data["event_count"].as_u64().is_some(),
+            "expected event_count in response"
+        );
+        assert!(
+            data["events"].is_array(),
+            "expected events array in response"
+        );
     }
 
     // ── search_muhurta validation ─────────────────────────────────────────────

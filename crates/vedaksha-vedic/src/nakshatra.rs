@@ -101,19 +101,38 @@ pub enum Gana {
 /// Source: BPHS Ch. 20.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Yoni {
-    Horse, Elephant, Goat, Serpent, Dog, Cat, Rat, Cow,
-    Buffalo, Tiger, Deer, Monkey, Mongoose, Lion,
+    Horse,
+    Elephant,
+    Goat,
+    Serpent,
+    Dog,
+    Cat,
+    Rat,
+    Cow,
+    Buffalo,
+    Tiger,
+    Deer,
+    Monkey,
+    Mongoose,
+    Lion,
 }
 
 /// Yoni gender for compatibility.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum YoniGender { Male, Female }
+pub enum YoniGender {
+    Male,
+    Female,
+}
 
 /// Nadi (pulse/constitution) for Ashtakoota matching.
 /// Nadi dosha is the highest-weighted koota (8 points).
 /// Source: BPHS Ch. 20.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum Nadi { Aadi, Madhya, Antya }
+pub enum Nadi {
+    Aadi,
+    Madhya,
+    Antya,
+}
 
 impl Nakshatra {
     /// Span of each nakshatra in degrees (13°20').
@@ -364,12 +383,33 @@ impl Nakshatra {
     #[must_use]
     pub fn deity(&self) -> &'static str {
         const DEITIES: [&str; 27] = [
-            "Ashwini Kumaras", "Yama", "Agni", "Brahma", "Soma",
-            "Rudra", "Aditi", "Brihaspati", "Sarpas", "Pitrs",
-            "Bhaga", "Aryaman", "Savitar", "Tvashtar", "Vayu",
-            "Indragni", "Mitra", "Indra", "Nirrti", "Apas",
-            "Vishvedeva", "Vishnu", "Vasu", "Varuna", "Ajaikapada",
-            "Ahirbudhnya", "Pushan",
+            "Ashwini Kumaras",
+            "Yama",
+            "Agni",
+            "Brahma",
+            "Soma",
+            "Rudra",
+            "Aditi",
+            "Brihaspati",
+            "Sarpas",
+            "Pitrs",
+            "Bhaga",
+            "Aryaman",
+            "Savitar",
+            "Tvashtar",
+            "Vayu",
+            "Indragni",
+            "Mitra",
+            "Indra",
+            "Nirrti",
+            "Apas",
+            "Vishvedeva",
+            "Vishnu",
+            "Vasu",
+            "Varuna",
+            "Ajaikapada",
+            "Ahirbudhnya",
+            "Pushan",
         ];
         DEITIES[*self as usize]
     }
@@ -381,15 +421,33 @@ impl Nakshatra {
         use Yoni::*;
         use YoniGender::*;
         const YONIS: [(Yoni, YoniGender); 27] = [
-            (Horse, Male), (Elephant, Male), (Goat, Female),
-            (Serpent, Male), (Serpent, Female), (Dog, Female),
-            (Cat, Female), (Goat, Male), (Cat, Male),
-            (Rat, Male), (Rat, Female), (Cow, Male),
-            (Buffalo, Female), (Tiger, Female), (Buffalo, Male),
-            (Tiger, Male), (Deer, Female), (Deer, Male),
-            (Dog, Male), (Monkey, Male), (Mongoose, Male),
-            (Monkey, Female), (Lion, Female), (Horse, Female),
-            (Lion, Male), (Cow, Female), (Elephant, Female),
+            (Horse, Male),
+            (Elephant, Male),
+            (Goat, Female),
+            (Serpent, Male),
+            (Serpent, Female),
+            (Dog, Female),
+            (Cat, Female),
+            (Goat, Male),
+            (Cat, Male),
+            (Rat, Male),
+            (Rat, Female),
+            (Cow, Male),
+            (Buffalo, Female),
+            (Tiger, Female),
+            (Buffalo, Male),
+            (Tiger, Male),
+            (Deer, Female),
+            (Deer, Male),
+            (Dog, Male),
+            (Monkey, Male),
+            (Mongoose, Male),
+            (Monkey, Female),
+            (Lion, Female),
+            (Horse, Female),
+            (Lion, Male),
+            (Cow, Female),
+            (Elephant, Female),
         ];
         YONIS[*self as usize]
     }

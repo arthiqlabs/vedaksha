@@ -86,9 +86,9 @@ pub(super) fn compute(ramc: f64, latitude: f64, obliquity: f64) -> HouseCusps {
 
     // Force cardinal cusps to exact ASC/IC/DSC/MC values
     cusps[0] = asc; // cusp 1 = ASC
-    cusps[3] = ic;  // cusp 4 = IC
+    cusps[3] = ic; // cusp 4 = IC
     cusps[6] = dsc; // cusp 7 = DSC
-    cusps[9] = mc;  // cusp 10 = MC
+    cusps[9] = mc; // cusp 10 = MC
 
     HouseCusps {
         cusps,

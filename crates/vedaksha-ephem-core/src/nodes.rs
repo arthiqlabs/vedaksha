@@ -82,7 +82,9 @@ pub fn true_node_osculating(jd: f64) -> f64 {
         let mm = crate::analytical::elp_mpp02::elp_geocentric_of_date(jd - dt);
         let inv_2dt = 1.0 / (2.0 * dt);
         crate::analytical::elp_mpp02::MoonRectangular {
-            x: m0.x, y: m0.y, z: m0.z,
+            x: m0.x,
+            y: m0.y,
+            z: m0.z,
             vx: (mp.x - mm.x) * inv_2dt,
             vy: (mp.y - mm.y) * inv_2dt,
             vz: (mp.z - mm.z) * inv_2dt,
@@ -91,7 +93,11 @@ pub fn true_node_osculating(jd: f64) -> f64 {
 
     // Avoid division by zero if Moon is exactly on the ecliptic
     // with zero vertical velocity (astronomically impossible, but safe).
-    let vz = if moon.vz.abs() < 1e-15 { 1e-15 } else { moon.vz };
+    let vz = if moon.vz.abs() < 1e-15 {
+        1e-15
+    } else {
+        moon.vz
+    };
 
     // Find where the tangent line to the orbit crosses z = 0.
     let fac = moon.z / vz;
@@ -269,18 +275,20 @@ mod tests {
         //
         // Source: NASA/JPL Horizons System (https://ssd.jpl.nasa.gov/horizons/).
         let oracle = [
-            (2451545.0, 123.984, "J2000"),       // 2000-01-01
-            (2453006.0, 49.237,  "2004-01-01"),   // JD from Horizons
+            (2451545.0, 123.984, "J2000"),     // 2000-01-01
+            (2453006.0, 49.237, "2004-01-01"), // JD from Horizons
             (2455197.5, 290.923, "2010-01-01"),
             (2457388.5, 174.656, "2016-01-01"),
-            (2459580.5, 60.937,  "2022-01-01"),
+            (2459580.5, 60.937, "2022-01-01"),
         ];
 
         for (jd, jpl_node, label) in &oracle {
             let osc = true_node_osculating(*jd);
 
             let mut diff = (osc - jpl_node).abs();
-            if diff > 180.0 { diff = 360.0 - diff; }
+            if diff > 180.0 {
+                diff = 360.0 - diff;
+            }
 
             assert!(
                 diff < 0.05,
@@ -329,7 +337,9 @@ mod tests {
 
             // Osculating vs Meeus: within 0.5° (inherent method difference)
             let mut diff_meeus = (osc - true_m).abs();
-            if diff_meeus > 180.0 { diff_meeus = 360.0 - diff_meeus; }
+            if diff_meeus > 180.0 {
+                diff_meeus = 360.0 - diff_meeus;
+            }
             assert!(
                 diff_meeus < 0.5,
                 "{label}: osculating vs Meeus diff too large: {diff_meeus:.4}°"
@@ -337,7 +347,9 @@ mod tests {
 
             // Osculating vs mean: within 3° (sanity)
             let mut diff_mean = (osc - mean).abs();
-            if diff_mean > 180.0 { diff_mean = 360.0 - diff_mean; }
+            if diff_mean > 180.0 {
+                diff_mean = 360.0 - diff_mean;
+            }
             assert!(
                 diff_mean < 3.0,
                 "{label}: osculating vs mean diff too large: {diff_mean:.4}°"

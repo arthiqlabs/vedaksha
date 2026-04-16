@@ -102,10 +102,7 @@ fn find_cusp(ramc_deg: f64, lat_deg: f64, eps_deg: f64, fraction: f64, above: bo
         // Convert RA to ecliptic longitude
         // For a point on the ecliptic (lat=0): λ = atan2(sin(RA), cos(RA)*cos(ε))
         let ra_rad = deg_to_rad(ra);
-        let lon_rad = libm::atan2(
-            libm::sin(ra_rad),
-            libm::cos(ra_rad) * libm::cos(eps),
-        );
+        let lon_rad = libm::atan2(libm::sin(ra_rad), libm::cos(ra_rad) * libm::cos(eps));
         let lon = normalize_degrees(rad_to_deg(lon_rad));
 
         // Get declination from this longitude
@@ -149,10 +146,7 @@ fn find_cusp(ramc_deg: f64, lat_deg: f64, eps_deg: f64, fraction: f64, above: bo
 
     // Return best estimate even if not fully converged
     let ra_rad = deg_to_rad(ra);
-    let lon = libm::atan2(
-        libm::sin(ra_rad),
-        libm::cos(ra_rad) * libm::cos(eps),
-    );
+    let lon = libm::atan2(libm::sin(ra_rad), libm::cos(ra_rad) * libm::cos(eps));
     Some(normalize_degrees(rad_to_deg(lon)))
 }
 

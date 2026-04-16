@@ -183,11 +183,7 @@ pub fn frame_bias_matrix() -> Matrix3 {
 
     Matrix3 {
         data: [
-            [
-                1.0 - 0.5 * (da0 * da0 + xi0 * xi0),
-                da0,
-                -xi0,
-            ],
+            [1.0 - 0.5 * (da0 * da0 + xi0 * xi0), da0, -xi0],
             [
                 -da0 - eta0 * xi0,
                 1.0 - 0.5 * (da0 * da0 + eta0 * eta0),

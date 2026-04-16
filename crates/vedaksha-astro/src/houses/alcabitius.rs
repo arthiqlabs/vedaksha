@@ -41,7 +41,10 @@ fn diurnal_semi_arc(lat_deg: f64, dec_deg: f64) -> f64 {
 fn equator_to_ecliptic(ra_deg: f64, eps_deg: f64) -> f64 {
     let ra = deg_to_rad(ra_deg);
     let eps = deg_to_rad(eps_deg);
-    normalize_degrees(rad_to_deg(libm::atan2(libm::sin(ra), libm::cos(ra) * libm::cos(eps))))
+    normalize_degrees(rad_to_deg(libm::atan2(
+        libm::sin(ra),
+        libm::cos(ra) * libm::cos(eps),
+    )))
 }
 
 /// Compute Alcabitius house cusps.

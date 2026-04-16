@@ -161,7 +161,10 @@ mod tests {
         assert_eq!(aspect_strength(VedicPlanet::Mars, 7), AspectStrength::Full);
         assert_eq!(aspect_strength(VedicPlanet::Mars, 8), AspectStrength::Full);
         // Graded aspects on non-special houses
-        assert_eq!(aspect_strength(VedicPlanet::Mars, 3), AspectStrength::Quarter);
+        assert_eq!(
+            aspect_strength(VedicPlanet::Mars, 3),
+            AspectStrength::Quarter
+        );
         assert_eq!(aspect_strength(VedicPlanet::Mars, 5), AspectStrength::Half);
         // No aspect on unaspected houses
         assert_eq!(aspect_strength(VedicPlanet::Mars, 1), AspectStrength::None);
@@ -221,10 +224,22 @@ mod tests {
     fn sun_graded_aspects() {
         // Sun has graded aspects per BPHS Ch. 26
         assert_eq!(aspect_strength(VedicPlanet::Sun, 7), AspectStrength::Full);
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 3), AspectStrength::Quarter);
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 10), AspectStrength::Quarter);
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 4), AspectStrength::ThreeQuarter);
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 8), AspectStrength::ThreeQuarter);
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 3),
+            AspectStrength::Quarter
+        );
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 10),
+            AspectStrength::Quarter
+        );
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 4),
+            AspectStrength::ThreeQuarter
+        );
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 8),
+            AspectStrength::ThreeQuarter
+        );
         assert_eq!(aspect_strength(VedicPlanet::Sun, 5), AspectStrength::Half);
         assert_eq!(aspect_strength(VedicPlanet::Sun, 9), AspectStrength::Half);
         // No aspect on remaining houses
@@ -263,26 +278,50 @@ mod tests {
 
     #[test]
     fn jupiter_full_on_5th_and_9th() {
-        assert_eq!(aspect_strength(VedicPlanet::Jupiter, 5), AspectStrength::Full);
-        assert_eq!(aspect_strength(VedicPlanet::Jupiter, 9), AspectStrength::Full);
+        assert_eq!(
+            aspect_strength(VedicPlanet::Jupiter, 5),
+            AspectStrength::Full
+        );
+        assert_eq!(
+            aspect_strength(VedicPlanet::Jupiter, 9),
+            AspectStrength::Full
+        );
     }
 
     #[test]
     fn saturn_full_on_3rd_and_10th() {
-        assert_eq!(aspect_strength(VedicPlanet::Saturn, 3), AspectStrength::Full);
-        assert_eq!(aspect_strength(VedicPlanet::Saturn, 10), AspectStrength::Full);
+        assert_eq!(
+            aspect_strength(VedicPlanet::Saturn, 3),
+            AspectStrength::Full
+        );
+        assert_eq!(
+            aspect_strength(VedicPlanet::Saturn, 10),
+            AspectStrength::Full
+        );
     }
 
     #[test]
     fn generic_planet_quarter_on_3rd_10th() {
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 3), AspectStrength::Quarter);
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 10), AspectStrength::Quarter);
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 3),
+            AspectStrength::Quarter
+        );
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 10),
+            AspectStrength::Quarter
+        );
     }
 
     #[test]
     fn generic_planet_threequarter_on_4th_8th() {
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 4), AspectStrength::ThreeQuarter);
-        assert_eq!(aspect_strength(VedicPlanet::Sun, 8), AspectStrength::ThreeQuarter);
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 4),
+            AspectStrength::ThreeQuarter
+        );
+        assert_eq!(
+            aspect_strength(VedicPlanet::Sun, 8),
+            AspectStrength::ThreeQuarter
+        );
     }
 
     #[test]

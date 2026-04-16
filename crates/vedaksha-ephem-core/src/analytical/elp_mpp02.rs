@@ -191,41 +191,58 @@ fn compute_arguments(t: f64) -> Arguments {
         + 538_101_628.66888 * t * SEC_TO_RAD;
     let ve = (-179.0 + 58.0 / 60.0 + 44.758419 / 3600.0) * DEG_TO_RAD
         + 210_664_136.45777 * t * SEC_TO_RAD;
-    let em = (100.0 + 27.0 / 60.0 + 59.13885 / 3600.0) * DEG_TO_RAD
-        + 129_597_742.293 * t * SEC_TO_RAD;
-    let ma = (-5.0 + 26.0 / 60.0 + 3.642778 / 3600.0) * DEG_TO_RAD
-        + 68_905_077.65936 * t * SEC_TO_RAD;
-    let ju = (34.0 + 21.0 / 60.0 + 5.379392 / 3600.0) * DEG_TO_RAD
-        + 10_925_660.57335 * t * SEC_TO_RAD;
-    let sa = (50.0 + 4.0 / 60.0 + 38.902495 / 3600.0) * DEG_TO_RAD
-        + 4_399_609.33632 * t * SEC_TO_RAD;
-    let ur = (-46.0 + 3.0 / 60.0 + 4.354234 / 3600.0) * DEG_TO_RAD
-        + 1_542_482.57845 * t * SEC_TO_RAD;
-    let ne = (-56.0 + 20.0 / 60.0 + 56.808371 / 3600.0) * DEG_TO_RAD
-        + 786_547.897 * t * SEC_TO_RAD;
+    let em =
+        (100.0 + 27.0 / 60.0 + 59.13885 / 3600.0) * DEG_TO_RAD + 129_597_742.293 * t * SEC_TO_RAD;
+    let ma =
+        (-5.0 + 26.0 / 60.0 + 3.642778 / 3600.0) * DEG_TO_RAD + 68_905_077.65936 * t * SEC_TO_RAD;
+    let ju =
+        (34.0 + 21.0 / 60.0 + 5.379392 / 3600.0) * DEG_TO_RAD + 10_925_660.57335 * t * SEC_TO_RAD;
+    let sa =
+        (50.0 + 4.0 / 60.0 + 38.902495 / 3600.0) * DEG_TO_RAD + 4_399_609.33632 * t * SEC_TO_RAD;
+    let ur =
+        (-46.0 + 3.0 / 60.0 + 4.354234 / 3600.0) * DEG_TO_RAD + 1_542_482.57845 * t * SEC_TO_RAD;
+    let ne = (-56.0 + 20.0 / 60.0 + 56.808371 / 3600.0) * DEG_TO_RAD + 786_547.897 * t * SEC_TO_RAD;
 
-    Arguments { w1, d, f, l, lp, me, ve, em, ma, ju, sa, ur, ne, zeta }
+    Arguments {
+        w1,
+        d,
+        f,
+        l,
+        lp,
+        me,
+        ve,
+        em,
+        ma,
+        ju,
+        sa,
+        ur,
+        ne,
+        zeta,
+    }
 }
 
 /// Evaluate the Delaunay argument combination for a main-problem term.
 #[inline(always)]
-fn delaunay_arg(
-    args: &Arguments,
-    id: i8, i_f: i8, il: i8, ilp: i8,
-) -> f64 {
-    id as f64 * args.d
-        + i_f as f64 * args.f
-        + il as f64 * args.l
-        + ilp as f64 * args.lp
+fn delaunay_arg(args: &Arguments, id: i8, i_f: i8, il: i8, ilp: i8) -> f64 {
+    id as f64 * args.d + i_f as f64 * args.f + il as f64 * args.l + ilp as f64 * args.lp
 }
 
 /// Evaluate the full argument combination for a perturbation term.
 #[inline(always)]
 fn pert_arg(
     args: &Arguments,
-    id: i8, i_f: i8, il: i8, ilp: i8,
-    i_me: i8, i_ve: i8, i_em: i8, i_ma: i8,
-    i_ju: i8, i_sa: i8, i_ur: i8, i_ne: i8,
+    id: i8,
+    i_f: i8,
+    il: i8,
+    ilp: i8,
+    i_me: i8,
+    i_ve: i8,
+    i_em: i8,
+    i_ma: i8,
+    i_ju: i8,
+    i_sa: i8,
+    i_ur: i8,
+    i_ne: i8,
     i_zeta: i8,
     phase: f64,
 ) -> f64 {
@@ -264,7 +281,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_longitude::PERT_T0
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         pert_t0 += amp * libm::sin(arg);
     }
     lon += pert_t0;
@@ -273,7 +292,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_longitude::PERT_T1
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         pert_t1 += amp * libm::sin(arg);
     }
     lon += pert_t1 * t;
@@ -282,7 +303,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_longitude::PERT_T2
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         pert_t2 += amp * libm::sin(arg);
     }
     lon += pert_t2 * t2;
@@ -291,7 +314,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_longitude::PERT_T3
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         pert_t3 += amp * libm::sin(arg);
     }
     lon += pert_t3 * t3;
@@ -308,7 +333,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_latitude::PERT_T0
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         lat_t0 += amp * libm::sin(arg);
     }
     lat += lat_t0;
@@ -317,7 +344,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_latitude::PERT_T1
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         lat_t1 += amp * libm::sin(arg);
     }
     lat += lat_t1 * t;
@@ -326,7 +355,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_latitude::PERT_T2
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         lat_t2 += amp * libm::sin(arg);
     }
     lat += lat_t2 * t2;
@@ -344,7 +375,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_distance::PERT_T0
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         dist_t0 += amp * libm::sin(arg);
     }
     dist += dist_t0;
@@ -353,7 +386,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_distance::PERT_T1
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         dist_t1 += amp * libm::sin(arg);
     }
     dist += dist_t1 * t;
@@ -362,7 +397,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_distance::PERT_T2
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         dist_t2 += amp * libm::sin(arg);
     }
     dist += dist_t2 * t2;
@@ -371,7 +408,9 @@ fn eval_series(t: f64, args: &Arguments) -> (f64, f64, f64) {
     for &(id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, amp, phase) in
         moon_distance::PERT_T3
     {
-        let arg = pert_arg(args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase);
+        let arg = pert_arg(
+            args, id, i_f, il, ilp, i_me, i_ve, i_em, i_ma, i_ju, i_sa, i_ur, i_ne, i_zeta, phase,
+        );
         dist_t3 += amp * libm::sin(arg);
     }
     dist += dist_t3 * t3;
@@ -397,10 +436,11 @@ fn precess_to_j2000(t: f64, x0: f64, y0: f64, z0: f64) -> (f64, f64, f64) {
     let t4 = t2 * t2;
     let t5 = t2 * t3;
 
-    let p = 0.101_803_91e-4 * t + 0.470_204_39e-6 * t2 - 0.541_736_7e-9 * t3
-        - 0.250_794_8e-11 * t4 + 0.463_486e-14 * t5;
+    let p = 0.101_803_91e-4 * t + 0.470_204_39e-6 * t2 - 0.541_736_7e-9 * t3 - 0.250_794_8e-11 * t4
+        + 0.463_486e-14 * t5;
     let q = -0.113_469_002e-3 * t + 0.123_726_74e-6 * t2 + 0.126_541_70e-8 * t3
-        - 0.137_180_8e-11 * t4 - 0.320_334e-14 * t5;
+        - 0.137_180_8e-11 * t4
+        - 0.320_334e-14 * t5;
 
     let sq = libm::sqrt(1.0 - p * p - q * q);
 
@@ -420,8 +460,6 @@ fn precess_to_j2000(t: f64, x0: f64, y0: f64, z0: f64) -> (f64, f64, f64) {
         p31 * x0 + p32 * y0 + p33 * z0,
     )
 }
-
-
 
 /// Compute the Moon's geocentric rectangular coordinates in the **ecliptic of date**
 /// (before precession to J2000). Used for osculating node computation, where the
@@ -458,7 +496,9 @@ pub fn elp_geocentric_of_date(jd: f64) -> MoonRectangular {
     let inv_2dt = 1.0 / (2.0 * dt);
 
     MoonRectangular {
-        x, y, z,
+        x,
+        y,
+        z,
         vx: (xp - xm) * inv_2dt,
         vy: (yp - ym) * inv_2dt,
         vz: (zp - zm) * inv_2dt,
@@ -542,7 +582,9 @@ mod tests {
         assert!(
             result.x.abs() > 1.0 && result.y.abs() > 1.0,
             "Moon position should be nonzero: x={}, y={}, z={}",
-            result.x, result.y, result.z,
+            result.x,
+            result.y,
+            result.z,
         );
     }
 
@@ -550,7 +592,8 @@ mod tests {
     fn moon_velocity_nonzero_at_j2000() {
         let result = elp_geocentric(2_451_545.0);
         // Moon moves ~1 km/s = ~86400 km/day; should be nonzero
-        let speed = libm::sqrt(result.vx * result.vx + result.vy * result.vy + result.vz * result.vz);
+        let speed =
+            libm::sqrt(result.vx * result.vx + result.vy * result.vy + result.vz * result.vz);
         assert!(
             speed > 10_000.0 && speed < 200_000.0,
             "Moon speed should be ~86000 km/day, got {speed:.0}"

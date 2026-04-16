@@ -151,9 +151,9 @@ pub fn varga_sign_with_tradition(
         VargaTradition::Element => {
             let lon = normalize_degrees(longitude_deg);
             match varga {
-                VargaType::Shodashamsha
-                | VargaType::Vimshamsha
-                | VargaType::Akshavedamsha => varga_sign_element_based(lon, varga),
+                VargaType::Shodashamsha | VargaType::Vimshamsha | VargaType::Akshavedamsha => {
+                    varga_sign_element_based(lon, varga)
+                }
                 VargaType::Trimshamsha => trimshamsha_element(lon),
                 _ => varga_sign(longitude_deg, varga),
             }

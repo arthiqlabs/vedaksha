@@ -579,8 +579,16 @@ mod tests {
         let days_per_year: f64 = 365.25;
 
         let test_dates_jd: [f64; 10] = [
-            2_415_020.5, 2_421_639.5, 2_428_258.5, 2_434_877.5, 2_441_496.5,
-            2_448_115.5, 2_451_545.0, 2_455_197.5, 2_462_867.5, 2_488_069.5,
+            2_415_020.5,
+            2_421_639.5,
+            2_428_258.5,
+            2_434_877.5,
+            2_441_496.5,
+            2_448_115.5,
+            2_451_545.0,
+            2_455_197.5,
+            2_462_867.5,
+            2_488_069.5,
         ];
 
         for &jd in &test_dates_jd {
@@ -607,9 +615,7 @@ mod tests {
 
         // Ancient dates (pre-1700 BCE) where the 5th-order polynomial
         // diverges measurably (>0.05°) from the truncated quadratic.
-        let historical_dates_jd: [f64; 4] = [
-            625_295.0, 990_545.0, 1_063_295.0, 1_100_345.0,
-        ];
+        let historical_dates_jd: [f64; 4] = [625_295.0, 990_545.0, 1_063_295.0, 1_100_345.0];
 
         let mut any_diverged = false;
         for &jd in &historical_dates_jd {

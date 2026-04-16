@@ -15,12 +15,12 @@
 //! these evaluators into the unified trait interface.
 
 pub mod coefficients;
-pub mod vsop87a;
 pub mod elp_mpp02;
+pub mod vsop87a;
 
 use crate::bodies::Body;
 use crate::error::ComputeError;
-use crate::jpl::{EphemerisProvider, Position, StateVector, Velocity, AU_KM};
+use crate::jpl::{AU_KM, EphemerisProvider, Position, StateVector, Velocity};
 
 use self::vsop87a::Planet;
 
@@ -50,11 +50,7 @@ const SIN_EPS: f64 = 0.397_777_155_931_913_7; // libm::sin(OBLIQUITY_J2000)
 /// Rotate a vector from ecliptic (J2000) to equatorial (ICRS approximation).
 #[inline]
 fn ecliptic_to_equatorial(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
-    (
-        x,
-        y * COS_EPS - z * SIN_EPS,
-        y * SIN_EPS + z * COS_EPS,
-    )
+    (x, y * COS_EPS - z * SIN_EPS, y * SIN_EPS + z * COS_EPS)
 }
 
 /// Convert VSOP87A planet enum from Body enum.
@@ -88,8 +84,16 @@ fn vsop_state(planet: Planet, jd: f64) -> StateVector {
     let (vx, vy, vz) = ecliptic_to_equatorial(vx_day, vy_day, vz_day);
 
     StateVector {
-        position: Position { x: px, y: py, z: pz },
-        velocity: Velocity { x: vx, y: vy, z: vz },
+        position: Position {
+            x: px,
+            y: py,
+            z: pz,
+        },
+        velocity: Velocity {
+            x: vx,
+            y: vy,
+            z: vz,
+        },
     }
 }
 
@@ -135,8 +139,16 @@ fn moon_state(jd: f64) -> StateVector {
     let (vx, vy, vz) = ecliptic_to_equatorial(rel_vx, rel_vy, rel_vz);
 
     StateVector {
-        position: Position { x: px, y: py, z: pz },
-        velocity: Velocity { x: vx, y: vy, z: vz },
+        position: Position {
+            x: px,
+            y: py,
+            z: pz,
+        },
+        velocity: Velocity {
+            x: vx,
+            y: vy,
+            z: vz,
+        },
     }
 }
 
@@ -146,8 +158,16 @@ fn node_state(longitude_deg: f64) -> StateVector {
     // Unit vector in ecliptic plane, then rotate to equatorial
     let (px, py, pz) = ecliptic_to_equatorial(libm::cos(lon_rad), libm::sin(lon_rad), 0.0);
     StateVector {
-        position: Position { x: px, y: py, z: pz },
-        velocity: Velocity { x: 0.0, y: 0.0, z: 0.0 },
+        position: Position {
+            x: px,
+            y: py,
+            z: pz,
+        },
+        velocity: Velocity {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
     }
 }
 
@@ -209,8 +229,16 @@ impl EphemerisProvider for AnalyticalProvider {
 
             // Sun ≈ SSB origin
             Body::Sun => Ok(StateVector {
-                position: Position { x: 0.0, y: 0.0, z: 0.0 },
-                velocity: Velocity { x: 0.0, y: 0.0, z: 0.0 },
+                position: Position {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+                velocity: Velocity {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
             }),
 
             // Moon: geocentric ELP + Earth position from VSOP87A
@@ -374,16 +402,12 @@ mod tests {
             );
             let sv = result.unwrap();
             assert!(
-                sv.position.x.is_finite()
-                    && sv.position.y.is_finite()
-                    && sv.position.z.is_finite(),
+                sv.position.x.is_finite() && sv.position.y.is_finite() && sv.position.z.is_finite(),
                 "{:?} position has non-finite values",
                 body
             );
             assert!(
-                sv.velocity.x.is_finite()
-                    && sv.velocity.y.is_finite()
-                    && sv.velocity.z.is_finite(),
+                sv.velocity.x.is_finite() && sv.velocity.y.is_finite() && sv.velocity.z.is_finite(),
                 "{:?} velocity has non-finite values",
                 body
             );

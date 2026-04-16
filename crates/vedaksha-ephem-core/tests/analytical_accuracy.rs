@@ -10,8 +10,8 @@
 use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates;
-use vedaksha_ephem_core::jpl::reader::SpkReader;
 use vedaksha_ephem_core::jpl::EphemerisProvider;
+use vedaksha_ephem_core::jpl::reader::SpkReader;
 
 /// Path to DE440s BSP file relative to workspace root.
 fn bsp_path() -> std::path::PathBuf {
@@ -69,7 +69,10 @@ const MOON_TOLERANCE_ARCSEC: f64 = 30.0;
 fn planet_longitude_accuracy() {
     let bsp = bsp_path();
     if !bsp.exists() {
-        eprintln!("DE440s not found at {:?}, skipping planet_longitude_accuracy", bsp);
+        eprintln!(
+            "DE440s not found at {:?}, skipping planet_longitude_accuracy",
+            bsp
+        );
         return;
     }
     let spk = SpkReader::open(&bsp).expect("failed to open DE440s");
@@ -125,17 +128,23 @@ fn planet_longitude_accuracy() {
         }
 
         let max_arcsec = body_max_err * 3600.0;
-        eprintln!(
-            "  MAX ERROR: {max_arcsec:.2}\" at JD {body_max_jd:.1}",
-        );
+        eprintln!("  MAX ERROR: {max_arcsec:.2}\" at JD {body_max_jd:.1}",);
         max_errors.push((body, max_arcsec, body_max_jd));
     }
 
     eprintln!("\n=== Planet Longitude Summary ===");
     let mut any_failed = false;
     for &(body, err, jd) in &max_errors {
-        let status = if err <= PLANET_TOLERANCE_ARCSEC { "PASS" } else { any_failed = true; "FAIL" };
-        eprintln!("  {:10} max={err:8.2}\"  at JD {jd:.1}  [{status}]", body.name());
+        let status = if err <= PLANET_TOLERANCE_ARCSEC {
+            "PASS"
+        } else {
+            any_failed = true;
+            "FAIL"
+        };
+        eprintln!(
+            "  {:10} max={err:8.2}\"  at JD {jd:.1}  [{status}]",
+            body.name()
+        );
     }
 
     assert!(
@@ -183,9 +192,7 @@ fn sun_longitude_accuracy() {
         let diff_deg = angular_diff_deg(spk_lon, ana_lon);
         let diff_arcsec = diff_deg * 3600.0;
 
-        eprintln!(
-            "  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"",
-        );
+        eprintln!("  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"",);
 
         if diff_deg > max_err {
             max_err = diff_deg;
@@ -241,9 +248,7 @@ fn moon_longitude_accuracy() {
         let diff_deg = angular_diff_deg(spk_lon, ana_lon);
         let diff_arcsec = diff_deg * 3600.0;
 
-        eprintln!(
-            "  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"",
-        );
+        eprintln!("  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"",);
 
         if diff_deg > max_err {
             max_err = diff_deg;
@@ -394,10 +399,7 @@ fn node_delegation() {
         diff < 5.0,
         "Mean and True node should differ by < 5 degrees, got {diff:.4}"
     );
-    assert!(
-        diff > 0.0,
-        "Mean and True node should not be identical"
-    );
+    assert!(diff > 0.0, "Mean and True node should not be identical");
 }
 
 // ─── Test 6: Error cases ────────────────────────────────────────────────────

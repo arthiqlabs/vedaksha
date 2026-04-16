@@ -11,13 +11,16 @@
 #![deny(unsafe_code)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::enum_glob_use)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::uninlined_format_args)]
 
 pub mod bhava;
 pub mod dasha;
 pub mod drishti;
 pub mod muhurta;
 pub mod nakshatra;
+pub mod panchanga;
 pub mod shadbala;
 pub mod varga;
 pub mod yoga;
-pub mod panchanga;

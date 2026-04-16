@@ -20,6 +20,9 @@
 #![deny(unsafe_code)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::question_mark)]
 
 pub mod aspects;
 pub mod chart;

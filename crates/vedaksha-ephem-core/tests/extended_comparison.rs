@@ -15,8 +15,8 @@ use vedaksha_ephem_core::nutation;
 use vedaksha_ephem_core::obliquity;
 use vedaksha_ephem_core::sidereal_time;
 
-use vedaksha_astro::houses::{compute_houses, HouseSystem};
-use vedaksha_astro::sidereal::{ayanamsha_value, Ayanamsha};
+use vedaksha_astro::houses::{HouseSystem, compute_houses};
+use vedaksha_astro::sidereal::{Ayanamsha, ayanamsha_value};
 
 use vedaksha_vedic::muhurta::compute_tithi;
 
@@ -264,8 +264,7 @@ fn extended_comparison_against_reference() {
     // Cardinal cusps (1,4,7,10 = ASC/IC/DSC/MC) are analytically exact.
     // Intermediate cusps (2,3,5,6,8,9,11,12) use iterative semi-arc methods
     // which have known accuracy limits across some house systems; informational only.
-    let mut cusp_cardinal_stats =
-        CategoryStats::new("House Cusps (cardinal)", "degrees", 2.0);
+    let mut cusp_cardinal_stats = CategoryStats::new("House Cusps (cardinal)", "degrees", 2.0);
     let mut cusp_intermediate_stats =
         CategoryStats::new("House Cusps (intermed)", "degrees", 5.0).informational();
     let mut ascmc_stats = CategoryStats::new("House ASC/MC", "degrees", 0.01);
@@ -481,4 +480,3 @@ fn extended_comparison_against_reference() {
         all_stats.len()
     );
 }
-

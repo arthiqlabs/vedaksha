@@ -30,7 +30,8 @@ fn call_tool(server: &McpServer, tool: &str, args: serde_json::Value) -> serde_j
             if let Some(first) = content.get(0) {
                 if let Some(text) = first.get("text") {
                     let text_str = text.as_str().unwrap_or("");
-                    return serde_json::from_str(text_str).unwrap_or(serde_json::Value::String(text_str.to_string()));
+                    return serde_json::from_str(text_str)
+                        .unwrap_or(serde_json::Value::String(text_str.to_string()));
                 }
             }
         }
@@ -58,16 +59,18 @@ fn mcp_compute_dasha_matches_direct() {
             total += 1;
 
             // Direct computation
-            let direct = vedaksha_vedic::dasha::vimshottari::compute_vimshottari(
-                moon_lon, jd, 2,
-            );
+            let direct = vedaksha_vedic::dasha::vimshottari::compute_vimshottari(moon_lon, jd, 2);
 
             // MCP computation
-            let mcp_result = call_tool(&server, "compute_dasha", serde_json::json!({
-                "moon_longitude": moon_lon,
-                "birth_jd": jd,
-                "levels": 2
-            }));
+            let mcp_result = call_tool(
+                &server,
+                "compute_dasha",
+                serde_json::json!({
+                    "moon_longitude": moon_lon,
+                    "birth_jd": jd,
+                    "levels": 2
+                }),
+            );
 
             // Compare: MCP should return serialized VimshottariDasha
             if mcp_result.is_null() || mcp_result.get("error_code").is_some() {
@@ -77,35 +80,42 @@ fn mcp_compute_dasha_matches_direct() {
 
             // Compare moon_nakshatra
             let direct_nak = format!("{:?}", direct.moon_nakshatra);
-            let mcp_nak = mcp_result.get("moon_nakshatra")
+            let mcp_nak = mcp_result
+                .get("moon_nakshatra")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
             if direct_nak != mcp_nak {
                 fail += 1;
                 if fail <= 5 {
-                    eprintln!("MISMATCH dasha nakshatra: moon_lon={moon_lon}, direct={direct_nak}, mcp={mcp_nak}");
+                    eprintln!(
+                        "MISMATCH dasha nakshatra: moon_lon={moon_lon}, direct={direct_nak}, mcp={mcp_nak}"
+                    );
                 }
                 continue;
             }
 
             // Compare initial_balance
             let direct_balance = direct.initial_balance;
-            let mcp_balance = mcp_result.get("initial_balance")
+            let mcp_balance = mcp_result
+                .get("initial_balance")
                 .and_then(|v| v.as_f64())
                 .unwrap_or(-1.0);
 
             if (direct_balance - mcp_balance).abs() > 1e-10 {
                 fail += 1;
                 if fail <= 5 {
-                    eprintln!("MISMATCH dasha balance: moon_lon={moon_lon}, direct={direct_balance}, mcp={mcp_balance}");
+                    eprintln!(
+                        "MISMATCH dasha balance: moon_lon={moon_lon}, direct={direct_balance}, mcp={mcp_balance}"
+                    );
                 }
                 continue;
             }
 
             // Compare number of maha dashas
             let direct_count = direct.maha_dashas.len();
-            let mcp_count = mcp_result.get("maha_dashas")
+            let mcp_count = mcp_result
+                .get("maha_dashas")
                 .and_then(|v| v.as_array())
                 .map(|a| a.len())
                 .unwrap_or(0);
@@ -117,13 +127,9 @@ fn mcp_compute_dasha_matches_direct() {
 
             // Compare first maha dasha lord and duration
             if let Some(first_direct) = direct.maha_dashas.first() {
-                if let Some(first_mcp) = mcp_result.get("maha_dashas")
-                    .and_then(|v| v.get(0))
-                {
+                if let Some(first_mcp) = mcp_result.get("maha_dashas").and_then(|v| v.get(0)) {
                     let direct_lord = format!("{:?}", first_direct.lord);
-                    let mcp_lord = first_mcp.get("lord")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("");
+                    let mcp_lord = first_mcp.get("lord").and_then(|v| v.as_str()).unwrap_or("");
 
                     if direct_lord != mcp_lord {
                         fail += 1;
@@ -131,7 +137,8 @@ fn mcp_compute_dasha_matches_direct() {
                     }
 
                     let direct_dur = first_direct.duration_days;
-                    let mcp_dur = first_mcp.get("duration_days")
+                    let mcp_dur = first_mcp
+                        .get("duration_days")
                         .and_then(|v| v.as_f64())
                         .unwrap_or(-1.0);
 
@@ -164,7 +171,13 @@ fn mcp_compute_vargas_matches_direct() {
     let mut fail = 0;
     let mut total = 0;
 
-    let vargas = ["Rashi", "Navamsha", "Dashamsha", "Dwadashamsha", "Shashtiamsha"];
+    let vargas = [
+        "Rashi",
+        "Navamsha",
+        "Dashamsha",
+        "Dwadashamsha",
+        "Shashtiamsha",
+    ];
     let longitudes: Vec<f64> = (0..200).map(|i| (i as f64) * 1.8).collect();
 
     for varga_name in &vargas {
@@ -184,20 +197,25 @@ fn mcp_compute_vargas_matches_direct() {
             let direct_sign = vedaksha_vedic::varga::varga_sign(lon, varga_type);
 
             // MCP — include required fields even though only planet_longitude is used
-            let mcp_result = call_tool(&server, "compute_vargas", serde_json::json!({
-                "julian_day": 2451545.0,
-                "latitude": 0.0,
-                "longitude": 0.0,
-                "planet_longitude": lon,
-                "divisions": [varga_name]
-            }));
+            let mcp_result = call_tool(
+                &server,
+                "compute_vargas",
+                serde_json::json!({
+                    "julian_day": 2451545.0,
+                    "latitude": 0.0,
+                    "longitude": 0.0,
+                    "planet_longitude": lon,
+                    "divisions": [varga_name]
+                }),
+            );
 
             if mcp_result.is_null() || mcp_result.get("error_code").is_some() {
                 fail += 1;
                 continue;
             }
 
-            let mcp_sign = mcp_result.get(varga_name)
+            let mcp_sign = mcp_result
+                .get(varga_name)
                 .and_then(|v| v.as_u64())
                 .map(|v| v as u8)
                 .unwrap_or(255);
@@ -207,7 +225,9 @@ fn mcp_compute_vargas_matches_direct() {
             } else {
                 fail += 1;
                 if fail <= 3 {
-                    eprintln!("MISMATCH varga {varga_name}: lon={lon}, direct={direct_sign}, mcp={mcp_sign}");
+                    eprintln!(
+                        "MISMATCH varga {varga_name}: lon={lon}, direct={direct_sign}, mcp={mcp_sign}"
+                    );
                     eprintln!("  raw mcp_result: {mcp_result}");
                 }
             }
@@ -238,9 +258,7 @@ fn mcp_emit_graph_roundtrip() {
     for i in 0..100 {
         let graph = vedaksha_graph::ChartGraph::new(
             vedaksha_graph::NodeId::chart_scoped(
-                &vedaksha_graph::ids::NodeId::chart_hash(
-                    2451545.0 + i as f64, 28.6, 77.2, 0,
-                ),
+                &vedaksha_graph::ids::NodeId::chart_hash(2451545.0 + i as f64, 28.6, 77.2, 0),
                 "chart",
                 "test",
             ),
@@ -264,10 +282,14 @@ fn mcp_emit_graph_roundtrip() {
             };
 
             // MCP emission
-            let mcp_result = call_tool(&server, "emit_graph", serde_json::json!({
-                "chart_json": chart_json,
-                "format": format
-            }));
+            let mcp_result = call_tool(
+                &server,
+                "emit_graph",
+                serde_json::json!({
+                    "chart_json": chart_json,
+                    "format": format
+                }),
+            );
 
             match (direct_result, &mcp_result) {
                 (Ok(direct_str), mcp_val) => {
@@ -299,7 +321,10 @@ fn mcp_emit_graph_roundtrip() {
                         debug_fail += 1;
                         if debug_fail <= 2 {
                             eprintln!("  EMIT MISMATCH format={format} graph={i}");
-                            eprintln!("    direct[..60]: {:?}", &direct_str[..direct_str.len().min(60)]);
+                            eprintln!(
+                                "    direct[..60]: {:?}",
+                                &direct_str[..direct_str.len().min(60)]
+                            );
                             eprintln!("    mcp[..60]:    {:?}", &mcp_str[..mcp_str.len().min(60)]);
                         }
                     }
@@ -337,10 +362,13 @@ fn mcp_tools_list_returns_all_7() {
     let response_str = server.handle_request(&serde_json::to_string(&request).unwrap());
     let response: serde_json::Value = serde_json::from_str(&response_str).unwrap();
 
-    let tools = response["result"]["tools"].as_array().expect("tools should be array");
+    let tools = response["result"]["tools"]
+        .as_array()
+        .expect("tools should be array");
     assert_eq!(tools.len(), 7, "Expected 7 MCP tools, got {}", tools.len());
 
-    let names: Vec<&str> = tools.iter()
+    let names: Vec<&str> = tools
+        .iter()
         .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
         .collect();
 
@@ -363,15 +391,27 @@ fn mcp_validation_rejects_bad_inputs() {
     let mut total = 0;
 
     // 100 invalid JDs
-    let bad_jds = [0.0, -1.0, 1e15, f64::NAN, f64::INFINITY, f64::NEG_INFINITY,
-                   1000000.0, 99999999.0];
+    let bad_jds = [
+        0.0,
+        -1.0,
+        1e15,
+        f64::NAN,
+        f64::INFINITY,
+        f64::NEG_INFINITY,
+        1000000.0,
+        99999999.0,
+    ];
     for &jd in &bad_jds {
         total += 1;
-        let result = call_tool(&server, "compute_natal_chart", serde_json::json!({
-            "julian_day": jd,
-            "latitude": 28.0,
-            "longitude": 77.0
-        }));
+        let result = call_tool(
+            &server,
+            "compute_natal_chart",
+            serde_json::json!({
+                "julian_day": jd,
+                "latitude": 28.0,
+                "longitude": 77.0
+            }),
+        );
         if result.get("error_code").is_some() || result.get("code").is_some() {
             pass += 1;
         }
@@ -381,11 +421,15 @@ fn mcp_validation_rejects_bad_inputs() {
     let bad_lats = [91.0, -91.0, 200.0, -200.0];
     for &lat in &bad_lats {
         total += 1;
-        let result = call_tool(&server, "compute_natal_chart", serde_json::json!({
-            "julian_day": 2451545.0,
-            "latitude": lat,
-            "longitude": 77.0
-        }));
+        let result = call_tool(
+            &server,
+            "compute_natal_chart",
+            serde_json::json!({
+                "julian_day": 2451545.0,
+                "latitude": lat,
+                "longitude": 77.0
+            }),
+        );
         if result.get("error_code").is_some() || result.get("code").is_some() {
             pass += 1;
         }
@@ -395,11 +439,15 @@ fn mcp_validation_rejects_bad_inputs() {
     let bad_lons = [181.0, -181.0, 500.0];
     for &lon in &bad_lons {
         total += 1;
-        let result = call_tool(&server, "compute_natal_chart", serde_json::json!({
-            "julian_day": 2451545.0,
-            "latitude": 28.0,
-            "longitude": lon
-        }));
+        let result = call_tool(
+            &server,
+            "compute_natal_chart",
+            serde_json::json!({
+                "julian_day": 2451545.0,
+                "latitude": 28.0,
+                "longitude": lon
+            }),
+        );
         if result.get("error_code").is_some() || result.get("code").is_some() {
             pass += 1;
         }
@@ -421,10 +469,14 @@ fn mcp_validation_rejects_bad_inputs() {
 
     // Bad emit formats
     total += 1;
-    let result = call_tool(&server, "emit_graph", serde_json::json!({
-        "chart_json": {},
-        "format": "invalid_format"
-    }));
+    let result = call_tool(
+        &server,
+        "emit_graph",
+        serde_json::json!({
+            "chart_json": {},
+            "format": "invalid_format"
+        }),
+    );
     if result.get("error_code").is_some() || result.get("code").is_some() {
         pass += 1;
     }

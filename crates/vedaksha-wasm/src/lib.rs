@@ -227,12 +227,20 @@ struct NatalChartInput {
     bodies: Vec<String>,
 }
 
-fn default_ayanamsha() -> String { "Lahiri".to_string() }
-fn default_house_system() -> String { "Placidus".to_string() }
+fn default_ayanamsha() -> String {
+    "Lahiri".to_string()
+}
+fn default_house_system() -> String {
+    "Placidus".to_string()
+}
 
 fn default_bodies() -> Vec<String> {
-    vec!["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "MeanNode", "TrueNode"]
-        .into_iter().map(String::from).collect()
+    vec![
+        "Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "MeanNode", "TrueNode",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect()
 }
 
 fn body_from_name(name: &str) -> Option<vedaksha_ephem_core::bodies::Body> {
@@ -249,7 +257,9 @@ fn body_from_name(name: &str) -> Option<vedaksha_ephem_core::bodies::Body> {
         "neptune" => Some(Body::Neptune),
         "meannode" | "mean_node" | "rahu" => Some(Body::MeanNode),
         "truenode" | "true_node" => Some(Body::TrueNode),
-        "truenodeosculating" | "true_node_osculating" | "osculating_node" => Some(Body::TrueNodeOsculating),
+        "truenodeosculating" | "true_node_osculating" | "osculating_node" => {
+            Some(Body::TrueNodeOsculating)
+        }
         _ => None,
     }
 }
@@ -257,8 +267,8 @@ fn body_from_name(name: &str) -> Option<vedaksha_ephem_core::bodies::Body> {
 fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
     use vedaksha_ephem_core::analytical::AnalyticalProvider;
     use vedaksha_ephem_core::coordinates;
-    use vedaksha_ephem_core::julian;
     use vedaksha_ephem_core::jpl::EphemerisProvider;
+    use vedaksha_ephem_core::julian;
     use vedaksha_ephem_core::nutation;
     use vedaksha_ephem_core::obliquity;
     use vedaksha_ephem_core::sidereal_time;
@@ -280,11 +290,17 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
     let provider = AnalyticalProvider;
     let (jd_min, jd_max) = provider.time_range();
     if jd < jd_min || jd > jd_max {
-        return Err(format!("Date out of range: JD {jd:.1} outside [{jd_min:.0}, {jd_max:.0}]"));
+        return Err(format!(
+            "Date out of range: JD {jd:.1} outside [{jd_min:.0}, {jd_max:.0}]"
+        ));
     }
 
     // Resolve bodies
-    let body_names = if input.bodies.is_empty() { default_bodies() } else { input.bodies };
+    let body_names = if input.bodies.is_empty() {
+        default_bodies()
+    } else {
+        input.bodies
+    };
 
     // Compute positions
     let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::new();
@@ -323,7 +339,12 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
 
     // Compute chart
     let chart = vedaksha_astro::chart::compute_chart(
-        &planet_data, ramc_deg, input.latitude, obliquity_deg, jd, &config,
+        &planet_data,
+        ramc_deg,
+        input.latitude,
+        obliquity_deg,
+        jd,
+        &config,
     );
 
     let ayanamsha_value = vedaksha_astro::sidereal::ayanamsha_value(ayanamsha_system, jd);
@@ -524,14 +545,26 @@ mod tests {
     #[test]
     fn compute_natal_chart_inner_known_chart() {
         let input = NatalChartInput {
-            year: 2000, month: 1, day: 1, hour: 12, minute: 0, second: 0,
-            latitude: 28.6139, longitude: 77.209,
+            year: 2000,
+            month: 1,
+            day: 1,
+            hour: 12,
+            minute: 0,
+            second: 0,
+            latitude: 28.6139,
+            longitude: 77.209,
             ayanamsha: "Lahiri".to_string(),
             house_system: "Placidus".to_string(),
             bodies: vec![
-                "Sun".into(), "Moon".into(), "Mercury".into(), "Venus".into(),
-                "Mars".into(), "Jupiter".into(), "Saturn".into(),
-                "MeanNode".into(), "TrueNode".into(),
+                "Sun".into(),
+                "Moon".into(),
+                "Mercury".into(),
+                "Venus".into(),
+                "Mars".into(),
+                "Jupiter".into(),
+                "Saturn".into(),
+                "MeanNode".into(),
+                "TrueNode".into(),
             ],
         };
         let result = compute_natal_chart_inner(input);
@@ -551,14 +584,23 @@ mod tests {
         assert!(asc > 0.0 && asc < 360.0, "ASC out of range: {asc}");
 
         let ayan = output["ayanamsha_value"].as_f64().unwrap();
-        assert!((ayan - 23.856).abs() < 0.1, "Lahiri should be ~23.856°, got {ayan}");
+        assert!(
+            (ayan - 23.856).abs() < 0.1,
+            "Lahiri should be ~23.856°, got {ayan}"
+        );
     }
 
     #[test]
     fn compute_natal_chart_inner_defaults() {
         let input = NatalChartInput {
-            year: 1990, month: 6, day: 15, hour: 10, minute: 30, second: 0,
-            latitude: 51.5074, longitude: -0.1278,
+            year: 1990,
+            month: 6,
+            day: 15,
+            hour: 10,
+            minute: 30,
+            second: 0,
+            latitude: 51.5074,
+            longitude: -0.1278,
             ayanamsha: "Lahiri".to_string(),
             house_system: "Placidus".to_string(),
             bodies: vec![],
@@ -572,8 +614,14 @@ mod tests {
     #[test]
     fn compute_natal_chart_inner_error_cases() {
         let input = NatalChartInput {
-            year: 2000, month: 1, day: 1, hour: 12, minute: 0, second: 0,
-            latitude: 28.0, longitude: 77.0,
+            year: 2000,
+            month: 1,
+            day: 1,
+            hour: 12,
+            minute: 0,
+            second: 0,
+            latitude: 28.0,
+            longitude: 77.0,
             ayanamsha: "FooBar".to_string(),
             house_system: "Placidus".to_string(),
             bodies: vec!["Sun".into()],
@@ -581,8 +629,14 @@ mod tests {
         assert!(compute_natal_chart_inner(input).is_err());
 
         let input = NatalChartInput {
-            year: 2000, month: 1, day: 1, hour: 12, minute: 0, second: 0,
-            latitude: 28.0, longitude: 77.0,
+            year: 2000,
+            month: 1,
+            day: 1,
+            hour: 12,
+            minute: 0,
+            second: 0,
+            latitude: 28.0,
+            longitude: 77.0,
             ayanamsha: "Lahiri".to_string(),
             house_system: "Topocentric".to_string(),
             bodies: vec!["Sun".into()],

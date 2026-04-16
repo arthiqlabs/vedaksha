@@ -75,17 +75,17 @@ fn is_odd_sign(sign: u8) -> bool {
 /// Standard Parashari lordships used for simplicity per Jaimini Sutras Ch. 2.
 fn sign_lord_sign(sign: u8) -> u8 {
     match sign {
-        0 => 7,   // Aries → Mars → Scorpio
-        1 => 6,   // Taurus → Venus → Libra
-        2 => 5,   // Gemini → Mercury → Virgo
-        3 => 3,   // Cancer → Moon → Cancer (self)
-        4 => 4,   // Leo → Sun → Leo (self)
-        5 => 2,   // Virgo → Mercury → Gemini
-        6 => 1,   // Libra → Venus → Taurus
-        8 => 11,  // Sagittarius → Jupiter → Pisces
-        9 => 10,  // Capricorn → Saturn → Aquarius
-        10 => 9,  // Aquarius → Saturn → Capricorn
-        11 => 8,  // Pisces → Jupiter → Sagittarius
+        0 => 7,  // Aries → Mars → Scorpio
+        1 => 6,  // Taurus → Venus → Libra
+        2 => 5,  // Gemini → Mercury → Virgo
+        3 => 3,  // Cancer → Moon → Cancer (self)
+        4 => 4,  // Leo → Sun → Leo (self)
+        5 => 2,  // Virgo → Mercury → Gemini
+        6 => 1,  // Libra → Venus → Taurus
+        8 => 11, // Sagittarius → Jupiter → Pisces
+        9 => 10, // Capricorn → Saturn → Aquarius
+        10 => 9, // Aquarius → Saturn → Capricorn
+        11 => 8, // Pisces → Jupiter → Sagittarius
         // 7 (Scorpio → Mars → Aries) and fallback
         _ => 0,
     }
@@ -174,20 +174,38 @@ mod tests {
     #[test]
     fn narayana_odd_sign_goes_forward() {
         let result = compute_narayana(0, TEST_JD);
-        assert_eq!(result.periods[0].sign_index, 0, "first period should be Aries");
+        assert_eq!(
+            result.periods[0].sign_index, 0,
+            "first period should be Aries"
+        );
         assert_eq!(result.periods[0].sign_name, "Aries");
-        assert_eq!(result.periods[1].sign_index, 1, "second period should be Taurus");
-        assert_eq!(result.periods[2].sign_index, 2, "third period should be Gemini");
+        assert_eq!(
+            result.periods[1].sign_index, 1,
+            "second period should be Taurus"
+        );
+        assert_eq!(
+            result.periods[2].sign_index, 2,
+            "third period should be Gemini"
+        );
     }
 
     // 3. Even sign (Taurus=1) goes backward: first=Taurus, second=Aries
     #[test]
     fn narayana_even_sign_goes_backward() {
         let result = compute_narayana(1, TEST_JD);
-        assert_eq!(result.periods[0].sign_index, 1, "first period should be Taurus");
+        assert_eq!(
+            result.periods[0].sign_index, 1,
+            "first period should be Taurus"
+        );
         assert_eq!(result.periods[0].sign_name, "Taurus");
-        assert_eq!(result.periods[1].sign_index, 0, "second period should be Aries");
-        assert_eq!(result.periods[2].sign_index, 11, "third period should be Pisces");
+        assert_eq!(
+            result.periods[1].sign_index, 0,
+            "second period should be Aries"
+        );
+        assert_eq!(
+            result.periods[2].sign_index, 11,
+            "third period should be Pisces"
+        );
     }
 
     // 4. Periods are contiguous

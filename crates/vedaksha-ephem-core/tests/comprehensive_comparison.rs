@@ -13,15 +13,15 @@ use std::fs;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates;
 use vedaksha_ephem_core::delta_t;
-use vedaksha_ephem_core::jpl::reader::SpkReader;
 use vedaksha_ephem_core::jpl::EphemerisProvider;
+use vedaksha_ephem_core::jpl::reader::SpkReader;
 use vedaksha_ephem_core::nodes;
 use vedaksha_ephem_core::nutation;
 use vedaksha_ephem_core::obliquity;
 use vedaksha_ephem_core::sidereal_time;
 
-use vedaksha_astro::houses::{compute_houses, HouseSystem};
-use vedaksha_astro::sidereal::{ayanamsha_value, Ayanamsha};
+use vedaksha_astro::houses::{HouseSystem, compute_houses};
+use vedaksha_astro::sidereal::{Ayanamsha, ayanamsha_value};
 
 // ---------------------------------------------------------------------------
 // Deserialization types
@@ -286,8 +286,7 @@ fn comprehensive_comparison_against_reference() {
     // Placidus cardinal cusps (1,4,7,10 = ASC/IC/DSC/MC) are analytically exact.
     // Intermediate cusps (2,3,5,6,8,9,11,12) use iterative semi-arc method
     // which has known accuracy limits; we use a wider tolerance for those.
-    let mut cusp_cardinal_stats =
-        CategoryStats::new("House Cusps (cardinal)", "degrees", 2.0);
+    let mut cusp_cardinal_stats = CategoryStats::new("House Cusps (cardinal)", "degrees", 2.0);
     let mut cusp_intermediate_stats =
         CategoryStats::new("House Cusps (intermediate)", "degrees", 5.0).informational();
     let mut ascmc_stats = CategoryStats::new("ASC/MC", "degrees", 2.0);
@@ -375,10 +374,7 @@ fn comprehensive_comparison_against_reference() {
         let houses = compute_houses(ramc, hc.latitude, eps_deg, HouseSystem::Placidus);
 
         if houses.polar_fallback {
-            eprintln!(
-                "  NOTE: polar fallback at JD {} lat {}",
-                hc.jd, hc.latitude
-            );
+            eprintln!("  NOTE: polar fallback at JD {} lat {}", hc.jd, hc.latitude);
             // Still compare, but expect larger errors
         }
 
@@ -553,5 +549,8 @@ fn comprehensive_comparison_against_reference() {
         panic!("One or more categories below 80% accuracy threshold.");
     }
 
-    eprintln!("All {} categories passed (>80% within target tolerance).", all_stats.len());
+    eprintln!(
+        "All {} categories passed (>80% within target tolerance).",
+        all_stats.len()
+    );
 }
