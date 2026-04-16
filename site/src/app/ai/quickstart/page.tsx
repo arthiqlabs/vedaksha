@@ -76,20 +76,20 @@ export VEDAKSHA_LICENSE_KEY="vk_live_..."
     "chart_graph": {
       "nodes": [
         {
-          "id": "planet_jupiter_40.2",
+          "id": "planet_jupiter_45.0",
           "type": "Planet",
           "name": "Jupiter",
-          "longitude": 40.2,
+          "longitude": 45.0,
           "sign": "Taurus",
           "nakshatra": "Krittika",
           "house": 1,
           "dignity": "neutral",
-          "nl_description": "Jupiter at 40.2° in Taurus..."
+          "nl_description": "Jupiter at 45.0° in Taurus..."
         }
       ],
       "edges": [
         {
-          "from": "planet_jupiter_40.2",
+          "from": "planet_jupiter_45.0",
           "to": "house_1",
           "type": "Occupies"
         }
@@ -128,7 +128,7 @@ export VEDAKSHA_LICENSE_KEY="vk_live_..."
 // Response
 {
   "result": {
-    "output": "CREATE (p:Planet {id: 'planet_jupiter_40.2', name: 'Jupiter', ...})\\nCREATE (h:House {id: 'house_1', ...})\\nMERGE (p)-[:Occupies]->(h)\\n..."
+    "output": "CREATE (p:Planet {id: 'planet_jupiter_45.0', name: 'Jupiter', ...})\\nCREATE (h:House {id: 'house_1', ...})\\nMERGE (p)-[:Occupies]->(h)\\n..."
   }
 }`,
       file: "emit_graph.json",

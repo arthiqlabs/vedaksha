@@ -1,5 +1,5 @@
 [package]
-name = "vedaksha-mcp"
+name = "vedaksha"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,11 +7,7 @@ homepage.workspace = true
 repository.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
-description = "MCP server for AI agent chart computation via JSON-RPC"
-
-[[bin]]
-name = "vedaksha-mcp"
-path = "src/main.rs"
+description = "Vedic and Western astrology engine — ephemeris, charts, dashas, nakshatras, and more"
 
 [dependencies]
 vedaksha-math = { version = "1.6.0", path = "../vedaksha-math" }
@@ -20,15 +16,8 @@ vedaksha-astro = { version = "1.6.0", path = "../vedaksha-astro" }
 vedaksha-vedic = { version = "1.6.0", path = "../vedaksha-vedic" }
 vedaksha-graph = { version = "1.6.0", path = "../vedaksha-graph" }
 vedaksha-emit = { version = "1.6.0", path = "../vedaksha-emit" }
-serde = { workspace = true }
-serde_json = { workspace = true }
-thiserror = { workspace = true }
-tiny_http = { version = "0.12", optional = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }
+vedaksha-locale = { version = "1.6.0", path = "../vedaksha-locale" }
 
 [features]
-default = ["std", "http"]
+default = ["std"]
 std = ["vedaksha-ephem-core/std"]
-http = ["tiny_http"]

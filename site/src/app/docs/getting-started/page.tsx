@@ -70,23 +70,18 @@ export default function GettingStartedPage() {
                 <span className="size-2.5 rounded-full bg-yellow-400/50" />
                 <span className="size-2.5 rounded-full bg-green-400/50" />
               </div>
-              <span className="text-[10px] font-mono text-[var(--color-brand-text-muted)]">main.rs</span>
+              <span className="text-[10px] font-mono text-[var(--color-brand-text-muted)]">chart.py</span>
             </div>
             <pre className="p-4 overflow-x-auto text-sm leading-7 font-mono bg-[var(--color-brand-bg-code)]">
               <code>
-                <span className="text-purple-600">use</span> <span className="text-blue-700">vedaksha</span>::prelude::*;{"\n"}
+                <span className="text-purple-600">import</span> <span className="text-blue-700">vedaksha</span>, <span className="text-blue-700">json</span>{"\n"}
                 {"\n"}
-                <span className="text-purple-600">let</span> jd = <span className="text-blue-700">calendar_to_jd</span>(<span className="text-blue-700">2024</span>, <span className="text-blue-700">3</span>, <span className="text-blue-700">20</span>, <span className="text-blue-700">12.0</span>);{"\n"}
-                <span className="text-purple-600">let</span> chart = <span className="text-blue-700">compute_chart</span>({"\n"}
-                {"  "}jd, <span className="text-blue-700">28.6139</span>, <span className="text-blue-700">77.2090</span>,{"\n"}
-                {"  "}&amp;<span className="text-amber-700">ChartConfig</span>::<span className="text-blue-700">vedic</span>(){"\n"}
-                );{"\n"}
+                chart = json.loads(<span className="text-blue-700">vedaksha</span>.<span className="text-blue-700">compute_natal_chart</span>({"\n"}
+                {"  "}<span className="text-blue-700">2024</span>, <span className="text-blue-700">3</span>, <span className="text-blue-700">20</span>, <span className="text-blue-700">12</span>, <span className="text-blue-700">0</span>, <span className="text-blue-700">28.6139</span>, <span className="text-blue-700">77.2090</span>{"\n"}
+                )){"\n"}
                 {"\n"}
-                <span className="text-purple-600">for</span> planet <span className="text-purple-600">in</span> &amp;chart.planets {"{"}{"\n"}
-                {"  "}<span className="text-blue-700">println!</span>(<span className="text-green-700">&quot;{"{}"}: {}° {"{}"}&quot;</span>,{"\n"}
-                {"    "}planet.name, planet.longitude,{"\n"}
-                {"    "}planet.sign);{"\n"}
-                {"}"}
+                <span className="text-purple-600">for</span> p <span className="text-purple-600">in</span> chart[<span className="text-green-700">&quot;planets&quot;</span>]:{"\n"}
+                {"  "}<span className="text-blue-700">print</span>(<span className="text-green-700">f&quot;{"{"}p[&apos;name&apos;]{"}"}: {"{"}p[&apos;longitude&apos;]:.1f{"}"}° {"{"}p[&apos;sign&apos;]{"}"}&quot;</span>)
               </code>
             </pre>
           </div>

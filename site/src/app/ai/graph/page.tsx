@@ -32,15 +32,15 @@ export default function GraphPage() {
     {
       name: "Cypher (Neo4j)",
       desc: "CREATE statements for nodes and MERGE for relationships. Load directly into Neo4j with a single query batch.",
-      example: `CREATE (p:Planet {id: "planet_jupiter_40.2", name: "Jupiter", longitude: 40.2, sign: "Taurus"})
+      example: `CREATE (p:Planet {id: "planet_jupiter_45.0", name: "Jupiter", longitude: 45.0, sign: "Taurus"})
 CREATE (h:House {id: "house_1_15.7", number: 1, degree: 15.7, sign: "Aries"})
 MERGE (p)-[:Occupies]->(h)`,
     },
     {
       name: "SurrealQL (SurrealDB)",
       desc: "INSERT statements with typed record links. Native graph traversal with SurrealDB's RELATE syntax.",
-      example: `INSERT INTO planet {id: planet:jupiter_40_2, name: "Jupiter", longitude: 40.2, sign: "Taurus"};
-RELATE planet:jupiter_40_2->occupies->house:1_15_7;`,
+      example: `INSERT INTO planet {id: planet:jupiter_45_0, name: "Jupiter", longitude: 45.0, sign: "Taurus"};
+RELATE planet:jupiter_45_0->occupies->house:1_15_7;`,
     },
     {
       name: "JSON-LD",
@@ -49,9 +49,9 @@ RELATE planet:jupiter_40_2->occupies->house:1_15_7;`,
   "@context": {"vedaksha": "https://vedaksha.net/ontology/"},
   "@graph": [{
     "@type": "Planet",
-    "@id": "planet_jupiter_40.2",
+    "@id": "planet_jupiter_45.0",
     "name": "Jupiter",
-    "longitude": 40.2
+    "longitude": 45.0
   }]
 }`,
     },
@@ -59,14 +59,14 @@ RELATE planet:jupiter_40_2->occupies->house:1_15_7;`,
       name: "JSON",
       desc: "Standard JSON with typed fields. The default output format for all MCP tool responses.",
       example: `{
-  "nodes": [{"id": "planet_jupiter", "type": "Planet", "longitude": 40.2}],
+  "nodes": [{"id": "planet_jupiter", "type": "Planet", "longitude": 45.0}],
   "edges": [{"from": "planet_jupiter", "to": "house_1", "type": "Occupies"}]
 }`,
     },
     {
       name: "Embedding Text (RAG)",
       desc: "Optimized text chunks for vector embedding. Each chunk is a self-contained fact suitable for retrieval-augmented generation.",
-      example: `Jupiter is at 40.2 degrees in Taurus in the 1st house.
+      example: `Jupiter is at 45.0 degrees in Taurus in the 1st house.
 Jupiter is exalted, indicating strong beneficial influence.
 Jupiter aspects the 5th, 7th, and 9th houses from its position.`,
     },
