@@ -14,13 +14,13 @@
 //! vedaksha = "1.6"
 //! ```
 
-pub use vedaksha_math as math;
-pub use vedaksha_ephem_core as ephem;
 pub use vedaksha_astro as astro;
-pub use vedaksha_vedic as vedic;
-pub use vedaksha_graph as graph;
 pub use vedaksha_emit as emit;
+pub use vedaksha_ephem_core as ephem;
+pub use vedaksha_graph as graph;
 pub use vedaksha_locale as locale;
+pub use vedaksha_math as math;
+pub use vedaksha_vedic as vedic;
 
 /// Convenience re-exports for the most common entry points.
 pub mod prelude {
@@ -34,14 +34,14 @@ pub mod prelude {
     pub use vedaksha_ephem_core::coordinates::apparent_position;
 
     // Chart computation
-    pub use vedaksha_astro::chart::{compute_chart, ChartConfig, ComputedChart};
+    pub use vedaksha_astro::aspects::AspectType;
+    pub use vedaksha_astro::chart::{ChartConfig, ComputedChart, compute_chart};
+    pub use vedaksha_astro::dignity::RulershipScheme;
     pub use vedaksha_astro::houses::HouseSystem;
     pub use vedaksha_astro::sidereal::Ayanamsha;
-    pub use vedaksha_astro::dignity::RulershipScheme;
-    pub use vedaksha_astro::aspects::AspectType;
 
     // Vedic
-    pub use vedaksha_vedic::nakshatra;
     pub use vedaksha_vedic::dasha;
+    pub use vedaksha_vedic::nakshatra;
     pub use vedaksha_vedic::panchanga;
 }

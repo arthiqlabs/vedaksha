@@ -11,8 +11,8 @@
 use std::fs;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates;
-use vedaksha_ephem_core::jpl::reader::SpkReader;
 use vedaksha_ephem_core::jpl::EphemerisProvider;
+use vedaksha_ephem_core::jpl::reader::SpkReader;
 
 #[derive(serde::Deserialize)]
 struct OracleDataPoint {
@@ -84,7 +84,10 @@ fn compare_against_reference() {
 
     let oracle_path = oracle_data_path();
     if !oracle_path.exists() {
-        eprintln!("Oracle data not found at {}. Run: python3 tests/oracle_comparison.py", oracle_path.display());
+        eprintln!(
+            "Oracle data not found at {}. Run: python3 tests/oracle_comparison.py",
+            oracle_path.display()
+        );
         return;
     }
 
@@ -128,7 +131,10 @@ fn compare_against_reference() {
         let vedaksha_lon = match result {
             Ok(pos) => pos.ecliptic.longitude.to_degrees(),
             Err(e) => {
-                eprintln!("  ERROR: {} at {} (JD {}): {:?}", dp.body, dp.date, dp.jd, e);
+                eprintln!(
+                    "  ERROR: {} at {} (JD {}): {:?}",
+                    dp.body, dp.date, dp.jd, e
+                );
                 skipped += 1;
                 continue;
             }
@@ -164,16 +170,34 @@ fn compare_against_reference() {
             max_error_date = dp.date.clone();
         }
 
-        errors.push((dp.body.clone(), dp.date.clone(), dp.ref_longitude, vedaksha_lon, diff_arcsec));
+        errors.push((
+            dp.body.clone(),
+            dp.date.clone(),
+            dp.ref_longitude,
+            vedaksha_lon,
+            diff_arcsec,
+        ));
     }
 
     // Print detailed results
-    eprintln!("{:<10} {:<24} {:>12} {:>12} {:>10}", "Body", "Date", "Ref", "Vedākṣha", "Diff (″)");
+    eprintln!(
+        "{:<10} {:<24} {:>12} {:>12} {:>10}",
+        "Body", "Date", "Ref", "Vedākṣha", "Diff (″)"
+    );
     eprintln!("{}", "-".repeat(72));
 
     for (body, date, swe, ved, diff) in &errors {
-        let marker = if *diff > 60.0 { " ⚠" } else if *diff > 10.0 { " ●" } else { "" };
-        eprintln!("{:<10} {:<24} {:>12.6} {:>12.6} {:>9.3}{}", body, date, swe, ved, diff, marker);
+        let marker = if *diff > 60.0 {
+            " ⚠"
+        } else if *diff > 10.0 {
+            " ●"
+        } else {
+            ""
+        };
+        eprintln!(
+            "{:<10} {:<24} {:>12.6} {:>12.6} {:>9.3}{}",
+            body, date, swe, ved, diff, marker
+        );
     }
 
     // Print summary
@@ -183,13 +207,39 @@ fn compare_against_reference() {
     eprintln!("Total comparisons:    {}", total);
     eprintln!("Skipped (out of range): {}", skipped);
     eprintln!("");
-    eprintln!("Within 1 arcsecond:   {} / {} ({:.1}%)", within_1_arcsec, total, 100.0 * within_1_arcsec as f64 / total as f64);
-    eprintln!("Within 10 arcseconds: {} / {} ({:.1}%)", within_10_arcsec, total, 100.0 * within_10_arcsec as f64 / total as f64);
-    eprintln!("Within 1 arcminute:   {} / {} ({:.1}%)", within_1_arcmin, total, 100.0 * within_1_arcmin as f64 / total as f64);
-    eprintln!("Within 1 degree:      {} / {} ({:.1}%)", within_1_degree, total, 100.0 * within_1_degree as f64 / total as f64);
+    eprintln!(
+        "Within 1 arcsecond:   {} / {} ({:.1}%)",
+        within_1_arcsec,
+        total,
+        100.0 * within_1_arcsec as f64 / total as f64
+    );
+    eprintln!(
+        "Within 10 arcseconds: {} / {} ({:.1}%)",
+        within_10_arcsec,
+        total,
+        100.0 * within_10_arcsec as f64 / total as f64
+    );
+    eprintln!(
+        "Within 1 arcminute:   {} / {} ({:.1}%)",
+        within_1_arcmin,
+        total,
+        100.0 * within_1_arcmin as f64 / total as f64
+    );
+    eprintln!(
+        "Within 1 degree:      {} / {} ({:.1}%)",
+        within_1_degree,
+        total,
+        100.0 * within_1_degree as f64 / total as f64
+    );
     eprintln!("");
-    eprintln!("Mean error:           {:.3} arcseconds", sum_error / total as f64);
-    eprintln!("Max error:            {:.3} arcseconds ({} at {})", max_error, max_error_body, max_error_date);
+    eprintln!(
+        "Mean error:           {:.3} arcseconds",
+        sum_error / total as f64
+    );
+    eprintln!(
+        "Max error:            {:.3} arcseconds ({} at {})",
+        max_error, max_error_body, max_error_date
+    );
 
     // The test passes if all positions are within 1 degree
     // (our pipeline doesn't yet have all corrections for sub-arcsecond)

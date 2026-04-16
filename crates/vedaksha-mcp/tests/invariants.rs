@@ -8,12 +8,12 @@
 //! These verify properties that must ALWAYS hold, regardless of input.
 
 use vedaksha_astro::sidereal::{self, Ayanamsha};
-use vedaksha_ephem_core::sidereal_time;
 use vedaksha_ephem_core::nutation;
 use vedaksha_ephem_core::obliquity;
-use vedaksha_vedic::nakshatra::Nakshatra;
-use vedaksha_vedic::dasha::vimshottari;
+use vedaksha_ephem_core::sidereal_time;
 use vedaksha_math::angle::normalize_degrees;
+use vedaksha_vedic::dasha::vimshottari;
+use vedaksha_vedic::nakshatra::Nakshatra;
 
 // ─── SIDEREAL LONGITUDE ───
 
@@ -22,8 +22,12 @@ fn sidereal_longitude_equals_tropical_minus_ayanamsha() {
     // For any longitude, any ayanamsha, any date:
     // sidereal = tropical - ayanamsha (mod 360)
     let systems = [
-        Ayanamsha::Lahiri, Ayanamsha::FaganBradley, Ayanamsha::Raman,
-        Ayanamsha::Krishnamurti, Ayanamsha::Yukteshwar, Ayanamsha::Tropical,
+        Ayanamsha::Lahiri,
+        Ayanamsha::FaganBradley,
+        Ayanamsha::Raman,
+        Ayanamsha::Krishnamurti,
+        Ayanamsha::Yukteshwar,
+        Ayanamsha::Tropical,
     ];
     let jds = [2451545.0, 2451000.0, 2452000.0, 2440000.0, 2460000.0];
     let longitudes = [0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 315.0, 359.99];
@@ -42,7 +46,10 @@ fn sidereal_longitude_equals_tropical_minus_ayanamsha() {
                 if diff < 1e-10 || (360.0 - diff).abs() < 1e-10 {
                     pass += 1;
                 } else {
-                    eprintln!("FAIL sidereal: sys={:?} jd={jd} lon={lon} expected={expected} got={sidereal} diff={diff}", sys);
+                    eprintln!(
+                        "FAIL sidereal: sys={:?} jd={jd} lon={lon} expected={expected} got={sidereal} diff={diff}",
+                        sys
+                    );
                 }
             }
         }
@@ -122,12 +129,14 @@ fn retrograde_detection_from_speed_sign() {
 
 #[test]
 fn polar_house_fallback_triggers_above_66_56() {
-    use vedaksha_astro::houses::{compute_houses, HouseSystem};
+    use vedaksha_astro::houses::{HouseSystem, compute_houses};
 
     let mut total = 0;
     let mut pass = 0;
 
-    let polar_lats = [67.0, 70.0, 75.0, 80.0, 85.0, 89.0, -67.0, -70.0, -80.0, -89.0];
+    let polar_lats = [
+        67.0, 70.0, 75.0, 80.0, 85.0, 89.0, -67.0, -70.0, -80.0, -89.0,
+    ];
     let non_polar_lats = [0.0, 10.0, 30.0, 45.0, 55.0, 60.0, 65.0, 66.0, -30.0, -60.0];
 
     // Placidus and Koch should fallback at polar latitudes
@@ -138,7 +147,10 @@ fn polar_house_fallback_triggers_above_66_56() {
             if cusps.polar_fallback {
                 pass += 1;
             } else {
-                eprintln!("FAIL polar: system={:?} lat={lat} should fallback but didn't", system);
+                eprintln!(
+                    "FAIL polar: system={:?} lat={lat} should fallback but didn't",
+                    system
+                );
             }
         }
 
@@ -148,7 +160,10 @@ fn polar_house_fallback_triggers_above_66_56() {
             if !cusps.polar_fallback {
                 pass += 1;
             } else {
-                eprintln!("FAIL non-polar: system={:?} lat={lat} should NOT fallback but did", system);
+                eprintln!(
+                    "FAIL non-polar: system={:?} lat={lat} should NOT fallback but did",
+                    system
+                );
             }
         }
     }
@@ -177,7 +192,10 @@ fn nakshatra_from_longitude_covers_full_circle() {
         if nak.index() == expected_index {
             pass += 1;
         } else {
-            eprintln!("FAIL nakshatra: lon={lon} expected_idx={expected_index} got={}", nak.index());
+            eprintln!(
+                "FAIL nakshatra: lon={lon} expected_idx={expected_index} got={}",
+                nak.index()
+            );
         }
     }
 
@@ -189,7 +207,10 @@ fn nakshatra_from_longitude_covers_full_circle() {
         if nak.index() == i as u8 {
             pass += 1;
         } else {
-            eprintln!("FAIL nakshatra boundary: lon={boundary} expected={i} got={}", nak.index());
+            eprintln!(
+                "FAIL nakshatra boundary: lon={boundary} expected={i} got={}",
+                nak.index()
+            );
         }
     }
 
@@ -243,7 +264,9 @@ fn dasha_period_sums_equal_120_years() {
         if diff < 0.01 {
             pass += 1;
         } else {
-            eprintln!("FAIL dasha sum: moon_lon={moon_lon} sum={sum} expected={expected_days} diff={diff}");
+            eprintln!(
+                "FAIL dasha sum: moon_lon={moon_lon} sum={sum} expected={expected_days} diff={diff}"
+            );
         }
     }
 
@@ -259,7 +282,10 @@ fn dasha_period_sums_equal_120_years() {
             if diff < 0.01 {
                 pass += 1;
             } else {
-                eprintln!("FAIL sub-period sum: lord={:?} parent={} sub_sum={sub_sum} diff={diff}", maha.lord, maha.duration_days);
+                eprintln!(
+                    "FAIL sub-period sum: lord={:?} parent={} sub_sum={sub_sum} diff={diff}",
+                    maha.lord, maha.duration_days
+                );
             }
 
             // Level 3: pratyantar sums to antar
@@ -288,10 +314,11 @@ fn gast_equals_gmst_plus_equation_of_equinoxes() {
     let mut total = 0;
     let mut pass = 0;
 
-    let jds = [2451545.0, 2451000.0, 2452000.0, 2440000.0, 2460000.0,
-               2445000.0, 2450000.0, 2455000.0, 2448000.0, 2453000.0,
-               2430000.0, 2435000.0, 2442000.0, 2457000.0, 2462000.0,
-               2447000.0, 2449000.0, 2451500.0, 2454000.0, 2456000.0];
+    let jds = [
+        2451545.0, 2451000.0, 2452000.0, 2440000.0, 2460000.0, 2445000.0, 2450000.0, 2455000.0,
+        2448000.0, 2453000.0, 2430000.0, 2435000.0, 2442000.0, 2457000.0, 2462000.0, 2447000.0,
+        2449000.0, 2451500.0, 2454000.0, 2456000.0,
+    ];
 
     for &jd in &jds {
         total += 1;
@@ -322,7 +349,7 @@ fn gast_equals_gmst_plus_equation_of_equinoxes() {
 
 #[test]
 fn whole_sign_cusps_are_deterministic_from_asc() {
-    use vedaksha_astro::houses::{compute_houses, HouseSystem};
+    use vedaksha_astro::houses::{HouseSystem, compute_houses};
 
     let mut total = 0;
     let mut pass = 0;
@@ -346,9 +373,14 @@ fn whole_sign_cusps_are_deterministic_from_asc() {
                         eprintln!("FAIL whole_sign gap: cusp {} to {} = {gap}", i + 1, i + 2);
                     }
                 }
-                if all_30 { pass += 1; }
+                if all_30 {
+                    pass += 1;
+                }
             } else {
-                eprintln!("FAIL whole_sign: asc={} sign_start={asc_sign_start} cusp1={}", cusps.asc, cusps.cusps[0]);
+                eprintln!(
+                    "FAIL whole_sign: asc={} sign_start={asc_sign_start} cusp1={}",
+                    cusps.asc, cusps.cusps[0]
+                );
             }
         }
     }

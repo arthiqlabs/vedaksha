@@ -41,8 +41,7 @@ impl Tithi {
     #[must_use]
     pub fn lord(&self) -> &'static str {
         const LORDS: [&str; 15] = [
-            "Sun", "Moon", "Mars", "Mercury", "Jupiter",
-            "Venus", "Saturn", "Rahu", "Sun", "Moon",
+            "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Sun", "Moon",
             "Mars", "Mercury", "Jupiter", "Venus", "Saturn",
         ];
         LORDS[((self.number - 1) % 15) as usize]
@@ -617,8 +616,12 @@ mod tests {
     #[test]
     fn all_weekdays_have_lords() {
         let days = [
-            Weekday::Sunday, Weekday::Monday, Weekday::Tuesday,
-            Weekday::Wednesday, Weekday::Thursday, Weekday::Friday,
+            Weekday::Sunday,
+            Weekday::Monday,
+            Weekday::Tuesday,
+            Weekday::Wednesday,
+            Weekday::Thursday,
+            Weekday::Friday,
             Weekday::Saturday,
         ];
         for d in &days {

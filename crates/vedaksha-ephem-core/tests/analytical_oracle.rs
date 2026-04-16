@@ -38,11 +38,19 @@ fn body_from_name(name: &str) -> Option<Body> {
 #[test]
 fn analytical_oracle_regression() {
     let oracle_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent().unwrap().parent().unwrap()
-        .join("tests").join("oracle_jpl").join("reference_positions.json");
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .join("tests")
+        .join("oracle_jpl")
+        .join("reference_positions.json");
 
     if !oracle_path.exists() {
-        eprintln!("Oracle data not found at {}, skipping", oracle_path.display());
+        eprintln!(
+            "Oracle data not found at {}, skipping",
+            oracle_path.display()
+        );
         return;
     }
 
@@ -65,24 +73,33 @@ fn analytical_oracle_regression() {
             None => continue,
         };
 
-        if dp.jd < jd_min || dp.jd > jd_max { continue; }
+        if dp.jd < jd_min || dp.jd > jd_max {
+            continue;
+        }
 
         let result = coordinates::apparent_position(&provider, body, dp.jd);
         let lon = match result {
             Ok(pos) => pos.ecliptic.longitude.to_degrees(),
             Err(e) => {
-                eprintln!("  ERROR: {} at {} (JD {}): {:?}", dp.body, dp.date, dp.jd, e);
+                eprintln!(
+                    "  ERROR: {} at {} (JD {}): {:?}",
+                    dp.body, dp.date, dp.jd, e
+                );
                 continue;
             }
         };
 
         let mut diff = (lon - dp.ref_longitude).abs();
-        if diff > 180.0 { diff = 360.0 - diff; }
+        if diff > 180.0 {
+            diff = 360.0 - diff;
+        }
         let diff_arcsec = diff * 3600.0;
 
         total += 1;
         sum_error += diff_arcsec;
-        if diff <= 1.0 { within_1_degree += 1; }
+        if diff <= 1.0 {
+            within_1_degree += 1;
+        }
         if diff_arcsec > max_error_arcsec {
             max_error_arcsec = diff_arcsec;
             max_error_body = dp.body.clone();
@@ -94,10 +111,18 @@ fn analytical_oracle_regression() {
     eprintln!(" Analytical Provider — Oracle Regression");
     eprintln!("===========================================================================\n");
     eprintln!("Total comparisons:  {total}");
-    eprintln!("Within 1 degree:    {within_1_degree}/{total} ({:.1}%)",
-              100.0 * within_1_degree as f64 / total.max(1) as f64);
-    eprintln!("Mean error:         {:.3}\"", sum_error / total.max(1) as f64);
-    eprintln!("Max error:          {:.3}\" ({} at {})", max_error_arcsec, max_error_body, max_error_date);
+    eprintln!(
+        "Within 1 degree:    {within_1_degree}/{total} ({:.1}%)",
+        100.0 * within_1_degree as f64 / total.max(1) as f64
+    );
+    eprintln!(
+        "Mean error:         {:.3}\"",
+        sum_error / total.max(1) as f64
+    );
+    eprintln!(
+        "Max error:          {:.3}\" ({} at {})",
+        max_error_arcsec, max_error_body, max_error_date
+    );
 
     assert!(
         within_1_degree == total,

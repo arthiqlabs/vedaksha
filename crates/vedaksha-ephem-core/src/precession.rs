@@ -167,8 +167,8 @@ mod tests {
         // Pin exact output at three epochs to detect any refactoring drift.
         let epochs = [
             J2000,
-            J2000 + 36_525.0,   // J2100
-            J2000 - 73_050.0,   // J1800
+            J2000 + 36_525.0, // J2100
+            J2000 - 73_050.0, // J1800
         ];
         for &jd in &epochs {
             let p = precession_matrix(jd);

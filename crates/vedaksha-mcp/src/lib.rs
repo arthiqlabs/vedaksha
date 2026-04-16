@@ -13,6 +13,7 @@
 #![deny(unsafe_code)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+#![allow(clippy::too_many_lines)]
 
 pub mod server;
 pub mod tools;

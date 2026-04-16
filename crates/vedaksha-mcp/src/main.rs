@@ -86,8 +86,7 @@ fn run_http(port: u16) {
         // Health check
         if path == "/health" {
             let _ = request.respond(
-                Response::from_string(r#"{"status":"ok"}"#)
-                    .with_header(content_type_json()),
+                Response::from_string(r#"{"status":"ok"}"#).with_header(content_type_json()),
             );
             continue;
         }
@@ -114,9 +113,8 @@ fn run_http(port: u16) {
                 );
                 continue;
             }
-            let _ = request.respond(
-                Response::from_string("Method Not Allowed").with_status_code(405),
-            );
+            let _ =
+                request.respond(Response::from_string("Method Not Allowed").with_status_code(405));
             continue;
         }
 

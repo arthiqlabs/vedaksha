@@ -386,13 +386,13 @@ mod tests {
     fn known_planet_distances_at_j2000() {
         // Approximate semi-major axes in AU for a rough sanity check
         let expected: &[(Planet, f64, f64)] = &[
-            (Planet::Mercury,  0.30, 0.50),
-            (Planet::Venus,    0.70, 0.74),
-            (Planet::Earth,    0.97, 1.03),
-            (Planet::Mars,     1.38, 1.67),
-            (Planet::Jupiter,  4.90, 5.50),
-            (Planet::Saturn,   9.00, 9.60),
-            (Planet::Uranus,  18.20, 20.20),
+            (Planet::Mercury, 0.30, 0.50),
+            (Planet::Venus, 0.70, 0.74),
+            (Planet::Earth, 0.97, 1.03),
+            (Planet::Mars, 1.38, 1.67),
+            (Planet::Jupiter, 4.90, 5.50),
+            (Planet::Saturn, 9.00, 9.60),
+            (Planet::Uranus, 18.20, 20.20),
             (Planet::Neptune, 29.80, 30.40),
         ];
 
