@@ -65,20 +65,20 @@ static HOUSES_HI: &[&str] = &[
     "द्वादश भाव",
 ];
 
-/// Sanskrit names in IAST transliteration.
+/// Sanskrit names in Devanagari script.
 static HOUSES_SA: &[&str] = &[
-    "Prathama Bhāva",
-    "Dvitīya Bhāva",
-    "Tṛtīya Bhāva",
-    "Caturtha Bhāva",
-    "Pañcama Bhāva",
-    "Ṣaṣṭha Bhāva",
-    "Saptama Bhāva",
-    "Aṣṭama Bhāva",
-    "Navama Bhāva",
-    "Daśama Bhāva",
-    "Ekādaśa Bhāva",
-    "Dvādaśa Bhāva",
+    "प्रथमभावः",
+    "द्वितीयभावः",
+    "तृतीयभावः",
+    "चतुर्थभावः",
+    "पञ्चमभावः",
+    "षष्ठभावः",
+    "सप्तमभावः",
+    "अष्टमभावः",
+    "नवमभावः",
+    "दशमभावः",
+    "एकादशभावः",
+    "द्वादशभावः",
 ];
 
 static HOUSES_TA: &[&str] = &[

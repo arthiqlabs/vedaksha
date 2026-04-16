@@ -41,8 +41,8 @@ static DIGNITIES_EN: &[&str] = &["Domicile", "Exaltation", "Detriment", "Fall", 
 
 static DIGNITIES_HI: &[&str] = &["स्वक्षेत्र", "उच्च", "शत्रुक्षेत्र", "नीच", "सामान्य"];
 
-/// Sanskrit names in IAST transliteration.
-static DIGNITIES_SA: &[&str] = &["Svakṣetra", "Ucca", "Śatrukṣetra", "Nīca", "Sāmānya"];
+/// Sanskrit names in Devanagari script.
+static DIGNITIES_SA: &[&str] = &["उच्चम्", "मूलत्रिकोणम्", "स्वक्षेत्रम्", "नीचम्", "शत्रुक्षेत्रम्"];
 
 static DIGNITIES_TA: &[&str] = &["சொந்த வீடு", "உச்சம்", "பகை வீடு", "நீசம்", "சாமான்யம்"];
 
@@ -74,7 +74,7 @@ mod tests {
 
     #[test]
     fn fall_sanskrit() {
-        assert_eq!(dignity_name(3, Language::Sanskrit), "Nīca");
+        assert_eq!(dignity_name(3, Language::Sanskrit), "नीचम्");
     }
 
     #[test]

@@ -62,16 +62,16 @@ static YOGAS_HI: &[&str] = &[
     "केमद्रुम योग",
 ];
 
-/// Sanskrit names in IAST transliteration.
+/// Sanskrit names in Devanagari script.
 static YOGAS_SA: &[&str] = &[
-    "Rucaka Yoga",
-    "Bhadra Yoga",
-    "Haṃsa Yoga",
-    "Mālavya Yoga",
-    "Śaśa Yoga",
-    "Gajakesarī Yoga",
-    "Budhāditya Yoga",
-    "Kemadrama Yoga",
+    "गजकेसरी",
+    "बुधादित्यः",
+    "परिवर्तनम्",
+    "राजयोगः",
+    "धनयोगः",
+    "महापुरुषयोगः",
+    "कालसर्पः",
+    "विपरीतराजयोगः",
 ];
 
 static YOGAS_TA: &[&str] = &[

@@ -67,19 +67,19 @@ static KARANAS_HI: &[&str] = &[
     "नाग",
 ];
 
-/// Sanskrit names in IAST transliteration.
+/// Sanskrit names in Devanagari script.
 static KARANAS_SA: &[&str] = &[
-    "Bava",
-    "Bālava",
-    "Kaulava",
-    "Taitila",
-    "Garaja",
-    "Vaṇij",
-    "Viṣṭi",
-    "Kiṃstughna",
-    "Śakunī",
-    "Catuṣpāda",
-    "Nāga",
+    "बवः",
+    "बालवः",
+    "कौलवः",
+    "तैतिलः",
+    "गरः",
+    "वणिज्",
+    "विष्टिः",
+    "शकुनिः",
+    "चतुष्पात्",
+    "नागः",
+    "किंस्तुघ्नः",
 ];
 
 static KARANAS_TA: &[&str] = &[
