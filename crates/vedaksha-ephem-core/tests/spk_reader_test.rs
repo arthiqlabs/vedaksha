@@ -128,8 +128,7 @@ fn velocity_is_nonzero() {
     let state = reader
         .compute_state(Body::EarthMoonBarycenter, J2000)
         .expect("EMB at J2000");
-    let v =
-        (state.velocity.x.powi(2) + state.velocity.y.powi(2) + state.velocity.z.powi(2)).sqrt();
+    let v = (state.velocity.x.powi(2) + state.velocity.y.powi(2) + state.velocity.z.powi(2)).sqrt();
     // Earth orbital velocity ~30 km/s ≈ 0.0173 AU/day
     assert!(
         (0.01..=0.02).contains(&v),
