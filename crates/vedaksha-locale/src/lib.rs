@@ -67,7 +67,7 @@ impl Language {
         match self {
             Self::English => "English",
             Self::Hindi => "हिन्दी",
-            Self::Sanskrit => "Saṃskṛtam",
+            Self::Sanskrit => "संस्कृतम्",
             Self::Tamil => "தமிழ்",
             Self::Telugu => "తెలుగు",
             Self::Kannada => "ಕನ್ನಡ",
@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn sign_name_sanskrit_aries() {
-        assert_eq!(signs::sign_name(0, Language::Sanskrit), "Meṣa");
+        assert_eq!(signs::sign_name(0, Language::Sanskrit), "मेषः");
     }
 
     #[test]
@@ -303,7 +303,57 @@ mod tests {
 
     #[test]
     fn karana_name_sanskrit_vishti() {
-        assert_eq!(karanas::karana_name(6, Language::Sanskrit), "Viṣṭi");
+        assert_eq!(karanas::karana_name(6, Language::Sanskrit), "विष्टिः");
+    }
+
+    // ── Devanagari spot-checks (one per module) ──
+
+    #[test]
+    fn sanskrit_planet_sun_devanagari() {
+        assert_eq!(planets::planet_name(0, Language::Sanskrit), "सूर्यः");
+    }
+
+    #[test]
+    fn sanskrit_nakshatra_ashwini_devanagari() {
+        assert_eq!(nakshatras::nakshatra_name(0, Language::Sanskrit), "अश्विनी");
+    }
+
+    #[test]
+    fn sanskrit_deity_yama_devanagari() {
+        assert_eq!(deities::deity_name(1, Language::Sanskrit), "यमः");
+    }
+
+    #[test]
+    fn sanskrit_house_first_devanagari() {
+        assert_eq!(houses::house_name(1, Language::Sanskrit), "प्रथमभावः");
+    }
+
+    #[test]
+    fn sanskrit_dignity_ucca_devanagari() {
+        assert_eq!(dignities::dignity_name(0, Language::Sanskrit), "उच्चम्");
+    }
+
+    #[test]
+    fn sanskrit_panchanga_yoga_vishkambha_devanagari() {
+        assert_eq!(
+            panchanga_yogas::panchanga_yoga_name(0, Language::Sanskrit),
+            "विष्कम्भः"
+        );
+    }
+
+    #[test]
+    fn sanskrit_yoga_gajakesari_devanagari() {
+        assert_eq!(yogas::yoga_name(0, Language::Sanskrit), "गजकेसरी");
+    }
+
+    #[test]
+    fn sanskrit_aspect_yuti_devanagari() {
+        assert_eq!(aspects::aspect_name(0, Language::Sanskrit), "युतिः");
+    }
+
+    #[test]
+    fn sanskrit_native_name_devanagari() {
+        assert_eq!(Language::Sanskrit.native_name(), "संस्कृतम्");
     }
 
     #[test]

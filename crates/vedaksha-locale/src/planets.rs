@@ -51,17 +51,17 @@ static PLANETS_HI: &[&str] = &[
     "केतु",
 ];
 
-/// Sanskrit names in IAST transliteration (BPHS Ch. 3).
+/// Sanskrit names in Devanagari script (BPHS Ch. 3).
 static PLANETS_SA: &[&str] = &[
-    "Sūrya",
-    "Candra",
-    "Maṅgala",
-    "Budha",
-    "Bṛhaspati",
-    "Śukra",
-    "Śani",
-    "Rāhu",
-    "Ketu",
+    "सूर्यः",
+    "चन्द्रः",
+    "मङ्गलः",
+    "बुधः",
+    "बृहस्पतिः",
+    "शुक्रः",
+    "शनिः",
+    "राहुः",
+    "केतुः",
 ];
 
 static PLANETS_TA: &[&str] = &[

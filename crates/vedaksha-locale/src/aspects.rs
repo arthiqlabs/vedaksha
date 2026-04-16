@@ -73,19 +73,19 @@ static ASPECTS_HI: &[&str] = &[
     "द्वि-पंचमांश",
 ];
 
-/// Sanskrit in IAST transliteration.
+/// Sanskrit names in Devanagari script.
 static ASPECTS_SA: &[&str] = &[
-    "Yuti",
-    "Ṣaṣṭhāṃśa",
-    "Caturthāṃśa",
-    "Trikoṇa",
-    "Virodhī",
-    "Ardha-ṣaṣṭhāṃśa",
-    "Quiñcunx",
-    "Ardha-caturthāṃśa",
-    "Seski-caturthāṃśa",
-    "Pañcamāṃśa",
-    "Dvi-pañcamāṃśa",
+    "युतिः",
+    "सप्तमदृष्टिः",
+    "पञ्चमदृष्टिः",
+    "नवमदृष्टिः",
+    "तृतीयदृष्टिः",
+    "दशमदृष्टिः",
+    "चतुर्थदृष्टिः",
+    "अष्टमदृष्टिः",
+    "द्वादशदृष्टिः",
+    "षडष्टकम्",
+    "केन्द्रम्",
 ];
 
 static ASPECTS_TA: &[&str] = &[

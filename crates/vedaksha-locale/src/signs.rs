@@ -64,20 +64,20 @@ static SIGNS_HI: &[&str] = &[
     "मीन",
 ];
 
-/// Sanskrit names in IAST transliteration.
+/// Sanskrit names in Devanagari script.
 static SIGNS_SA: &[&str] = &[
-    "Meṣa",
-    "Vṛṣabha",
-    "Mithuna",
-    "Karka",
-    "Siṃha",
-    "Kanyā",
-    "Tulā",
-    "Vṛścika",
-    "Dhanus",
-    "Makara",
-    "Kumbha",
-    "Mīna",
+    "मेषः",
+    "वृषभः",
+    "मिथुनम्",
+    "कर्कः",
+    "सिंहः",
+    "कन्या",
+    "तुला",
+    "वृश्चिकः",
+    "धनुः",
+    "मकरः",
+    "कुम्भः",
+    "मीनः",
 ];
 
 static SIGNS_TA: &[&str] = &[
