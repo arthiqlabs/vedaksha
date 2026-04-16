@@ -158,6 +158,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
+        with:
+          pattern: 'mcp-*'
+      - uses: actions/download-artifact@v4
+        with:
+          name: vedaksha-wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: wheels/
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:

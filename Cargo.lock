@@ -327,8 +327,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
 
 [[package]]
+name = "vedaksha"
+version = "1.6.0"
+dependencies = [
+ "vedaksha-astro",
+ "vedaksha-emit",
+ "vedaksha-ephem-core",
+ "vedaksha-graph",
+ "vedaksha-locale",
+ "vedaksha-math",
+ "vedaksha-vedic",
+]
+
+[[package]]
 name = "vedaksha-astro"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "libm",
  "serde",
@@ -338,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-emit"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -347,7 +360,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-ephem-core"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "libm",
  "serde",
@@ -359,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-graph"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -367,18 +380,18 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-locale"
-version = "1.5.1"
+version = "1.6.0"
 
 [[package]]
 name = "vedaksha-math"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "libm",
 ]
 
 [[package]]
 name = "vedaksha-mcp"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -394,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-vedic"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "serde",
  "vedaksha-astro",
@@ -404,7 +417,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-wasm"
-version = "1.5.1"
+version = "1.6.0"
 dependencies = [
  "serde",
  "serde-wasm-bindgen",
