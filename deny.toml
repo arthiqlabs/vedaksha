@@ -2,14 +2,12 @@
 # Run: cargo deny check
 
 [advisories]
-vulnerability = "deny"
+yanked = "deny"
 unmaintained = "workspace"
-yanked = "workspace"
-notice = "workspace"
 
 [licenses]
-unlicensed = "deny"
 allow = [
+    "BUSL-1.1",
     "MIT",
     "Apache-2.0",
     "BSD-2-Clause",
@@ -20,17 +18,6 @@ allow = [
     "BSL-1.0",
     "Zlib",
     "CC0-1.0",
-]
-copyleft = "deny"
-# CRITICAL: No AGPL, GPL, LGPL, SSPL allowed
-deny = [
-    "AGPL-3.0",
-    "GPL-2.0",
-    "GPL-3.0",
-    "LGPL-2.0",
-    "LGPL-2.1",
-    "LGPL-3.0",
-    "SSPL-1.0",
 ]
 
 [bans]

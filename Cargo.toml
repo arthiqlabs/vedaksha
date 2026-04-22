@@ -19,6 +19,7 @@ edition = "2024"
 authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
 homepage = "https://vedaksha.net"
 repository = "https://github.com/arthiqlabs/vedaksha"
+license = "BUSL-1.1"
 license-file = "LICENSE"
 rust-version = "1.85"
 
