@@ -66,8 +66,23 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          for crate in vedaksha-math vedaksha-ephem-core vedaksha-graph vedaksha-astro vedaksha-vedic vedaksha-emit vedaksha-locale vedaksha-mcp vedaksha-wasm; do
-            cargo publish -p "$crate" --allow-dirty 2>&1 || echo "Skipping $crate (already published or error)"
+          set -e
+          for crate in vedaksha-math vedaksha-ephem-core vedaksha-graph vedaksha-astro vedaksha-vedic vedaksha-emit vedaksha-locale vedaksha-mcp vedaksha-wasm vedaksha; do
+            echo "::group::Publishing $crate"
+            log=$(mktemp)
+            if cargo publish -p "$crate" --allow-dirty 2>&1 | tee "$log"; then
+              echo "::endgroup::"
+              echo "published $crate"
+            else
+              if grep -qEi 'already.{0,15}(exists|uploaded|published)|crate version.*is already' "$log"; then
+                echo "::endgroup::"
+                echo "skip $crate (already on crates.io)"
+              else
+                echo "::endgroup::"
+                echo "::error::$crate publish failed — see log above"
+                exit 1
+              fi
+            fi
             sleep 30
           done
 
