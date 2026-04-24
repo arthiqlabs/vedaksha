@@ -1,0 +1,70 @@
+name: clean-room-gate
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    name: Repository hygiene + clean-room checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Never-public paths
+        run: |
+          set -euo pipefail
+          forbidden='^(docs/superpowers/|docs/plans/|docs/internal/|docs/agents/|docs/brainstorm/|\.claude/|scratch/|drafts/|notes/|prompts/|_archive/|VEDAKSHA_INIT\.md|LOCAL_FIRST_DIRECTIVE\.md|AUDIT_REPORT\.md|SCAFFOLDING\.md|STRATEGY\.md|.*_STRATEGY\.md|BRAINSTORM.*\.md|ROADMAP_INTERNAL\.md|COMPETITIVE\.md|PRICING_NOTES\.md|AGENTS\.md)$'
+          hits=$(git ls-files | grep -E "$forbidden" || true)
+          if [[ -n "$hits" ]]; then
+            echo "::error::Never-public paths tracked in repo:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "No never-public paths tracked."
+
+      - name: Source-code clean-room (crates/ + bindings/)
+        run: |
+          set -euo pipefail
+          bad=$(git grep -iInE 'swisseph|swiss\.eph|swe_[a-z]|SE_SIDM|jagannatha|pyswisseph' -- 'crates/' 'bindings/' | grep -v 'serde(alias' || true)
+          if [[ -n "$bad" ]]; then
+            echo "::error::Clean-room violation in source code:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "Source tree clean-room-compliant."
+
+      - name: AI-workflow markers outside policy docs
+        run: |
+          set -euo pipefail
+          bad=$(git grep -iInE 'superpowers:|subagent-driven-development|For agentic workers:|REQUIRED SUB-SKILL' \
+            -- ':(exclude)SECURITY.md' \
+               ':(exclude)CONTRIBUTING.md' \
+               ':(exclude)README.md' \
+               ':(exclude).github/' \
+               ':(exclude).githooks/' \
+               ':(exclude).gitignore' \
+               ':(exclude)deny.toml' \
+               ':(exclude)clippy.toml' || true)
+          if [[ -n "$bad" ]]; then
+            echo "::error::AI-workflow markers leaked outside policy docs:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "No AI-workflow markers outside policy docs."
+
+      - name: Secret pattern scan
+        run: |
+          set -euo pipefail
+          patterns='BEGIN (RSA |OPENSSH |EC |DSA |PGP )?PRIVATE KEY|AKIA[0-9A-Z]{16}|ghp_[0-9A-Za-z]{36}|gho_[0-9A-Za-z]{36}|ghs_[0-9A-Za-z]{36}|sk-[a-zA-Z0-9]{20,}|xox[baprs]-[0-9A-Za-z-]+|AIza[0-9A-Za-z_-]{35}|BW_SESSION|bw://'
+          bad=$(git grep -iInE "$patterns" -- ':(exclude)SECURITY.md' ':(exclude)CONTRIBUTING.md' ':(exclude)README.md' ':(exclude).github/' ':(exclude).githooks/' ':(exclude).gitignore' || true)
+          if [[ -n "$bad" ]]; then
+            echo "::error::Potential secret leak:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "No secret patterns detected."

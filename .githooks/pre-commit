@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Clean-room and internal-artifact gate.
+# Blocks commits that introduce forbidden content or never-public paths.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Emergency bypass:         VEDAKSHA_SKIP_HOOK=1 git commit ...
+#                           (documented in SECURITY.md; prefer fixing the hit)
+
+set -euo pipefail
+
+if [[ "${VEDAKSHA_SKIP_HOOK:-}" == "1" ]]; then
+  echo "[pre-commit] VEDAKSHA_SKIP_HOOK=1 set; gate skipped." >&2
+  exit 0
+fi
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+if [[ -z "$staged" ]]; then
+  exit 0
+fi
+
+fail=0
+
+# ---------- Path gate ----------
+forbidden_paths='^(docs/superpowers/|docs/plans/|docs/internal/|docs/agents/|docs/brainstorm/|\.claude/|scratch/|drafts/|notes/|prompts/|_archive/|VEDAKSHA_INIT\.md|LOCAL_FIRST_DIRECTIVE\.md|AUDIT_REPORT\.md|SCAFFOLDING\.md|STRATEGY\.md|.*_STRATEGY\.md|BRAINSTORM.*\.md|ROADMAP_INTERNAL\.md|COMPETITIVE\.md|PRICING_NOTES\.md|AGENTS\.md)$'
+bad_paths=$(echo "$staged" | grep -E "$forbidden_paths" || true)
+if [[ -n "$bad_paths" ]]; then
+  echo "[pre-commit] BLOCKED: never-public paths staged:" >&2
+  echo "$bad_paths" >&2
+  fail=1
+fi
+
+# ---------- Content gate ----------
+# Policy docs legitimately enumerate forbidden markers; exempt them.
+policy_exempt='^(SECURITY\.md|CONTRIBUTING\.md|README\.md|\.github/|\.githooks/|\.gitignore|deny\.toml|clippy\.toml)'
+non_policy=$(echo "$staged" | grep -vE "$policy_exempt" || true)
+
+if [[ -n "$non_policy" ]]; then
+  markers='superpowers:|subagent-driven-development|For agentic workers:|REQUIRED SUB-SKILL|swisseph|swiss\.eph|swe_[a-z]|SE_SIDM|jagannatha|pyswisseph|BW_SESSION|bw://'
+  for f in $non_policy; do
+    hits=$(git diff --cached -U0 -- "$f" | grep -iE "$markers" | grep -v 'serde(alias' || true)
+    if [[ -n "$hits" ]]; then
+      echo "[pre-commit] BLOCKED: forbidden marker in $f:" >&2
+      echo "$hits" >&2
+      fail=1
+    fi
+  done
+fi
+
+if [[ $fail -ne 0 ]]; then
+  echo "" >&2
+  echo "[pre-commit] Commit blocked. Unstage or fix the offending content." >&2
+  echo "See SECURITY.md 'Repository Hygiene' and 'Source-Code Clean-Room Rule'." >&2
+  exit 1
+fi
+
+exit 0
