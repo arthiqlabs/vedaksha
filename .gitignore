@@ -44,8 +44,15 @@ data/*.bsp
 # Downloaded VSOP87/ELP source data (generated Rust files ARE committed)
 scripts/data/
 
-# Internal dev artifacts
+# Internal dev artifacts — NEVER sync to public repo
 docs/superpowers/
+docs/plans/
+docs/specs/internal/
+docs/internal/
+docs/agents/
+docs/brainstorm/
+.claude/
+AGENTS.md
 tests/oracle_*.py
 tests/stress_oracle_*.py
 tests/deep_oracle_*.py
@@ -55,13 +62,24 @@ tests/oracle_jpl/
 tests/oracle_secondary/
 tests/proptest/
 
-# Internal strategy/prompt files
+# Internal strategy/prompt files — NEVER sync to public repo
 VEDAKSHA_INIT.md
 VEDAKSHA_*.md
 !VEDAKSHA_NOTICE.md
 LOCAL_FIRST_DIRECTIVE.md
 AUDIT_REPORT.md
 SCAFFOLDING.md
+STRATEGY.md
+*_STRATEGY.md
+BRAINSTORM*.md
+ROADMAP_INTERNAL.md
+COMPETITIVE.md
+PRICING_NOTES.md
+scratch/
+drafts/
+notes/
+prompts/
+_archive/
 *-mockup.html
 *-logo-options.html
 bindings/python/.venv/
