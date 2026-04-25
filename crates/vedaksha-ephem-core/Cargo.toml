@@ -17,8 +17,12 @@ vedaksha-math = { version = "1.7.0", path = "../vedaksha-math" }
 [dev-dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
-vedaksha-astro = { version = "1.7.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "1.7.0", path = "../vedaksha-vedic" }
+# Path-only dev-deps: these crates depend on ephem-core (circular), so they
+# cannot exist on crates.io until ephem-core is published. Omitting the
+# version field tells cargo to treat them as local-only for testing and
+# not require them during `cargo publish`.
+vedaksha-astro = { path = "../vedaksha-astro" }
+vedaksha-vedic = { path = "../vedaksha-vedic" }
 
 [features]
 default = ["std"]
