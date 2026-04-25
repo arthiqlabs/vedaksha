@@ -20,5 +20,5 @@ vedaksha-vedic = { path = "../../crates/vedaksha-vedic" }
 vedaksha-graph = { path = "../../crates/vedaksha-graph" }
 vedaksha-emit = { path = "../../crates/vedaksha-emit" }
 vedaksha-locale = { path = "../../crates/vedaksha-locale" }
-pyo3 = { version = "0.23", features = ["extension-module"] }
+pyo3 = { version = "0.24", features = ["extension-module"] }
 serde_json = "1"
