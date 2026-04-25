@@ -1,0 +1,45 @@
+# Build artifacts
+/target/
+**/*.rs.bk
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Python bindings
+bindings/python/target/
+bindings/python/*.egg-info/
+bindings/python/.venv/
+__pycache__/
+*.pyc
+
+# WASM build
+crates/vedaksha-wasm/pkg/
+
+# Node
+node_modules/
+.next/
+.vercel/
+
+# Coverage
+*.profraw
+lcov.info
+tarpaulin-report.html
+
+# JPL ephemeris data (too large for git)
+data/*.441
+data/*.bin
+data/*.bsp
+
+# Downloaded VSOP87/ELP source data (generated Rust files ARE committed)
+scripts/data/

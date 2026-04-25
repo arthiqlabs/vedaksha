@@ -1,0 +1,23 @@
+[package]
+name = "vedaksha-emit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Graph emitters: Neo4j Cypher, SurrealDB, JSON-LD, embedding text"
+
+[dependencies]
+vedaksha-graph = { version = "2.0.0", path = "../vedaksha-graph" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[features]
+default = ["std"]
+std = []

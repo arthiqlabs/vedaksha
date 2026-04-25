@@ -1,0 +1,23 @@
+[package]
+name = "vedaksha-astro"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Western astrology: house systems, aspects, dignities, chart computation"
+
+[dependencies]
+vedaksha-math = { version = "2.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "2.0.0", path = "../vedaksha-ephem-core" }
+libm = "0.2"
+serde = { workspace = true }
+
+[dev-dependencies]
+
+[features]
+default = ["std"]
+std = ["vedaksha-ephem-core/std"]

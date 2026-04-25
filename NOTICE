@@ -1,0 +1,36 @@
+Vedākṣha — Vision from Vedas
+Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
+
+This product includes software developed by ArthIQ Labs LLC.
+https://vedaksha.net | info@arthiq.net
+
+Licensed under the Business Source License 1.1 (BSL 1.1).
+See the LICENSE file for terms. After the Change Date (5 years from each
+version's release), each version converts to the Apache License 2.0.
+See LICENSE-APACHE for those terms.
+
+---
+
+Attribution & References
+
+This software implements astronomical algorithms derived exclusively from
+the following public, non-copyleft primary sources:
+
+  - NASA JPL Development Ephemeris DE441/DE440 (public domain, US Government work)
+  - Jean Meeus, "Astronomical Algorithms", 2nd edition (Willmann-Bell, 1998)
+  - IAU SOFA Library (BSD license) — used as reference only
+  - IERS Conventions (2010)
+  - IAU 2006 precession: Capitaine, Wallace & Chapront (2003), A&A 412
+  - IAU 2000A nutation: Mathews, Herring & Buffett (2002), JGR 107
+  - Ralph William Holden, "The Elements of House Division" (L.N. Fowler)
+  - B.V. Raman, "Hindu Predictive Astrology"
+  - Krishnamurti Paddhati series
+  - Brihat Parashara Hora Shastra (BPHS)
+  - ESA Hipparcos Catalog
+  - IAU Minor Planet Center (MPC)
+  - Robin M. Green, "Spherical Astronomy" (Cambridge University Press)
+  - W.M. Smart, "Textbook on Spherical Astronomy" (Cambridge University Press)
+
+No code, data, or algorithmic choices in this project are derived from any
+AGPL, GPL, or SSPL-licensed software project. All implementations are
+clean-room derivations from the cited primary sources above.

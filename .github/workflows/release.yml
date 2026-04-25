@@ -1,0 +1,192 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-mcp:
+    name: Build MCP binary (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            artifact: vedaksha-mcp
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact: vedaksha-mcp
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact: vedaksha-mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }} -p vedaksha-mcp
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} dist/vedaksha-mcp-${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-${{ matrix.target }}
+          path: dist/
+
+  wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - run: cargo install wasm-pack
+      - name: Build WASM
+        run: wasm-pack build --target web crates/vedaksha-wasm/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vedaksha-wasm
+          path: crates/vedaksha-wasm/pkg/
+
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish crates
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -eo pipefail
+          for crate in vedaksha-math vedaksha-ephem-core vedaksha-graph vedaksha-astro vedaksha-vedic vedaksha-emit vedaksha-locale vedaksha-mcp vedaksha-wasm vedaksha; do
+            echo "::group::Publishing $crate"
+            log=$(mktemp)
+            if cargo publish -p "$crate" --allow-dirty 2>&1 | tee "$log"; then
+              echo "::endgroup::"
+              echo "published $crate"
+            else
+              if grep -qEi 'already.{0,15}(exists|uploaded|published)|crate version.*is already' "$log"; then
+                echo "::endgroup::"
+                echo "skip $crate (already on crates.io)"
+              else
+                echo "::endgroup::"
+                echo "::error::$crate publish failed — see log above"
+                exit 1
+              fi
+            fi
+            sleep 60
+          done
+
+  publish-npm:
+    name: Publish to npm
+    needs: [wasm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: vedaksha-wasm
+          path: crates/vedaksha-wasm/pkg/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Publish to npm
+        working-directory: crates/vedaksha-wasm/pkg
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+  publish-pypi:
+    name: Build Python wheels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install maturin
+        run: pip install maturin
+      - name: Build wheel (x86_64)
+        working-directory: bindings/python
+        run: maturin build --release -i python3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels
+          path: bindings/python/target/wheels/*.whl
+
+  upload-pypi:
+    name: Upload to PyPI
+    needs: [publish-pypi]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: dist/
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install twine
+        run: pip install twine
+      - name: Upload to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/* --skip-existing
+
+  docker:
+    name: Push Docker image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/arthiqlabs/vedaksha-mcp:latest
+            ghcr.io/arthiqlabs/vedaksha-mcp:${{ github.ref_name }}
+
+  github-release:
+    name: Create GitHub Release
+    needs: [build-mcp, wasm, publish-crates, publish-npm, upload-pypi, docker]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: 'mcp-*'
+      - uses: actions/download-artifact@v4
+        with:
+          name: vedaksha-wasm
+      - uses: actions/download-artifact@v4
+        with:
+          name: wheels
+          path: wheels/
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            mcp-*/**/*
+            vedaksha-wasm/**/*
+            wheels/**/*

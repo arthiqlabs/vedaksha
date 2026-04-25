@@ -1,0 +1,20 @@
+[package]
+name = "vedaksha-math"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "Numeric primitives for Vedākṣha: Chebyshev polynomials, angle arithmetic, interpolation, rotation matrices"
+
+[dependencies]
+libm = "0.2"
+
+[dev-dependencies]
+
+[features]
+default = ["std"]
+std = []

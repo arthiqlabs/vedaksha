@@ -1,0 +1,35 @@
+[package]
+name = "vedaksha-mcp"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+license-file.workspace = true
+rust-version.workspace = true
+description = "MCP server for AI agent chart computation via JSON-RPC"
+
+[[bin]]
+name = "vedaksha-mcp"
+path = "src/main.rs"
+
+[dependencies]
+vedaksha-math = { version = "2.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "2.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "2.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "2.0.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "2.0.0", path = "../vedaksha-graph" }
+vedaksha-emit = { version = "2.0.0", path = "../vedaksha-emit" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tiny_http = { version = "0.12", optional = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[features]
+default = ["std", "http"]
+std = ["vedaksha-ephem-core/std"]
+http = ["tiny_http"]

@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Vedākṣha Astrological Graph Ontology",
+  "version": "1.0.0",
+  "description": "Property graph ontology for astronomical and astrological chart data",
+  "copyright": "© 2026 ArthIQ Labs LLC. All rights reserved.",
+  "license": "BSL-1.1",
+  "nodeTypes": [
+    {
+      "name": "Chart",
+      "description": "Root node representing a computed astrological chart",
+      "properties": ["julian_day", "latitude", "longitude", "classification"]
+    },
+    {
+      "name": "Planet",
+      "description": "A celestial body placed in the chart",
+      "properties": ["name", "longitude", "latitude", "distance", "speed", "retrograde", "sign_index", "house"]
+    },
+    {
+      "name": "Sign",
+      "description": "A zodiac sign (global, shared across charts)",
+      "properties": ["name", "index", "element", "modality"],
+      "global": true
+    },
+    {
+      "name": "House",
+      "description": "An astrological house in the chart",
+      "properties": ["number", "cusp_longitude", "system"]
+    },
+    {
+      "name": "Nakshatra",
+      "description": "A Vedic lunar mansion (global, shared across charts)",
+      "properties": ["name", "index", "lord", "deity"],
+      "global": true
+    },
+    {
+      "name": "Pada",
+      "description": "A quarter division of a nakshatra",
+      "properties": ["nakshatra_index", "pada_number", "start_longitude"]
+    },
+    {
+      "name": "Pattern",
+      "description": "An astrological pattern (Grand Trine, T-Square, etc.)",
+      "properties": ["pattern_type", "description"]
+    },
+    {
+      "name": "DashaPeriod",
+      "description": "A period in the Vimshottari or other dasha system",
+      "properties": ["lord", "level", "start_jd", "end_jd", "duration_days"]
+    },
+    {
+      "name": "Yoga",
+      "description": "A Vedic planetary combination",
+      "properties": ["name", "yoga_type", "description"]
+    },
+    {
+      "name": "FixedStar",
+      "description": "A fixed star from the Hipparcos catalog (global)",
+      "properties": ["name", "longitude", "latitude", "magnitude"],
+      "global": true
+    }
+  ],
+  "edgeTypes": [
+    {"name": "PLACED_IN", "from": "Planet", "to": "Sign", "description": "Planet is placed in a zodiac sign"},
+    {"name": "OCCUPIES", "from": "Planet", "to": "House", "description": "Planet occupies a house"},
+    {"name": "ASPECTS", "from": "Planet", "to": "Planet", "description": "Aspect between two planets", "properties": ["aspect_type", "orb", "applying", "strength"]},
+    {"name": "RULES", "from": "Planet", "to": "Sign", "description": "Planet rules (is domicile lord of) a sign"},
+    {"name": "DISPOSITS", "from": "Planet", "to": "Planet", "description": "Dispositor relationship"},
+    {"name": "CUSP_OF", "from": "House", "to": "Sign", "description": "House cusp falls in a sign"},
+    {"name": "BELONGS_TO", "from": "Planet", "to": "Chart", "description": "Planet belongs to a chart"},
+    {"name": "PART_OF_PATTERN", "from": "Planet", "to": "Pattern", "description": "Planet participates in a pattern"},
+    {"name": "IN_NAKSHATRA", "from": "Planet", "to": "Nakshatra", "description": "Planet is in a nakshatra"},
+    {"name": "CONJUNCT_STAR", "from": "Planet", "to": "FixedStar", "description": "Planet conjuncts a fixed star", "properties": ["orb"]},
+    {"name": "DASHA_LORD", "from": "DashaPeriod", "to": "Planet", "description": "Dasha period is ruled by a planet"},
+    {"name": "CONTAINS_PERIOD", "from": "DashaPeriod", "to": "DashaPeriod", "description": "Parent period contains child period"},
+    {"name": "HAS_YOGA", "from": "Chart", "to": "Yoga", "description": "Chart contains a yoga"}
+  ],
+  "dataClassification": {
+    "levels": ["Anonymous", "Pseudonymized", "Identified"],
+    "description": "Classification propagates to all emitted nodes for GDPR/DPDP compliance"
+  },
+  "idScheme": {
+    "global": "category:name (e.g., sign:aries, nakshatra:ashwini)",
+    "chartScoped": "chart:{hash}:category:name (e.g., chart:a1b2c3d4:planet:mars)",
+    "hashAlgorithm": "FNV-1a 64-bit from (julian_day, latitude, longitude, config_hash)"
+  }
+}

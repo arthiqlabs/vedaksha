@@ -1,0 +1,3 @@
+# Vedākṣha clippy configuration
+too-many-arguments-threshold = 8
+cognitive-complexity-threshold = 30

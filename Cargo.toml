@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vedaksha",
+    "crates/vedaksha-math",
+    "crates/vedaksha-ephem-core",
+    "crates/vedaksha-graph",
+    "crates/vedaksha-astro",
+    "crates/vedaksha-vedic",
+    "crates/vedaksha-emit",
+    "crates/vedaksha-locale",
+    "crates/vedaksha-mcp",
+    "crates/vedaksha-wasm",
+]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2024"
+authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
+homepage = "https://vedaksha.net"
+repository = "https://github.com/arthiqlabs/vedaksha"
+license = "BUSL-1.1"
+license-file = "LICENSE"
+rust-version = "1.85"
+
+[workspace.dependencies]
+vedaksha-math = { version = "2.0.0", path = "crates/vedaksha-math" }
+vedaksha-ephem-core = { version = "2.0.0", path = "crates/vedaksha-ephem-core" }
+vedaksha-graph = { version = "2.0.0", path = "crates/vedaksha-graph" }
+vedaksha-astro = { version = "2.0.0", path = "crates/vedaksha-astro" }
+vedaksha-vedic = { version = "2.0.0", path = "crates/vedaksha-vedic" }
+vedaksha-emit = { version = "2.0.0", path = "crates/vedaksha-emit" }
+vedaksha-locale = { version = "2.0.0", path = "crates/vedaksha-locale" }
+vedaksha-mcp = { version = "2.0.0", path = "crates/vedaksha-mcp" }
+vedaksha-wasm = { version = "2.0.0", path = "crates/vedaksha-wasm" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"

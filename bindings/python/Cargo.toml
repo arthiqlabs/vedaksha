@@ -1,0 +1,24 @@
+[workspace]
+
+[package]
+name = "vedaksha-python"
+version = "2.0.0"
+edition = "2024"
+authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
+description = "Python bindings for Vedākṣha astronomical computation"
+license = "BSL-1.1"
+
+[lib]
+name = "vedaksha"
+crate-type = ["cdylib"]
+
+[dependencies]
+vedaksha-math = { path = "../../crates/vedaksha-math" }
+vedaksha-ephem-core = { path = "../../crates/vedaksha-ephem-core" }
+vedaksha-astro = { path = "../../crates/vedaksha-astro" }
+vedaksha-vedic = { path = "../../crates/vedaksha-vedic" }
+vedaksha-graph = { path = "../../crates/vedaksha-graph" }
+vedaksha-emit = { path = "../../crates/vedaksha-emit" }
+vedaksha-locale = { path = "../../crates/vedaksha-locale" }
+pyo3 = { version = "0.23", features = ["extension-module"] }
+serde_json = "1"
