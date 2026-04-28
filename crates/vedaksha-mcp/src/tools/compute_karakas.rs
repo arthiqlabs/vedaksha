@@ -25,6 +25,7 @@ pub struct ComputeKarakasInput {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[allow(dead_code)]
 pub struct ComputeKarakasOutput {
     pub assignments: serde_json::Value,
 }

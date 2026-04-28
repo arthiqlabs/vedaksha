@@ -70,6 +70,9 @@ pub(crate) fn degrees_in_sign(longitude: f64) -> f64 {
 }
 
 /// Rahu's effective degree is reflected because it moves retrograde.
+///
+/// When Rahu is exactly at 0° of a sign (sign boundary), it has traversed
+/// no degrees and ranks lowest (0.0), not highest (30.0 would be out-of-range).
 #[must_use]
 pub(crate) fn rahu_degrees_in_sign(longitude: f64) -> f64 {
     let d = degrees_in_sign(longitude);
