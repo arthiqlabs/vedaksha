@@ -10,6 +10,7 @@ use serde::Deserialize;
 use crate::validation::McpError;
 
 #[derive(Debug, Clone, Deserialize)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct ComputeCombustionInput {
     pub sun: f64,
     pub moon: f64,
