@@ -608,6 +608,76 @@ pub fn compute_combustion(positions_json: &str, retro_json: &str) -> Result<Stri
     compute_combustion_inner(positions_json, retro_json).map_err(|e| JsError::new(&e))
 }
 
+fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
+    use vedaksha_vedic::shadbala::{compute_shadbala_full, ShadbalaPlanetData};
+    use vedaksha_vedic::yoga::{PlanetPosition, YogaPlanet};
+
+    let v: serde_json::Value = serde_json::from_str(input_json)
+        .map_err(|e| format!("invalid JSON: {e}"))?;
+
+    let is_daytime = v.get("is_daytime").and_then(|x| x.as_bool()).unwrap_or(false);
+    let moon_phase_waxing = v.get("moon_phase_waxing").and_then(|x| x.as_bool()).unwrap_or(false);
+
+    let planets_arr = v
+        .get("planets")
+        .and_then(|x| x.as_array())
+        .ok_or_else(|| "missing 'planets' array".to_string())?;
+
+    let parse_planet_name = |name: &str| -> Result<YogaPlanet, String> {
+        match name.to_lowercase().as_str() {
+            "sun"     => Ok(YogaPlanet::Sun),
+            "moon"    => Ok(YogaPlanet::Moon),
+            "mars"    => Ok(YogaPlanet::Mars),
+            "mercury" => Ok(YogaPlanet::Mercury),
+            "jupiter" => Ok(YogaPlanet::Jupiter),
+            "venus"   => Ok(YogaPlanet::Venus),
+            "saturn"  => Ok(YogaPlanet::Saturn),
+            other => Err(format!("unknown planet '{other}'")),
+        }
+    };
+
+    let mut planet_data: Vec<ShadbalaPlanetData> = Vec::with_capacity(planets_arr.len());
+    for entry in planets_arr {
+        let planet_name = entry
+            .get("planet")
+            .and_then(|x| x.as_str())
+            .ok_or_else(|| "missing 'planet' field".to_string())?;
+        let planet = parse_planet_name(planet_name)?;
+        let sign = entry.get("sign").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
+        let longitude = entry.get("longitude").and_then(|x| x.as_f64()).unwrap_or(0.0);
+        let bhava = entry.get("bhava").and_then(|x| x.as_u64()).unwrap_or(1) as u8;
+        let speed = entry.get("speed").and_then(|x| x.as_f64()).unwrap_or(0.0);
+        let average_speed = entry.get("average_speed").and_then(|x| x.as_f64()).unwrap_or(1.0);
+        let benefic = entry.get("benefic_aspect_count").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+        let malefic = entry.get("malefic_aspect_count").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+        planet_data.push(ShadbalaPlanetData {
+            position: PlanetPosition { planet, sign, longitude, bhava },
+            speed,
+            average_speed,
+            benefic_aspect_count: benefic,
+            malefic_aspect_count: malefic,
+        });
+    }
+
+    let results = compute_shadbala_full(&planet_data, is_daytime, moon_phase_waxing);
+    serde_json::to_string(&results).map_err(|e| e.to_string())
+}
+
+/// Compute full Shadbala for all supplied planets.
+///
+/// # Arguments
+/// * `input_json` — JSON object with `"planets"` array plus optional `"is_daytime"` and
+///   `"moon_phase_waxing"` booleans. Each planet: `planet` (string), `sign` (0–11),
+///   `longitude` (0–360), `bhava` (1–12), `speed`, `average_speed`,
+///   optional `benefic_aspect_count`, `malefic_aspect_count`.
+///
+/// # Returns
+/// JSON array of Shadbala objects including `uccha_bala`, `ishta_phala`, `kashta_phala`.
+#[wasm_bindgen]
+pub fn compute_shadbala(input_json: &str) -> Result<String, JsError> {
+    compute_shadbala_inner(input_json).map_err(|e| JsError::new(&e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -791,6 +861,40 @@ mod tests {
         assert!(language_from_str("fr").is_err());
         assert!(language_from_str("").is_err());
         assert!(language_from_str("japanese").is_err());
+    }
+
+    mod shadbala_tests {
+        use super::*;
+
+        #[test]
+        fn compute_shadbala_jupiter_retrograde() {
+            let input = r#"{
+                "planets": [{
+                    "planet": "Jupiter", "sign": 3, "longitude": 105.0,
+                    "bhava": 4, "speed": -0.05, "average_speed": 0.08,
+                    "benefic_aspect_count": 2, "malefic_aspect_count": 1
+                }],
+                "is_daytime": true,
+                "moon_phase_waxing": true
+            }"#;
+            let result = compute_shadbala_inner(input).unwrap();
+            let arr: serde_json::Value = serde_json::from_str(&result).unwrap();
+            let sb = &arr[0];
+            assert_eq!(sb["planet"], "Jupiter");
+            assert!(sb["total"].as_f64().unwrap() > 0.0);
+            assert!(sb["uccha_bala"].as_f64().is_some());
+            assert!(sb["ishta_phala"].as_f64().is_some());
+            assert!(sb["kashta_phala"].as_f64().is_some());
+            let ishta = sb["ishta_phala"].as_f64().unwrap();
+            let kashta = sb["kashta_phala"].as_f64().unwrap();
+            assert!((ishta + kashta - 60.0).abs() < 0.001);
+        }
+
+        #[test]
+        fn compute_shadbala_missing_planets_errors() {
+            let input = r#"{"is_daytime": true}"#;
+            assert!(compute_shadbala_inner(input).is_err());
+        }
     }
 }
 
