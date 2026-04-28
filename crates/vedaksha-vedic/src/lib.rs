@@ -16,6 +16,7 @@
 #![allow(clippy::uninlined_format_args)]
 
 pub mod bhava;
+pub mod combustion;
 pub mod dasha;
 pub mod drishti;
 pub mod karaka;
