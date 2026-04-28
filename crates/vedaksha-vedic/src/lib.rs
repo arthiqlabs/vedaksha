@@ -15,6 +15,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::uninlined_format_args)]
 
+pub mod ashtakavarga;
 pub mod bhava;
 pub mod combustion;
 pub mod dasha;
