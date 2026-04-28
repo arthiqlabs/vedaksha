@@ -473,6 +473,61 @@ fn parse_language(s: &str) -> Result<vedaksha_locale::Language, JsError> {
     language_from_str(s).map_err(|_| JsError::new(&format!("Unknown language: {s}")))
 }
 
+fn compute_karakas_inner(positions_json: &str, scheme: &str) -> Result<String, String> {
+    use vedaksha_vedic::karaka::{KarakaInput, KarakaScheme};
+
+    let pos: serde_json::Value = serde_json::from_str(positions_json)
+        .map_err(|e| format!("invalid positions JSON: {e}"))?;
+
+    let get = |key: &str| -> Result<f64, String> {
+        pos.get(key)
+            .and_then(|v| v.as_f64())
+            .ok_or_else(|| format!("missing or invalid field '{key}'"))
+    };
+
+    let karaka_scheme = match scheme {
+        "8" => KarakaScheme::Eight,
+        "7" | "" => KarakaScheme::Seven,
+        other => return Err(format!("unknown scheme '{other}'; use '7' or '8'")),
+    };
+
+    let rahu = if karaka_scheme == KarakaScheme::Eight {
+        Some(get("Rahu")?)
+    } else {
+        pos.get("Rahu").and_then(|v| v.as_f64())
+    };
+
+    let input = KarakaInput {
+        sun: get("Sun")?,
+        moon: get("Moon")?,
+        mars: get("Mars")?,
+        mercury: get("Mercury")?,
+        jupiter: get("Jupiter")?,
+        venus: get("Venus")?,
+        saturn: get("Saturn")?,
+        rahu,
+        scheme: karaka_scheme,
+    };
+
+    let assignments = vedaksha_vedic::karaka::compute_karakas(&input);
+    serde_json::to_string(&assignments).map_err(|e| e.to_string())
+}
+
+/// Compute Jaimini Chara Karaka assignments from sidereal planet longitudes.
+///
+/// # Arguments
+/// * `positions_json` — JSON object with keys `"Sun"`, `"Moon"`, `"Mars"`,
+///   `"Mercury"`, `"Jupiter"`, `"Venus"`, `"Saturn"`, and optionally `"Rahu"`.
+///   All values are sidereal longitudes in degrees [0, 360).
+/// * `scheme` — `"7"` (default, Sun–Saturn) or `"8"` (adds Rahu + Pitrikaraka).
+///
+/// # Returns
+/// JSON array of `{ "planet": "...", "karaka": "...", "degrees_in_sign": f64 }`.
+#[wasm_bindgen]
+pub fn compute_karakas(positions_json: &str, scheme: &str) -> Result<String, JsError> {
+    compute_karakas_inner(positions_json, scheme).map_err(|e| JsError::new(&e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,5 +711,35 @@ mod tests {
         assert!(language_from_str("fr").is_err());
         assert!(language_from_str("").is_err());
         assert!(language_from_str("japanese").is_err());
+    }
+}
+
+#[cfg(test)]
+mod karaka_tests {
+    #[test]
+    fn compute_karakas_7_scheme_returns_json_array() {
+        let positions = r#"{"Sun":25.0,"Moon":20.0,"Mars":15.0,"Mercury":10.0,"Jupiter":5.0,"Venus":2.0,"Saturn":1.0}"#;
+        let result = super::compute_karakas_inner(positions, "7").unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert!(parsed.is_array());
+        let arr = parsed.as_array().unwrap();
+        assert_eq!(arr.len(), 7);
+        assert_eq!(arr[0]["karaka"].as_str().unwrap(), "Atmakaraka");
+        assert_eq!(arr[0]["planet"].as_str().unwrap(), "Sun");
+    }
+
+    #[test]
+    fn compute_karakas_8_scheme_returns_eight_items() {
+        let positions = r#"{"Sun":25.0,"Moon":20.0,"Mars":15.0,"Mercury":10.0,"Jupiter":5.0,"Venus":2.0,"Saturn":1.0,"Rahu":310.0}"#;
+        let result = super::compute_karakas_inner(positions, "8").unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(parsed.as_array().unwrap().len(), 8);
+    }
+
+    #[test]
+    fn compute_karakas_rejects_missing_planet() {
+        // Moon is missing
+        let positions = r#"{"Sun":25.0,"Mars":15.0,"Mercury":10.0,"Jupiter":5.0,"Venus":2.0,"Saturn":1.0}"#;
+        assert!(super::compute_karakas_inner(positions, "7").is_err());
     }
 }
