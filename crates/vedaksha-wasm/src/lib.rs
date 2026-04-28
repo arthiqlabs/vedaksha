@@ -528,6 +528,86 @@ pub fn compute_karakas(positions_json: &str, scheme: &str) -> Result<String, JsE
     compute_karakas_inner(positions_json, scheme).map_err(|e| JsError::new(&e))
 }
 
+fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<String, String> {
+    use vedaksha_vedic::combustion::{combustion_state, CombustionState};
+    use vedaksha_vedic::yoga::YogaPlanet;
+
+    let pos: serde_json::Value = serde_json::from_str(positions_json)
+        .map_err(|e| format!("invalid positions JSON: {e}"))?;
+    let retro: serde_json::Value = serde_json::from_str(retro_json)
+        .map_err(|e| format!("invalid retro JSON: {e}"))?;
+
+    let get_lon = |key: &str| -> Result<f64, String> {
+        pos.get(key).and_then(|v| v.as_f64())
+            .ok_or_else(|| format!("missing or invalid field '{key}'"))
+    };
+    let get_bool = |key: &str| -> bool {
+        retro.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
+    };
+
+    let sun = get_lon("sun")?;
+    let moon_lon = get_lon("moon")?;
+    let mars_lon = get_lon("mars")?;
+    let mercury_lon = get_lon("mercury")?;
+    let jupiter_lon = get_lon("jupiter")?;
+    let venus_lon = get_lon("venus")?;
+    let saturn_lon = get_lon("saturn")?;
+
+    let mars_retro    = get_bool("mars");
+    let mercury_retro = get_bool("mercury");
+    let jupiter_retro = get_bool("jupiter");
+    let venus_retro   = get_bool("venus");
+    let saturn_retro  = get_bool("saturn");
+
+    let sep = |lon: f64| -> f64 {
+        let diff = (lon - sun).abs() % 360.0;
+        if diff > 180.0 { 360.0 - diff } else { diff }
+    };
+
+    let entries: &[(YogaPlanet, f64, bool, &str)] = &[
+        (YogaPlanet::Moon,    moon_lon,    false,         "Moon"),
+        (YogaPlanet::Mars,    mars_lon,    mars_retro,    "Mars"),
+        (YogaPlanet::Mercury, mercury_lon, mercury_retro, "Mercury"),
+        (YogaPlanet::Jupiter, jupiter_lon, jupiter_retro, "Jupiter"),
+        (YogaPlanet::Venus,   venus_lon,   venus_retro,   "Venus"),
+        (YogaPlanet::Saturn,  saturn_lon,  saturn_retro,  "Saturn"),
+    ];
+
+    let results: Vec<serde_json::Value> = entries
+        .iter()
+        .map(|(planet, lon, retro_flag, name)| {
+            let state = combustion_state(*planet, *lon, sun, *retro_flag);
+            let state_str = match state {
+                CombustionState::None => "None",
+                CombustionState::Combust => "Combust",
+                CombustionState::DeeplyCombust => "DeeplyCombust",
+            };
+            serde_json::json!({
+                "planet": name,
+                "state": state_str,
+                "degrees_from_sun": sep(*lon),
+            })
+        })
+        .collect();
+
+    serde_json::to_string(&results).map_err(|e| e.to_string())
+}
+
+/// Compute combustion state for the 6 combustible planets relative to the Sun.
+///
+/// # Arguments
+/// * `positions_json` — JSON object with lowercase keys: `"sun"`, `"moon"`, `"mars"`,
+///   `"mercury"`, `"jupiter"`, `"venus"`, `"saturn"`. Values are sidereal longitudes [0, 360).
+/// * `retro_json` — JSON object with boolean keys `"mars"`, `"mercury"`, `"jupiter"`,
+///   `"venus"`, `"saturn"`. Absent keys default to `false`.
+///
+/// # Returns
+/// JSON array of `{ "planet", "state", "degrees_from_sun" }` for the 6 combustible planets.
+#[wasm_bindgen]
+pub fn compute_combustion(positions_json: &str, retro_json: &str) -> Result<String, JsError> {
+    compute_combustion_inner(positions_json, retro_json).map_err(|e| JsError::new(&e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -741,5 +821,37 @@ mod karaka_tests {
         // Moon is missing
         let positions = r#"{"Sun":25.0,"Mars":15.0,"Mercury":10.0,"Jupiter":5.0,"Venus":2.0,"Saturn":1.0}"#;
         assert!(super::compute_karakas_inner(positions, "7").is_err());
+    }
+}
+
+#[cfg(test)]
+mod combustion_tests {
+    use super::*;
+
+    #[test]
+    fn compute_combustion_moon_combust() {
+        let pos = r#"{"sun":0.0,"moon":5.0,"mars":100.0,"mercury":200.0,"jupiter":300.0,"venus":50.0,"saturn":150.0}"#;
+        let retro = r#"{}"#;
+        let result = compute_combustion_inner(pos, retro).unwrap();
+        let arr: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let moon = &arr[0];
+        assert_eq!(moon["planet"], "Moon");
+        assert_eq!(moon["state"], "Combust");
+    }
+
+    #[test]
+    fn compute_combustion_moon_not_combust() {
+        let pos = r#"{"sun":0.0,"moon":20.0,"mars":100.0,"mercury":200.0,"jupiter":300.0,"venus":50.0,"saturn":150.0}"#;
+        let retro = r#"{}"#;
+        let result = compute_combustion_inner(pos, retro).unwrap();
+        let arr: serde_json::Value = serde_json::from_str(&result).unwrap();
+        assert_eq!(arr[0]["state"], "None");
+    }
+
+    #[test]
+    fn compute_combustion_missing_field_errors() {
+        let pos = r#"{"sun":0.0}"#;
+        let retro = r#"{}"#;
+        assert!(compute_combustion_inner(pos, retro).is_err());
     }
 }

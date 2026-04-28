@@ -216,6 +216,7 @@ impl McpServer {
             "compute_natal_chart" => Self::call_compute_natal(&arguments),
             "compute_dasha" => Self::call_compute_dasha(&arguments),
             "compute_karakas" => Self::call_compute_karakas(&arguments),
+            "compute_combustion" => Self::call_compute_combustion(&arguments),
             "compute_vargas" => Self::call_compute_vargas(&arguments),
             "emit_graph" => Self::call_emit_graph(&arguments),
             "compute_transit" => Self::call_compute_transit(&arguments),
@@ -452,6 +453,48 @@ impl McpServer {
 
         let assignments = vedaksha_vedic::karaka::compute_karakas(&karaka_input);
         serde_json::to_value(&assignments).map_err(|e| McpError::computation_failed(&e.to_string()))
+    }
+
+    fn call_compute_combustion(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::combustion::{combustion_state, CombustionState};
+        use vedaksha_vedic::yoga::YogaPlanet;
+
+        let input: crate::tools::compute_combustion::ComputeCombustionInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_combustion::validate(&input)?;
+
+        let sun = input.sun;
+        let sep = |lon: f64| -> f64 {
+            let diff = (lon - sun).abs() % 360.0;
+            if diff > 180.0 { 360.0 - diff } else { diff }
+        };
+
+        let results: Vec<serde_json::Value> = vec![
+            (YogaPlanet::Moon,    input.moon,    false,                        "Moon"),
+            (YogaPlanet::Mars,    input.mars,    input.mars_retrograde,        "Mars"),
+            (YogaPlanet::Mercury, input.mercury, input.mercury_retrograde,     "Mercury"),
+            (YogaPlanet::Jupiter, input.jupiter, input.jupiter_retrograde,     "Jupiter"),
+            (YogaPlanet::Venus,   input.venus,   input.venus_retrograde,       "Venus"),
+            (YogaPlanet::Saturn,  input.saturn,  input.saturn_retrograde,      "Saturn"),
+        ]
+        .into_iter()
+        .map(|(planet, lon, retro, name)| {
+            let state = combustion_state(planet, lon, sun, retro);
+            let state_str = match state {
+                CombustionState::None => "None",
+                CombustionState::Combust => "Combust",
+                CombustionState::DeeplyCombust => "DeeplyCombust",
+            };
+            serde_json::json!({
+                "planet": name,
+                "state": state_str,
+                "degrees_from_sun": sep(lon),
+            })
+        })
+        .collect();
+
+        Ok(serde_json::json!(results))
     }
 
     fn call_compute_vargas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -865,13 +908,13 @@ mod tests {
     // ── tools/list ────────────────────────────────────────────────────────────
 
     #[test]
-    fn tools_list_returns_eight_tools() {
+    fn tools_list_returns_nine_tools() {
         let s = server();
         let resp =
             s.handle_request(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list","params":null}"#);
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         let tools = val["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 8, "expected exactly 8 tools");
+        assert_eq!(tools.len(), 9, "expected exactly 9 tools");
     }
 
     #[test]
@@ -894,6 +937,7 @@ mod tests {
         assert!(names.contains(&"compute_transit"));
         assert!(names.contains(&"search_transits"));
         assert!(names.contains(&"search_muhurta"));
+        assert!(names.contains(&"compute_combustion"));
     }
 
     // ── tools/call — unknown tool ─────────────────────────────────────────────

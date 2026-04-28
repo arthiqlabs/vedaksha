@@ -365,7 +365,7 @@ fn mcp_tools_list_returns_all_8() {
     let tools = response["result"]["tools"]
         .as_array()
         .expect("tools should be array");
-    assert_eq!(tools.len(), 8, "Expected 8 MCP tools, got {}", tools.len());
+    assert_eq!(tools.len(), 9, "Expected 9 MCP tools, got {}", tools.len());
 
     let names: Vec<&str> = tools
         .iter()
