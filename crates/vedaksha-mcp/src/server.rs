@@ -215,6 +215,7 @@ impl McpServer {
         let result = match tool_name {
             "compute_natal_chart" => Self::call_compute_natal(&arguments),
             "compute_dasha" => Self::call_compute_dasha(&arguments),
+            "compute_karakas" => Self::call_compute_karakas(&arguments),
             "compute_vargas" => Self::call_compute_vargas(&arguments),
             "emit_graph" => Self::call_emit_graph(&arguments),
             "compute_transit" => Self::call_compute_transit(&arguments),
@@ -422,6 +423,35 @@ impl McpServer {
         );
 
         serde_json::to_value(&dasha).map_err(|e| McpError::computation_failed(&e.to_string()))
+    }
+
+    fn call_compute_karakas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::karaka::{KarakaInput, KarakaScheme};
+
+        let input: crate::tools::compute_karakas::ComputeKarakasInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_karakas::validate(&input)?;
+
+        let scheme = match input.scheme.as_deref().unwrap_or("7") {
+            "8" => KarakaScheme::Eight,
+            _ => KarakaScheme::Seven,
+        };
+
+        let karaka_input = KarakaInput {
+            sun: input.sun,
+            moon: input.moon,
+            mars: input.mars,
+            mercury: input.mercury,
+            jupiter: input.jupiter,
+            venus: input.venus,
+            saturn: input.saturn,
+            rahu: input.rahu,
+            scheme,
+        };
+
+        let assignments = vedaksha_vedic::karaka::compute_karakas(&karaka_input);
+        serde_json::to_value(&assignments).map_err(|e| McpError::computation_failed(&e.to_string()))
     }
 
     fn call_compute_vargas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -835,13 +865,13 @@ mod tests {
     // ── tools/list ────────────────────────────────────────────────────────────
 
     #[test]
-    fn tools_list_returns_seven_tools() {
+    fn tools_list_returns_eight_tools() {
         let s = server();
         let resp =
             s.handle_request(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list","params":null}"#);
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         let tools = val["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 7, "expected exactly 7 tools");
+        assert_eq!(tools.len(), 8, "expected exactly 8 tools");
     }
 
     #[test]
@@ -858,6 +888,7 @@ mod tests {
             .collect();
         assert!(names.contains(&"compute_natal_chart"));
         assert!(names.contains(&"compute_dasha"));
+        assert!(names.contains(&"compute_karakas"));
         assert!(names.contains(&"compute_vargas"));
         assert!(names.contains(&"emit_graph"));
         assert!(names.contains(&"compute_transit"));

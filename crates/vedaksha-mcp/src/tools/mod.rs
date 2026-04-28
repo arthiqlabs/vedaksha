@@ -8,6 +8,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod compute_dasha;
+pub mod compute_karakas;
 pub mod compute_natal;
 pub mod compute_transit;
 pub mod compute_vargas;
@@ -29,6 +30,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
     vec![
         compute_natal::definition(),
         compute_dasha::definition(),
+        compute_karakas::definition(),
         compute_vargas::definition(),
         emit_graph::definition(),
         compute_transit::definition(),
@@ -72,8 +74,8 @@ mod tests {
     }
 
     #[test]
-    fn exactly_seven_tools_are_registered() {
-        assert_eq!(tool_definitions().len(), 7);
+    fn exactly_eight_tools_are_registered() {
+        assert_eq!(tool_definitions().len(), 8);
     }
 
     #[test]
