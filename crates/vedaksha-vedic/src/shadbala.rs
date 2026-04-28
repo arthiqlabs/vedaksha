@@ -14,11 +14,12 @@
 //! Source: BPHS Ch. 27; B.V. Raman, *Graha and Bhava Balas*.
 
 use crate::yoga::{PlanetPosition, YogaPlanet};
+use serde::Serialize;
 
 /// Shadbala (six-fold strength) for a planet.
 ///
 /// All component values are in virupas (shashtiamsas, 1/60 of a rupa).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Shadbala {
     /// The planet this strength applies to.
     pub planet: YogaPlanet,
@@ -36,6 +37,12 @@ pub struct Shadbala {
     pub drik_bala: f64,
     /// Total Shadbala (sum of all six components).
     pub total: f64,
+    /// Exaltation strength component (0–60 virupas). Source: BPHS Ch.27.
+    pub uccha_bala: f64,
+    /// Benefit strength per Rasmi scale (0–60 virupas). Source: BPHS Ch.28 vv.5-6.
+    pub ishta_phala: f64,
+    /// Affliction strength per Rasmi scale (0–60 virupas). Source: BPHS Ch.28 v.6.
+    pub kashta_phala: f64,
 }
 
 /// Additional temporal/motional parameters needed for full Shadbala computation.
@@ -247,6 +254,36 @@ pub fn drik_bala(benefic_aspect_count: u32, malefic_aspect_count: u32) -> f64 {
     (benefic_strength - malefic_strength).clamp(-30.0, 60.0)
 }
 
+// ── Ishta/Kashta Phala (BPHS Ch.28 vv.5-6) ─────────────────────────
+
+/// Uchcha Rasmi: linear transform of uccha_bala virupas to 0–7 scale.
+///
+/// Source: BPHS Ch.28 v.5.
+#[must_use]
+pub fn uccha_rasmi(uccha_bala_virupas: f64) -> f64 {
+    uccha_bala_virupas * 7.0 / 60.0
+}
+
+/// Cheshta Rasmi: linear transform of cheshta_bala virupas to 0–7 scale.
+///
+/// Source: BPHS Ch.28 v.5.
+#[must_use]
+pub fn cheshta_rasmi(cheshta_bala_virupas: f64) -> f64 {
+    cheshta_bala_virupas * 7.0 / 60.0
+}
+
+/// Ishta Phala (benefit) and Kashta Phala (affliction) from Rasmi values.
+///
+/// Formula: ishta = 5 × (uchcha_rasmi + cheshta_rasmi − 2), clipped to [0, 60].
+/// kashta = 60 − ishta. Source: BPHS Ch.28 vv.5-6.
+#[must_use]
+pub fn ishta_kashta_phala(uccha_bala: f64, cheshta_bala: f64) -> (f64, f64) {
+    let ur = uccha_rasmi(uccha_bala);
+    let cr = cheshta_rasmi(cheshta_bala);
+    let ishta = (5.0 * (ur + cr - 2.0)).clamp(0.0, 60.0);
+    (ishta, 60.0 - ishta)
+}
+
 // ── Planet-sign helpers (reuse from yoga.rs logic) ──────────────────
 
 #[allow(dead_code)]
@@ -360,6 +397,7 @@ pub fn compute_shadbala(positions: &[PlanetPosition], _lagna_sign: u8) -> Vec<Sh
             let dig = dig_bala(pos.planet, pos.bhava);
             let sthana = sthana_bala(pos.planet, pos.sign, pos.longitude);
             let total = naisargika + dig + sthana;
+            let (ishta, kashta) = ishta_kashta_phala(sthana, 0.0);
             Shadbala {
                 planet: pos.planet,
                 sthana_bala: sthana,
@@ -369,6 +407,9 @@ pub fn compute_shadbala(positions: &[PlanetPosition], _lagna_sign: u8) -> Vec<Sh
                 naisargika_bala: naisargika,
                 drik_bala: 0.0,
                 total,
+                uccha_bala: sthana,
+                ishta_phala: ishta,
+                kashta_phala: kashta,
             }
         })
         .collect()
@@ -398,6 +439,7 @@ pub fn compute_shadbala_full(
             let drik = drik_bala(data.benefic_aspect_count, data.malefic_aspect_count);
             let total = naisargika + dig + sthana + kala + cheshta + drik;
 
+            let (ishta, kashta) = ishta_kashta_phala(sthana, cheshta);
             Shadbala {
                 planet: pos.planet,
                 sthana_bala: sthana,
@@ -407,6 +449,9 @@ pub fn compute_shadbala_full(
                 naisargika_bala: naisargika,
                 drik_bala: drik,
                 total,
+                uccha_bala: sthana,
+                ishta_phala: ishta,
+                kashta_phala: kashta,
             }
         })
         .collect()
@@ -709,6 +754,66 @@ mod tests {
                 sb.planet
             );
         }
+    }
+
+    // ── Ishta/Kashta Phala tests ─────────────────────────────────────────
+
+    #[test]
+    fn uccha_rasmi_at_max_virupas() {
+        let r = uccha_rasmi(60.0);
+        assert!((r - 7.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn cheshta_rasmi_at_max_virupas() {
+        let r = cheshta_rasmi(60.0);
+        assert!((r - 7.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn uccha_rasmi_zero() {
+        assert!((uccha_rasmi(0.0) - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ishta_phala_max_at_both_full() {
+        // uccha=60 (ur=7), cheshta=60 (cr=7): ishta = 5*(7+7-2) = 60
+        let (ishta, kashta) = ishta_kashta_phala(60.0, 60.0);
+        assert!((ishta - 60.0).abs() < f64::EPSILON);
+        assert!((kashta - 0.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ishta_phala_clips_to_zero() {
+        // uccha=0, cheshta=0: 5*(0+0-2) = -10 → clamp to 0
+        let (ishta, kashta) = ishta_kashta_phala(0.0, 0.0);
+        assert!((ishta - 0.0).abs() < f64::EPSILON);
+        assert!((kashta - 60.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn kashta_is_complement_of_ishta() {
+        let (ishta, kashta) = ishta_kashta_phala(30.0, 30.0);
+        assert!((ishta + kashta - 60.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn full_shadbala_has_uccha_bala_matching_sthana() {
+        let data = [planet_data(YogaPlanet::Jupiter, 3, 4, -0.05, 0.08, 2, 1)];
+        let results = compute_shadbala_full(&data, true, true);
+        let sb = &results[0];
+        assert!((sb.uccha_bala - sb.sthana_bala).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn full_shadbala_uccha_not_in_total() {
+        // total must still equal sum of the original six components
+        let data = [planet_data(YogaPlanet::Sun, 0, 10, 1.0, 1.0, 1, 0)];
+        let results = compute_shadbala_full(&data, true, false);
+        let sb = &results[0];
+        let sum = sb.sthana_bala + sb.dig_bala + sb.kala_bala
+            + sb.cheshta_bala + sb.naisargika_bala + sb.drik_bala;
+        assert!((sb.total - sum).abs() < f64::EPSILON);
     }
 
     #[test]
