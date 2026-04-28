@@ -11,6 +11,8 @@
 //!
 //! Source: BPHS; Phaladipika (Mantreshwara).
 
+use serde::{Deserialize, Serialize};
+
 use crate::bhava;
 
 /// A detected Vedic yoga (planetary combination).
@@ -27,7 +29,7 @@ pub struct Yoga {
 }
 
 /// Planet identifiers for yoga detection.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum YogaPlanet {
     Sun,
     Moon,

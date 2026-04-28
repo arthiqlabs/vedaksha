@@ -18,6 +18,7 @@
 pub mod bhava;
 pub mod dasha;
 pub mod drishti;
+pub mod karaka;
 pub mod muhurta;
 pub mod nakshatra;
 pub mod panchanga;
