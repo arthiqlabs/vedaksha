@@ -678,6 +678,55 @@ pub fn compute_shadbala(input_json: &str) -> Result<String, JsError> {
     compute_shadbala_inner(input_json).map_err(|e| JsError::new(&e))
 }
 
+fn compute_ashtakavarga_inner(input_json: &str) -> Result<String, String> {
+    use vedaksha_vedic::ashtakavarga::{bhinna_ashtakavarga, sarvashtakavarga, BhinnaAshtakavargaInput};
+
+    let v: serde_json::Value = serde_json::from_str(input_json)
+        .map_err(|e| format!("invalid JSON: {e}"))?;
+
+    let get_sign = |key: &str| -> Result<u8, String> {
+        let n = v.get(key).and_then(|x| x.as_u64())
+            .ok_or_else(|| format!("missing or invalid field '{key}'"))?;
+        if n > 11 {
+            return Err(format!("'{key}' must be 0–11, got {n}"));
+        }
+        Ok(n as u8)
+    };
+
+    let input = BhinnaAshtakavargaInput {
+        sun:     get_sign("sun")?,
+        moon:    get_sign("moon")?,
+        mars:    get_sign("mars")?,
+        mercury: get_sign("mercury")?,
+        jupiter: get_sign("jupiter")?,
+        venus:   get_sign("venus")?,
+        saturn:  get_sign("saturn")?,
+        lagna:   get_sign("lagna")?,
+    };
+
+    let tables = bhinna_ashtakavarga(&input);
+    let sarva = sarvashtakavarga(&tables);
+
+    serde_json::to_string(&serde_json::json!({
+        "tables": tables,
+        "sarvashtakavarga": sarva,
+    }))
+    .map_err(|e| e.to_string())
+}
+
+/// Compute Bhinna Ashtakavarga and Sarvashtakavarga from sign positions.
+///
+/// # Arguments
+/// * `input_json` — JSON object with integer sign-index fields: `"sun"`, `"moon"`, `"mars"`,
+///   `"mercury"`, `"jupiter"`, `"venus"`, `"saturn"`, `"lagna"`. Values 0–11.
+///
+/// # Returns
+/// JSON object: `{ "tables": [...], "sarvashtakavarga": [u8; 12] }`.
+#[wasm_bindgen]
+pub fn compute_ashtakavarga(input_json: &str) -> Result<String, JsError> {
+    compute_ashtakavarga_inner(input_json).map_err(|e| JsError::new(&e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -957,5 +1006,36 @@ mod combustion_tests {
         let pos = r#"{"sun":0.0}"#;
         let retro = r#"{}"#;
         assert!(compute_combustion_inner(pos, retro).is_err());
+    }
+}
+
+#[cfg(test)]
+mod ashtakavarga_tests {
+    use super::*;
+
+    #[test]
+    fn compute_ashtakavarga_canonical_sun_total() {
+        let input = r#"{"sun":3,"moon":7,"mars":1,"mercury":10,"jupiter":5,"venus":8,"saturn":11,"lagna":0}"#;
+        let result = compute_ashtakavarga_inner(input).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let sun_total = v["tables"][0]["total"].as_u64().unwrap();
+        assert_eq!(sun_total, 48, "Sun total must be 48");
+    }
+
+    #[test]
+    fn compute_ashtakavarga_sarva_grand_total() {
+        // Grand total = 48+49+39+54+56+52+39 = 337
+        let input = r#"{"sun":3,"moon":7,"mars":1,"mercury":10,"jupiter":5,"venus":8,"saturn":11,"lagna":0}"#;
+        let result = compute_ashtakavarga_inner(input).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let sarva = v["sarvashtakavarga"].as_array().unwrap();
+        let total: u64 = sarva.iter().map(|x| x.as_u64().unwrap_or(0)).sum();
+        assert_eq!(total, 337);
+    }
+
+    #[test]
+    fn compute_ashtakavarga_missing_field_errors() {
+        let input = r#"{"sun":0}"#;
+        assert!(compute_ashtakavarga_inner(input).is_err());
     }
 }

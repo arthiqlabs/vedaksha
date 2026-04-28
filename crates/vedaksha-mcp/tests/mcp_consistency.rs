@@ -351,7 +351,7 @@ fn fail_count(_a: &str, _b: &str) -> bool {
 }
 
 #[test]
-fn mcp_tools_list_returns_all_10() {
+fn mcp_tools_list_returns_all_11() {
     let server = McpServer::new();
     let request = serde_json::json!({
         "jsonrpc": "2.0",
@@ -365,7 +365,7 @@ fn mcp_tools_list_returns_all_10() {
     let tools = response["result"]["tools"]
         .as_array()
         .expect("tools should be array");
-    assert_eq!(tools.len(), 10, "Expected 10 MCP tools, got {}", tools.len());
+    assert_eq!(tools.len(), 11, "Expected 11 MCP tools, got {}", tools.len());
 
     let names: Vec<&str> = tools
         .iter()
@@ -382,9 +382,10 @@ fn mcp_tools_list_returns_all_10() {
     assert!(names.contains(&"search_muhurta"));
     assert!(names.contains(&"compute_combustion"));
     assert!(names.contains(&"compute_shadbala"));
+    assert!(names.contains(&"compute_ashtakavarga"));
 
     eprintln!("\n=== MCP TOOLS LIST ===");
-    eprintln!("All 10 tools present: {:?}", names);
+    eprintln!("All 11 tools present: {:?}", names);
 }
 
 #[test]

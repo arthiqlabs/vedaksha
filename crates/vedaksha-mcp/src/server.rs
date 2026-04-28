@@ -218,6 +218,7 @@ impl McpServer {
             "compute_karakas" => Self::call_compute_karakas(&arguments),
             "compute_combustion" => Self::call_compute_combustion(&arguments),
             "compute_shadbala" => Self::call_compute_shadbala(&arguments),
+            "compute_ashtakavarga" => Self::call_compute_ashtakavarga(&arguments),
             "compute_vargas" => Self::call_compute_vargas(&arguments),
             "emit_graph" => Self::call_emit_graph(&arguments),
             "compute_transit" => Self::call_compute_transit(&arguments),
@@ -530,6 +531,35 @@ impl McpServer {
 
         let results = compute_shadbala_full(&planet_data, input.is_daytime, input.moon_phase_waxing);
         serde_json::to_value(&results).map_err(|e| McpError::computation_failed(&e.to_string()))
+    }
+
+    fn call_compute_ashtakavarga(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::ashtakavarga::{bhinna_ashtakavarga, sarvashtakavarga, BhinnaAshtakavargaInput};
+
+        let input: crate::tools::compute_ashtakavarga::ComputeAshtakavargaInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_ashtakavarga::validate(&input)?;
+
+        let av_input = BhinnaAshtakavargaInput {
+            sun: input.sun,
+            moon: input.moon,
+            mars: input.mars,
+            mercury: input.mercury,
+            jupiter: input.jupiter,
+            venus: input.venus,
+            saturn: input.saturn,
+            lagna: input.lagna,
+        };
+
+        let tables = bhinna_ashtakavarga(&av_input);
+        let sarva = sarvashtakavarga(&tables);
+
+        serde_json::to_value(serde_json::json!({
+            "tables": tables,
+            "sarvashtakavarga": sarva,
+        }))
+        .map_err(|e| McpError::computation_failed(&e.to_string()))
     }
 
     fn call_compute_vargas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -943,13 +973,13 @@ mod tests {
     // ── tools/list ────────────────────────────────────────────────────────────
 
     #[test]
-    fn tools_list_returns_ten_tools() {
+    fn tools_list_returns_eleven_tools() {
         let s = server();
         let resp =
             s.handle_request(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list","params":null}"#);
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         let tools = val["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 10, "expected exactly 10 tools");
+        assert_eq!(tools.len(), 11, "expected exactly 11 tools");
     }
 
     #[test]
@@ -974,6 +1004,7 @@ mod tests {
         assert!(names.contains(&"search_muhurta"));
         assert!(names.contains(&"compute_combustion"));
         assert!(names.contains(&"compute_shadbala"));
+        assert!(names.contains(&"compute_ashtakavarga"));
     }
 
     // ── tools/call — unknown tool ─────────────────────────────────────────────
