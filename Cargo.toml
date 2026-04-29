@@ -14,7 +14,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2.2.0"
+version = "2.3.0"
 edition = "2024"
 authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
 homepage = "https://vedaksha.net"
@@ -24,15 +24,15 @@ license-file = "LICENSE"
 rust-version = "1.85"
 
 [workspace.dependencies]
-vedaksha-math = { version = "2.2.0", path = "crates/vedaksha-math" }
-vedaksha-ephem-core = { version = "2.2.0", path = "crates/vedaksha-ephem-core" }
-vedaksha-graph = { version = "2.2.0", path = "crates/vedaksha-graph" }
-vedaksha-astro = { version = "2.2.0", path = "crates/vedaksha-astro" }
-vedaksha-vedic = { version = "2.2.0", path = "crates/vedaksha-vedic" }
-vedaksha-emit = { version = "2.2.0", path = "crates/vedaksha-emit" }
-vedaksha-locale = { version = "2.2.0", path = "crates/vedaksha-locale" }
-vedaksha-mcp = { version = "2.2.0", path = "crates/vedaksha-mcp" }
-vedaksha-wasm = { version = "2.2.0", path = "crates/vedaksha-wasm" }
+vedaksha-math = { version = "2.3.0", path = "crates/vedaksha-math" }
+vedaksha-ephem-core = { version = "2.3.0", path = "crates/vedaksha-ephem-core" }
+vedaksha-graph = { version = "2.3.0", path = "crates/vedaksha-graph" }
+vedaksha-astro = { version = "2.3.0", path = "crates/vedaksha-astro" }
+vedaksha-vedic = { version = "2.3.0", path = "crates/vedaksha-vedic" }
+vedaksha-emit = { version = "2.3.0", path = "crates/vedaksha-emit" }
+vedaksha-locale = { version = "2.3.0", path = "crates/vedaksha-locale" }
+vedaksha-mcp = { version = "2.3.0", path = "crates/vedaksha-mcp" }
+vedaksha-wasm = { version = "2.3.0", path = "crates/vedaksha-wasm" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
