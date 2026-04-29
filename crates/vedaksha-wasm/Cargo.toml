@@ -14,13 +14,13 @@ description = "WASM bindings for Vedākṣha astronomical computation"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-vedaksha-math = { version = "2.1.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "2.1.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "2.1.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "2.1.0", path = "../vedaksha-vedic" }
-vedaksha-graph = { version = "2.1.0", path = "../vedaksha-graph" }
-vedaksha-emit = { version = "2.1.0", path = "../vedaksha-emit" }
-vedaksha-locale = { version = "2.1.0", path = "../vedaksha-locale" }
+vedaksha-math = { version = "2.2.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "2.2.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "2.2.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "2.2.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "2.2.0", path = "../vedaksha-graph" }
+vedaksha-emit = { version = "2.2.0", path = "../vedaksha-emit" }
+vedaksha-locale = { version = "2.2.0", path = "../vedaksha-locale" }
 wasm-bindgen = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }

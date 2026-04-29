@@ -2,7 +2,7 @@
 
 [package]
 name = "vedaksha-python"
-version = "2.1.0"
+version = "2.2.0"
 edition = "2024"
 authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
 description = "Python bindings for Vedākṣha astronomical computation"
