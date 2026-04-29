@@ -727,6 +727,68 @@ pub fn compute_ashtakavarga(input_json: &str) -> Result<String, JsError> {
     compute_ashtakavarga_inner(input_json).map_err(|e| JsError::new(&e))
 }
 
+fn compute_gochara_inner(input_json: &str) -> Result<String, String> {
+    use vedaksha_vedic::gochara::{
+        apply_vedha_exemptions, compute_gochara, SchoolProfile, TransitPositions, VedhaTable,
+    };
+
+    let v: serde_json::Value = serde_json::from_str(input_json)
+        .map_err(|e| format!("invalid JSON: {e}"))?;
+
+    let get_sign = |key: &str| -> Result<u8, String> {
+        let n = v.get(key).and_then(|x| x.as_u64())
+            .ok_or_else(|| format!("missing or invalid field '{key}'"))?;
+        if n > 11 {
+            return Err(format!("'{key}' must be 0–11, got {n}"));
+        }
+        Ok(n as u8)
+    };
+
+    let transits = TransitPositions {
+        sun:     get_sign("sun")?,
+        moon:    get_sign("moon")?,
+        mars:    get_sign("mars")?,
+        mercury: get_sign("mercury")?,
+        jupiter: get_sign("jupiter")?,
+        venus:   get_sign("venus")?,
+        saturn:  get_sign("saturn")?,
+    };
+    let natal_reference_sign = get_sign("natal_reference_sign")?;
+
+    let table = match v.get("vedha_table").and_then(|x| x.as_str()).unwrap_or("Bphs29") {
+        "Bphs29" => VedhaTable::Bphs29,
+        other => return Err(format!("unknown vedha_table '{other}'")),
+    };
+    let school = match v.get("school").and_then(|x| x.as_str()).unwrap_or("Geometry") {
+        "Geometry" => SchoolProfile::Geometry,
+        "Parashari" => SchoolProfile::Parashari,
+        other => return Err(format!("unknown school '{other}'")),
+    };
+
+    let mut entries = compute_gochara(&transits, natal_reference_sign, table);
+    for entry in entries.iter_mut() {
+        apply_vedha_exemptions(entry, school);
+    }
+
+    serde_json::to_string(&serde_json::json!({ "entries": entries }))
+        .map_err(|e| e.to_string())
+}
+
+/// Compute Gochara (transit interpretation) per BPHS Ch.29.
+///
+/// # Arguments
+/// * `input_json` — JSON object with integer sign-index fields for the seven
+///   transiting grahas (`"sun"`, `"moon"`, …, `"saturn"`), `"natal_reference_sign"`
+///   (0–11), and optional `"vedha_table"` ("Bphs29") and `"school"` ("Geometry"
+///   or "Parashari").
+///
+/// # Returns
+/// JSON object: `{ "entries": [GrahaGochara, …] }` for the seven non-nodal grahas.
+#[wasm_bindgen]
+pub fn compute_gochara(input_json: &str) -> Result<String, JsError> {
+    compute_gochara_inner(input_json).map_err(|e| JsError::new(&e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1037,5 +1099,54 @@ mod ashtakavarga_tests {
     fn compute_ashtakavarga_missing_field_errors() {
         let input = r#"{"sun":0}"#;
         assert!(compute_ashtakavarga_inner(input).is_err());
+    }
+}
+
+#[cfg(test)]
+mod gochara_tests {
+    use super::*;
+
+    #[test]
+    fn compute_gochara_returns_seven_entries() {
+        let input = r#"{
+            "sun":0,"moon":4,"mars":2,"mercury":6,"jupiter":8,"venus":10,"saturn":6,
+            "natal_reference_sign":0
+        }"#;
+        let result = compute_gochara_inner(input).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let entries = v["entries"].as_array().unwrap();
+        assert_eq!(entries.len(), 7);
+    }
+
+    #[test]
+    fn compute_gochara_parashari_school_strips_sun_moon_vedha() {
+        // Reference sign 0; Moon at sign 0 (1st house, vedha 5);
+        // Sun at sign 4 (5th house) — geometric mutual vedha pair.
+        let input = r#"{
+            "sun":4,"moon":0,"mars":1,"mercury":2,"jupiter":3,"venus":5,"saturn":6,
+            "natal_reference_sign":0,
+            "school":"Parashari"
+        }"#;
+        let result = compute_gochara_inner(input).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let moon = v["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|e| e["graha"] == "Moon")
+            .unwrap();
+        let candidates = moon["vedha_candidates"].as_array().unwrap();
+        for c in candidates {
+            assert_ne!(c.as_str().unwrap(), "Sun");
+        }
+    }
+
+    #[test]
+    fn compute_gochara_rejects_bad_sign() {
+        let input = r#"{
+            "sun":12,"moon":0,"mars":0,"mercury":0,"jupiter":0,"venus":0,"saturn":0,
+            "natal_reference_sign":0
+        }"#;
+        assert!(compute_gochara_inner(input).is_err());
     }
 }

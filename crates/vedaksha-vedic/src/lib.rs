@@ -20,6 +20,7 @@ pub mod bhava;
 pub mod combustion;
 pub mod dasha;
 pub mod drishti;
+pub mod gochara;
 pub mod karaka;
 pub mod muhurta;
 pub mod nakshatra;

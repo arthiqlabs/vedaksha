@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub mod compute_ashtakavarga;
 pub mod compute_combustion;
 pub mod compute_dasha;
+pub mod compute_gochara;
 pub mod compute_shadbala;
 pub mod compute_karakas;
 pub mod compute_natal;
@@ -42,6 +43,7 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         search_transits::definition(),
         search_muhurta::definition(),
         compute_ashtakavarga::definition(),
+        compute_gochara::definition(),
     ]
 }
 
@@ -80,8 +82,8 @@ mod tests {
     }
 
     #[test]
-    fn exactly_eleven_tools_are_registered() {
-        assert_eq!(tool_definitions().len(), 11);
+    fn exactly_twelve_tools_are_registered() {
+        assert_eq!(tool_definitions().len(), 12);
     }
 
     #[test]

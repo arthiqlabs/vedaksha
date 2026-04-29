@@ -219,6 +219,7 @@ impl McpServer {
             "compute_combustion" => Self::call_compute_combustion(&arguments),
             "compute_shadbala" => Self::call_compute_shadbala(&arguments),
             "compute_ashtakavarga" => Self::call_compute_ashtakavarga(&arguments),
+            "compute_gochara" => Self::call_compute_gochara(&arguments),
             "compute_vargas" => Self::call_compute_vargas(&arguments),
             "emit_graph" => Self::call_emit_graph(&arguments),
             "compute_transit" => Self::call_compute_transit(&arguments),
@@ -560,6 +561,55 @@ impl McpServer {
             "sarvashtakavarga": sarva,
         }))
         .map_err(|e| McpError::computation_failed(&e.to_string()))
+    }
+
+    fn call_compute_gochara(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::gochara::{
+            apply_vedha_exemptions, compute_gochara, SchoolProfile, TransitPositions, VedhaTable,
+        };
+
+        let input: crate::tools::compute_gochara::ComputeGocharaInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_gochara::validate(&input)?;
+
+        let table = match input.vedha_table.as_deref().unwrap_or("Bphs29") {
+            "Bphs29" => VedhaTable::Bphs29,
+            other => {
+                return Err(McpError::invalid_parameter(
+                    "vedha_table",
+                    &format!("unknown table '{other}'"),
+                ));
+            }
+        };
+        let school = match input.school.as_deref().unwrap_or("Geometry") {
+            "Geometry" => SchoolProfile::Geometry,
+            "Parashari" => SchoolProfile::Parashari,
+            other => {
+                return Err(McpError::invalid_parameter(
+                    "school",
+                    &format!("unknown school '{other}'"),
+                ));
+            }
+        };
+
+        let transits = TransitPositions {
+            sun: input.sun,
+            moon: input.moon,
+            mars: input.mars,
+            mercury: input.mercury,
+            jupiter: input.jupiter,
+            venus: input.venus,
+            saturn: input.saturn,
+        };
+
+        let mut entries = compute_gochara(&transits, input.natal_reference_sign, table);
+        for entry in &mut entries {
+            apply_vedha_exemptions(entry, school);
+        }
+
+        serde_json::to_value(serde_json::json!({ "entries": entries }))
+            .map_err(|e| McpError::computation_failed(&e.to_string()))
     }
 
     fn call_compute_vargas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -973,13 +1023,13 @@ mod tests {
     // ── tools/list ────────────────────────────────────────────────────────────
 
     #[test]
-    fn tools_list_returns_eleven_tools() {
+    fn tools_list_returns_twelve_tools() {
         let s = server();
         let resp =
             s.handle_request(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list","params":null}"#);
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         let tools = val["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 11, "expected exactly 11 tools");
+        assert_eq!(tools.len(), 12, "expected exactly 12 tools");
     }
 
     #[test]
@@ -1005,6 +1055,7 @@ mod tests {
         assert!(names.contains(&"compute_combustion"));
         assert!(names.contains(&"compute_shadbala"));
         assert!(names.contains(&"compute_ashtakavarga"));
+        assert!(names.contains(&"compute_gochara"));
     }
 
     // ── tools/call — unknown tool ─────────────────────────────────────────────
