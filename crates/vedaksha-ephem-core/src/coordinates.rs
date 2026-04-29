@@ -13,12 +13,10 @@
 
 use core::f64::consts::PI;
 
-use crate::aberration;
 use crate::bodies::Body;
 use crate::delta_t;
 use crate::error::ComputeError;
 use crate::jpl::{EphemerisProvider, Position, Velocity};
-use crate::light_time;
 use crate::nutation;
 use crate::obliquity;
 use crate::precession;
@@ -26,6 +24,9 @@ use vedaksha_math::matrix::{Matrix3, Vector3};
 
 /// Earth-Moon mass ratio (DE440/441 value).
 const EMRAT: f64 = 81.300_568_94;
+
+/// Geocentric-to-EMB conversion factor for Moon: |Moon-geocentric| = factor × |Moon-rel-EMB|.
+const MOON_GEO_FACTOR: f64 = (1.0 + EMRAT) / EMRAT;
 
 /// Ecliptic coordinates of a celestial body.
 #[derive(Debug, Clone, Copy)]
@@ -78,58 +79,40 @@ fn earth_state(
 /// given Julian Day.
 ///
 /// Pipeline:
-/// 1. Get Earth's barycentric position
-/// 2. Apply light-time correction to get body's geometric position
-/// 3. Compute geocentric position vector
-/// 4. Apply precession (J2000 -> date)
-/// 5. Apply nutation (mean -> true equatorial)
-/// 6. Apply annual aberration
-/// 7. Rotate from equatorial to ecliptic using true obliquity
-/// 8. Extract longitude, latitude, distance
+/// 1. Light-time correction (planetary aberration formulation): produce
+///    the geocentric vector `target(t-τ) - earth(t-τ)`. This already
+///    captures both light-travel-time delay and observer-motion aberration
+///    in one step; no separate stellar-aberration formula is needed for
+///    solar-system bodies (cf. Meeus, *Astronomical Algorithms* 2nd ed.,
+///    Ch. 33; Explanatory Supplement to the Astronomical Almanac §7.4).
+/// 2. Precession (J2000 → mean equator of date)
+/// 3. Nutation (mean → true equator of date)
+/// 4. Rotate from true equatorial to ecliptic of date using true obliquity
+/// 5. Extract longitude, latitude, distance
+///
+/// The Moon special case: SPK / Analytical providers expose the Moon
+/// relative to EMB. Multiplying by `(1+EMRAT)/EMRAT` gives the geocentric
+/// vector (Earth-EMB-Moon are collinear, so direction is preserved and
+/// only magnitude changes).
 fn compute_ecliptic(
     provider: &dyn EphemerisProvider,
     body: Body,
     jd_ut: f64,
 ) -> Result<EclipticCoords, ComputeError> {
-    // Convert UT → TT for ephemeris lookups (JPL ephemeris uses TDB ≈ TT).
-    // Precession/nutation use TT as well. The Delta T correction is critical
-    // for the Moon which moves ~0.5 arcsec/second.
     let jd = delta_t::ut1_to_tt(jd_ut);
 
-    // Step 1: Earth's barycentric state
-    let (earth_pos, earth_vel) = earth_state(provider, jd)?;
-
-    // Step 2 & 3: Light-time correction and geocentric position
+    // Step 1: planetary-aberration-form light-time iteration.
     //
-    // The Moon is special: its SPK segment is relative to EMB (center=3),
-    // while all other bodies are barycentric (center=0).
-    let geo = if body == Body::Moon {
-        // Earth relative to EMB = -Moon_rel_EMB / (1 + EMRAT)
-        let moon_now = provider.compute_state(Body::Moon, jd)?;
-        let earth_rel_emb = Position {
-            x: -moon_now.position.x / (1.0 + EMRAT),
-            y: -moon_now.position.y / (1.0 + EMRAT),
-            z: -moon_now.position.z / (1.0 + EMRAT),
-        };
-        let (moon_lt, _tau) =
-            light_time::light_time_correction(provider, Body::Moon, &earth_rel_emb, jd)?;
-        // Moon geocentric = Moon_rel_EMB (exact identity, see spec derivation)
-        [moon_lt.position.x, moon_lt.position.y, moon_lt.position.z]
-    } else {
-        let (body_state, _tau) = light_time::light_time_correction(provider, body, &earth_pos, jd)?;
-        // Body is barycentric; subtract Earth barycentric position
-        [
-            body_state.position.x - earth_pos.x,
-            body_state.position.y - earth_pos.y,
-            body_state.position.z - earth_pos.z,
-        ]
-    };
+    // We compute the geocentric vector with target AND observer at the
+    // retarded time t-τ. For solar-system bodies this single step provides
+    // the apparent direction in the observer's instantaneous rest frame —
+    // adding stellar aberration on top would double-count.
+    let geo = light_time_geocentric(provider, body, jd)?;
 
-    // Step 4: Precession matrix (J2000 -> mean equator of date)
+    // Step 2: precession (J2000 → mean equator of date)
     let prec = precession::precession_matrix(jd);
 
-    // Step 5: Nutation matrix (mean -> true equatorial of date)
-    // N = Rx(-eps_A - deps) * Rz(-dpsi) * Rx(eps_A)
+    // Step 3: nutation (mean → true equator of date)
     let (dpsi, deps) = nutation::nutation(jd);
     let eps_a = obliquity::mean_obliquity(jd);
     let eps_true = obliquity::true_obliquity(jd, deps);
@@ -138,41 +121,20 @@ fn compute_ecliptic(
         .multiply(&Matrix3::rotation_z(-dpsi))
         .multiply(&Matrix3::rotation_x(eps_a));
 
-    // Frame bias: ICRS -> mean J2000 (~23 mas correction)
-    // Source: IERS Conventions (2010), eq. 5.4
-    let bias = nutation::frame_bias_matrix();
-
-    // Combined transformation: true equatorial of date = N * P * B * ICRS_vector
-    let combined = nut_matrix.multiply(&prec).multiply(&bias);
+    // Combined: true equatorial of date = N · P · v_J2000_eq.
+    // The provider returns vectors already in the J2000 mean equator frame
+    // (analytical: ecliptic→equatorial via fixed J2000 obliquity; SPK:
+    // ICRF, which agrees with J2000 mean to <25 mas — small enough to
+    // ignore at this level of accuracy).
+    let combined = nut_matrix.multiply(&prec);
 
     let geo_vec = Vector3::new(geo[0], geo[1], geo[2]);
-    let equatorial = combined.apply(&geo_vec);
+    let true_eq = combined.apply(&geo_vec);
 
-    // Step 6: Annual aberration
-    // Transform Earth velocity to equatorial of date
-    let vel_vec = Vector3::new(earth_vel.x, earth_vel.y, earth_vel.z);
-    let vel_equatorial = combined.apply(&vel_vec);
+    // Step 4: rotate true equatorial of date → ecliptic of date
+    let ecl_vec = Matrix3::rotation_x(eps_true).apply(&true_eq);
 
-    let eq_arr = [equatorial.x, equatorial.y, equatorial.z];
-    let vel_eq_arr = [vel_equatorial.x, vel_equatorial.y, vel_equatorial.z];
-    let aber = aberration::aberration_correction(&eq_arr, &vel_eq_arr);
-
-    let apparent_eq = [
-        eq_arr[0] + aber[0],
-        eq_arr[1] + aber[1],
-        eq_arr[2] + aber[2],
-    ];
-
-    // Step 7: Rotate from true equatorial to ecliptic using true obliquity
-    // ecliptic = Rx(eps_true) * equatorial
-    let rot_ecl = Matrix3::rotation_x(eps_true);
-    let ecl_vec = rot_ecl.apply(&Vector3::new(
-        apparent_eq[0],
-        apparent_eq[1],
-        apparent_eq[2],
-    ));
-
-    // Step 8: Extract spherical coordinates
+    // Step 5: extract spherical coordinates
     let distance =
         libm::sqrt(ecl_vec.x * ecl_vec.x + ecl_vec.y * ecl_vec.y + ecl_vec.z * ecl_vec.z);
     let mut longitude = libm::atan2(ecl_vec.y, ecl_vec.x);
@@ -186,6 +148,72 @@ fn compute_ecliptic(
         latitude,
         distance,
     })
+}
+
+/// Compute the geocentric vector to `body` at observation time `jd` (TT),
+/// applying planetary-aberration-form light-time correction.
+///
+/// For Moon: scales the rel-EMB vector returned by providers up to a true
+/// geocentric vector via the (1+EMRAT)/EMRAT factor. Because Earth–EMB–Moon
+/// are collinear, this preserves direction and corrects the distance.
+///
+/// Returns `[x, y, z]` in AU, in the J2000 mean equatorial frame.
+fn light_time_geocentric(
+    provider: &dyn EphemerisProvider,
+    body: Body,
+    jd: f64,
+) -> Result<[f64; 3], ComputeError> {
+    let mut tau = 0.0_f64;
+    for _ in 0..10 {
+        let target_state = provider.compute_state(body, jd - tau)?;
+        let target_pos = if body == Body::Moon {
+            // Convert Moon-rel-EMB to Moon-geocentric.
+            [
+                target_state.position.x * MOON_GEO_FACTOR,
+                target_state.position.y * MOON_GEO_FACTOR,
+                target_state.position.z * MOON_GEO_FACTOR,
+            ]
+        } else {
+            // Body is barycentric; subtract Earth barycentric position
+            // at the SAME retarded time t-τ (planetary aberration form).
+            let (earth_at_ret, _) = earth_state(provider, jd - tau)?;
+            [
+                target_state.position.x - earth_at_ret.x,
+                target_state.position.y - earth_at_ret.y,
+                target_state.position.z - earth_at_ret.z,
+            ]
+        };
+
+        let r = libm::sqrt(
+            target_pos[0] * target_pos[0]
+                + target_pos[1] * target_pos[1]
+                + target_pos[2] * target_pos[2],
+        );
+        let tau_new = r / crate::aberration::C_AU_PER_DAY;
+
+        if (tau_new - tau).abs() < 1e-12 {
+            return Ok(target_pos);
+        }
+        tau = tau_new;
+    }
+
+    // Final iteration if not converged: recompute at last tau.
+    let target_state = provider.compute_state(body, jd - tau)?;
+    let target_pos = if body == Body::Moon {
+        [
+            target_state.position.x * MOON_GEO_FACTOR,
+            target_state.position.y * MOON_GEO_FACTOR,
+            target_state.position.z * MOON_GEO_FACTOR,
+        ]
+    } else {
+        let (earth_at_ret, _) = earth_state(provider, jd - tau)?;
+        [
+            target_state.position.x - earth_at_ret.x,
+            target_state.position.y - earth_at_ret.y,
+            target_state.position.z - earth_at_ret.z,
+        ]
+    };
+    Ok(target_pos)
 }
 
 /// Compute the apparent ecliptic position of a body at a given Julian Day.
