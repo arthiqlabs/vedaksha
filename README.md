@@ -115,7 +115,7 @@ Validated against independent reference ephemerides across 24,000+ oracle data p
 | Metric | SpkReader (DE440s) | AnalyticalProvider |
 |--------|-------------------|-------------------|
 | Planetary longitude | Sub-arcsecond (avg 1.7") | <15" (avg 3.8") |
-| Moon longitude | Sub-arcsecond | <1" (0.36") |
+| Moon longitude | Sub-arcsecond | <1" (0.23" avg, 0.60" max, 1900–2100 vs JPL Horizons) |
 | House cusps (10 systems) | Sub-0.001° | Sub-0.01° |
 | Ayanamsha (44 systems) | avg 0.005° | Same (pure math) |
 | Dasha periods | Sum to 120 years ± 0.01 days | Same |
