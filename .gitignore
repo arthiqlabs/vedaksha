@@ -43,3 +43,9 @@ data/*.bsp
 
 # Downloaded VSOP87/ELP source data (generated Rust files ARE committed)
 scripts/data/
+.env.production.local
+.env.local.resolved
+.cleanroom-allow.yaml
+.cleanroom-deny.yaml
+.githooks/
+scripts/setup-hooks.sh

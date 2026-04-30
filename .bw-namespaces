@@ -1,0 +1,3 @@
+# Bitwarden namespace allowlist for this repo.
+# bw-env / bw-cmd refuse to resolve refs outside these prefixes (plus shared/, infra/).
+vedaksha
