@@ -115,7 +115,7 @@ docker run -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp  # Docker
 
 ## Accuracy
 
-Validated against independent reference ephemerides across 24,000+ oracle data points:
+Validated against two independent reference ephemerides across 8,700 oracle reference rows in `tests/oracle_jpl/`:
 
 | Metric | SpkReader (DE440s) | AnalyticalProvider |
 |--------|-------------------|-------------------|
