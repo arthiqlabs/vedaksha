@@ -7,7 +7,7 @@
 //!
 //! MCP (Model Context Protocol) server for Vedākṣha.
 //!
-//! Provides 7 tools for AI agents to compute charts, dashas,
+//! Provides 12 tools for AI agents to compute charts, dashas,
 //! vargas, transits, and emit graph data.
 
 #![deny(unsafe_code)]

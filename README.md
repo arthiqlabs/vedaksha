@@ -21,7 +21,7 @@ let chart = compute_chart(
 ```
 
 ```bash
-cargo add vedaksha-astro vedaksha-ephem-core
+cargo add vedaksha
 ```
 
 ```bash
@@ -38,7 +38,7 @@ pip install vedaksha
 | [vedaksha-vedic](crates/vedaksha-vedic) | 27 nakshatras, 3 dasha systems, 16 vargas, 50 yogas, Shadbala |
 | [vedaksha-graph](crates/vedaksha-graph) | Property graph ontology — 10 node types, 13 edge types |
 | [vedaksha-emit](crates/vedaksha-emit) | Cypher, SurrealQL, JSON-LD, JSON, embedding text emitters |
-| [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 7 fully functional JSON-RPC tools for AI agents |
+| [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 12 fully functional JSON-RPC tools for AI agents |
 | [vedaksha-locale](crates/vedaksha-locale) | 7-language localization (English, Hindi, Sanskrit, Tamil, Telugu, Kannada, Bengali) |
 | [vedaksha-wasm](crates/vedaksha-wasm) | WebAssembly bindings — 972 KB binary, full chart computation in browser |
 
@@ -88,12 +88,17 @@ First-class Jyotish support — not a Western afterthought.
 
 ## AI-First Architecture
 
-Every chart computation produces a **property graph** — not flat structs. AI agents query chart data with Cypher, SurrealQL, or JSON-LD. The MCP server exposes 7 fully functional tools:
+Every chart computation produces a **property graph** — not flat structs. AI agents query chart data with Cypher, SurrealQL, or JSON-LD. The MCP server exposes 12 fully functional tools:
 
 - `compute_natal_chart` — Full natal chart with houses, planets, aspects, dignities
 - `compute_dasha` — Vimshottari dasha periods to any depth
-- `compute_vargas` — Divisional chart positions
+- `compute_karakas` — Jaimini Chara Karakas (AK through PK)
+- `compute_combustion` — Solar combustion state per planet with orb thresholds
+- `compute_shadbala` — Six-fold strength with Ishta/Kashta phala
+- `compute_vargas` — Divisional chart positions across 16 vargas
 - `compute_transit` — Transit positions against natal with aspects
+- `compute_gochara` — BPHS Ch. 29 gochara results with Vedha cancellation
+- `compute_ashtakavarga` — Sarva and Bhinna Ashtakavarga bindu tables
 - `search_transits` — Find exact transit events in a date range
 - `search_muhurta` — Find auspicious times with quality scoring
 - `emit_graph` — Emit chart as Cypher, SurrealQL, JSON-LD, or embedding text
@@ -125,10 +130,10 @@ Validated against independent reference ephemerides across 24,000+ oracle data p
 
 | Platform | Install | Chart Computation |
 |----------|---------|-------------------|
-| Rust | `cargo add vedaksha-astro vedaksha-ephem-core` | Full pipeline |
+| Rust | `cargo add vedaksha` | Full pipeline |
 | Python | `pip install vedaksha` | `vedaksha.compute_natal_chart(...)` |
 | WASM | `wasm-pack build crates/vedaksha-wasm` | 972 KB, zero data files |
-| MCP | stdio + HTTP transport | 7 tools, JSON-RPC 2.0 |
+| MCP | stdio + HTTP transport | 12 tools, JSON-RPC 2.0 |
 | Docker | `docker run -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp` | HTTP on port 3100 |
 
 ## Published Packages

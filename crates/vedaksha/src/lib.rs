@@ -11,7 +11,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! vedaksha = "1.6"
+//! vedaksha = "2.3"
 //! ```
 
 pub use vedaksha_astro as astro;
