@@ -459,7 +459,7 @@ impl McpServer {
     }
 
     fn call_compute_combustion(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_vedic::combustion::{combustion_state, CombustionState};
+        use vedaksha_vedic::combustion::{CombustionState, combustion_state};
         use vedaksha_vedic::yoga::YogaPlanet;
 
         let input: crate::tools::compute_combustion::ComputeCombustionInput =
@@ -474,12 +474,32 @@ impl McpServer {
         };
 
         let results: Vec<serde_json::Value> = vec![
-            (YogaPlanet::Moon,    input.moon,    false,                        "Moon"),
-            (YogaPlanet::Mars,    input.mars,    input.mars_retrograde,        "Mars"),
-            (YogaPlanet::Mercury, input.mercury, input.mercury_retrograde,     "Mercury"),
-            (YogaPlanet::Jupiter, input.jupiter, input.jupiter_retrograde,     "Jupiter"),
-            (YogaPlanet::Venus,   input.venus,   input.venus_retrograde,       "Venus"),
-            (YogaPlanet::Saturn,  input.saturn,  input.saturn_retrograde,      "Saturn"),
+            (YogaPlanet::Moon, input.moon, false, "Moon"),
+            (YogaPlanet::Mars, input.mars, input.mars_retrograde, "Mars"),
+            (
+                YogaPlanet::Mercury,
+                input.mercury,
+                input.mercury_retrograde,
+                "Mercury",
+            ),
+            (
+                YogaPlanet::Jupiter,
+                input.jupiter,
+                input.jupiter_retrograde,
+                "Jupiter",
+            ),
+            (
+                YogaPlanet::Venus,
+                input.venus,
+                input.venus_retrograde,
+                "Venus",
+            ),
+            (
+                YogaPlanet::Saturn,
+                input.saturn,
+                input.saturn_retrograde,
+                "Saturn",
+            ),
         ]
         .into_iter()
         .map(|(planet, lon, retro, name)| {
@@ -501,7 +521,7 @@ impl McpServer {
     }
 
     fn call_compute_shadbala(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_vedic::shadbala::{compute_shadbala_full, ShadbalaPlanetData};
+        use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
         use vedaksha_vedic::yoga::PlanetPosition;
 
         let input: crate::tools::compute_shadbala::ComputeShidbalaInput =
@@ -530,12 +550,15 @@ impl McpServer {
             })
             .collect();
 
-        let results = compute_shadbala_full(&planet_data, input.is_daytime, input.moon_phase_waxing);
+        let results =
+            compute_shadbala_full(&planet_data, input.is_daytime, input.moon_phase_waxing);
         serde_json::to_value(&results).map_err(|e| McpError::computation_failed(&e.to_string()))
     }
 
     fn call_compute_ashtakavarga(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_vedic::ashtakavarga::{bhinna_ashtakavarga, sarvashtakavarga, BhinnaAshtakavargaInput};
+        use vedaksha_vedic::ashtakavarga::{
+            BhinnaAshtakavargaInput, bhinna_ashtakavarga, sarvashtakavarga,
+        };
 
         let input: crate::tools::compute_ashtakavarga::ComputeAshtakavargaInput =
             serde_json::from_value(args.clone())
@@ -565,7 +588,7 @@ impl McpServer {
 
     fn call_compute_gochara(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
         use vedaksha_vedic::gochara::{
-            apply_vedha_exemptions, compute_gochara, SchoolProfile, TransitPositions, VedhaTable,
+            SchoolProfile, TransitPositions, VedhaTable, apply_vedha_exemptions, compute_gochara,
         };
 
         let input: crate::tools::compute_gochara::ComputeGocharaInput =

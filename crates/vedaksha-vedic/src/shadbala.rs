@@ -811,8 +811,12 @@ mod tests {
         let data = [planet_data(YogaPlanet::Sun, 0, 10, 1.0, 1.0, 1, 0)];
         let results = compute_shadbala_full(&data, true, false);
         let sb = &results[0];
-        let sum = sb.sthana_bala + sb.dig_bala + sb.kala_bala
-            + sb.cheshta_bala + sb.naisargika_bala + sb.drik_bala;
+        let sum = sb.sthana_bala
+            + sb.dig_bala
+            + sb.kala_bala
+            + sb.cheshta_bala
+            + sb.naisargika_bala
+            + sb.drik_bala;
         assert!((sb.total - sum).abs() < f64::EPSILON);
     }
 

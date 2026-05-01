@@ -61,7 +61,10 @@ pub fn definition() -> super::ToolDefinition {
 
 fn validate_lon(name: &'static str, value: f64) -> Result<(), McpError> {
     if !value.is_finite() || !(0.0..360.0).contains(&value) {
-        return Err(McpError::invalid_parameter(name, "must be a finite number in [0, 360)"));
+        return Err(McpError::invalid_parameter(
+            name,
+            "must be a finite number in [0, 360)",
+        ));
     }
     Ok(())
 }
@@ -110,14 +113,20 @@ mod tests {
     fn validate_rejects_nan_longitude() {
         let mut input = valid_input();
         input.sun = f64::NAN;
-        assert_eq!(validate(&input).unwrap_err().error_code, "INVALID_PARAMETER");
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
     }
 
     #[test]
     fn validate_rejects_longitude_at_360() {
         let mut input = valid_input();
         input.moon = 360.0;
-        assert_eq!(validate(&input).unwrap_err().error_code, "INVALID_PARAMETER");
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
     }
 
     #[test]

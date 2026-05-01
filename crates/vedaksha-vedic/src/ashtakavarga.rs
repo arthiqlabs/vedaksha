@@ -67,12 +67,23 @@ const BINDU_MASKS: [[u16; 8]; 7] = [
 #[must_use]
 pub fn bhinna_ashtakavarga(input: &BhinnaAshtakavargaInput) -> [AshtakavargaTable; 7] {
     let contributor_signs: [u8; 8] = [
-        input.sun, input.moon, input.mars, input.mercury,
-        input.jupiter, input.venus, input.saturn, input.lagna,
+        input.sun,
+        input.moon,
+        input.mars,
+        input.mercury,
+        input.jupiter,
+        input.venus,
+        input.saturn,
+        input.lagna,
     ];
     let target_planets = [
-        YogaPlanet::Sun, YogaPlanet::Moon, YogaPlanet::Mars,
-        YogaPlanet::Mercury, YogaPlanet::Jupiter, YogaPlanet::Venus, YogaPlanet::Saturn,
+        YogaPlanet::Sun,
+        YogaPlanet::Moon,
+        YogaPlanet::Mars,
+        YogaPlanet::Mercury,
+        YogaPlanet::Jupiter,
+        YogaPlanet::Venus,
+        YogaPlanet::Saturn,
     ];
 
     core::array::from_fn(|pi| {
@@ -118,9 +129,14 @@ mod tests {
 
     fn all_different_signs() -> BhinnaAshtakavargaInput {
         BhinnaAshtakavargaInput {
-            sun: 3, moon: 7, mars: 1,
-            mercury: 10, jupiter: 5,
-            venus: 8, saturn: 11, lagna: 0,
+            sun: 3,
+            moon: 7,
+            mars: 1,
+            mercury: 10,
+            jupiter: 5,
+            venus: 8,
+            saturn: 11,
+            lagna: 0,
         }
     }
 
@@ -173,7 +189,11 @@ mod tests {
         let tables = bhinna_ashtakavarga(&all_different_signs());
         for table in &tables {
             let sum: u8 = table.bindus.iter().sum();
-            assert_eq!(table.total, sum, "total must equal sum of bindus for {:?}", table.planet);
+            assert_eq!(
+                table.total, sum,
+                "total must equal sum of bindus for {:?}",
+                table.planet
+            );
         }
     }
 
@@ -211,8 +231,14 @@ mod tests {
     fn all_contributors_in_same_sign_canonical_totals_unchanged() {
         // Totals are position-independent invariants — same regardless of input signs.
         let input = BhinnaAshtakavargaInput {
-            sun: 0, moon: 0, mars: 0,
-            mercury: 0, jupiter: 0, venus: 0, saturn: 0, lagna: 0,
+            sun: 0,
+            moon: 0,
+            mars: 0,
+            mercury: 0,
+            jupiter: 0,
+            venus: 0,
+            saturn: 0,
+            lagna: 0,
         };
         let tables = bhinna_ashtakavarga(&input);
         assert_eq!(tables[0].total, 48);

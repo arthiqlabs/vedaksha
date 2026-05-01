@@ -26,12 +26,12 @@ pub enum CombustionState {
 /// Source: BPHS Ch.7 vv.28-29.
 fn orb(planet: YogaPlanet, is_retrograde: bool) -> Option<f64> {
     match planet {
-        YogaPlanet::Moon    => Some(12.0),
-        YogaPlanet::Mars    => Some(if is_retrograde { 8.0 } else { 17.0 }),
+        YogaPlanet::Moon => Some(12.0),
+        YogaPlanet::Mars => Some(if is_retrograde { 8.0 } else { 17.0 }),
         YogaPlanet::Mercury => Some(if is_retrograde { 12.0 } else { 14.0 }),
         YogaPlanet::Jupiter => Some(11.0),
-        YogaPlanet::Venus   => Some(if is_retrograde { 8.0 } else { 10.0 }),
-        YogaPlanet::Saturn  => Some(16.0),
+        YogaPlanet::Venus => Some(if is_retrograde { 8.0 } else { 10.0 }),
+        YogaPlanet::Saturn => Some(16.0),
         YogaPlanet::Sun | YogaPlanet::Rahu | YogaPlanet::Ketu => None,
     }
 }

@@ -101,7 +101,9 @@ pub fn compute_karakas(input: &KarakaInput) -> Vec<KarakaAssignment> {
     ];
 
     if input.scheme == KarakaScheme::Eight {
-        let rahu_lon = input.rahu.expect("rahu longitude required for 8-karaka scheme");
+        let rahu_lon = input
+            .rahu
+            .expect("rahu longitude required for 8-karaka scheme");
         candidates.push((YogaPlanet::Rahu, rahu_degrees_in_sign(rahu_lon)));
     }
 
@@ -198,15 +200,18 @@ mod tests {
     fn seven_karaka_roles_in_order() {
         let result = compute_karakas(&test_input_7());
         let roles: Vec<Karaka> = result.iter().map(|a| a.karaka).collect();
-        assert_eq!(roles, vec![
-            Karaka::Atmakaraka,
-            Karaka::Amatyakaraka,
-            Karaka::Bhratrikaraka,
-            Karaka::Matrikaraka,
-            Karaka::Putrakaraka,
-            Karaka::Gnatikaraka,
-            Karaka::Darakaraka,
-        ]);
+        assert_eq!(
+            roles,
+            vec![
+                Karaka::Atmakaraka,
+                Karaka::Amatyakaraka,
+                Karaka::Bhratrikaraka,
+                Karaka::Matrikaraka,
+                Karaka::Putrakaraka,
+                Karaka::Gnatikaraka,
+                Karaka::Darakaraka,
+            ]
+        );
     }
 
     #[test]

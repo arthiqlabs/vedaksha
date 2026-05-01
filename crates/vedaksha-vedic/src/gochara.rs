@@ -82,40 +82,48 @@ pub struct TransitPositions {
 // BPHS Ch.29 — favourable house numbers (1-indexed) per graha.
 // Anything not listed here is unfavourable.
 const FAVOURABLE_HOUSES: [(YogaPlanet, &[u8]); 7] = [
-    (YogaPlanet::Sun,     &[3, 6, 10, 11]),
-    (YogaPlanet::Moon,    &[1, 3, 6, 7, 10, 11]),
-    (YogaPlanet::Mars,    &[3, 6, 11]),
+    (YogaPlanet::Sun, &[3, 6, 10, 11]),
+    (YogaPlanet::Moon, &[1, 3, 6, 7, 10, 11]),
+    (YogaPlanet::Mars, &[3, 6, 11]),
     (YogaPlanet::Mercury, &[2, 4, 6, 8, 10, 11]),
     (YogaPlanet::Jupiter, &[2, 5, 7, 9, 11]),
-    (YogaPlanet::Venus,   &[1, 2, 3, 4, 5, 8, 9, 11, 12]),
-    (YogaPlanet::Saturn,  &[3, 6, 11]),
+    (YogaPlanet::Venus, &[1, 2, 3, 4, 5, 8, 9, 11, 12]),
+    (YogaPlanet::Saturn, &[3, 6, 11]),
 ];
 
 // BPHS Ch.29 — vedha (obstruction) pair table.
 // (favourable_house_for_graha, vedha_house) — when another graha occupies
 // the vedha house, the favourable transit is obstructed.
 const BPHS29_VEDHA: [(YogaPlanet, &[(u8, u8)]); 7] = [
-    (YogaPlanet::Sun, &[
-        (3, 9), (6, 12), (10, 4), (11, 5),
-    ]),
-    (YogaPlanet::Moon, &[
-        (1, 5), (3, 9), (6, 12), (7, 2), (10, 4), (11, 8),
-    ]),
-    (YogaPlanet::Mars, &[
-        (3, 12), (6, 9), (11, 5),
-    ]),
-    (YogaPlanet::Mercury, &[
-        (2, 5), (4, 3), (6, 9), (8, 1), (10, 8), (11, 12),
-    ]),
-    (YogaPlanet::Jupiter, &[
-        (2, 12), (5, 4), (7, 3), (9, 10), (11, 8),
-    ]),
-    (YogaPlanet::Venus, &[
-        (1, 8), (2, 7), (3, 1), (4, 10), (5, 9), (8, 5), (9, 11), (11, 6), (12, 3),
-    ]),
-    (YogaPlanet::Saturn, &[
-        (3, 12), (6, 9), (11, 5),
-    ]),
+    (YogaPlanet::Sun, &[(3, 9), (6, 12), (10, 4), (11, 5)]),
+    (
+        YogaPlanet::Moon,
+        &[(1, 5), (3, 9), (6, 12), (7, 2), (10, 4), (11, 8)],
+    ),
+    (YogaPlanet::Mars, &[(3, 12), (6, 9), (11, 5)]),
+    (
+        YogaPlanet::Mercury,
+        &[(2, 5), (4, 3), (6, 9), (8, 1), (10, 8), (11, 12)],
+    ),
+    (
+        YogaPlanet::Jupiter,
+        &[(2, 12), (5, 4), (7, 3), (9, 10), (11, 8)],
+    ),
+    (
+        YogaPlanet::Venus,
+        &[
+            (1, 8),
+            (2, 7),
+            (3, 1),
+            (4, 10),
+            (5, 9),
+            (8, 5),
+            (9, 11),
+            (11, 6),
+            (12, 3),
+        ],
+    ),
+    (YogaPlanet::Saturn, &[(3, 12), (6, 9), (11, 5)]),
 ];
 
 #[inline]
@@ -175,13 +183,13 @@ const GOCHARA_GRAHAS: [YogaPlanet; 7] = [
 #[inline]
 fn transit_sign_of(graha: YogaPlanet, t: TransitPositions) -> Option<u8> {
     match graha {
-        YogaPlanet::Sun     => Some(t.sun),
-        YogaPlanet::Moon    => Some(t.moon),
-        YogaPlanet::Mars    => Some(t.mars),
+        YogaPlanet::Sun => Some(t.sun),
+        YogaPlanet::Moon => Some(t.moon),
+        YogaPlanet::Mars => Some(t.mars),
         YogaPlanet::Mercury => Some(t.mercury),
         YogaPlanet::Jupiter => Some(t.jupiter),
-        YogaPlanet::Venus   => Some(t.venus),
-        YogaPlanet::Saturn  => Some(t.saturn),
+        YogaPlanet::Venus => Some(t.venus),
+        YogaPlanet::Saturn => Some(t.saturn),
         YogaPlanet::Rahu | YogaPlanet::Ketu => None,
     }
 }
@@ -223,10 +231,8 @@ pub fn compute_gochara(
         let mut vedha_candidates: Vec<YogaPlanet> = Vec::new();
         if favourable {
             if let Some(vedha_house) = lookup_vedha_house(graha, house, vedha_table) {
-                let target_sign_i = (i16::from(natal_reference_sign)
-                    + i16::from(vedha_house)
-                    - 1)
-                .rem_euclid(12);
+                let target_sign_i =
+                    (i16::from(natal_reference_sign) + i16::from(vedha_house) - 1).rem_euclid(12);
                 // target_sign_i is in [0, 11] by construction.
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let target_sign = target_sign_i as u8;
@@ -298,13 +304,13 @@ mod tests {
     fn sample_transits() -> TransitPositions {
         // Arbitrary positions; chosen to exercise vedha lookup.
         TransitPositions {
-            sun:     0,  // Aries
-            moon:    4,  // Leo
-            mars:    2,  // Gemini
-            mercury: 6,  // Libra
-            jupiter: 8,  // Sagittarius
-            venus:   10, // Aquarius
-            saturn:  6,  // Libra
+            sun: 0,     // Aries
+            moon: 4,    // Leo
+            mars: 2,    // Gemini
+            mercury: 6, // Libra
+            jupiter: 8, // Sagittarius
+            venus: 10,  // Aquarius
+            saturn: 6,  // Libra
         }
     }
 
@@ -378,7 +384,11 @@ mod tests {
         t.sun = 2;
         t.saturn = 8;
         // Make sure no other planet sits in sign 8.
-        t.moon = 1; t.mars = 3; t.mercury = 4; t.jupiter = 5; t.venus = 10;
+        t.moon = 1;
+        t.mars = 3;
+        t.mercury = 4;
+        t.jupiter = 5;
+        t.venus = 10;
         let g = compute_gochara(&t, 0, VedhaTable::Bphs29);
         let sun = g.iter().find(|e| e.graha == YogaPlanet::Sun).unwrap();
         assert_eq!(sun.classical_effect, GocharaEffect::Favourable);
@@ -391,9 +401,13 @@ mod tests {
         // Sun transiting 5th house from natal — geometric vedha pair.
         // Reference sign 0, Moon in sign 0 (1st), Sun in sign 4 (5th).
         let t = TransitPositions {
-            sun:     4,
-            moon:    0,
-            mars:    1, mercury: 2, jupiter: 3, venus: 5, saturn: 6,
+            sun: 4,
+            moon: 0,
+            mars: 1,
+            mercury: 2,
+            jupiter: 3,
+            venus: 5,
+            saturn: 6,
         };
         let mut g = compute_gochara(&t, 0, VedhaTable::Bphs29);
         let moon = g.iter().find(|e| e.graha == YogaPlanet::Moon).unwrap();

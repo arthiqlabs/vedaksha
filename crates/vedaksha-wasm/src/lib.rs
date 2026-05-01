@@ -476,8 +476,8 @@ fn parse_language(s: &str) -> Result<vedaksha_locale::Language, JsError> {
 fn compute_karakas_inner(positions_json: &str, scheme: &str) -> Result<String, String> {
     use vedaksha_vedic::karaka::{KarakaInput, KarakaScheme};
 
-    let pos: serde_json::Value = serde_json::from_str(positions_json)
-        .map_err(|e| format!("invalid positions JSON: {e}"))?;
+    let pos: serde_json::Value =
+        serde_json::from_str(positions_json).map_err(|e| format!("invalid positions JSON: {e}"))?;
 
     let get = |key: &str| -> Result<f64, String> {
         pos.get(key)
@@ -529,21 +529,21 @@ pub fn compute_karakas(positions_json: &str, scheme: &str) -> Result<String, JsE
 }
 
 fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<String, String> {
-    use vedaksha_vedic::combustion::{combustion_state, CombustionState};
+    use vedaksha_vedic::combustion::{CombustionState, combustion_state};
     use vedaksha_vedic::yoga::YogaPlanet;
 
-    let pos: serde_json::Value = serde_json::from_str(positions_json)
-        .map_err(|e| format!("invalid positions JSON: {e}"))?;
-    let retro: serde_json::Value = serde_json::from_str(retro_json)
-        .map_err(|e| format!("invalid retro JSON: {e}"))?;
+    let pos: serde_json::Value =
+        serde_json::from_str(positions_json).map_err(|e| format!("invalid positions JSON: {e}"))?;
+    let retro: serde_json::Value =
+        serde_json::from_str(retro_json).map_err(|e| format!("invalid retro JSON: {e}"))?;
 
     let get_lon = |key: &str| -> Result<f64, String> {
-        pos.get(key).and_then(|v| v.as_f64())
+        pos.get(key)
+            .and_then(|v| v.as_f64())
             .ok_or_else(|| format!("missing or invalid field '{key}'"))
     };
-    let get_bool = |key: &str| -> bool {
-        retro.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
-    };
+    let get_bool =
+        |key: &str| -> bool { retro.get(key).and_then(|v| v.as_bool()).unwrap_or(false) };
 
     let sun = get_lon("sun")?;
     let moon_lon = get_lon("moon")?;
@@ -553,11 +553,11 @@ fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<St
     let venus_lon = get_lon("venus")?;
     let saturn_lon = get_lon("saturn")?;
 
-    let mars_retro    = get_bool("mars");
+    let mars_retro = get_bool("mars");
     let mercury_retro = get_bool("mercury");
     let jupiter_retro = get_bool("jupiter");
-    let venus_retro   = get_bool("venus");
-    let saturn_retro  = get_bool("saturn");
+    let venus_retro = get_bool("venus");
+    let saturn_retro = get_bool("saturn");
 
     let sep = |lon: f64| -> f64 {
         let diff = (lon - sun).abs() % 360.0;
@@ -565,12 +565,12 @@ fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<St
     };
 
     let entries: &[(YogaPlanet, f64, bool, &str)] = &[
-        (YogaPlanet::Moon,    moon_lon,    false,         "Moon"),
-        (YogaPlanet::Mars,    mars_lon,    mars_retro,    "Mars"),
+        (YogaPlanet::Moon, moon_lon, false, "Moon"),
+        (YogaPlanet::Mars, mars_lon, mars_retro, "Mars"),
         (YogaPlanet::Mercury, mercury_lon, mercury_retro, "Mercury"),
         (YogaPlanet::Jupiter, jupiter_lon, jupiter_retro, "Jupiter"),
-        (YogaPlanet::Venus,   venus_lon,   venus_retro,   "Venus"),
-        (YogaPlanet::Saturn,  saturn_lon,  saturn_retro,  "Saturn"),
+        (YogaPlanet::Venus, venus_lon, venus_retro, "Venus"),
+        (YogaPlanet::Saturn, saturn_lon, saturn_retro, "Saturn"),
     ];
 
     let results: Vec<serde_json::Value> = entries
@@ -609,14 +609,20 @@ pub fn compute_combustion(positions_json: &str, retro_json: &str) -> Result<Stri
 }
 
 fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
-    use vedaksha_vedic::shadbala::{compute_shadbala_full, ShadbalaPlanetData};
+    use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
     use vedaksha_vedic::yoga::{PlanetPosition, YogaPlanet};
 
-    let v: serde_json::Value = serde_json::from_str(input_json)
-        .map_err(|e| format!("invalid JSON: {e}"))?;
+    let v: serde_json::Value =
+        serde_json::from_str(input_json).map_err(|e| format!("invalid JSON: {e}"))?;
 
-    let is_daytime = v.get("is_daytime").and_then(|x| x.as_bool()).unwrap_or(false);
-    let moon_phase_waxing = v.get("moon_phase_waxing").and_then(|x| x.as_bool()).unwrap_or(false);
+    let is_daytime = v
+        .get("is_daytime")
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false);
+    let moon_phase_waxing = v
+        .get("moon_phase_waxing")
+        .and_then(|x| x.as_bool())
+        .unwrap_or(false);
 
     let planets_arr = v
         .get("planets")
@@ -625,13 +631,13 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
 
     let parse_planet_name = |name: &str| -> Result<YogaPlanet, String> {
         match name.to_lowercase().as_str() {
-            "sun"     => Ok(YogaPlanet::Sun),
-            "moon"    => Ok(YogaPlanet::Moon),
-            "mars"    => Ok(YogaPlanet::Mars),
+            "sun" => Ok(YogaPlanet::Sun),
+            "moon" => Ok(YogaPlanet::Moon),
+            "mars" => Ok(YogaPlanet::Mars),
             "mercury" => Ok(YogaPlanet::Mercury),
             "jupiter" => Ok(YogaPlanet::Jupiter),
-            "venus"   => Ok(YogaPlanet::Venus),
-            "saturn"  => Ok(YogaPlanet::Saturn),
+            "venus" => Ok(YogaPlanet::Venus),
+            "saturn" => Ok(YogaPlanet::Saturn),
             other => Err(format!("unknown planet '{other}'")),
         }
     };
@@ -644,14 +650,31 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
             .ok_or_else(|| "missing 'planet' field".to_string())?;
         let planet = parse_planet_name(planet_name)?;
         let sign = entry.get("sign").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
-        let longitude = entry.get("longitude").and_then(|x| x.as_f64()).unwrap_or(0.0);
+        let longitude = entry
+            .get("longitude")
+            .and_then(|x| x.as_f64())
+            .unwrap_or(0.0);
         let bhava = entry.get("bhava").and_then(|x| x.as_u64()).unwrap_or(1) as u8;
         let speed = entry.get("speed").and_then(|x| x.as_f64()).unwrap_or(0.0);
-        let average_speed = entry.get("average_speed").and_then(|x| x.as_f64()).unwrap_or(1.0);
-        let benefic = entry.get("benefic_aspect_count").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
-        let malefic = entry.get("malefic_aspect_count").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+        let average_speed = entry
+            .get("average_speed")
+            .and_then(|x| x.as_f64())
+            .unwrap_or(1.0);
+        let benefic = entry
+            .get("benefic_aspect_count")
+            .and_then(|x| x.as_u64())
+            .unwrap_or(0) as u32;
+        let malefic = entry
+            .get("malefic_aspect_count")
+            .and_then(|x| x.as_u64())
+            .unwrap_or(0) as u32;
         planet_data.push(ShadbalaPlanetData {
-            position: PlanetPosition { planet, sign, longitude, bhava },
+            position: PlanetPosition {
+                planet,
+                sign,
+                longitude,
+                bhava,
+            },
             speed,
             average_speed,
             benefic_aspect_count: benefic,
@@ -679,13 +702,17 @@ pub fn compute_shadbala(input_json: &str) -> Result<String, JsError> {
 }
 
 fn compute_ashtakavarga_inner(input_json: &str) -> Result<String, String> {
-    use vedaksha_vedic::ashtakavarga::{bhinna_ashtakavarga, sarvashtakavarga, BhinnaAshtakavargaInput};
+    use vedaksha_vedic::ashtakavarga::{
+        BhinnaAshtakavargaInput, bhinna_ashtakavarga, sarvashtakavarga,
+    };
 
-    let v: serde_json::Value = serde_json::from_str(input_json)
-        .map_err(|e| format!("invalid JSON: {e}"))?;
+    let v: serde_json::Value =
+        serde_json::from_str(input_json).map_err(|e| format!("invalid JSON: {e}"))?;
 
     let get_sign = |key: &str| -> Result<u8, String> {
-        let n = v.get(key).and_then(|x| x.as_u64())
+        let n = v
+            .get(key)
+            .and_then(|x| x.as_u64())
             .ok_or_else(|| format!("missing or invalid field '{key}'"))?;
         if n > 11 {
             return Err(format!("'{key}' must be 0–11, got {n}"));
@@ -694,14 +721,14 @@ fn compute_ashtakavarga_inner(input_json: &str) -> Result<String, String> {
     };
 
     let input = BhinnaAshtakavargaInput {
-        sun:     get_sign("sun")?,
-        moon:    get_sign("moon")?,
-        mars:    get_sign("mars")?,
+        sun: get_sign("sun")?,
+        moon: get_sign("moon")?,
+        mars: get_sign("mars")?,
         mercury: get_sign("mercury")?,
         jupiter: get_sign("jupiter")?,
-        venus:   get_sign("venus")?,
-        saturn:  get_sign("saturn")?,
-        lagna:   get_sign("lagna")?,
+        venus: get_sign("venus")?,
+        saturn: get_sign("saturn")?,
+        lagna: get_sign("lagna")?,
     };
 
     let tables = bhinna_ashtakavarga(&input);
@@ -729,14 +756,16 @@ pub fn compute_ashtakavarga(input_json: &str) -> Result<String, JsError> {
 
 fn compute_gochara_inner(input_json: &str) -> Result<String, String> {
     use vedaksha_vedic::gochara::{
-        apply_vedha_exemptions, compute_gochara, SchoolProfile, TransitPositions, VedhaTable,
+        SchoolProfile, TransitPositions, VedhaTable, apply_vedha_exemptions, compute_gochara,
     };
 
-    let v: serde_json::Value = serde_json::from_str(input_json)
-        .map_err(|e| format!("invalid JSON: {e}"))?;
+    let v: serde_json::Value =
+        serde_json::from_str(input_json).map_err(|e| format!("invalid JSON: {e}"))?;
 
     let get_sign = |key: &str| -> Result<u8, String> {
-        let n = v.get(key).and_then(|x| x.as_u64())
+        let n = v
+            .get(key)
+            .and_then(|x| x.as_u64())
             .ok_or_else(|| format!("missing or invalid field '{key}'"))?;
         if n > 11 {
             return Err(format!("'{key}' must be 0–11, got {n}"));
@@ -745,21 +774,29 @@ fn compute_gochara_inner(input_json: &str) -> Result<String, String> {
     };
 
     let transits = TransitPositions {
-        sun:     get_sign("sun")?,
-        moon:    get_sign("moon")?,
-        mars:    get_sign("mars")?,
+        sun: get_sign("sun")?,
+        moon: get_sign("moon")?,
+        mars: get_sign("mars")?,
         mercury: get_sign("mercury")?,
         jupiter: get_sign("jupiter")?,
-        venus:   get_sign("venus")?,
-        saturn:  get_sign("saturn")?,
+        venus: get_sign("venus")?,
+        saturn: get_sign("saturn")?,
     };
     let natal_reference_sign = get_sign("natal_reference_sign")?;
 
-    let table = match v.get("vedha_table").and_then(|x| x.as_str()).unwrap_or("Bphs29") {
+    let table = match v
+        .get("vedha_table")
+        .and_then(|x| x.as_str())
+        .unwrap_or("Bphs29")
+    {
         "Bphs29" => VedhaTable::Bphs29,
         other => return Err(format!("unknown vedha_table '{other}'")),
     };
-    let school = match v.get("school").and_then(|x| x.as_str()).unwrap_or("Geometry") {
+    let school = match v
+        .get("school")
+        .and_then(|x| x.as_str())
+        .unwrap_or("Geometry")
+    {
         "Geometry" => SchoolProfile::Geometry,
         "Parashari" => SchoolProfile::Parashari,
         other => return Err(format!("unknown school '{other}'")),
@@ -770,8 +807,7 @@ fn compute_gochara_inner(input_json: &str) -> Result<String, String> {
         apply_vedha_exemptions(entry, school);
     }
 
-    serde_json::to_string(&serde_json::json!({ "entries": entries }))
-        .map_err(|e| e.to_string())
+    serde_json::to_string(&serde_json::json!({ "entries": entries })).map_err(|e| e.to_string())
 }
 
 /// Compute Gochara (transit interpretation) per BPHS Ch.29.
@@ -1034,7 +1070,8 @@ mod karaka_tests {
     #[test]
     fn compute_karakas_rejects_missing_planet() {
         // Moon is missing
-        let positions = r#"{"Sun":25.0,"Mars":15.0,"Mercury":10.0,"Jupiter":5.0,"Venus":2.0,"Saturn":1.0}"#;
+        let positions =
+            r#"{"Sun":25.0,"Mars":15.0,"Mercury":10.0,"Jupiter":5.0,"Venus":2.0,"Saturn":1.0}"#;
         assert!(super::compute_karakas_inner(positions, "7").is_err());
     }
 }

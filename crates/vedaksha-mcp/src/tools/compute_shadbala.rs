@@ -81,16 +81,18 @@ pub fn definition() -> super::ToolDefinition {
 pub fn parse_planet(name: &str) -> Result<vedaksha_vedic::yoga::YogaPlanet, McpError> {
     use vedaksha_vedic::yoga::YogaPlanet;
     match name.to_lowercase().as_str() {
-        "sun"     => Ok(YogaPlanet::Sun),
-        "moon"    => Ok(YogaPlanet::Moon),
-        "mars"    => Ok(YogaPlanet::Mars),
+        "sun" => Ok(YogaPlanet::Sun),
+        "moon" => Ok(YogaPlanet::Moon),
+        "mars" => Ok(YogaPlanet::Mars),
         "mercury" => Ok(YogaPlanet::Mercury),
         "jupiter" => Ok(YogaPlanet::Jupiter),
-        "venus"   => Ok(YogaPlanet::Venus),
-        "saturn"  => Ok(YogaPlanet::Saturn),
+        "venus" => Ok(YogaPlanet::Venus),
+        "saturn" => Ok(YogaPlanet::Saturn),
         other => Err(McpError::invalid_parameter(
             "planet",
-            &format!("unknown planet '{other}'; expected Sun, Moon, Mars, Mercury, Jupiter, Venus, or Saturn"),
+            &format!(
+                "unknown planet '{other}'; expected Sun, Moon, Mars, Mercury, Jupiter, Venus, or Saturn"
+            ),
         )),
     }
 }
@@ -107,7 +109,8 @@ pub fn validate(input: &ComputeShidbalaInput) -> Result<(), McpError> {
         }
         if !entry.longitude.is_finite() || !(0.0..360.0).contains(&entry.longitude) {
             return Err(McpError::invalid_parameter(
-                "longitude", "must be a finite number in [0, 360)",
+                "longitude",
+                "must be a finite number in [0, 360)",
             ));
         }
         if entry.bhava == 0 || entry.bhava > 12 {
@@ -153,7 +156,10 @@ mod tests {
             is_daytime: false,
             moon_phase_waxing: false,
         };
-        assert_eq!(validate(&input).unwrap_err().error_code, "INVALID_PARAMETER");
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
     }
 
     #[test]
@@ -165,7 +171,10 @@ mod tests {
             is_daytime: false,
             moon_phase_waxing: false,
         };
-        assert_eq!(validate(&input).unwrap_err().error_code, "INVALID_PARAMETER");
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
     }
 
     #[test]

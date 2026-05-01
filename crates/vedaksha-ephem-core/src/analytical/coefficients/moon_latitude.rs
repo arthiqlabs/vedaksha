@@ -22,6 +22,7 @@
 
 #![allow(clippy::excessive_precision)]
 #![allow(clippy::unreadable_literal)]
+#![cfg_attr(rustfmt, rustfmt::skip)]
 
 /// Main problem — 484 terms (of 918)
 /// (i_D, i_F, i_L, i_Lp, amplitude_rad)

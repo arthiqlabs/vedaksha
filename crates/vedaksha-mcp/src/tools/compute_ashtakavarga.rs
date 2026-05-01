@@ -55,7 +55,10 @@ pub fn definition() -> super::ToolDefinition {
 
 fn validate_sign(name: &'static str, value: u8) -> Result<(), McpError> {
     if value > 11 {
-        return Err(McpError::invalid_parameter(name, "must be 0–11 (Aries=0 … Pisces=11)"));
+        return Err(McpError::invalid_parameter(
+            name,
+            "must be 0–11 (Aries=0 … Pisces=11)",
+        ));
     }
     Ok(())
 }
@@ -65,14 +68,14 @@ fn validate_sign(name: &'static str, value: u8) -> Result<(), McpError> {
 /// # Errors
 /// Returns [`McpError`] when any sign index is > 11.
 pub fn validate(input: &ComputeAshtakavargaInput) -> Result<(), McpError> {
-    validate_sign("sun",     input.sun)?;
-    validate_sign("moon",    input.moon)?;
-    validate_sign("mars",    input.mars)?;
+    validate_sign("sun", input.sun)?;
+    validate_sign("moon", input.moon)?;
+    validate_sign("mars", input.mars)?;
     validate_sign("mercury", input.mercury)?;
     validate_sign("jupiter", input.jupiter)?;
-    validate_sign("venus",   input.venus)?;
-    validate_sign("saturn",  input.saturn)?;
-    validate_sign("lagna",   input.lagna)
+    validate_sign("venus", input.venus)?;
+    validate_sign("saturn", input.saturn)?;
+    validate_sign("lagna", input.lagna)
 }
 
 #[cfg(test)]
@@ -81,9 +84,14 @@ mod tests {
 
     fn valid_input() -> ComputeAshtakavargaInput {
         ComputeAshtakavargaInput {
-            sun: 3, moon: 7, mars: 1,
-            mercury: 10, jupiter: 5,
-            venus: 8, saturn: 11, lagna: 0,
+            sun: 3,
+            moon: 7,
+            mars: 1,
+            mercury: 10,
+            jupiter: 5,
+            venus: 8,
+            saturn: 11,
+            lagna: 0,
         }
     }
 
@@ -96,14 +104,23 @@ mod tests {
     fn validate_rejects_sign_12() {
         let mut input = valid_input();
         input.sun = 12;
-        assert_eq!(validate(&input).unwrap_err().error_code, "INVALID_PARAMETER");
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
     }
 
     #[test]
     fn validate_accepts_all_zeros() {
         let input = ComputeAshtakavargaInput {
-            sun: 0, moon: 0, mars: 0, mercury: 0,
-            jupiter: 0, venus: 0, saturn: 0, lagna: 0,
+            sun: 0,
+            moon: 0,
+            mars: 0,
+            mercury: 0,
+            jupiter: 0,
+            venus: 0,
+            saturn: 0,
+            lagna: 0,
         };
         assert!(validate(&input).is_ok());
     }
