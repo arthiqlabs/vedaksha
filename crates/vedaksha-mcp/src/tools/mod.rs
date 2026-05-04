@@ -105,12 +105,12 @@ mod tests {
     ///   cargo run -p vedaksha-mcp --bin dump-tools-list > tools/mcp-tools.json
     #[test]
     fn snapshot_matches_current_tool_definitions() {
-        let snapshot_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../tools/mcp-tools.json");
+        let snapshot_path =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tools/mcp-tools.json");
         let snapshot_raw = std::fs::read_to_string(&snapshot_path)
             .unwrap_or_else(|e| panic!("read {}: {e}", snapshot_path.display()));
-        let snapshot: serde_json::Value = serde_json::from_str(&snapshot_raw)
-            .expect("snapshot is valid JSON");
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&snapshot_raw).expect("snapshot is valid JSON");
 
         let live_tools: Vec<serde_json::Value> = tool_definitions()
             .iter()

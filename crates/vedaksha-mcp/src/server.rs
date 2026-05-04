@@ -413,20 +413,44 @@ impl McpServer {
     }
 
     fn call_compute_dasha(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        let input: crate::tools::compute_dasha::ComputeDashaInput =
-            serde_json::from_value(args.clone())
-                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
-        crate::tools::compute_dasha::validate(&input)?;
+        use crate::tools::compute_dasha::{ComputeDashaInput, DashaSystem};
+        use vedaksha_vedic::dasha;
+
+        let input: ComputeDashaInput = serde_json::from_value(args.clone())
+            .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        let system = crate::tools::compute_dasha::validate(&input)?;
 
         // Dasha computation is ephemeris-free — compute directly.
         let levels = input.levels.unwrap_or(3).clamp(1, 5);
-        let dasha = vedaksha_vedic::dasha::vimshottari::compute_vimshottari(
-            input.moon_longitude,
-            input.birth_jd,
-            levels,
-        );
+        let result = match system {
+            DashaSystem::Vimshottari => {
+                serde_json::to_value(dasha::vimshottari::compute_vimshottari(
+                    input.moon_longitude.expect("validated above"),
+                    input.birth_jd,
+                    levels,
+                ))
+            }
+            DashaSystem::Ashtottari => serde_json::to_value(dasha::ashtottari::compute_ashtottari(
+                input.moon_longitude.expect("validated above"),
+                input.birth_jd,
+                levels,
+            )),
+            DashaSystem::Yogini => serde_json::to_value(dasha::yogini::compute_yogini(
+                input.moon_longitude.expect("validated above"),
+                input.birth_jd,
+                levels,
+            )),
+            DashaSystem::Chara => serde_json::to_value(dasha::chara::compute_chara(
+                input.lagna_sign.expect("validated above"),
+                input.birth_jd,
+            )),
+            DashaSystem::Narayana => serde_json::to_value(dasha::narayana::compute_narayana(
+                input.lagna_sign.expect("validated above"),
+                input.birth_jd,
+            )),
+        };
 
-        serde_json::to_value(&dasha).map_err(|e| McpError::computation_failed(&e.to_string()))
+        result.map_err(|e| McpError::computation_failed(&e.to_string()))
     }
 
     fn call_compute_karakas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -1195,6 +1219,102 @@ mod tests {
         assert!(
             dasha["maha_dashas"].is_array(),
             "expected maha_dashas array"
+        );
+    }
+
+    fn dasha_text(s: &McpServer, args: &str) -> serde_json::Value {
+        let resp = s.handle_request(&format!(
+            r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{
+                "name":"compute_dasha","arguments":{args}
+            }}}}"#
+        ));
+        let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+        assert!(val["result"].is_object(), "expected result, got: {val}");
+        let text = val["result"]["content"][0]["text"].as_str().unwrap();
+        serde_json::from_str(text).unwrap()
+    }
+
+    #[test]
+    fn compute_dasha_dispatches_ashtottari() {
+        let s = server();
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Ashtottari","moon_longitude":45.0,"birth_jd":2451545.0}"#,
+        );
+        // AshtottariDasha has `starting_lord` (8-planet sequence) and `periods` —
+        // distinct from VimshottariDasha which has `lord` and `maha_dashas`.
+        assert!(dasha["starting_lord"].is_string());
+        assert!(dasha["periods"].is_array());
+    }
+
+    #[test]
+    fn compute_dasha_dispatches_yogini() {
+        let s = server();
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Yogini","moon_longitude":45.0,"birth_jd":2451545.0}"#,
+        );
+        // YoginiDasha has `starting_yogini_index` and `maha_periods`.
+        assert!(dasha["starting_yogini_index"].is_number());
+        assert!(dasha["maha_periods"].is_array());
+    }
+
+    #[test]
+    fn compute_dasha_dispatches_chara() {
+        let s = server();
+        // Chara returns an array of CharaPeriod, not a struct.
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Chara","lagna_sign":1,"birth_jd":2451545.0}"#,
+        );
+        let periods = dasha.as_array().expect("expected array of CharaPeriod");
+        assert!(!periods.is_empty());
+        assert!(periods[0]["sign_index"].is_number());
+    }
+
+    #[test]
+    fn compute_dasha_dispatches_narayana() {
+        let s = server();
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Narayana","lagna_sign":1,"birth_jd":2451545.0}"#,
+        );
+        // NarayanaDasha has `lagna_sign` and `periods`.
+        assert!(dasha["lagna_sign"].is_number());
+        assert!(dasha["periods"].is_array());
+    }
+
+    #[test]
+    fn compute_dasha_rejects_unknown_system() {
+        let s = server();
+        let resp = s.handle_request(
+            r#"{"jsonrpc":"2.0","id":11,"method":"tools/call","params":{
+                "name":"compute_dasha",
+                "arguments":{"system":"BogusSystem","moon_longitude":45.0,"birth_jd":2451545.0}
+            }}"#,
+        );
+        let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+        assert!(val["error"].is_object(), "expected error, got: {val}");
+        assert_eq!(
+            val["error"]["data"]["error_code"].as_str().unwrap(),
+            "INVALID_PARAMETER"
+        );
+    }
+
+    #[test]
+    fn compute_dasha_chara_without_lagna_returns_invalid_parameter() {
+        let s = server();
+        let resp = s.handle_request(
+            r#"{"jsonrpc":"2.0","id":12,"method":"tools/call","params":{
+                "name":"compute_dasha",
+                "arguments":{"system":"Chara","moon_longitude":45.0,"birth_jd":2451545.0}
+            }}"#,
+        );
+        let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+        assert!(val["error"].is_object());
+        assert_eq!(
+            val["error"]["data"]["error_code"].as_str().unwrap(),
+            "INVALID_PARAMETER"
         );
     }
 

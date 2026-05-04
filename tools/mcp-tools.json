@@ -38,32 +38,46 @@
       "name": "compute_natal_chart"
     },
     {
-      "description": "Compute Vedic dasha (planetary period) sequences from a natal Moon longitude and birth epoch. Returns a hierarchical JSON structure of dasha, antardasha, and pratyantardasha periods with start/end Julian Days.",
+      "description": "Compute Vedic dasha (planetary period) sequences. Supports five classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (Lagna-sign based, require `lagna_sign`). Returns a JSON dasha tree with start/end Julian Days.",
       "inputSchema": {
         "properties": {
           "birth_jd": {
-            "description": "Birth Julian Day number (TDB) used as dasha epoch",
+            "description": "Birth Julian Day (TDB) used as the dasha epoch",
             "type": "number"
+          },
+          "lagna_sign": {
+            "description": "Lagna (ascendant) sign 1–12 (1 = Aries). Required for Chara, Narayana.",
+            "maximum": 12,
+            "minimum": 1,
+            "type": "integer"
           },
           "levels": {
             "default": 3,
-            "description": "Number of dasha levels to compute (1–5)",
+            "description": "Number of nested dasha levels (1–5). Ignored by Chara and Narayana.",
             "maximum": 5,
             "minimum": 1,
             "type": "integer"
           },
           "moon_longitude": {
-            "description": "Natal Moon longitude in degrees [0, 360)",
+            "description": "Natal Moon sidereal longitude in degrees [0, 360). Required for Vimshottari, Ashtottari, Yogini.",
+            "maximum": 360,
+            "minimum": 0,
             "type": "number"
           },
           "system": {
             "default": "Vimshottari",
-            "description": "Dasha system: Vimshottari, Ashtottari, etc.",
+            "description": "Dasha system selector",
+            "enum": [
+              "Vimshottari",
+              "Ashtottari",
+              "Yogini",
+              "Chara",
+              "Narayana"
+            ],
             "type": "string"
           }
         },
         "required": [
-          "moon_longitude",
           "birth_jd"
         ],
         "type": "object"
