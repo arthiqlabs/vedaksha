@@ -159,6 +159,40 @@ wasm-pack build --target web crates/vedaksha-wasm/
 
 ---
 
+## MCP `tools/list` Snapshot
+
+**What:** `tools/mcp-tools.json` is a committed snapshot of the canonical
+`tools/list` JSON-RPC response body, generated from the Rust
+`tool_definitions()` registry in `crates/vedaksha-mcp/src/tools/`.
+
+**Why it exists:** The introspection-only MCP endpoint at
+`vedaksha.net/api/mcp` reads it at request time, and the portal's
+`/docs/mcp` page reads it for the rendered tool catalog. Both surfaces
+are therefore guaranteed to match the Rust source as of the last commit
+on `main`.
+
+**When to regenerate:** Any time a tool is added, removed, renamed, or
+its `inputSchema` / `description` changes. The drift-guard test
+`tools::tests::snapshot_matches_current_tool_definitions` fails CI if
+the snapshot is stale.
+
+**How to regenerate:**
+
+```bash
+cargo run -p vedaksha-mcp --bin dump-tools-list > tools/mcp-tools.json
+cargo test -p vedaksha-mcp tools::tests::snapshot_matches_current_tool_definitions
+git add tools/mcp-tools.json
+git commit -m "chore(mcp): regenerate tools/list snapshot"
+```
+
+The site repo (`arthiqlabs/vedaksha-site`) reads the snapshot from
+`https://raw.githubusercontent.com/arthiqlabs/vedaksha/main/tools/mcp-tools.json`
+at MCP-route cold start, so the snapshot must be on `main` for the live
+endpoint to see the change. Trigger a Vercel redeploy of the site repo
+after merging here.
+
+---
+
 ## Quick Reference: Annual Maintenance Checklist
 
 ```

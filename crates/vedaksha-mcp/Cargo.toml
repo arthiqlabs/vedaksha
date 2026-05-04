@@ -14,6 +14,10 @@ description = "MCP server for AI agent chart computation via JSON-RPC"
 name = "vedaksha-mcp"
 path = "src/main.rs"
 
+[[bin]]
+name = "dump-tools-list"
+path = "src/bin/dump_tools_list.rs"
+
 [dependencies]
 vedaksha-math = { version = "2.3.0", path = "../vedaksha-math" }
 vedaksha-ephem-core = { version = "2.3.0", path = "../vedaksha-ephem-core" }

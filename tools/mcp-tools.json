@@ -1,0 +1,622 @@
+{
+  "engineVersion": "2.3.0",
+  "tools": [
+    {
+      "description": "Compute a natal astrological chart for a given time and location. Returns a ChartGraph in JSON format containing planetary positions, house cusps, aspects, nakshatras, and dignities.",
+      "inputSchema": {
+        "properties": {
+          "ayanamsha": {
+            "default": "Tropical",
+            "description": "Ayanamsha system for sidereal: Lahiri, FaganBradley, Tropical, etc.",
+            "type": "string"
+          },
+          "house_system": {
+            "default": "Placidus",
+            "description": "House system: Placidus, Koch, Equal, WholeSign, etc.",
+            "type": "string"
+          },
+          "julian_day": {
+            "description": "Julian Day number (TDB)",
+            "type": "number"
+          },
+          "latitude": {
+            "description": "Geographic latitude in degrees [-90, +90]",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Geographic longitude in degrees [-180, +180], east positive",
+            "type": "number"
+          }
+        },
+        "required": [
+          "julian_day",
+          "latitude",
+          "longitude"
+        ],
+        "type": "object"
+      },
+      "name": "compute_natal_chart"
+    },
+    {
+      "description": "Compute Vedic dasha (planetary period) sequences from a natal Moon longitude and birth epoch. Returns a hierarchical JSON structure of dasha, antardasha, and pratyantardasha periods with start/end Julian Days.",
+      "inputSchema": {
+        "properties": {
+          "birth_jd": {
+            "description": "Birth Julian Day number (TDB) used as dasha epoch",
+            "type": "number"
+          },
+          "levels": {
+            "default": 3,
+            "description": "Number of dasha levels to compute (1–5)",
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "moon_longitude": {
+            "description": "Natal Moon longitude in degrees [0, 360)",
+            "type": "number"
+          },
+          "system": {
+            "default": "Vimshottari",
+            "description": "Dasha system: Vimshottari, Ashtottari, etc.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "moon_longitude",
+          "birth_jd"
+        ],
+        "type": "object"
+      },
+      "name": "compute_dasha"
+    },
+    {
+      "description": "Compute Jaimini Chara Karaka assignments from sidereal planet longitudes. Ranks planets by degrees within their current sign: highest = Atmakaraka (soul significator), lowest = Darakaraka (spouse significator). Supports 7-karaka (Sun–Saturn) and 8-karaka (adds Rahu) schemes.",
+      "inputSchema": {
+        "properties": {
+          "jupiter": {
+            "description": "Sidereal longitude of Jupiter [0, 360)",
+            "type": "number"
+          },
+          "mars": {
+            "description": "Sidereal longitude of Mars [0, 360)",
+            "type": "number"
+          },
+          "mercury": {
+            "description": "Sidereal longitude of Mercury [0, 360)",
+            "type": "number"
+          },
+          "moon": {
+            "description": "Sidereal longitude of Moon [0, 360)",
+            "type": "number"
+          },
+          "rahu": {
+            "description": "Sidereal longitude of Rahu [0, 360). Required for scheme '8'.",
+            "type": "number"
+          },
+          "saturn": {
+            "description": "Sidereal longitude of Saturn [0, 360)",
+            "type": "number"
+          },
+          "scheme": {
+            "default": "7",
+            "description": "Karaka scheme: '7' (default, Sun–Saturn) or '8' (adds Rahu + Pitrikaraka)",
+            "enum": [
+              "7",
+              "8"
+            ],
+            "type": "string"
+          },
+          "sun": {
+            "description": "Sidereal longitude of Sun [0, 360)",
+            "type": "number"
+          },
+          "venus": {
+            "description": "Sidereal longitude of Venus [0, 360)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "sun",
+          "moon",
+          "mars",
+          "mercury",
+          "jupiter",
+          "venus",
+          "saturn"
+        ],
+        "type": "object"
+      },
+      "name": "compute_karakas"
+    },
+    {
+      "description": "Compute combustion state for each planet relative to the Sun per BPHS Ch.7 vv.28-29. Returns Combust, DeeplyCombust, or None for Moon, Mars, Mercury, Jupiter, Venus, Saturn with degrees of separation.",
+      "inputSchema": {
+        "properties": {
+          "jupiter": {
+            "description": "Sidereal longitude of Jupiter [0, 360)",
+            "type": "number"
+          },
+          "jupiter_retrograde": {
+            "default": false,
+            "type": "boolean"
+          },
+          "mars": {
+            "description": "Sidereal longitude of Mars [0, 360)",
+            "type": "number"
+          },
+          "mars_retrograde": {
+            "default": false,
+            "type": "boolean"
+          },
+          "mercury": {
+            "description": "Sidereal longitude of Mercury [0, 360)",
+            "type": "number"
+          },
+          "mercury_retrograde": {
+            "default": false,
+            "type": "boolean"
+          },
+          "moon": {
+            "description": "Sidereal longitude of Moon [0, 360)",
+            "type": "number"
+          },
+          "saturn": {
+            "description": "Sidereal longitude of Saturn [0, 360)",
+            "type": "number"
+          },
+          "saturn_retrograde": {
+            "default": false,
+            "type": "boolean"
+          },
+          "sun": {
+            "description": "Sidereal longitude of Sun [0, 360)",
+            "type": "number"
+          },
+          "venus": {
+            "description": "Sidereal longitude of Venus [0, 360)",
+            "type": "number"
+          },
+          "venus_retrograde": {
+            "default": false,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sun",
+          "moon",
+          "mars",
+          "mercury",
+          "jupiter",
+          "venus",
+          "saturn"
+        ],
+        "type": "object"
+      },
+      "name": "compute_combustion"
+    },
+    {
+      "description": "Compute full six-fold Shadbala (Sthana, Dig, Kala, Cheshta, Naisargika, Drik Bala) for each planet, plus uccha_bala, ishta_phala, and kashta_phala per BPHS Ch.27-28.",
+      "inputSchema": {
+        "properties": {
+          "is_daytime": {
+            "default": false,
+            "type": "boolean"
+          },
+          "moon_phase_waxing": {
+            "default": false,
+            "type": "boolean"
+          },
+          "planets": {
+            "description": "Array of planet data objects.",
+            "items": {
+              "properties": {
+                "average_speed": {
+                  "type": "number"
+                },
+                "benefic_aspect_count": {
+                  "default": 0,
+                  "type": "integer"
+                },
+                "bhava": {
+                  "maximum": 12,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "longitude": {
+                  "maximum": 360,
+                  "minimum": 0,
+                  "type": "number"
+                },
+                "malefic_aspect_count": {
+                  "default": 0,
+                  "type": "integer"
+                },
+                "planet": {
+                  "description": "Planet name: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn",
+                  "type": "string"
+                },
+                "sign": {
+                  "maximum": 11,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "speed": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "planet",
+                "sign",
+                "longitude",
+                "bhava",
+                "speed",
+                "average_speed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "planets"
+        ],
+        "type": "object"
+      },
+      "name": "compute_shadbala"
+    },
+    {
+      "description": "Compute Vedic divisional charts (vargas) for a given time and location. Supply a list of division codes (e.g. D1, D9, D10) and receive a ChartGraph JSON for each, including planetary positions and dignities within each varga.",
+      "inputSchema": {
+        "properties": {
+          "ayanamsha": {
+            "default": "Lahiri",
+            "description": "Ayanamsha system for sidereal: Lahiri, FaganBradley, Tropical, etc.",
+            "type": "string"
+          },
+          "divisions": {
+            "description": "Varga division codes to compute, e.g. [\"D1\", \"D9\", \"D10\"]",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "julian_day": {
+            "description": "Julian Day number (TDB)",
+            "type": "number"
+          },
+          "latitude": {
+            "description": "Geographic latitude in degrees [-90, +90]",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Geographic longitude in degrees [-180, +180], east positive",
+            "type": "number"
+          },
+          "planet_longitude": {
+            "description": "Sidereal longitude of the planet in degrees [0, 360) for direct varga computation",
+            "type": "number"
+          }
+        },
+        "required": [
+          "julian_day",
+          "latitude",
+          "longitude",
+          "divisions"
+        ],
+        "type": "object"
+      },
+      "name": "compute_vargas"
+    },
+    {
+      "description": "Convert a ChartGraph JSON (as produced by compute_natal_chart or compute_vargas) into a target output format for downstream storage or retrieval. Supports Neo4j Cypher, SurrealDB SurrealQL, JSON-LD, plain JSON, and RAG embedding text.",
+      "inputSchema": {
+        "properties": {
+          "chart_json": {
+            "description": "ChartGraph JSON as returned by compute_natal_chart or compute_vargas",
+            "type": "object"
+          },
+          "classification": {
+            "description": "Optional label or session ID attached to emitted nodes",
+            "type": "string"
+          },
+          "format": {
+            "description": "Target output format",
+            "enum": [
+              "cypher",
+              "surreal",
+              "jsonld",
+              "json",
+              "embedding"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "chart_json",
+          "format"
+        ],
+        "type": "object"
+      },
+      "name": "emit_graph"
+    },
+    {
+      "description": "Compute transiting planet positions relative to a natal chart at a specific moment. Returns planet longitudes for the transit time alongside natal positions, enabling aspect calculation between transit and natal placements.",
+      "inputSchema": {
+        "properties": {
+          "natal_jd": {
+            "description": "Julian Day of the natal chart (TDB)",
+            "type": "number"
+          },
+          "natal_lat": {
+            "description": "Natal geographic latitude in degrees [-90, +90]",
+            "type": "number"
+          },
+          "natal_lon": {
+            "description": "Natal geographic longitude in degrees [-180, +180], east positive",
+            "type": "number"
+          },
+          "transit_jd": {
+            "description": "Julian Day of the transit moment to compute (TDB)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "natal_jd",
+          "natal_lat",
+          "natal_lon",
+          "transit_jd"
+        ],
+        "type": "object"
+      },
+      "name": "compute_transit"
+    },
+    {
+      "description": "Search for transiting planet–natal planet aspects within a time window. Supply natal positions and a Julian Day range; receive a list of exact transit moments with aspect type, orb, and applying/separating status.",
+      "inputSchema": {
+        "properties": {
+          "aspects": {
+            "description": "Aspect types to filter (e.g. conjunction, opposition, trine). Defaults to major aspects.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bodies": {
+            "description": "Transiting bodies to include. Defaults to all planets.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "end_jd": {
+            "description": "End of the search window as a Julian Day (TDB)",
+            "type": "number"
+          },
+          "max_orb": {
+            "default": 1.0,
+            "description": "Maximum orb in degrees (default 1.0)",
+            "type": "number"
+          },
+          "natal_positions": {
+            "description": "Array of natal planet positions to check transits against",
+            "items": {
+              "properties": {
+                "longitude": {
+                  "description": "Natal sidereal longitude in degrees [0, 360)",
+                  "type": "number"
+                },
+                "name": {
+                  "description": "Planet name (e.g. Mars, Venus)",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "name",
+                "longitude"
+              ],
+              "type": "object"
+            },
+            "minItems": 1,
+            "type": "array"
+          },
+          "start_jd": {
+            "description": "Start of the search window as a Julian Day (TDB)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "natal_positions",
+          "start_jd",
+          "end_jd"
+        ],
+        "type": "object"
+      },
+      "name": "search_transits"
+    },
+    {
+      "description": "Search for auspicious time windows (muhurta) within a given period for a geographic location. Returns ranked muhurta candidates with quality scores based on tithi, nakshatra, yoga, karana, and planetary positions.",
+      "inputSchema": {
+        "properties": {
+          "end_jd": {
+            "description": "End of the search window as a Julian Day (TDB)",
+            "type": "number"
+          },
+          "latitude": {
+            "description": "Geographic latitude in degrees [-90, +90]",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Geographic longitude in degrees [-180, +180], east positive",
+            "type": "number"
+          },
+          "min_quality": {
+            "default": 0.5,
+            "description": "Minimum quality score [0.0, 1.0] for muhurta inclusion (default 0.5)",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          "start_jd": {
+            "description": "Start of the search window as a Julian Day (TDB)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "start_jd",
+          "end_jd",
+          "latitude",
+          "longitude"
+        ],
+        "type": "object"
+      },
+      "name": "search_muhurta"
+    },
+    {
+      "description": "Compute Bhinna Ashtakavarga (raw bindu tables) and Sarvashtakavarga for all 7 planets from sign positions. Source: BPHS Ch.66 vv.13-68. Trikona/Ekadhipatya Shodhana and Pinda Sadhana are not included.",
+      "inputSchema": {
+        "properties": {
+          "jupiter": {
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lagna": {
+            "description": "Sign index of Lagna (Ascendant)",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mars": {
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mercury": {
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "moon": {
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "saturn": {
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sun": {
+            "description": "Sign index of Sun (0=Aries…11=Pisces)",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "venus": {
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sun",
+          "moon",
+          "mars",
+          "mercury",
+          "jupiter",
+          "venus",
+          "saturn",
+          "lagna"
+        ],
+        "type": "object"
+      },
+      "name": "compute_ashtakavarga"
+    },
+    {
+      "description": "Compute Gochara (transit interpretation) for the seven grahas against a natal reference sign per BPHS Ch.29. Returns favourable/unfavourable verdict, house from natal, and raw vedha (obstruction) candidates per planet. The natal reference sign is the caller's choice — typically the natal Moon's sign (Chandra Gochara) or the natal Lagna's sign. Rahu and Ketu are not included.",
+      "inputSchema": {
+        "properties": {
+          "jupiter": {
+            "description": "Transit sign index of Jupiter",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mars": {
+            "description": "Transit sign index of Mars",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "mercury": {
+            "description": "Transit sign index of Mercury",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "moon": {
+            "description": "Transit sign index of Moon",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "natal_reference_sign": {
+            "description": "Sign index of the natal reference point — natal Moon for Chandra Gochara, natal Lagna for Lagna-based Gochara",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "saturn": {
+            "description": "Transit sign index of Saturn",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "school": {
+            "default": "Geometry",
+            "description": "Exemption profile applied to the raw vedha candidate list",
+            "enum": [
+              "Geometry",
+              "Parashari"
+            ],
+            "type": "string"
+          },
+          "sun": {
+            "description": "Transit sign index of Sun (0=Aries … 11=Pisces)",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "vedha_table": {
+            "default": "Bphs29",
+            "description": "Vedha pair table source",
+            "enum": [
+              "Bphs29"
+            ],
+            "type": "string"
+          },
+          "venus": {
+            "description": "Transit sign index of Venus",
+            "maximum": 11,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sun",
+          "moon",
+          "mars",
+          "mercury",
+          "jupiter",
+          "venus",
+          "saturn",
+          "natal_reference_sign"
+        ],
+        "type": "object"
+      },
+      "name": "compute_gochara"
+    }
+  ]
+}

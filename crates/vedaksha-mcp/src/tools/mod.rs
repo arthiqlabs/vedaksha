@@ -94,4 +94,43 @@ mod tests {
         names.dedup();
         assert_eq!(names.len(), defs.len(), "tool names must be unique");
     }
+
+    /// Drift guard: the committed `tools/mcp-tools.json` snapshot at the
+    /// workspace root must match what `dump-tools-list` would produce now.
+    /// The snapshot powers `vedaksha.net/api/mcp` (introspection-only MCP
+    /// endpoint) and the portal's `/docs/mcp` page; if it falls behind the
+    /// Rust registry, agents see stale `tools/list` responses.
+    ///
+    /// To fix a failure, regenerate the snapshot:
+    ///   cargo run -p vedaksha-mcp --bin dump-tools-list > tools/mcp-tools.json
+    #[test]
+    fn snapshot_matches_current_tool_definitions() {
+        let snapshot_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tools/mcp-tools.json");
+        let snapshot_raw = std::fs::read_to_string(&snapshot_path)
+            .unwrap_or_else(|e| panic!("read {}: {e}", snapshot_path.display()));
+        let snapshot: serde_json::Value = serde_json::from_str(&snapshot_raw)
+            .expect("snapshot is valid JSON");
+
+        let live_tools: Vec<serde_json::Value> = tool_definitions()
+            .iter()
+            .map(|t| {
+                serde_json::json!({
+                    "name": t.name,
+                    "description": t.description,
+                    "inputSchema": t.input_schema,
+                })
+            })
+            .collect();
+        let live = serde_json::json!({
+            "engineVersion": env!("CARGO_PKG_VERSION"),
+            "tools": live_tools,
+        });
+
+        assert_eq!(
+            snapshot, live,
+            "tools/mcp-tools.json is out of date — regenerate with: \
+             cargo run -p vedaksha-mcp --bin dump-tools-list > tools/mcp-tools.json"
+        );
+    }
 }
