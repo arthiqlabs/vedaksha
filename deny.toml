@@ -23,6 +23,13 @@ allow = [
 [bans]
 multiple-versions = "warn"
 wildcards = "deny"
+# Permit path-only / unversioned dev-dependencies inside the workspace.
+# `vedaksha-ephem-core` has dev-deps on `vedaksha-astro` and `vedaksha-vedic`
+# (which themselves depend on ephem-core) for integration testing.  The
+# version field is intentionally omitted so `cargo publish` does not require
+# them to exist on crates.io ahead of ephem-core.  This option applies to
+# private/dev-dep wildcards only — public deps still must declare a version.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

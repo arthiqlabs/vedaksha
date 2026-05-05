@@ -27,6 +27,11 @@ pub enum DashaSystem {
 }
 
 impl DashaSystem {
+    /// Parse a case-insensitive system name.
+    ///
+    /// # Errors
+    /// Returns [`McpError::invalid_parameter`] if `s` does not match one of
+    /// `Vimshottari`, `Ashtottari`, `Yogini`, `Chara`, or `Narayana`.
     pub fn parse(s: &str) -> Result<Self, McpError> {
         match s.to_ascii_lowercase().as_str() {
             "vimshottari" => Ok(Self::Vimshottari),
@@ -43,6 +48,7 @@ impl DashaSystem {
 
     /// Whether this system uses the natal Moon's sidereal longitude
     /// (`true`) or the lagna sign (`false`) as its anchor.
+    #[must_use]
     pub fn is_moon_based(self) -> bool {
         matches!(self, Self::Vimshottari | Self::Ashtottari | Self::Yogini)
     }
