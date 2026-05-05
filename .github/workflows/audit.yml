@@ -8,6 +8,9 @@ on:
     paths:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
+      - 'deny.toml'
+      - '.github/workflows/audit.yml'
+  workflow_dispatch:
 
 jobs:
   audit:
