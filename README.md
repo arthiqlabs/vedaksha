@@ -1,6 +1,6 @@
 # Vedākṣha — Vision from Vedas
 
-Astronomical ephemeris and Vedic astrology platform. Clean-room Rust implementation with sub-arcsecond planetary precision.
+Astronomical ephemeris and Vedic astrology platform. Clean-room Rust implementation with sub-arcsecond planetary precision. (Lunar module under clean-room re-derivation as of 2026-05-09 — see `docs/superpowers/specs/2026-05-09-elp-mpp02-rederivation-design.md`.)
 
 **Celestial computation. Agentic precision.**
 

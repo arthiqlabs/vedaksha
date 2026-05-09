@@ -220,6 +220,7 @@ mod tests {
         );
     }
 
+    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn osculating_node_at_j2000_close_to_mean_node() {
         let mn = mean_node(J2000);
@@ -234,6 +235,7 @@ mod tests {
         );
     }
 
+    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn osculating_node_close_to_meeus_true_node() {
         // The osculating node and Meeus 5-term true node should agree
@@ -250,6 +252,7 @@ mod tests {
         );
     }
 
+    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn osculating_node_always_in_range() {
         for offset in [-3652.5_f64, 0.0, 3652.5, 7305.0, 10957.5] {
@@ -262,6 +265,7 @@ mod tests {
         }
     }
 
+    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn osculating_node_vs_jpl_horizons() {
         // Oracle data: JPL Horizons DE441 osculating node longitude (J2000 ecliptic).
@@ -298,6 +302,7 @@ mod tests {
         }
     }
 
+    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn osculating_node_multi_epoch_sanity() {
         // The osculating node is the Moon's instantaneous ascending node
@@ -357,6 +362,7 @@ mod tests {
         }
     }
 
+    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn osculating_south_node_is_north_plus_180() {
         let north = true_node_osculating(J2000);

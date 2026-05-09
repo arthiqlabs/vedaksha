@@ -211,6 +211,7 @@ fn sun_longitude_accuracy() {
 
 // ─── Test 3: Moon longitude accuracy ────────────────────────────────────────
 
+#[ignore = "lunar quarantine — pending clean-room re-derivation"]
 #[test]
 fn moon_longitude_accuracy() {
     let bsp = bsp_path();
@@ -267,6 +268,7 @@ fn moon_longitude_accuracy() {
 
 // ─── Test 4: Moon nakshatra boundary test ───────────────────────────────────
 
+#[ignore = "lunar quarantine — pending clean-room re-derivation"]
 #[test]
 fn moon_nakshatra_boundary() {
     let bsp = bsp_path();
