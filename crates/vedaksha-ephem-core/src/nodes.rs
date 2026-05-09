@@ -64,8 +64,12 @@ pub fn true_node(jd: f64) -> f64 {
 /// select the ascending (not descending) node. This is exact to the
 /// accuracy of the underlying lunar ephemeris.
 ///
-/// **Important:** Uses ecliptic-of-date coordinates (not J2000), because
-/// the astrological true node is the node on the ecliptic of date.
+/// **Frame:** Uses the J2000 mean ecliptic. This matches the convention
+/// used by JPL Horizons `EPHEM_TYPE='ELEMENTS'` for the longitude of the
+/// ascending node `OM`, and by Swiss Ephemeris for `SE_TRUE_NODE`. Sidereal
+/// (Vedic) consumers should subtract their chosen ayanamsa downstream;
+/// tropical-of-date consumers should add the accumulated precession of the
+/// ecliptic (`p_A + Δp·t`) downstream.
 ///
 /// Requires the `analytical` module (ELP/MPP02).
 ///
@@ -77,9 +81,9 @@ pub fn true_node_osculating(jd: f64) -> f64 {
     // The osculating node is sensitive to velocity direction.
     let moon = {
         let dt = 0.001_f64;
-        let m0 = crate::analytical::elp_mpp02::elp_geocentric_of_date(jd);
-        let mp = crate::analytical::elp_mpp02::elp_geocentric_of_date(jd + dt);
-        let mm = crate::analytical::elp_mpp02::elp_geocentric_of_date(jd - dt);
+        let m0 = crate::analytical::elp_mpp02::elp_geocentric(jd);
+        let mp = crate::analytical::elp_mpp02::elp_geocentric(jd + dt);
+        let mm = crate::analytical::elp_mpp02::elp_geocentric(jd - dt);
         let inv_2dt = 1.0 / (2.0 * dt);
         crate::analytical::elp_mpp02::MoonRectangular {
             x: m0.x,
@@ -264,21 +268,13 @@ mod tests {
 
     #[test]
     fn osculating_node_vs_jpl_horizons() {
-        // Oracle data: JPL Horizons DE441 osculating node longitude (J2000 ecliptic).
-        // Query: COMMAND='301', CENTER='500@399', EPHEM_TYPE='ELEMENTS'.
-        // The OM (longitude of ascending node) values are osculating orbital
-        // elements from the DE441 numerical integration.
-        //
-        // Our osculating node uses ecliptic-of-date (for astrological use),
-        // so small differences (up to ~0.5°) are expected from the
-        // J2000↔date frame rotation, the osculating-vs-series divergence,
-        // and the velocity-cross-product node algorithm's sensitivity to
-        // sub-arcsec lunar-velocity noise. Tolerance: 0.5° (bumped from
-        // 0.05° during the ELP/MPP02 clean-room re-derivation, in line
-        // with the sibling `osculating_node_multi_epoch_sanity` test
-        // which uses the same 0.5° envelope between osculating and
-        // Meeus). The Moon position itself matches JPL DE441 to ≤ 0.02 km
-        // at J2000 — see tests/lunar_horizons.rs.
+        // Oracle: JPL Horizons DE441 osculating node longitude `OM` in the
+        // J2000 ecliptic. Query: COMMAND='301', CENTER='500@399',
+        // EPHEM_TYPE='ELEMENTS'. Both our `true_node_osculating` and the
+        // JPL `OM` are referred to the same J2000 mean ecliptic, so the
+        // residual is bounded by the lunar-theory difference (ELP/MPP02
+        // vs DE441) plus the algorithm's sensitivity to sub-arcsec lunar
+        // velocity noise. Tolerance: 0.05°.
         //
         // Source: NASA/JPL Horizons System (https://ssd.jpl.nasa.gov/horizons/).
         let oracle = [
@@ -297,17 +293,8 @@ mod tests {
                 diff = 360.0 - diff;
             }
 
-            // Tolerance: 0.5°. The osculating-node algorithm derives the
-            // ascending-node longitude from L = r × v; sub-arcsec velocity
-            // noise in any lunar theory amplifies into a few-arcminute node
-            // swing. The sibling `osculating_node_multi_epoch_sanity` test
-            // documents up to 0.5° as the inherent osculating-vs-series
-            // divergence. The new Moon position itself matches JPL DE441
-            // to ≤ 0.02 km / ≤ 0.02″ at J2000 (see tests/lunar_horizons.rs);
-            // the larger diff here is about the node-derivation algorithm,
-            // not the underlying lunar theory.
             assert!(
-                diff < 0.5,
+                diff < 0.05,
                 "{label}: osculating vs JPL DE441 diff too large: {diff:.4}° \
                  (ours={osc:.4}°, JPL={jpl_node:.3}°)"
             );
