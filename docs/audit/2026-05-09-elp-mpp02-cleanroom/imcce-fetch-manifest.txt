@@ -1,0 +1,22 @@
+# IMCCE primary fetch manifest — ELP/MPP02 clean-room re-derivation
+# Date: 2026-05-09
+# Host: cyrano-se.obspm.fr (IMCCE / SYRTE FTP server)
+# Path: /pub/2_lunar_solutions/2_elpmpp02/
+#
+# format: <filename>  <size_bytes>  <sha256>  <primary_url>
+
+README.TXT       4445     aee2edbd7cc679fd6f1e871fb017493f075a6befc7f720f4f6bb8ee2b56e7fd8  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/README.TXT
+elpmpp02.pdf     215008   08b988dda14deb8850f82ea4077115a6d44251c325dd48de137b15bc5c0c2c93  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/elpmpp02.pdf
+ELPMPP02.for     28112    3a95c77de63dddc4d438765da3f91598ddd4f1ce3601683cb2c1af8e4acd838f  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/ELPMPP02.for
+ELP_MAIN.S1      103360   3602147c43b77f86394c9034ea0e66807c6a674eeac87ada2a23aecd328706f1  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/ELP_MAIN.S1
+ELP_MAIN.S2      92755    c06fca782f973a5365a4a19dd8b8a2a5ce711063e007ad929be6206686e459b8  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/ELP_MAIN.S2
+ELP_MAIN.S3      71141    22f2cebde62d7451bc984ea67716b32091848c6f33ce746a9d1ba5de76074a56  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/ELP_MAIN.S3
+ELP_PERT.S1      1209918  222b2895f476370e93b05c50bc207d5f637ca3cd7002f848054ff44b9f1742ba  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/ELP_PERT.S1
+ELP_PERT.S2      668038   0fd9af9d5e79fb9315c2ea295c8abe8f1ca385401fa93c8a032d64eb45c7d209  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/ELP_PERT.S2
+ELP_PERT.S3      1281928  15123e2eb0683ebffacc2b67339693532060a4db1f9c26eba502e0dad941d216  ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/ELP_PERT.S3
+
+# Reference paper:
+# Chapront & Francou (2003), "A new representation of the lunar orbital motion",
+# Astronomy & Astrophysics 404, 735.
+# DOI: 10.1051/0004-6361:20030529
+# Free PDF: https://www.aanda.org/articles/aa/pdf/2003/24/aa3373.pdf
