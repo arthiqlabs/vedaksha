@@ -894,7 +894,6 @@ mod tests {
         assert!(language_from_str("bengali").is_ok());
     }
 
-    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn compute_natal_chart_inner_known_chart() {
         let input = NatalChartInput {
@@ -943,7 +942,6 @@ mod tests {
         );
     }
 
-    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn compute_natal_chart_inner_defaults() {
         let input = NatalChartInput {

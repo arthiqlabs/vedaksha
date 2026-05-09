@@ -35,7 +35,6 @@ fn body_from_name(name: &str) -> Option<Body> {
     }
 }
 
-#[ignore = "lunar quarantine — pending clean-room re-derivation"]
 #[test]
 fn analytical_oracle_regression() {
     let oracle_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))

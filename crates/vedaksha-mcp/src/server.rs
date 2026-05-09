@@ -1161,7 +1161,6 @@ mod tests {
 
     // ── compute_natal_chart ───────────────────────────────────────────────────
 
-    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn compute_natal_with_valid_params_returns_chart() {
         let s = server();
@@ -1437,7 +1436,6 @@ mod tests {
         );
     }
 
-    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn search_transits_returns_actual_results() {
         let s = server();

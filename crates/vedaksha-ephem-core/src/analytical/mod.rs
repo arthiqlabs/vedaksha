@@ -350,7 +350,6 @@ mod tests {
         );
     }
 
-    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn moon_at_reasonable_distance() {
         // AnalyticalProvider returns Moon relative to EMB (not barycentric),
@@ -376,7 +375,6 @@ mod tests {
         );
     }
 
-    #[ignore = "lunar quarantine — pending clean-room re-derivation"]
     #[test]
     fn all_supported_bodies_return_ok() {
         let bodies = [
