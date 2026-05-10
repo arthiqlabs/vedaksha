@@ -12,11 +12,13 @@ env:
 
 jobs:
   test:
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    name: Test
+    runs-on: ubuntu-latest
+    # macOS coverage runs in the Release workflow's mcp-binary build,
+    # which exercises both x86_64 and aarch64 Apple targets on tag.
+    # Routine CI is Linux-only — x86 vs aarch64 numerics agreement is
+    # well-established for the ELP/MPP02 and VSOP87 series we evaluate,
+    # and the macOS leg was the slow path historically.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
