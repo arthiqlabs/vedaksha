@@ -109,20 +109,20 @@ pub fn elp_geocentric(jd: f64) -> MoonRectangular {
 #[must_use]
 pub fn elp_geocentric_of_date(jd: f64) -> MoonRectangular {
     let (v, u, r, vp, up, rp) = vur_series(jd, Fit::Llr);
-    let t = (jd - J2000) / DAYS_PER_CENTURY;
+    let tau = (jd - J2000) / DAYS_PER_CENTURY;
 
     // Add precession of date (in radians) to longitude.
-    let p = (P_PA_LIN + P_PA_DELTA) * t
-        + P_PA_QUAD * t * t
-        + P_PA_CUBE * t * t * t
-        + P_PA_QUART * t * t * t * t;
-    let pdot = (P_PA_LIN + P_PA_DELTA)
-        + 2.0 * P_PA_QUAD * t
-        + 3.0 * P_PA_CUBE * t * t
-        + 4.0 * P_PA_QUART * t * t * t;
+    let prec = (P_PA_LIN + P_PA_DELTA) * tau
+        + P_PA_QUAD * tau * tau
+        + P_PA_CUBE * tau * tau * tau
+        + P_PA_QUART * tau * tau * tau * tau;
+    let prec_dot = (P_PA_LIN + P_PA_DELTA)
+        + 2.0 * P_PA_QUAD * tau
+        + 3.0 * P_PA_CUBE * tau * tau
+        + 4.0 * P_PA_QUART * tau * tau * tau;
 
-    let v_d = v + p;
-    let vdot_d = vp + pdot;
+    let v_d = v + prec;
+    let vdot_d = vp + prec_dot;
 
     // Spherical → rectangular in the (date) ecliptic frame, no P/Q rotation.
     rectangular_from_spherical(v_d, u, r, vdot_d, up, rp)
@@ -310,6 +310,10 @@ fn build_args(fit: Fit) -> Args {
     let dw1_1_rad = arcsec_to_rad(dw1_1);
     let deart_1_rad = arcsec_to_rad(deart_1);
 
+    // `i` is a column index into bp[0..5] and a selector for w2/w3 — not a
+    // straight iteration over a single slice — so the clippy suggestion to
+    // switch to `.iter().enumerate()` doesn't apply.
+    #[allow(clippy::needless_range_loop)]
     for i in 0..2usize {
         let xi = if i == 0 { w2[1] } else { w3[1] } / w1[1];
         let yi = M_RATIO * bp[0][i] + xa * bp[4][i];
