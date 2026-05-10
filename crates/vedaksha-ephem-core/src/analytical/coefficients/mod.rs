@@ -27,4 +27,3 @@ pub mod venus;
 pub mod moon_distance;
 pub mod moon_latitude;
 pub mod moon_longitude;
-

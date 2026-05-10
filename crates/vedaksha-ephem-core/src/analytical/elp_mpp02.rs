@@ -584,18 +584,38 @@ fn eval_pert_series(
     groups: &[&[(
         f64,
         f64,
-        i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
+        i32,
     )]],
     args: &Args,
     t_pow: &[f64; 5],
     arcsec_to_radian: bool,
 ) -> SeriesPart {
-    let scale = if arcsec_to_radian { 1.0 / ARCSEC_PER_RAD } else { 1.0 };
+    let scale = if arcsec_to_radian {
+        1.0 / ARCSEC_PER_RAD
+    } else {
+        1.0
+    };
     let mut value = 0.0;
     let mut dot = 0.0;
     for (n, &group) in groups.iter().enumerate() {
         let tn = t_pow[n];
-        let dtn = if n >= 1 { (n as f64) * t_pow[n - 1] } else { 0.0 };
+        let dtn = if n >= 1 {
+            (n as f64) * t_pow[n - 1]
+        } else {
+            0.0
+        };
         for &(s_raw, c_raw, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13) in group {
             let s = s_raw * scale;
             let c = c_raw * scale;
@@ -720,7 +740,9 @@ fn apply_pq_rotation(xyz_date: MoonRectangular, t: f64) -> MoonRectangular {
         pw2 * xp1 + pwqw * xp2 + pwra * xp3 + (ppw2 * x1 + ppwqpw * x2 + ppwra * x3) * inv_sc;
     let xyz_vy =
         pwqw * xp1 + qw2 * xp2 - qwra * xp3 + (ppwqpw * x1 + qpw2 * x2 - qpwra * x3) * inv_sc;
-    let xyz_vz = -pwra * xp1 + qwra * xp2 + (pw2 + qw2 - 1.0) * xp3
+    let xyz_vz = -pwra * xp1
+        + qwra * xp2
+        + (pw2 + qw2 - 1.0) * xp3
         + (-ppwra * x1 + qpwra * x2 + (ppw2 + qpw2) * x3) * inv_sc;
 
     MoonRectangular {
@@ -769,6 +791,9 @@ mod tests {
         let dy = llr.y - de4.y;
         let dz = llr.z - de4.z;
         let dr = libm::sqrt(dx * dx + dy * dy + dz * dz);
-        assert!(dr < 100.0, "fit difference at J2000 = {dr:.3} km, too large");
+        assert!(
+            dr < 100.0,
+            "fit difference at J2000 = {dr:.3} km, too large"
+        );
     }
 }

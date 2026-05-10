@@ -73,8 +73,7 @@ fn read_row(buf: &[u8]) -> [f64; 7] {
 #[test]
 fn reproduce_legacy_oracle_within_tolerance() {
     let path = fixture_path();
-    let file = File::open(&path)
-        .unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
+    let file = File::open(&path).unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));
     let mut rdr = BufReader::new(file);
     let mut bytes = Vec::new();
     rdr.read_to_end(&mut bytes).expect("read");

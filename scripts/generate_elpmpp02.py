@@ -317,6 +317,7 @@ def write_rust_file(
             pert_summary=pert_summary,
         ),
         "",
+        "#![rustfmt::skip]",
         "#![allow(clippy::approx_constant)]",
         "#![allow(clippy::excessive_precision)]",
         "",

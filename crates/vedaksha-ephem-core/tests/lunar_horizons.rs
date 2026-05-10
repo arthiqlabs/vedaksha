@@ -48,7 +48,7 @@ fn tolerance_for_jd(jd: f64) -> (f64, f64) {
     if (JD_1950..=JD_2060).contains(&jd) {
         (0.06, 0.004) // arcsec, km — elpmpp02.pdf §8 inner bound
     } else if (JD_1500..=JD_2500).contains(&jd) {
-        (0.6, 0.050)  // elpmpp02.pdf §8 mid bound
+        (0.6, 0.050) // elpmpp02.pdf §8 mid bound
     } else {
         // elpmpp02.pdf §8 outer bound is 50″ / 10 km over [−3000, 3000];
         // that figure is the *peak* and assumes the full untruncated series.
@@ -163,16 +163,15 @@ fn agrees_with_jpl_horizons_de441() {
             "JD {jd:.1} ({fit:?}): chord = {chord:.6} km, angle = {angle:.6} arcsec (tol {angle_tol}), radial = {radial:.6} km (tol {radial_tol})"
         );
         if angle > angle_tol {
-            failures.push(format!(
-                "JD {jd}: angle {angle:.3} > tol {angle_tol}"
-            ));
+            failures.push(format!("JD {jd}: angle {angle:.3} > tol {angle_tol}"));
         }
         if radial > radial_tol {
-            failures.push(format!(
-                "JD {jd}: radial {radial:.3} > tol {radial_tol}"
-            ));
+            failures.push(format!("JD {jd}: radial {radial:.3} > tol {radial_tol}"));
         }
     }
-    assert!(any_fetched, "no grid points succeeded — Horizons unreachable");
+    assert!(
+        any_fetched,
+        "no grid points succeeded — Horizons unreachable"
+    );
     assert!(failures.is_empty(), "Tier-1 violations: {failures:#?}");
 }

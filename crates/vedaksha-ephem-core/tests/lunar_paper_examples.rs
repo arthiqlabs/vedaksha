@@ -11,9 +11,7 @@
 //! of J2000, in km and km/day. The five LLR rows use [`Fit::Llr`]; the
 //! five long-range rows use [`Fit::De405`].
 
-use vedaksha_ephem_core::analytical::elp_mpp02::{
-    Fit, MoonRectangular, elp_geocentric_with_fit,
-};
+use vedaksha_ephem_core::analytical::elp_mpp02::{Fit, MoonRectangular, elp_geocentric_with_fit};
 
 /// Position tolerance (km). Spec §7 calls for ±5×10⁻⁵ km matching the
 /// printed digits; the coefficient series here is truncated at |A|≥1×10⁻⁵

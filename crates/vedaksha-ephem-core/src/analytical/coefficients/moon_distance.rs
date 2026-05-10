@@ -22,11 +22,11 @@
 //             + i5*Me + i6*V + i7*T + i8*Ma + i9*J + i10*Sa + i11*U + i12*N
 //             + i13*zeta
 
-
 #![allow(clippy::approx_constant)]
 #![allow(clippy::excessive_precision)]
 
 /// Main-problem series (Distance (r)).
+#[rustfmt::skip]
 pub static MAIN: &[(i32, i32, i32, i32, f64, f64, f64, f64, f64, f64, f64)] = &[
     (0, 0, 0, 0, 385000.52719, -7992.63, -11.06, 21578.08, -4.53, 11.39, -0.06),
     (0, 2, 0, 0, -3.14837, -204.48, -138.94, 159.64, -0.39, 0.12, 0.00),
@@ -733,6 +733,7 @@ pub static MAIN: &[(i32, i32, i32, i32, f64, f64, f64, f64, f64, f64, f64)] = &[
 ];
 
 /// Perturbation series, power t^0 (Distance (r)).
+#[rustfmt::skip]
 pub static PERT_0: &[(f64, f64, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32)] = &[
     (-2.1896794483520e-03, 1.0586167299450e+00, 2, 0, -1, 0, 0, 0, 2, 0, -2, 0, 0, 0, 0),
     (3.2535611946840e-01, 6.5130878903300e-01, 0, 0, 2, 0, 0, -18, 16, 0, 0, 0, 0, 0, 0),
@@ -12829,6 +12830,7 @@ pub static PERT_0: &[(f64, f64, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32
 ];
 
 /// Perturbation series, power t^1 (Distance (r)).
+#[rustfmt::skip]
 pub static PERT_1: &[(f64, f64, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32)] = &[
     (0.0000000000000e+00, 5.1395000000000e-01, 2, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0),
     (0.0000000000000e+00, 3.8245000000000e-01, 2, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0),
@@ -13994,6 +13996,7 @@ pub static PERT_1: &[(f64, f64, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32
 ];
 
 /// Perturbation series, power t^2 (Distance (r)).
+#[rustfmt::skip]
 pub static PERT_2: &[(f64, f64, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32)] = &[
     (0.0000000000000e+00, 1.4900000000000e-03, 2, 0, 0, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0),
     (0.0000000000000e+00, 1.1100000000000e-03, 2, 0, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0),
@@ -14127,5 +14130,6 @@ pub static PERT_2: &[(f64, f64, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32
 ];
 
 /// Perturbation series, power t^3 (Distance (r)).
+#[rustfmt::skip]
 pub static PERT_3: &[(f64, f64, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32)] = &[
 ];
