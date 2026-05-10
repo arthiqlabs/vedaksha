@@ -26,9 +26,9 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Build
-        run: cargo build --workspace
+        run: cargo build --workspace --release
       - name: Test
-        run: cargo test --workspace
+        run: cargo test --workspace --release
       - name: Clippy
         run: cargo clippy --workspace -- -D warnings
       - name: Format check
