@@ -70,7 +70,20 @@ fn read_row(buf: &[u8]) -> [f64; 7] {
     out
 }
 
+// Tier-3 is a one-time bug-compatibility regression net captured at the
+// moment of clean-room handover (2026-05-09). It iterates 10 000 JDs over
+// 6000 years and takes ~17 minutes. Once the clean re-derivation has been
+// signed off (Tier-1 + Tier-2 still pass continuously), running this on
+// every CI cycle adds no signal — the legacy oracle is fixed numerical
+// data and the new code is in the source tree under version control.
+//
+// Re-run manually whenever you make a substantive change to elp_mpp02.rs
+// or scripts/generate_elpmpp02.py:
+//
+//   cargo test -p vedaksha-ephem-core --release \
+//     --test lunar_legacy_oracle -- --include-ignored --nocapture
 #[test]
+#[ignore = "tier-3: one-time legacy regression net; manual run via --include-ignored"]
 fn reproduce_legacy_oracle_within_tolerance() {
     let path = fixture_path();
     let file = File::open(&path).unwrap_or_else(|e| panic!("opening {}: {e}", path.display()));

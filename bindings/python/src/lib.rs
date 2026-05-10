@@ -5,8 +5,8 @@
 
 //! Python bindings for Vedākṣha via PyO3.
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 
 /// Compute Vimshottari Dasha from Moon's sidereal longitude.
 ///
@@ -21,11 +21,9 @@ use pyo3::exceptions::PyValueError;
 #[pyo3(signature = (moon_longitude, birth_jd, levels=3))]
 fn compute_dasha(moon_longitude: f64, birth_jd: f64, levels: u8) -> PyResult<String> {
     let levels = levels.clamp(1, 5);
-    let dasha = vedaksha_vedic::dasha::vimshottari::compute_vimshottari(
-        moon_longitude, birth_jd, levels,
-    );
-    serde_json::to_string(&dasha)
-        .map_err(|e| PyValueError::new_err(e.to_string()))
+    let dasha =
+        vedaksha_vedic::dasha::vimshottari::compute_vimshottari(moon_longitude, birth_jd, levels);
+    serde_json::to_string(&dasha).map_err(|e| PyValueError::new_err(e.to_string()))
 }
 
 /// Get nakshatra and pada for a sidereal longitude.
@@ -77,7 +75,13 @@ fn compute_varga(longitude: f64, varga: &str) -> PyResult<u8> {
 ///     dict with cusps (list of 12), asc, mc, polar_fallback
 #[pyfunction]
 #[pyo3(signature = (ramc, latitude, obliquity, system="Placidus"))]
-fn compute_houses(py: Python<'_>, ramc: f64, latitude: f64, obliquity: f64, system: &str) -> PyResult<PyObject> {
+fn compute_houses(
+    py: Python<'_>,
+    ramc: f64,
+    latitude: f64,
+    obliquity: f64,
+    system: &str,
+) -> PyResult<PyObject> {
     let house_system = parse_house_system(system)?;
     let cusps = vedaksha_astro::houses::compute_houses(ramc, latitude, obliquity, house_system);
 
@@ -104,7 +108,11 @@ fn compute_houses(py: Python<'_>, ramc: f64, latitude: f64, obliquity: f64, syst
 #[pyo3(signature = (tropical_longitude, ayanamsha="Lahiri", jd=2451545.0))]
 fn tropical_to_sidereal(tropical_longitude: f64, ayanamsha: &str, jd: f64) -> PyResult<f64> {
     let system = parse_ayanamsha(ayanamsha)?;
-    Ok(vedaksha_astro::sidereal::tropical_to_sidereal(tropical_longitude, system, jd))
+    Ok(vedaksha_astro::sidereal::tropical_to_sidereal(
+        tropical_longitude,
+        system,
+        jd,
+    ))
 }
 
 /// Get ayanamsha value in degrees for a given date.
@@ -219,9 +227,7 @@ fn compute_natal_chart(
     let house_sys = parse_house_system(house_system)?;
 
     // Calendar to JD (UTC)
-    let day_fraction = day as f64
-        + hour as f64 / 24.0
-        + minute as f64 / 1440.0;
+    let day_fraction = day as f64 + hour as f64 / 24.0 + minute as f64 / 1440.0;
     let jd = calendar_to_jd(year, month, day_fraction);
 
     // Range check
@@ -280,7 +286,12 @@ fn compute_natal_chart(
     };
 
     let chart = vedaksha_astro::chart::compute_chart(
-        &planet_data, ramc_deg, latitude, obliquity_deg, jd, &config,
+        &planet_data,
+        ramc_deg,
+        latitude,
+        obliquity_deg,
+        jd,
+        &config,
     );
 
     let ayanamsha_value = vedaksha_astro::sidereal::ayanamsha_value(ayanamsha_system, jd);
