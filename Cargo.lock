@@ -331,7 +331,6 @@ name = "vedaksha"
 version = "2.6.0"
 dependencies = [
  "vedaksha-astro",
- "vedaksha-emit",
  "vedaksha-ephem-core",
  "vedaksha-graph",
  "vedaksha-locale",
@@ -347,15 +346,6 @@ dependencies = [
  "serde",
  "vedaksha-ephem-core",
  "vedaksha-math",
-]
-
-[[package]]
-name = "vedaksha-emit"
-version = "2.6.0"
-dependencies = [
- "serde",
- "serde_json",
- "vedaksha-graph",
 ]
 
 [[package]]
@@ -398,7 +388,6 @@ dependencies = [
  "thiserror",
  "tiny_http",
  "vedaksha-astro",
- "vedaksha-emit",
  "vedaksha-ephem-core",
  "vedaksha-graph",
  "vedaksha-math",
@@ -423,7 +412,6 @@ dependencies = [
  "serde-wasm-bindgen",
  "serde_json",
  "vedaksha-astro",
- "vedaksha-emit",
  "vedaksha-ephem-core",
  "vedaksha-graph",
  "vedaksha-locale",
