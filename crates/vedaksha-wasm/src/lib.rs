@@ -188,21 +188,21 @@ pub fn get_sign(longitude: f64) -> String {
 #[wasm_bindgen]
 pub fn planet_name(index: usize, language: &str) -> Result<String, JsError> {
     let lang = parse_language(language)?;
-    Ok(vedaksha_locale::planets::planet_name(index, lang).to_string())
+    Ok(vedaksha::locale::planets::planet_name(index, lang).to_string())
 }
 
 /// Get localized name for a zodiac sign.
 #[wasm_bindgen]
 pub fn sign_name(index: usize, language: &str) -> Result<String, JsError> {
     let lang = parse_language(language)?;
-    Ok(vedaksha_locale::signs::sign_name(index, lang).to_string())
+    Ok(vedaksha::locale::signs::sign_name(index, lang).to_string())
 }
 
 /// Get localized name for a nakshatra.
 #[wasm_bindgen]
 pub fn nakshatra_name(index: usize, language: &str) -> Result<String, JsError> {
     let lang = parse_language(language)?;
-    Ok(vedaksha_locale::nakshatras::nakshatra_name(index, lang).to_string())
+    Ok(vedaksha::locale::nakshatras::nakshatra_name(index, lang).to_string())
 }
 
 // --- Natal chart ---
@@ -456,20 +456,20 @@ fn parse_varga_type(s: &str) -> Result<vedaksha_vedic::varga::VargaType, JsError
     varga_type_from_str(s).map_err(|_| JsError::new(&format!("Unknown varga: {s}")))
 }
 
-fn language_from_str(s: &str) -> Result<vedaksha_locale::Language, &'static str> {
+fn language_from_str(s: &str) -> Result<vedaksha::locale::Language, &'static str> {
     match s.to_lowercase().as_str() {
-        "en" | "english" => Ok(vedaksha_locale::Language::English),
-        "hi" | "hindi" => Ok(vedaksha_locale::Language::Hindi),
-        "sa" | "sanskrit" => Ok(vedaksha_locale::Language::Sanskrit),
-        "ta" | "tamil" => Ok(vedaksha_locale::Language::Tamil),
-        "te" | "telugu" => Ok(vedaksha_locale::Language::Telugu),
-        "kn" | "kannada" => Ok(vedaksha_locale::Language::Kannada),
-        "bn" | "bengali" => Ok(vedaksha_locale::Language::Bengali),
+        "en" | "english" => Ok(vedaksha::locale::Language::English),
+        "hi" | "hindi" => Ok(vedaksha::locale::Language::Hindi),
+        "sa" | "sanskrit" => Ok(vedaksha::locale::Language::Sanskrit),
+        "ta" | "tamil" => Ok(vedaksha::locale::Language::Tamil),
+        "te" | "telugu" => Ok(vedaksha::locale::Language::Telugu),
+        "kn" | "kannada" => Ok(vedaksha::locale::Language::Kannada),
+        "bn" | "bengali" => Ok(vedaksha::locale::Language::Bengali),
         _ => Err("unknown language"),
     }
 }
 
-fn parse_language(s: &str) -> Result<vedaksha_locale::Language, JsError> {
+fn parse_language(s: &str) -> Result<vedaksha::locale::Language, JsError> {
     language_from_str(s).map_err(|_| JsError::new(&format!("Unknown language: {s}")))
 }
 

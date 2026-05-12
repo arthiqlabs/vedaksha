@@ -168,7 +168,7 @@ fn calendar_to_jd(year: i32, month: u32, day: f64) -> f64 {
 #[pyo3(signature = (index, language="en"))]
 fn planet_name(index: usize, language: &str) -> PyResult<String> {
     let lang = parse_language(language)?;
-    Ok(vedaksha_locale::planets::planet_name(index, lang).to_string())
+    Ok(vedaksha::locale::planets::planet_name(index, lang).to_string())
 }
 
 /// Get sign name in a specified language.
@@ -176,7 +176,7 @@ fn planet_name(index: usize, language: &str) -> PyResult<String> {
 #[pyo3(signature = (index, language="en"))]
 fn sign_name(index: usize, language: &str) -> PyResult<String> {
     let lang = parse_language(language)?;
-    Ok(vedaksha_locale::signs::sign_name(index, lang).to_string())
+    Ok(vedaksha::locale::signs::sign_name(index, lang).to_string())
 }
 
 /// Get nakshatra name in a specified language.
@@ -184,7 +184,7 @@ fn sign_name(index: usize, language: &str) -> PyResult<String> {
 #[pyo3(signature = (index, language="en"))]
 fn nakshatra_name_i18n(index: usize, language: &str) -> PyResult<String> {
     let lang = parse_language(language)?;
-    Ok(vedaksha_locale::nakshatras::nakshatra_name(index, lang).to_string())
+    Ok(vedaksha::locale::nakshatras::nakshatra_name(index, lang).to_string())
 }
 
 /// Compute a complete natal chart from birth data.
@@ -364,8 +364,8 @@ fn parse_varga(s: &str) -> PyResult<vedaksha_vedic::varga::VargaType> {
     }
 }
 
-fn parse_language(s: &str) -> PyResult<vedaksha_locale::Language> {
-    use vedaksha_locale::Language;
+fn parse_language(s: &str) -> PyResult<vedaksha::locale::Language> {
+    use vedaksha::locale::Language;
     match s.to_lowercase().as_str() {
         "en" | "english" => Ok(Language::English),
         "hi" | "hindi" => Ok(Language::Hindi),
