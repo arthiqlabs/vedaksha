@@ -24,9 +24,15 @@
 pub use vedaksha_astro as astro;
 pub use vedaksha_ephem_core as ephem;
 pub use vedaksha_graph as graph;
-pub use vedaksha_locale as locale;
 pub use vedaksha_math as math;
 pub use vedaksha_vedic as vedic;
+
+/// Localization tables (planet/sign/nakshatra names in 7 languages).
+///
+/// Folded in from the standalone `vedaksha-locale` crate (v2.x).
+/// Enable via the `locale` feature.
+#[cfg(feature = "locale")]
+pub mod locale;
 
 /// Convenience re-exports for the most common entry points.
 pub mod prelude {

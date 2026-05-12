@@ -16,8 +16,10 @@ vedaksha-ephem-core = { version = "2.3.0", path = "../vedaksha-ephem-core" }
 vedaksha-astro = { version = "2.3.0", path = "../vedaksha-astro" }
 vedaksha-vedic = { version = "2.3.0", path = "../vedaksha-vedic" }
 vedaksha-graph = { version = "2.3.0", path = "../vedaksha-graph", features = ["emitters"] }
-vedaksha-locale = { version = "2.3.0", path = "../vedaksha-locale" }
 
 [features]
 default = ["std"]
 std = ["vedaksha-ephem-core/std"]
+# Localization lookup tables (planet/sign/nakshatra names in 7 languages).
+# Folded in from the standalone `vedaksha-locale` crate (v2.x) in v3.0.0.
+locale = []

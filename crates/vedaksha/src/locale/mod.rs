@@ -3,7 +3,7 @@
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! # vedaksha-locale
+//! # `vedaksha::locale`
 //!
 //! Localization engine for the Vedākṣha platform.
 //!
@@ -12,15 +12,12 @@
 //!
 //! # Implementation Note
 //!
-//! This crate uses static lookup tables rather than Mozilla Fluent (.ftl files).
-//! Static tables are `no_std`-compatible, zero-allocation at lookup time, and
-//! sufficient for our fixed astrological vocabulary. See `DATA_PROVENANCE.md`
-//! for details.
-
-#![cfg_attr(not(feature = "std"), no_std)]
-#![deny(unsafe_code)]
-#![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
+//! Uses static lookup tables rather than Mozilla Fluent (.ftl files). Static
+//! tables are zero-allocation at lookup time and sufficient for our fixed
+//! astrological vocabulary. See `DATA_PROVENANCE.md` for details.
+//!
+//! Folded in from the standalone `vedaksha-locale` crate (v2.x) in v3.0.0;
+//! enable the `locale` feature on `vedaksha` to reach this module.
 
 pub mod aspects;
 pub mod dashas;
