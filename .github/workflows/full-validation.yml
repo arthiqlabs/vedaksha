@@ -1,0 +1,39 @@
+name: Full Validation
+
+# Comprehensive validation that doesn't run on every push because it's slow:
+#   - cargo clippy across 36k+ lines of generated coefficient tables
+#   - full integration test suite (oracle comparisons, extended comparisons)
+# Triggers:
+#   - manual (workflow_dispatch)
+#   - weekly cron (Sunday 04:00 UTC)
+# Release-time validation lives in release.yml; this workflow is the
+# nightly-style drift catcher between releases.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 0'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  full-test:
+    name: Full Test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Build (release)
+        run: cargo build --workspace --release --locked
+      - name: Full test suite
+        run: cargo test --workspace --release --locked
+      - name: Clippy
+        env:
+          RUSTFLAGS: -D warnings
+        run: cargo clippy --workspace -- -D warnings
+      - name: Format check
+        run: cargo fmt --all -- --check

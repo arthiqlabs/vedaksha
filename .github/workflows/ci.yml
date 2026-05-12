@@ -1,5 +1,12 @@
 name: CI
 
+# Routine CI gate: fast feedback on every push and PR.
+# Heavy validation (full integration tests, clippy across 36k+ lines of
+# generated coefficient tables) lives in:
+#   - .github/workflows/full-validation.yml — manual + weekly
+#   - .github/workflows/release.yml         — every tag
+# This workflow targets ~3 minutes total.
+
 on:
   push:
     branches: [main, develop]
@@ -8,29 +15,23 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: -D warnings
 
 jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    # macOS coverage runs in the Release workflow's mcp-binary build,
-    # which exercises both x86_64 and aarch64 Apple targets on tag.
-    # Routine CI is Linux-only — x86 vs aarch64 numerics agreement is
-    # well-established for the ELP/MPP02 and VSOP87 series we evaluate,
-    # and the macOS leg was the slow path historically.
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Build
-        run: cargo build --workspace --release
-      - name: Test
-        run: cargo test --workspace --release
-      - name: Clippy
-        run: cargo clippy --workspace -- -D warnings
+      - name: Build (debug)
+        run: cargo build --workspace --locked
+      - name: Unit tests + Tier-2 paper-example acceptance
+        run: |
+          cargo test --workspace --lib --release --locked
+          cargo test -p vedaksha-ephem-core --test lunar_paper_examples --release --locked
       - name: Format check
         run: cargo fmt --all -- --check
 
@@ -44,7 +45,7 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Check WASM
-        run: cargo check -p vedaksha-wasm --target wasm32-unknown-unknown
+        run: cargo check -p vedaksha-wasm --target wasm32-unknown-unknown --locked
 
   no-std:
     name: no_std Check
@@ -54,4 +55,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check vedaksha-math no_std
-        run: cargo check -p vedaksha-math --no-default-features
+        run: cargo check -p vedaksha-math --no-default-features --locked
