@@ -1,5 +1,5 @@
 {
-  "engineVersion": "3.0.0",
+  "engineVersion": "3.0.1",
   "tools": [
     {
       "description": "Compute a natal astrological chart for a given time and location. Returns a ChartGraph in JSON format containing planetary positions, house cusps, aspects, nakshatras, and dignities.",

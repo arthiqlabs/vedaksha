@@ -235,7 +235,7 @@ checksum = "7264e107f553ccae879d21fbea1d6724ac785e8c3bfc762137959b5802826ef3"
 
 [[package]]
 name = "vedaksha"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "vedaksha-astro",
  "vedaksha-ephem-core",
@@ -246,7 +246,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-astro"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "libm",
  "serde",
@@ -256,7 +256,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-ephem-core"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "libm",
  "vedaksha-math",
@@ -264,7 +264,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-graph"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -272,14 +272,14 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-math"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "libm",
 ]
 
 [[package]]
 name = "vedaksha-python"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "pyo3",
  "serde_json",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-vedic"
-version = "3.0.0"
+version = "3.0.1"
 dependencies = [
  "serde",
  "vedaksha-astro",
