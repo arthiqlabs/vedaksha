@@ -168,7 +168,7 @@ jobs:
 
   github-release:
     name: Create GitHub Release
-    needs: [build-mcp, wasm, publish-crates, publish-npm, upload-pypi, docker]
+    needs: [build-mcp, wasm]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
