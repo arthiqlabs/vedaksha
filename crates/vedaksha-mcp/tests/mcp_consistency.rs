@@ -271,13 +271,13 @@ fn mcp_emit_graph_roundtrip() {
             total += 1;
 
             // Direct emission
-            use vedaksha_emit::GraphEmitter;
+            use vedaksha_graph::emitters::GraphEmitter;
             let direct_result = match format {
-                "cypher" => vedaksha_emit::cypher::CypherEmitter.emit(&graph),
-                "surreal" => vedaksha_emit::surreal::SurrealEmitter.emit(&graph),
-                "jsonld" => vedaksha_emit::jsonld::JsonLdEmitter.emit(&graph),
-                "json" => vedaksha_emit::json_graph::JsonGraphEmitter.emit(&graph),
-                "embedding" => vedaksha_emit::embedding_text::EmbeddingTextEmitter.emit(&graph),
+                "cypher" => vedaksha_graph::emitters::cypher::CypherEmitter.emit(&graph),
+                "surreal" => vedaksha_graph::emitters::surreal::SurrealEmitter.emit(&graph),
+                "jsonld" => vedaksha_graph::emitters::jsonld::JsonLdEmitter.emit(&graph),
+                "json" => vedaksha_graph::emitters::json_graph::JsonGraphEmitter.emit(&graph),
+                "embedding" => vedaksha_graph::emitters::embedding_text::EmbeddingTextEmitter.emit(&graph),
                 _ => continue,
             };
 

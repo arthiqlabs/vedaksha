@@ -980,7 +980,7 @@ impl McpServer {
     }
 
     fn call_emit_graph(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_emit::GraphEmitter;
+        use vedaksha_graph::emitters::GraphEmitter;
 
         let input: crate::tools::emit_graph::EmitGraphInput = serde_json::from_value(args.clone())
             .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
@@ -994,11 +994,11 @@ impl McpServer {
         // but validate() doesn't mutate, so normalise here as well).
         let fmt = input.format.trim().to_lowercase();
         let output = match fmt.as_str() {
-            "cypher" => vedaksha_emit::cypher::CypherEmitter.emit(&graph),
-            "surreal" => vedaksha_emit::surreal::SurrealEmitter.emit(&graph),
-            "jsonld" => vedaksha_emit::jsonld::JsonLdEmitter.emit(&graph),
-            "json" => vedaksha_emit::json_graph::JsonGraphEmitter.emit(&graph),
-            "embedding" => vedaksha_emit::embedding_text::EmbeddingTextEmitter.emit(&graph),
+            "cypher" => vedaksha_graph::emitters::cypher::CypherEmitter.emit(&graph),
+            "surreal" => vedaksha_graph::emitters::surreal::SurrealEmitter.emit(&graph),
+            "jsonld" => vedaksha_graph::emitters::jsonld::JsonLdEmitter.emit(&graph),
+            "json" => vedaksha_graph::emitters::json_graph::JsonGraphEmitter.emit(&graph),
+            "embedding" => vedaksha_graph::emitters::embedding_text::EmbeddingTextEmitter.emit(&graph),
             _ => Err(format!("Unknown format: {fmt}")),
         };
 

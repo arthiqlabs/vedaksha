@@ -11,11 +11,17 @@
 //!
 //! ```toml
 //! [dependencies]
-//! vedaksha = "2.3"
+//! vedaksha = "3"
 //! ```
+//!
+//! # v3.0.0 surface changes
+//!
+//! - `vedaksha::emit` is gone; the emitters now live at
+//!   `vedaksha::graph::emitters` (the umbrella always enables the
+//!   `emitters` feature on `vedaksha-graph`).
+//! - `vedaksha::locale` is gated by the `locale` feature on this crate.
 
 pub use vedaksha_astro as astro;
-pub use vedaksha_emit as emit;
 pub use vedaksha_ephem_core as ephem;
 pub use vedaksha_graph as graph;
 pub use vedaksha_locale as locale;
