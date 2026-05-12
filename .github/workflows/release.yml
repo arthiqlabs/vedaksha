@@ -67,7 +67,10 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -eo pipefail
-          for crate in vedaksha-math vedaksha-ephem-core vedaksha-graph vedaksha-astro vedaksha-vedic vedaksha-emit vedaksha-locale vedaksha-mcp vedaksha-wasm vedaksha; do
+          # v3.0.0: vedaksha-emit folded into vedaksha-graph[emitters];
+          # vedaksha-locale folded into vedaksha[locale]; vedaksha-wasm
+          # is published to npm only (publish = false in its Cargo.toml).
+          for crate in vedaksha-math vedaksha-ephem-core vedaksha-graph vedaksha-astro vedaksha-vedic vedaksha-mcp vedaksha; do
             echo "::group::Publishing $crate"
             log=$(mktemp)
             if cargo publish -p "$crate" --allow-dirty 2>&1 | tee "$log"; then

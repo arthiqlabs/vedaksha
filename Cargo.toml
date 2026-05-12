@@ -28,7 +28,6 @@ vedaksha-graph = { version = "2.6.0", path = "crates/vedaksha-graph" }
 vedaksha-astro = { version = "2.6.0", path = "crates/vedaksha-astro" }
 vedaksha-vedic = { version = "2.6.0", path = "crates/vedaksha-vedic" }
 vedaksha-mcp = { version = "2.6.0", path = "crates/vedaksha-mcp" }
-vedaksha-wasm = { version = "2.6.0", path = "crates/vedaksha-wasm" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
