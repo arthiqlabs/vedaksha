@@ -18,7 +18,7 @@
 //!
 //! Sources: BPHS, Surya Siddhanta.
 
-use crate::Language;
+use super::Language;
 
 /// Number of panchanga yogas.
 pub const PANCHANGA_YOGA_COUNT: usize = 27;

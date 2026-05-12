@@ -22,7 +22,7 @@
 //! Western-only aspects (semi-square, sesquiquadrate, quintile, bi-quintile)
 //! use transliterated Sanskrit neologisms consistent with B.V. Raman's usage.
 
-use crate::Language;
+use super::Language;
 
 /// Number of aspect types.
 pub const ASPECT_COUNT: usize = 11;

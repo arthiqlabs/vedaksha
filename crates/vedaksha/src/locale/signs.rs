@@ -11,7 +11,7 @@
 //!
 //! Sources: BPHS Ch. 4, B.V. Raman "A Manual of Hindu Astrology".
 
-use crate::Language;
+use super::Language;
 
 /// Number of zodiac signs.
 pub const SIGN_COUNT: usize = 12;

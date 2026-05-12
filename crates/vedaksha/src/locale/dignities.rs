@@ -14,7 +14,7 @@
 //!
 //! Sources: BPHS Ch. 3; Ptolemy "Tetrabiblos" I.17-20.
 
-use crate::Language;
+use super::Language;
 
 /// Number of dignity categories.
 pub const DIGNITY_COUNT: usize = 5;
@@ -55,7 +55,7 @@ static DIGNITIES_BN: &[&str] = &["স্বক্ষেত্র", "উচ্চ
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Language;
+    use super::Language;
 
     #[test]
     fn dignity_count_is_five() {

@@ -16,7 +16,7 @@
 //!
 //! Sources: BPHS, Surya Siddhanta.
 
-use crate::Language;
+use super::Language;
 
 /// Number of unique karanas.
 pub const KARANA_COUNT: usize = 11;

@@ -18,7 +18,7 @@
 //!
 //! Sources: BPHS Ch. 3-6, B.V. Raman "A Manual of Hindu Astrology".
 
-use crate::Language;
+use super::Language;
 
 /// Number of nakshatra deities.
 pub const DEITY_COUNT: usize = 27;

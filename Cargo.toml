@@ -7,7 +7,6 @@ members = [
     "crates/vedaksha-graph",
     "crates/vedaksha-astro",
     "crates/vedaksha-vedic",
-    "crates/vedaksha-locale",
     "crates/vedaksha-mcp",
     "crates/vedaksha-wasm",
 ]
@@ -28,7 +27,6 @@ vedaksha-ephem-core = { version = "2.6.0", path = "crates/vedaksha-ephem-core" }
 vedaksha-graph = { version = "2.6.0", path = "crates/vedaksha-graph" }
 vedaksha-astro = { version = "2.6.0", path = "crates/vedaksha-astro" }
 vedaksha-vedic = { version = "2.6.0", path = "crates/vedaksha-vedic" }
-vedaksha-locale = { version = "2.6.0", path = "crates/vedaksha-locale" }
 vedaksha-mcp = { version = "2.6.0", path = "crates/vedaksha-mcp" }
 vedaksha-wasm = { version = "2.6.0", path = "crates/vedaksha-wasm" }
 

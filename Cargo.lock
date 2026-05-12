@@ -333,7 +333,6 @@ dependencies = [
  "vedaksha-astro",
  "vedaksha-ephem-core",
  "vedaksha-graph",
- "vedaksha-locale",
  "vedaksha-math",
  "vedaksha-vedic",
 ]
@@ -367,10 +366,6 @@ dependencies = [
  "serde",
  "serde_json",
 ]
-
-[[package]]
-name = "vedaksha-locale"
-version = "2.6.0"
 
 [[package]]
 name = "vedaksha-math"
@@ -411,10 +406,10 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "serde_json",
+ "vedaksha",
  "vedaksha-astro",
  "vedaksha-ephem-core",
  "vedaksha-graph",
- "vedaksha-locale",
  "vedaksha-math",
  "vedaksha-vedic",
  "wasm-bindgen",

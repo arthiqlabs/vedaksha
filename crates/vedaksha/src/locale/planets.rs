@@ -11,7 +11,7 @@
 //!
 //! Sources: BPHS Ch. 3, B.V. Raman "A Manual of Hindu Astrology".
 
-use crate::Language;
+use super::Language;
 
 /// Number of planets in the lookup tables.
 pub const PLANET_COUNT: usize = 9;

@@ -9,7 +9,7 @@
 //!
 //! Sources: BPHS Ch. 11; B.V. Raman "A Manual of Hindu Astrology" Ch. 4.
 
-use crate::Language;
+use super::Language;
 
 /// Number of houses in a chart.
 pub const HOUSE_COUNT: usize = 12;
@@ -144,7 +144,7 @@ static HOUSES_BN: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Language;
+    use super::Language;
 
     #[test]
     fn house_count_is_twelve() {

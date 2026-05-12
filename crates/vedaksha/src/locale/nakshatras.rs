@@ -18,7 +18,7 @@
 //!
 //! Sources: BPHS Ch. 3-6, B.V. Raman "A Manual of Hindu Astrology".
 
-use crate::Language;
+use super::Language;
 
 /// Number of nakshatras.
 pub const NAKSHATRA_COUNT: usize = 27;

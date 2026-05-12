@@ -17,7 +17,7 @@
 //!
 //! Sources: BPHS Ch. 35-37; B.V. Raman, "Three Hundred Important Combinations".
 
-use crate::Language;
+use super::Language;
 
 /// Number of yoga entries in the lookup tables.
 pub const YOGA_COUNT: usize = 8;
@@ -121,7 +121,7 @@ static YOGAS_BN: &[&str] = &[
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Language;
+    use super::Language;
 
     #[test]
     fn yoga_count_is_eight() {

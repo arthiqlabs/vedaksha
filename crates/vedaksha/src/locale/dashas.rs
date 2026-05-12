@@ -12,7 +12,7 @@
 //! This module delegates to `planets::planet_name` using the mapping from
 //! dasha-lord position to planet index.
 
-use crate::{Language, planets};
+use super::{Language, planets};
 
 /// Number of dasha lords in the Vimshottari system.
 pub const DASHA_LORD_COUNT: usize = 9;
