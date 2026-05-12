@@ -26,12 +26,14 @@ jobs:
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Build (debug)
-        run: cargo build --workspace --locked
       - name: Unit tests + Tier-2 paper-example acceptance
+        # Debug mode — one build artifact set. Unit tests do 1-2 series
+        # evaluations each (microseconds even in debug). Tier-2 paper
+        # examples does ~10 ELP/MPP02 evals; debug ~50ms each = ~0.5s
+        # total. Total target for this step ≤90s on cold cache.
         run: |
-          cargo test --workspace --lib --release --locked
-          cargo test -p vedaksha-ephem-core --test lunar_paper_examples --release --locked
+          cargo test --workspace --lib --locked
+          cargo test -p vedaksha-ephem-core --test lunar_paper_examples --locked
       - name: Format check
         run: cargo fmt --all -- --check
 
