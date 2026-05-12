@@ -1,8 +1,10 @@
 name: Full Validation
 
 # Comprehensive validation that doesn't run on every push because it's slow:
-#   - cargo clippy across 36k+ lines of generated coefficient tables
-#   - full integration test suite (oracle comparisons, extended comparisons)
+#   - full release-mode build + integration test suite (oracle comparisons,
+#     extended comparisons)
+#   - coefficient-blob generator drift check (re-fetches IMCCE primary
+#     distributions and verifies sha256 against the committed sidecars)
 # Triggers:
 #   - manual (workflow_dispatch)
 #   - weekly cron (Sunday 04:00 UTC)
@@ -37,3 +39,19 @@ jobs:
         run: cargo clippy --workspace -- -D warnings
       - name: Format check
         run: cargo fmt --all -- --check
+
+  coefficient-blob-drift:
+    name: Coefficient-blob generator drift (--verify)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      # Each generator re-fetches IMCCE primary, regenerates the VDKBLOB1
+      # blobs into a temp directory, and exits non-zero if any sha256 has
+      # drifted from the committed .bin.sha256 sidecar.
+      - name: VSOP87A — regenerate, compare sha256 against committed sidecars
+        run: python3 scripts/generate_vsop87a.py --verify --threshold 1e-9
+      - name: ELP/MPP02 — regenerate, compare sha256 against committed sidecars
+        run: python3 scripts/generate_elpmpp02.py --verify --threshold 1e-6
