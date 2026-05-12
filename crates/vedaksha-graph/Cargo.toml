@@ -20,3 +20,6 @@ serde_json = { workspace = true }
 [features]
 default = ["std"]
 std = []
+# Emitters: Neo4j Cypher, SurrealDB, JSON-LD, plain JSON, RAG embedding text.
+# Folded in from the standalone `vedaksha-emit` crate (v2.x) in v3.0.0.
+emitters = []

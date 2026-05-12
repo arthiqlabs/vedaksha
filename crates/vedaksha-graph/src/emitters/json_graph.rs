@@ -8,8 +8,8 @@
 //! Serializes `ChartGraph` directly to pretty-printed JSON using serde.
 //! This is the simplest emitter and the default format for MCP tool responses.
 
-use crate::GraphEmitter;
-use vedaksha_graph::ChartGraph;
+use super::GraphEmitter;
+use crate::ChartGraph;
 
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
@@ -31,7 +31,7 @@ impl GraphEmitter for JsonGraphEmitter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vedaksha_graph::{
+    use crate::{
         ChartGraph,
         classification::DataClassification,
         ids::NodeId,

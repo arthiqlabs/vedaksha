@@ -10,8 +10,8 @@
 //! via `CREATE ... IF NOT EXISTS` style (or plain CREATE — `SurrealDB` is idempotent
 //! when using record IDs).
 
-use crate::GraphEmitter;
-use vedaksha_graph::{ChartGraph, Edge, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
+use super::GraphEmitter;
+use crate::{ChartGraph, Edge, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
 
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
@@ -247,7 +247,7 @@ fn escape_surreal_string(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vedaksha_graph::{
+    use crate::{
         classification::DataClassification,
         ids::NodeId,
         ontology::{Edge, EdgeProperties, Node, NodeProperties},

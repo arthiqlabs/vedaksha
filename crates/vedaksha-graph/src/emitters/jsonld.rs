@@ -8,8 +8,8 @@
 //! Emits a JSON-LD document with `@context` (vedaksha ontology namespace)
 //! and `@graph` array containing all nodes with `@type` and `@id`.
 
-use crate::GraphEmitter;
-use vedaksha_graph::{ChartGraph, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
+use super::GraphEmitter;
+use crate::{ChartGraph, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
 
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
@@ -269,7 +269,7 @@ fn edge_type_term(t: EdgeType) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vedaksha_graph::{
+    use crate::{
         classification::DataClassification,
         ids::NodeId,
         ontology::{Edge, EdgeProperties, Node, NodeProperties},

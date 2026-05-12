@@ -8,8 +8,8 @@
 //! Emits `MERGE` for global nodes (Sign, Nakshatra, `FixedStar`) and
 //! `CREATE` for chart-scoped nodes. Edges are created with `MATCH`+`CREATE`.
 
-use crate::GraphEmitter;
-use vedaksha_graph::{ChartGraph, Edge, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
+use super::GraphEmitter;
+use crate::{ChartGraph, Edge, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
 
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
@@ -242,7 +242,7 @@ fn escape_single_quotes(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vedaksha_graph::{
+    use crate::{
         classification::DataClassification, ids::NodeId, ontology::EdgeProperties,
     };
 
@@ -251,7 +251,7 @@ mod tests {
         let mut g = ChartGraph::new(chart_id, DataClassification::Anonymous);
 
         // Chart-scoped planet node
-        g.add_node(vedaksha_graph::ontology::Node {
+        g.add_node(crate::ontology::Node {
             id: NodeId::chart_scoped("test", "planet", "mars"),
             node_type: NodeType::Planet,
             properties: NodeProperties::Planet {
@@ -267,7 +267,7 @@ mod tests {
         });
 
         // Global sign node
-        g.add_node(vedaksha_graph::ontology::Node {
+        g.add_node(crate::ontology::Node {
             id: NodeId::global("sign", "capricorn"),
             node_type: NodeType::Sign,
             properties: NodeProperties::Sign {
@@ -279,7 +279,7 @@ mod tests {
         });
 
         // Global nakshatra node
-        g.add_node(vedaksha_graph::ontology::Node {
+        g.add_node(crate::ontology::Node {
             id: NodeId::global("nakshatra", "shravana"),
             node_type: NodeType::Nakshatra,
             properties: NodeProperties::Nakshatra {
@@ -291,7 +291,7 @@ mod tests {
         });
 
         // PlacedIn edge (no properties)
-        g.add_edge(vedaksha_graph::ontology::Edge {
+        g.add_edge(crate::ontology::Edge {
             edge_type: EdgeType::PlacedIn,
             from: NodeId::chart_scoped("test", "planet", "mars"),
             to: NodeId::global("sign", "capricorn"),
@@ -299,7 +299,7 @@ mod tests {
         });
 
         // Aspects edge with properties
-        g.add_edge(vedaksha_graph::ontology::Edge {
+        g.add_edge(crate::ontology::Edge {
             edge_type: EdgeType::Aspects,
             from: NodeId::chart_scoped("test", "planet", "mars"),
             to: NodeId::chart_scoped("test", "planet", "jupiter"),

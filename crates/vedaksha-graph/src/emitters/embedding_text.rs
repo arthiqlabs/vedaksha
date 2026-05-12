@@ -10,8 +10,8 @@
 //! nakshatra, yoga, dasha period, pattern, fixed star) is described in a
 //! human-readable sentence. Aspect relationships are woven inline.
 
-use crate::GraphEmitter;
-use vedaksha_graph::{ChartGraph, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
+use super::GraphEmitter;
+use crate::{ChartGraph, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
 
 #[cfg(not(feature = "std"))]
 use alloc::string::String;
@@ -236,7 +236,7 @@ impl GraphEmitter for EmbeddingTextEmitter {
 }
 
 /// Look up the sign name for a planet node by following `PlacedIn` edges.
-fn planet_sign_name(graph: &ChartGraph, planet_id: &vedaksha_graph::NodeId) -> Option<String> {
+fn planet_sign_name(graph: &ChartGraph, planet_id: &crate::NodeId) -> Option<String> {
     for edge in graph.edges_from(planet_id) {
         if edge.edge_type == EdgeType::PlacedIn {
             if let Some(sign_node) = graph.find_node(&edge.to) {
@@ -250,7 +250,7 @@ fn planet_sign_name(graph: &ChartGraph, planet_id: &vedaksha_graph::NodeId) -> O
 }
 
 /// Get a human-readable name for a node by ID.
-fn node_name_by_id(graph: &ChartGraph, id: &vedaksha_graph::NodeId) -> Option<String> {
+fn node_name_by_id(graph: &ChartGraph, id: &crate::NodeId) -> Option<String> {
     graph.find_node(id).and_then(node_display_name)
 }
 
@@ -269,7 +269,7 @@ fn node_display_name(node: &Node) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use vedaksha_graph::{
+    use crate::{
         ChartGraph,
         classification::DataClassification,
         ids::NodeId,
