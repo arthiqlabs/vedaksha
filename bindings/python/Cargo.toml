@@ -18,6 +18,9 @@ vedaksha-ephem-core = { path = "../../crates/vedaksha-ephem-core" }
 vedaksha-astro = { path = "../../crates/vedaksha-astro" }
 vedaksha-vedic = { path = "../../crates/vedaksha-vedic" }
 vedaksha-graph = { path = "../../crates/vedaksha-graph", features = ["emitters"] }
-vedaksha = { path = "../../crates/vedaksha", features = ["locale"] }
+# Rename the umbrella crate dep — the lib name of this binding is also
+# `vedaksha` (so Python consumers get `import vedaksha`), which would
+# otherwise shadow the umbrella crate inside this lib's source.
+vedaksha_engine = { package = "vedaksha", path = "../../crates/vedaksha", features = ["locale"] }
 pyo3 = { version = "0.24", features = ["extension-module"] }
 serde_json = "1"
