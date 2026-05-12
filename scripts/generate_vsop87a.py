@@ -16,11 +16,15 @@ Copyright (c) 2026 ArthIQ Labs LLC. All rights reserved.
 """
 
 import argparse
+import hashlib
 import os
 import re
+import shutil
+import struct
 import sys
-import urllib.request
+import tempfile
 import urllib.error
+import urllib.request
 
 # Planet names and their VSOP87A file suffixes
 PLANETS = [
@@ -151,49 +155,90 @@ def truncate_and_sort(series: dict, threshold: float) -> dict:
     return result
 
 
-def generate_rust_file(
+MAGIC = b"VDKBLOB1"
+VERSION = 1
+VSOP_RECORD = struct.Struct("<ddd")  # (amplitude, phase, frequency)
+
+
+def round_term_to_print_precision(term: tuple[float, float, float]) -> tuple[float, float, float]:
+    """Round each component through the same `{:.15e}` / `{:.15f}` format-then-parse
+    cycle the legacy text emitter performed. This makes the .bin and the
+    (long-deleted) `.rs` literals exactly round-trip bit-equivalent."""
+    A, B, C = term
+    return (
+        float(f"{A:.15e}"),
+        float(f"{B:.15f}"),
+        float(f"{C:.15f}"),
+    )
+
+
+def emit_blob(out_path: str, records: list[tuple[float, float, float]]) -> bytes:
+    """Write the VDKBLOB1 blob + return its raw bytes (also written to .sha256)."""
+    payload = bytearray()
+    for term in records:
+        payload.extend(VSOP_RECORD.pack(*term))
+    header = bytearray()
+    header.extend(MAGIC)
+    header.extend(struct.pack("<I", VERSION))
+    header.extend(struct.pack("<I", VSOP_RECORD.size))
+    header.extend(struct.pack("<I", len(records)))
+    header.extend(struct.pack("<I", 0))
+    blob = bytes(header) + bytes(payload)
+    with open(out_path, "wb") as f:
+        f.write(blob)
+    digest = hashlib.sha256(blob).hexdigest()
+    with open(out_path + ".sha256", "w") as f:
+        f.write(f"{digest}  {os.path.basename(out_path)}\n")
+    return blob
+
+
+def generate_wrapper_rs(planet_name: str) -> str:
+    """Generate the thin LazyLock wrapper .rs file for a planet."""
+    lines = []
+    lines.append("// Copyright © 2026 ArthIQ Labs LLC. All rights reserved.")
+    lines.append("// Vedākṣha — Vision from Vedas")
+    lines.append("// Licensed under BSL 1.1. See LICENSE file.")
+    lines.append("//")
+    lines.append("// GENERATED FILE — do not edit manually.")
+    lines.append("//")
+    lines.append("// Source: VSOP87A (Bretagnon & Francou 1988)")
+    lines.append(f"// Planet: {planet_name.capitalize()}")
+    lines.append("//")
+    lines.append("// Each table is a packed little-endian VDKBLOB1 blob alongside this file")
+    lines.append("// and is decoded into a `Vec<Vsop87Term>` at first access.")
+    lines.append("")
+    lines.append("use std::sync::LazyLock;")
+    lines.append("")
+    lines.append("use super::loader::{Vsop87Term, parse_vsop87};")
+    lines.append("")
+    for coord_label in COORD_LABELS:
+        for power in range(MAX_POWER + 1):
+            name = f"{coord_label}{power}"
+            bin_file = f"{planet_name}/{name.lower()}.bin"
+            panic = f"malformed {bin_file}"
+            lines.append(f"pub static {name}: LazyLock<Vec<Vsop87Term>> = LazyLock::new(|| {{")
+            lines.append(f'    parse_vsop87(include_bytes!("{bin_file}")).expect("{panic}")')
+            lines.append("});")
+            lines.append("")
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def emit_planet(
     planet_name: str,
     series: dict,
-    full_series: dict,
-    threshold: float,
-) -> str:
-    """Generate the Rust source file content for a planet."""
-    lines = []
-
-    # Count totals
-    total_full = sum(len(v) for v in full_series.values())
-    total_retained = sum(len(v) for v in series.values())
-
-    # File header
-    lines.append(f"// GENERATED FILE — do not edit manually")
-    lines.append(f"//")
-    lines.append(f"// Source: VSOP87A (Bretagnon & Francou 1988)")
-    lines.append(f"// Planet: {planet_name.capitalize()}")
-    lines.append(f"// Truncation threshold: {threshold:.0e} AU")
-    lines.append(f"// Terms retained: {total_retained} of {total_full}")
-    lines.append(f"//")
-    lines.append(f"// Rectangular heliocentric ecliptic coordinates (J2000.0)")
-    lines.append(f"// Each triple is (amplitude_AU, phase_rad, frequency_rad_per_millennium)")
-    lines.append(f"// Evaluate: X_alpha(t) = t^alpha * sum_i [A_i * cos(B_i + C_i * t)]")
-    lines.append(f"//   where t = Julian millennia from J2000.0 (JDE 2451545.0)")
-    lines.append(f"")
-
-    # Generate arrays for each coordinate and power
+    output_dir: str,
+) -> None:
+    """Write per-table .bin + .sha256 + wrapper .rs for one planet."""
+    bin_dir = os.path.join(output_dir, planet_name)
+    os.makedirs(bin_dir, exist_ok=True)
     for coord_idx, coord_label in enumerate(COORD_LABELS, start=1):
         for power in range(MAX_POWER + 1):
-            array_name = f"{coord_label}{power}"
-            key = (coord_idx, power)
-            terms = series.get(key, [])
-            full_count = len(full_series.get(key, []))
-
-            lines.append(f"/// {coord_label} coordinate, T^{power} — {len(terms)} terms (of {full_count})")
-            lines.append(f"pub static {array_name}: &[(f64, f64, f64)] = &[")
-            for A, B, C in terms:
-                lines.append(f"    ({A:>23.15e}, {B:>20.15f}, {C:>23.15f}),")
-            lines.append(f"];")
-            lines.append(f"")
-
-    return "\n".join(lines)
+            name = f"{coord_label}{power}"
+            terms = [round_term_to_print_precision(t) for t in series.get((coord_idx, power), [])]
+            emit_blob(os.path.join(bin_dir, f"{name.lower()}.bin"), terms)
+    rs_path = os.path.join(output_dir, f"{planet_name}.rs")
+    with open(rs_path, "w") as f:
+        f.write(generate_wrapper_rs(planet_name))
 
 
 def main():
@@ -212,20 +257,31 @@ def main():
         default=None,
         help="Output directory for generated Rust files",
     )
+    parser.add_argument(
+        "--verify",
+        action="store_true",
+        help="Re-fetch from IMCCE primary, regenerate the .bin files into a temp"
+        " directory, and compare SHA256s against the committed .sha256 sidecars."
+        " Exits non-zero on mismatch.",
+    )
     args = parser.parse_args()
 
     # Determine output directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
-    if args.output_dir:
+    canonical_dir = os.path.join(
+        project_root,
+        "crates", "vedaksha-ephem-core", "src", "analytical", "coefficients",
+    )
+    if args.verify:
+        verify_dir = tempfile.mkdtemp(prefix="vsop87a-verify-")
+        output_dir = verify_dir
+    elif args.output_dir:
         output_dir = args.output_dir
         if not os.path.isabs(output_dir):
             output_dir = os.path.join(project_root, output_dir)
     else:
-        output_dir = os.path.join(
-            project_root,
-            "crates", "vedaksha-ephem-core", "src", "analytical", "coefficients",
-        )
+        output_dir = canonical_dir
 
     os.makedirs(output_dir, exist_ok=True)
 
@@ -263,12 +319,9 @@ def main():
         stats[planet_name] = (retained_count, full_count)
         print(f"  {retained_count} / {full_count} terms retained")
 
-        # Generate Rust file
-        rust_code = generate_rust_file(planet_name, truncated, full_series, args.threshold)
-        out_path = os.path.join(output_dir, f"{planet_name}.rs")
-        with open(out_path, "w") as f:
-            f.write(rust_code)
-        print(f"  Written to {out_path}")
+        # Emit packed binary blobs + thin LazyLock wrapper.
+        emit_planet(planet_name, truncated, output_dir)
+        print(f"  Wrote {planet_name}/ + {planet_name}.rs to {output_dir}")
 
     # Summary
     print()
@@ -285,6 +338,32 @@ def main():
     pct = 100 * total_retained / total_full if total_full else 0
     print(f"  {'TOTAL':>10s}: {total_retained:5d} / {total_full:5d} terms ({pct:5.1f}%)")
     print()
+
+    if args.verify:
+        print("Verifying regenerated blobs against committed .sha256 sidecars...")
+        mismatches = 0
+        for planet_name, _ in PLANETS:
+            for coord_label in COORD_LABELS:
+                for power in range(MAX_POWER + 1):
+                    name = f"{coord_label}{power}".lower()
+                    fresh = os.path.join(output_dir, planet_name, f"{name}.bin")
+                    committed_sha = os.path.join(
+                        canonical_dir, planet_name, f"{name}.bin.sha256"
+                    )
+                    with open(fresh, "rb") as f:
+                        fresh_digest = hashlib.sha256(f.read()).hexdigest()
+                    with open(committed_sha) as f:
+                        committed_digest = f.read().split()[0]
+                    if fresh_digest != committed_digest:
+                        print(f"  MISMATCH {planet_name}/{name}.bin: "
+                              f"committed={committed_digest[:16]}…, fresh={fresh_digest[:16]}…")
+                        mismatches += 1
+        shutil.rmtree(output_dir, ignore_errors=True)
+        if mismatches:
+            print(f"\nverification failed: {mismatches} mismatched blob(s)")
+            sys.exit(2)
+        print("verification ok: all VSOP87A blobs match committed sha256s")
+
     print("Done.")
 
 

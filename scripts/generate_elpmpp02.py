@@ -35,7 +35,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import os
+import shutil
+import struct
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 
@@ -244,95 +247,116 @@ def truncate_pert(group: list[tuple], threshold: float) -> list[tuple]:
 # Rust emit
 # ---------------------------------------------------------------------------
 
-RUST_HEADER = """// GENERATED FILE — do not edit manually.
-//
-// Source: ELP/MPP02 (Chapront & Francou 2003, A&A 404, 735;
-//         IMCCE explanatory note `elpmpp02.pdf`, October 2002).
-// Distribution: ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/
-// Generator:    scripts/generate_elpmpp02.py
-//
-// {variable}
-// Truncation threshold: |A| >= {threshold:.0e} ({units})
-// Main terms retained:  {nmain} of {nmain_full}
-// Perturbation terms retained per power group n=0..3:
-{pert_summary}//
-// Records:
-//   MAIN[i] = (i1, i2, i3, i4, amp, b1, b2, b3, b4, b5, b6)
-//     phase = i1*D + i2*F + i3*l + i4*l_prime
-//   PERT_n[i] = (s, c, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13)
-//     phase = i1*D + i2*F + i3*l + i4*l_prime
-//             + i5*Me + i6*V + i7*T + i8*Ma + i9*J + i10*Sa + i11*U + i12*N
-//             + i13*zeta
-"""
+MAGIC = b"VDKBLOB1"
+VERSION = 1
+
+# Field order matches src/analytical/coefficients/loader.rs:
+#   ElpMainTerm = (i1, i2, i3, i4, amp, b1, b2, b3, b4, b5, b6)
+#   ElpPertTerm = (s, c, i1..i13)
+MAIN_RECORD = struct.Struct("<iiiiddddddd")  # 4×i32 + 7×f64 = 72 bytes
+PERT_RECORD = struct.Struct("<ddiiiiiiiiiiiii")  # 2×f64 + 13×i32 = 68 bytes
 
 
-def emit_main_array(name: str, terms: list[tuple], indent: str = "    ") -> list[str]:
-    out = [f"pub static {name}: &[(i32, i32, i32, i32, f64, f64, f64, f64, f64, f64, f64)] = &["]
-    for t in terms:
-        i1, i2, i3, i4, a, b1, b2, b3, b4, b5, b6 = t
-        out.append(
-            f"{indent}({i1}, {i2}, {i3}, {i4}, "
-            f"{a:.5f}, {b1:.2f}, {b2:.2f}, {b3:.2f}, {b4:.2f}, {b5:.2f}, {b6:.2f}),"
-        )
-    out.append("];")
-    return out
+def round_main_to_print(t: tuple) -> tuple:
+    """Snap to the same `{:.5f}`/`{:.2f}` rounding the legacy text emitter used."""
+    i1, i2, i3, i4, a, b1, b2, b3, b4, b5, b6 = t
+    return (
+        i1, i2, i3, i4,
+        float(f"{a:.5f}"),
+        float(f"{b1:.2f}"),
+        float(f"{b2:.2f}"),
+        float(f"{b3:.2f}"),
+        float(f"{b4:.2f}"),
+        float(f"{b5:.2f}"),
+        float(f"{b6:.2f}"),
+    )
 
 
-def emit_pert_array(name: str, terms: list[tuple], indent: str = "    ") -> list[str]:
-    out = [
-        f"pub static {name}: &[(f64, f64, "
-        "i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32, i32)] = &["
+def round_pert_to_print(t: tuple) -> tuple:
+    """Snap to the same `{:.13e}` rounding the legacy text emitter used."""
+    s, c = t[0], t[1]
+    ints = t[2:]
+    return (float(f"{s:.13e}"), float(f"{c:.13e}"), *ints)
+
+
+def emit_blob(out_path: str, record_struct: struct.Struct, records: list[tuple]) -> None:
+    payload = bytearray()
+    for row in records:
+        payload.extend(record_struct.pack(*row))
+    header = bytearray()
+    header.extend(MAGIC)
+    header.extend(struct.pack("<I", VERSION))
+    header.extend(struct.pack("<I", record_struct.size))
+    header.extend(struct.pack("<I", len(records)))
+    header.extend(struct.pack("<I", 0))
+    blob = bytes(header) + bytes(payload)
+    with open(out_path, "wb") as f:
+        f.write(blob)
+    digest = hashlib.sha256(blob).hexdigest()
+    with open(out_path + ".sha256", "w") as f:
+        f.write(f"{digest}  {os.path.basename(out_path)}\n")
+
+
+def write_wrapper_rs(out_path: str, component: str) -> None:
+    """Thin LazyLock wrapper module pointing at the sibling .bin files."""
+    pretty = component.replace("_", " ")
+    lines = [
+        "// Copyright © 2026 ArthIQ Labs LLC. All rights reserved.",
+        "// Vedākṣha — Vision from Vedas",
+        "// Licensed under BSL 1.1. See LICENSE file.",
+        "//",
+        "// GENERATED FILE — do not edit manually.",
+        "//",
+        "// Source: ELP/MPP02 (Chapront & Francou 2003, A&A 404, 735;",
+        "//         IMCCE explanatory note `elpmpp02.pdf`, October 2002).",
+        "// Distribution: ftp://cyrano-se.obspm.fr/pub/2_lunar_solutions/2_elpmpp02/",
+        f"// Component: {pretty}",
+        "//",
+        "// Each table is a packed little-endian VDKBLOB1 blob alongside this file",
+        "// and is decoded at first access.",
+        "",
+        "use std::sync::LazyLock;",
+        "",
+        "use super::loader::{ElpMainTerm, ElpPertTerm, parse_elp_main, parse_elp_pert};",
+        "",
+        f'pub static MAIN: LazyLock<Vec<ElpMainTerm>> = LazyLock::new(|| {{',
+        f'    parse_elp_main(include_bytes!("{component}/main.bin")).expect("malformed {component}/main.bin")',
+        "});",
+        "",
     ]
-    for t in terms:
-        s, c = t[0], t[1]
-        ints = t[2:]
-        ints_fmt = ", ".join(str(x) for x in ints)
-        out.append(f"{indent}({s:.13e}, {c:.13e}, {ints_fmt}),")
-    out.append("];")
-    return out
+    for n in range(4):
+        lines.append(
+            f'pub static PERT_{n}: LazyLock<Vec<ElpPertTerm>> = LazyLock::new(|| {{'
+        )
+        lines.append(
+            f'    parse_elp_pert(include_bytes!("{component}/pert_{n}.bin")).expect("malformed {component}/pert_{n}.bin")'
+        )
+        lines.append("});")
+        lines.append("")
+    with open(out_path, "w") as f:
+        f.write("\n".join(lines).rstrip() + "\n")
 
 
-def write_rust_file(
-    out_path: str,
-    variable: str,
-    units: str,
-    threshold: float,
-    main_full: list[tuple],
+def emit_component(
+    out_dir: str,
+    component: str,
     main_kept: list[tuple],
-    pert_full: list[list[tuple]],
     pert_kept: list[list[tuple]],
 ) -> None:
-    pert_summary_lines = []
-    for n, (full, kept) in enumerate(zip(pert_full, pert_kept)):
-        pert_summary_lines.append(f"//   n={n}: {len(kept)} of {len(full)}\n")
-    pert_summary = "".join(pert_summary_lines)
-
-    lines = [
-        RUST_HEADER.format(
-            variable=variable,
-            threshold=threshold,
-            units=units,
-            nmain=len(main_kept),
-            nmain_full=len(main_full),
-            pert_summary=pert_summary,
-        ),
-        "",
-        "#![rustfmt::skip]",
-        "#![allow(clippy::approx_constant)]",
-        "#![allow(clippy::excessive_precision)]",
-        "",
-    ]
-    lines.append(f"/// Main-problem series ({variable}).")
-    lines.extend(emit_main_array("MAIN", main_kept))
-    lines.append("")
-    for n, terms in enumerate(pert_kept):
-        lines.append(f"/// Perturbation series, power t^{n} ({variable}).")
-        lines.extend(emit_pert_array(f"PERT_{n}", terms))
-        lines.append("")
-
-    with open(out_path, "w") as f:
-        f.write("\n".join(lines))
-    print(f"  written {out_path}  ({sum(1 for _ in open(out_path)):,} lines)")
+    bin_dir = os.path.join(out_dir, component)
+    os.makedirs(bin_dir, exist_ok=True)
+    emit_blob(
+        os.path.join(bin_dir, "main.bin"),
+        MAIN_RECORD,
+        [round_main_to_print(t) for t in main_kept],
+    )
+    for n, group in enumerate(pert_kept):
+        emit_blob(
+            os.path.join(bin_dir, f"pert_{n}.bin"),
+            PERT_RECORD,
+            [round_pert_to_print(t) for t in group],
+        )
+    write_wrapper_rs(os.path.join(out_dir, f"{component}.rs"), component)
 
 
 # ---------------------------------------------------------------------------
@@ -345,18 +369,25 @@ def main() -> int:
                     help=f"amplitude truncation threshold (default: {DEFAULT_THRESHOLD:g})")
     ap.add_argument("--output-dir", type=str, default=None,
                     help="output dir for generated Rust files")
+    ap.add_argument("--verify", action="store_true",
+                    help="Re-fetch from IMCCE primary, regenerate the .bin files into a"
+                    " temp directory, and compare SHA256s against the committed .sha256"
+                    " sidecars. Exits non-zero on mismatch.")
     args = ap.parse_args()
 
     script_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(script_dir)
-    if args.output_dir:
+    canonical_dir = os.path.join(
+        project_root, "crates", "vedaksha-ephem-core", "src", "analytical", "coefficients",
+    )
+    if args.verify:
+        out_dir = tempfile.mkdtemp(prefix="elpmpp02-verify-")
+    elif args.output_dir:
         out_dir = args.output_dir
         if not os.path.isabs(out_dir):
             out_dir = os.path.join(project_root, out_dir)
     else:
-        out_dir = os.path.join(
-            project_root, "crates", "vedaksha-ephem-core", "src", "analytical", "coefficients",
-        )
+        out_dir = canonical_dir
     os.makedirs(out_dir, exist_ok=True)
 
     print("ELP/MPP02 Coefficient Generator")
@@ -383,12 +414,37 @@ def main() -> int:
         kept_pert = sum(len(g) for g in pert_kept)
         print(f"  main: kept {len(main_kept)} of {len(main_full)}")
         print(f"  pert: kept {kept_pert} of {full_pert} (over {len(pert_full)} power groups)")
-        write_rust_file(
-            os.path.join(out_dir, out_file),
-            variable, units, args.threshold,
-            main_full, main_kept, pert_full, pert_kept,
-        )
+        # `out_file` was the legacy `<component>.rs` filename; derive the
+        # component stem from it for the binary layout.
+        component = os.path.splitext(out_file)[0]
+        emit_component(out_dir, component, main_kept, pert_kept)
+        print(f"  wrote {component}/ + {component}.rs to {out_dir}")
         print()
+
+    if args.verify:
+        print("Verifying regenerated blobs against committed .sha256 sidecars...")
+        mismatches = 0
+        for _, _, _, out_file, _, _ in plan:
+            component = os.path.splitext(out_file)[0]
+            bin_dir = os.path.join(out_dir, component)
+            for bin_name in sorted(os.listdir(bin_dir)):
+                if not bin_name.endswith(".bin"):
+                    continue
+                fresh_path = os.path.join(bin_dir, bin_name)
+                committed_sha = os.path.join(canonical_dir, component, f"{bin_name}.sha256")
+                with open(fresh_path, "rb") as f:
+                    fresh_digest = hashlib.sha256(f.read()).hexdigest()
+                with open(committed_sha) as f:
+                    committed_digest = f.read().split()[0]
+                if fresh_digest != committed_digest:
+                    print(f"  MISMATCH {component}/{bin_name}: "
+                          f"committed={committed_digest[:16]}…, fresh={fresh_digest[:16]}…")
+                    mismatches += 1
+        shutil.rmtree(out_dir, ignore_errors=True)
+        if mismatches:
+            print(f"\nverification failed: {mismatches} mismatched blob(s)")
+            return 2
+        print("verification ok: all ELP/MPP02 blobs match committed sha256s")
 
     print("Done.")
     return 0
