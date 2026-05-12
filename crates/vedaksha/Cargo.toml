@@ -11,11 +11,11 @@ rust-version.workspace = true
 description = "Vedic and Western astrology engine — ephemeris, charts, dashas, nakshatras, and more"
 
 [dependencies]
-vedaksha-math = { version = "2.3.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "2.3.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "2.3.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "2.3.0", path = "../vedaksha-vedic" }
-vedaksha-graph = { version = "2.3.0", path = "../vedaksha-graph", features = ["emitters"] }
+vedaksha-math = { version = "3.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "3.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "3.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "3.0.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "3.0.0", path = "../vedaksha-graph", features = ["emitters"] }
 
 [features]
 default = ["std"]

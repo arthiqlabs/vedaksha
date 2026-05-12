@@ -19,12 +19,12 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-vedaksha-math = { version = "2.3.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "2.3.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "2.3.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "2.3.0", path = "../vedaksha-vedic" }
-vedaksha-graph = { version = "2.3.0", path = "../vedaksha-graph", features = ["emitters"] }
-vedaksha = { version = "2.3.0", path = "../vedaksha", features = ["locale"] }
+vedaksha-math = { version = "3.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "3.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "3.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "3.0.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "3.0.0", path = "../vedaksha-graph", features = ["emitters"] }
+vedaksha = { version = "3.0.0", path = "../vedaksha", features = ["locale"] }
 wasm-bindgen = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
