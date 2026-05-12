@@ -998,7 +998,9 @@ impl McpServer {
             "surreal" => vedaksha_graph::emitters::surreal::SurrealEmitter.emit(&graph),
             "jsonld" => vedaksha_graph::emitters::jsonld::JsonLdEmitter.emit(&graph),
             "json" => vedaksha_graph::emitters::json_graph::JsonGraphEmitter.emit(&graph),
-            "embedding" => vedaksha_graph::emitters::embedding_text::EmbeddingTextEmitter.emit(&graph),
+            "embedding" => {
+                vedaksha_graph::emitters::embedding_text::EmbeddingTextEmitter.emit(&graph)
+            }
             _ => Err(format!("Unknown format: {fmt}")),
         };
 

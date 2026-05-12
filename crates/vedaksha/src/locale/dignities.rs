@@ -54,8 +54,8 @@ static DIGNITIES_BN: &[&str] = &["স্বক্ষেত্র", "উচ্চ
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::Language;
+    use super::*;
 
     #[test]
     fn dignity_count_is_five() {

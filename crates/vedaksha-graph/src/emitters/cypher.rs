@@ -242,9 +242,7 @@ fn escape_single_quotes(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        classification::DataClassification, ids::NodeId, ontology::EdgeProperties,
-    };
+    use crate::{classification::DataClassification, ids::NodeId, ontology::EdgeProperties};
 
     fn make_test_graph() -> ChartGraph {
         let chart_id = NodeId::chart_scoped("test", "chart", "root");

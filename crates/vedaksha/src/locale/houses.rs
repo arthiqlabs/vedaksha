@@ -143,8 +143,8 @@ static HOUSES_BN: &[&str] = &[
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::Language;
+    use super::*;
 
     #[test]
     fn house_count_is_twelve() {
