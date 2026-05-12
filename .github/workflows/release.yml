@@ -20,9 +20,6 @@ jobs:
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: vedaksha-mcp
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            artifact: vedaksha-mcp
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
