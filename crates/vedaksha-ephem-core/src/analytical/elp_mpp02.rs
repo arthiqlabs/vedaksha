@@ -56,6 +56,7 @@
 
 use core::f64::consts::PI;
 
+use crate::analytical::coefficients::loader::{ElpMainTerm, ElpPertTerm};
 use crate::analytical::coefficients::{moon_distance, moon_latitude, moon_longitude};
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -440,7 +441,7 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
 
     // === Longitude (V), radians ===
     let v_main = eval_main_series(
-        moon_longitude::MAIN,
+        moon_longitude::MAIN.as_slice(),
         &args,
         &t_pow,
         false,
@@ -449,10 +450,10 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
     );
     let v_pert = eval_pert_series(
         &[
-            moon_longitude::PERT_0,
-            moon_longitude::PERT_1,
-            moon_longitude::PERT_2,
-            moon_longitude::PERT_3,
+            moon_longitude::PERT_0.as_slice(),
+            moon_longitude::PERT_1.as_slice(),
+            moon_longitude::PERT_2.as_slice(),
+            moon_longitude::PERT_3.as_slice(),
         ],
         &args,
         &t_pow,
@@ -464,7 +465,7 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
 
     // === Latitude (U), radians ===
     let u_main = eval_main_series(
-        moon_latitude::MAIN,
+        moon_latitude::MAIN.as_slice(),
         &args,
         &t_pow,
         false,
@@ -473,10 +474,10 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
     );
     let u_pert = eval_pert_series(
         &[
-            moon_latitude::PERT_0,
-            moon_latitude::PERT_1,
-            moon_latitude::PERT_2,
-            moon_latitude::PERT_3,
+            moon_latitude::PERT_0.as_slice(),
+            moon_latitude::PERT_1.as_slice(),
+            moon_latitude::PERT_2.as_slice(),
+            moon_latitude::PERT_3.as_slice(),
         ],
         &args,
         &t_pow,
@@ -489,7 +490,7 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
     // S3 main is a *cosine* series (elpmpp02.pdf §2.2.1), and corrections
     // include the additional `−(2/3)·A·δν/ν` term per §4.4.1.
     let r_main = eval_main_series(
-        moon_distance::MAIN,
+        moon_distance::MAIN.as_slice(),
         &args,
         &t_pow,
         true, // is_distance
@@ -498,10 +499,10 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
     );
     let r_pert = eval_pert_series(
         &[
-            moon_distance::PERT_0,
-            moon_distance::PERT_1,
-            moon_distance::PERT_2,
-            moon_distance::PERT_3,
+            moon_distance::PERT_0.as_slice(),
+            moon_distance::PERT_1.as_slice(),
+            moon_distance::PERT_2.as_slice(),
+            moon_distance::PERT_3.as_slice(),
         ],
         &args,
         &t_pow,
@@ -527,7 +528,7 @@ struct SeriesPart {
 
 /// Evaluate a main-problem series (S1, S2, or S3) with corrections.
 fn eval_main_series(
-    terms: &[(i32, i32, i32, i32, f64, f64, f64, f64, f64, f64, f64)],
+    terms: &[ElpMainTerm],
     args: &Args,
     t_pow: &[f64; 5],
     is_distance: bool,
@@ -536,7 +537,11 @@ fn eval_main_series(
 ) -> SeriesPart {
     let mut value = 0.0;
     let mut dot = 0.0;
-    for &(i1, i2, i3, i4, a_raw, b1, b2, b3, b4, b5, _b6) in terms {
+    for term in terms {
+        let (i1, i2, i3, i4, a_raw, b1, b2, b3, b4, b5) = (
+            term.i1, term.i2, term.i3, term.i4, term.amp, term.b1, term.b2, term.b3, term.b4,
+            term.b5,
+        );
         // Apply corrections in the file's native units (arcsec for S1/S2,
         // km for S3) — B partials are in per-σ ratios so the result stays
         // in those units. Convert to radian at the very end if needed.
@@ -581,23 +586,7 @@ fn eval_main_series(
 /// `t^n · (S sin φ + C cos φ)` with φ accumulating Delaunay + planetary +
 /// ζ multipliers.
 fn eval_pert_series(
-    groups: &[&[(
-        f64,
-        f64,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-        i32,
-    )]],
+    groups: &[&[ElpPertTerm]],
     args: &Args,
     t_pow: &[f64; 5],
     arcsec_to_radian: bool,
@@ -616,7 +605,11 @@ fn eval_pert_series(
         } else {
             0.0
         };
-        for &(s_raw, c_raw, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13) in group {
+        for term in group {
+            let (s_raw, c_raw, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13) = (
+                term.s, term.c, term.i1, term.i2, term.i3, term.i4, term.i5, term.i6, term.i7,
+                term.i8, term.i9, term.i10, term.i11, term.i12, term.i13,
+            );
             let s = s_raw * scale;
             let c = c_raw * scale;
             let mut phase = 0.0;

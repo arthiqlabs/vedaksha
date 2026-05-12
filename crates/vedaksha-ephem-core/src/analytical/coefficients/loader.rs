@@ -195,18 +195,25 @@ pub struct Header {
 /// Returns [`LoadError`] if the blob is too short, has the wrong magic,
 /// or uses an unsupported version.
 pub fn parse_header(bytes: &[u8]) -> Result<Header, LoadError> {
-    if bytes.len() < HEADER_LEN {
-        return Err(LoadError::HeaderTooShort);
-    }
-    if bytes[..8] != MAGIC {
+    let header: &[u8; HEADER_LEN] = bytes
+        .get(..HEADER_LEN)
+        .and_then(|s| s.try_into().ok())
+        .ok_or(LoadError::HeaderTooShort)?;
+    let mut magic = [0u8; 8];
+    magic.copy_from_slice(&header[0..8]);
+    if magic != MAGIC {
         return Err(LoadError::BadMagic);
     }
-    let version = u32::from_le_bytes(bytes[8..12].try_into().unwrap());
+    let mut buf4 = [0u8; 4];
+    buf4.copy_from_slice(&header[8..12]);
+    let version = u32::from_le_bytes(buf4);
     if version != VERSION {
         return Err(LoadError::UnsupportedVersion(version));
     }
-    let record_size = u32::from_le_bytes(bytes[12..16].try_into().unwrap());
-    let record_count = u32::from_le_bytes(bytes[16..20].try_into().unwrap());
+    buf4.copy_from_slice(&header[12..16]);
+    let record_size = u32::from_le_bytes(buf4);
+    buf4.copy_from_slice(&header[16..20]);
+    let record_count = u32::from_le_bytes(buf4);
     Ok(Header {
         version,
         record_size,
@@ -214,10 +221,7 @@ pub fn parse_header(bytes: &[u8]) -> Result<Header, LoadError> {
     })
 }
 
-fn check_payload(
-    bytes: &[u8],
-    expected_record_size: u32,
-) -> Result<(Header, &[u8]), LoadError> {
+fn check_payload(bytes: &[u8], expected_record_size: u32) -> Result<(Header, &[u8]), LoadError> {
     let header = parse_header(bytes)?;
     if header.record_size != expected_record_size {
         return Err(LoadError::RecordSizeMismatch {
@@ -236,14 +240,21 @@ fn check_payload(
     Ok((header, payload))
 }
 
+/// Bounds-checked little-endian `f64` read. Caller guarantees `off + 8 <= b.len()`
+/// (we verify `payload.len() == record_count * record_size` upstream).
 #[inline]
 fn read_f64(b: &[u8], off: usize) -> f64 {
-    f64::from_le_bytes(b[off..off + 8].try_into().unwrap())
+    let mut buf = [0u8; 8];
+    buf.copy_from_slice(&b[off..off + 8]);
+    f64::from_le_bytes(buf)
 }
 
+/// Bounds-checked little-endian `i32` read. Caller guarantees `off + 4 <= b.len()`.
 #[inline]
 fn read_i32(b: &[u8], off: usize) -> i32 {
-    i32::from_le_bytes(b[off..off + 4].try_into().unwrap())
+    let mut buf = [0u8; 4];
+    buf.copy_from_slice(&b[off..off + 4]);
+    i32::from_le_bytes(buf)
 }
 
 /// Decode a VSOP87A coefficient blob.
