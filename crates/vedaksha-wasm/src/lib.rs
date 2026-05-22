@@ -302,11 +302,19 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
         input.bodies
     };
 
-    // Compute positions
-    let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::new();
-    for name in &body_names {
-        let body = body_from_name(name).ok_or_else(|| format!("Unknown body: {name}"))?;
-        let pos = coordinates::apparent_position(&provider, body, jd)
+    // Compute positions via the batch API: one shared memoizing provider so
+    // the ELP/MPP02 lunar series pulled into every planet's light-time
+    // correction is evaluated once per timestamp instead of once per body.
+    // Output is bit-identical to per-body computation.
+    let bodies: Vec<vedaksha_ephem_core::bodies::Body> = body_names
+        .iter()
+        .map(|name| body_from_name(name).ok_or_else(|| format!("Unknown body: {name}")))
+        .collect::<Result<_, _>>()?;
+    let results = coordinates::apparent_positions(&provider, &bodies, jd);
+    let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::with_capacity(body_names.len());
+    for (name, (_body, res)) in body_names.iter().zip(results.iter()) {
+        let pos = res
+            .as_ref()
             .map_err(|e| format!("Failed to compute {name}: {e}"))?;
         planet_data.push((
             name.clone(),
