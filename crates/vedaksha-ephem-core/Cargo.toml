@@ -23,7 +23,12 @@ serde_json = { workspace = true }
 # not require them during `cargo publish`.
 vedaksha-astro = { path = "../vedaksha-astro" }
 vedaksha-vedic = { path = "../vedaksha-vedic" }
+criterion = "0.5"
 
 [features]
 default = ["std"]
 std = []
+
+[[bench]]
+name = "ephemeris"
+harness = false
