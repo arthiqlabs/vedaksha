@@ -567,14 +567,16 @@ fn eval_main_series(
             }
         }
 
+        // Single argument reduction for both sin and cos (same phase).
+        let (sin_phase, cos_phase) = libm::sincos(phase);
         match kind {
             SeriesKind::Sine => {
-                value += a_corrected * libm::sin(phase);
-                dot += a_corrected * omega * libm::cos(phase);
+                value += a_corrected * sin_phase;
+                dot += a_corrected * omega * cos_phase;
             }
             SeriesKind::Cosine => {
-                value += a_corrected * libm::cos(phase);
-                dot += -a_corrected * omega * libm::sin(phase);
+                value += a_corrected * cos_phase;
+                dot += -a_corrected * omega * sin_phase;
             }
         }
     }
@@ -633,8 +635,7 @@ fn eval_pert_series(
                     omega += (k as f64) * coef * t_pow[k - 1];
                 }
             }
-            let sin_phi = libm::sin(phase);
-            let cos_phi = libm::cos(phase);
+            let (sin_phi, cos_phi) = libm::sincos(phase);
             // f(t) = t^n · (s sin φ + c cos φ)
             // f'(t) = n·t^{n-1}·(s sin φ + c cos φ)
             //       + t^n · ω · (s cos φ − c sin φ)

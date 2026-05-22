@@ -75,8 +75,8 @@ fn eval_series(series: &[&[Vsop87Term]; 6], t: f64) -> (f64, f64) {
             let b = term.phase;
             let c = term.frequency;
             let angle = b + c * t;
-            let cos_val = libm::cos(angle);
-            let sin_val = libm::sin(angle);
+            // Single argument reduction for both sin and cos (same angle).
+            let (sin_val, cos_val) = libm::sincos(angle);
             sum_cos += a * cos_val;
             sum_sin_c += a * c * sin_val;
         }
