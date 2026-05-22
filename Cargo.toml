@@ -32,3 +32,23 @@ vedaksha-mcp = { version = "3.0.1", path = "crates/vedaksha-mcp" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
+
+# Release tuning for the numeric hot path. The ephemeris evaluation crosses
+# crate boundaries (vedaksha-astro → vedaksha-ephem-core → vedaksha-math →
+# libm); fat LTO + a single codegen unit let those inline and cross-optimize.
+# These settings do NOT change floating-point results — Rust/LLVM never
+# auto-contract FMA or reassociate FP without fast-math (not enabled), so the
+# clean-room bit-determinism is preserved. Cargo forces panic=unwind for test
+# and bench targets regardless of the setting below.
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+# Benchmarks build under the bench profile (derived from release); keep the
+# cross-crate inlining so criterion measures the shipped configuration.
+[profile.bench]
+lto = "fat"
+codegen-units = 1
