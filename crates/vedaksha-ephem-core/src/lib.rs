@@ -47,6 +47,8 @@ extern crate alloc;
 pub mod aberration;
 pub mod analytical;
 pub mod bodies;
+#[cfg(feature = "std")]
+pub mod cache;
 pub mod coordinates;
 pub mod delta_t;
 pub mod error;

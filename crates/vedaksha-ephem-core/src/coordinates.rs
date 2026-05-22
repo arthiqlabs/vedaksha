@@ -261,6 +261,32 @@ pub fn apparent_position(
     })
 }
 
+/// Compute apparent ecliptic positions for many bodies at a single instant.
+///
+/// Batch entry point for chart computation. All bodies share one memoizing
+/// provider ([`crate::cache::CachingProvider`]), so state lookups that recur
+/// across bodies and across the daily-motion timesteps are evaluated once and
+/// reused. The dominant saving is the ELP/MPP02 lunar series pulled into
+/// [`earth_state`] during every planet's light-time correction: at each shared
+/// timestamp it is now evaluated once rather than once per body.
+///
+/// Results are **bit-identical** to calling [`apparent_position`] per body —
+/// only redundant work is removed. One entry is returned per input body, in
+/// order; a per-body error (e.g. Pluto on the analytical provider) is returned
+/// in place rather than aborting the whole chart.
+#[cfg(feature = "std")]
+pub fn apparent_positions(
+    provider: &dyn EphemerisProvider,
+    bodies: &[Body],
+    jd: f64,
+) -> Vec<(Body, Result<ApparentPosition, ComputeError>)> {
+    let cached = crate::cache::CachingProvider::new(provider);
+    bodies
+        .iter()
+        .map(|&body| (body, apparent_position(&cached, body, jd)))
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,5 +305,58 @@ mod tests {
         };
         assert!((ec.longitude - 1.0).abs() < f64::EPSILON);
         assert!((ec.latitude - 0.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn batch_matches_per_body_bit_for_bit() {
+        use crate::analytical::AnalyticalProvider;
+
+        let provider = AnalyticalProvider::new();
+        let jd = 2_460_676.5;
+        let bodies = [
+            Body::Sun,
+            Body::Moon,
+            Body::Mercury,
+            Body::Venus,
+            Body::Mars,
+            Body::Jupiter,
+            Body::Saturn,
+            Body::Uranus,
+            Body::Neptune,
+            Body::MeanNode,
+            Body::TrueNode,
+        ];
+
+        let batch = apparent_positions(&provider, &bodies, jd);
+        assert_eq!(batch.len(), bodies.len());
+
+        for (i, &body) in bodies.iter().enumerate() {
+            let single = apparent_position(&provider, body, jd).expect("per-body should succeed");
+            let (batch_body, batch_res) = &batch[i];
+            assert_eq!(*batch_body, body);
+            let b = batch_res.as_ref().expect("batch body should succeed");
+
+            // The memoizing batch path must be bit-identical to per-body.
+            assert_eq!(
+                b.ecliptic.longitude.to_bits(),
+                single.ecliptic.longitude.to_bits(),
+                "{body:?} longitude differs"
+            );
+            assert_eq!(
+                b.ecliptic.latitude.to_bits(),
+                single.ecliptic.latitude.to_bits(),
+                "{body:?} latitude differs"
+            );
+            assert_eq!(
+                b.ecliptic.distance.to_bits(),
+                single.ecliptic.distance.to_bits(),
+                "{body:?} distance differs"
+            );
+            assert_eq!(
+                b.longitude_speed.to_bits(),
+                single.longitude_speed.to_bits(),
+                "{body:?} speed differs"
+            );
+        }
     }
 }

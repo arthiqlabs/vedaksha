@@ -17,7 +17,7 @@ use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::analytical::elp_mpp02::elp_geocentric;
 use vedaksha_ephem_core::analytical::vsop87a::{Planet, vsop87a_heliocentric};
 use vedaksha_ephem_core::bodies::Body;
-use vedaksha_ephem_core::coordinates::apparent_position;
+use vedaksha_ephem_core::coordinates::{apparent_position, apparent_positions};
 
 /// A representative contemporary epoch (≈ 2025), well inside the supported range.
 const JD: f64 = 2_460_676.5;
@@ -74,6 +74,19 @@ fn bench_chart(c: &mut Criterion) {
     });
 }
 
+fn bench_chart_batch(c: &mut Criterion) {
+    // Same 11-body chart via the batch API, which shares one memoizing
+    // provider across bodies and daily-motion timesteps. Compare against
+    // `apparent_position_full_chart` to see the redundant-work saving.
+    let provider = AnalyticalProvider::new();
+    c.bench_function("apparent_positions_batch_chart", |b| {
+        b.iter(|| {
+            let out = apparent_positions(&provider, black_box(CHART_BODIES), black_box(JD));
+            black_box(out);
+        });
+    });
+}
+
 fn bench_transit_scan(c: &mut Criterion) {
     // 365 daily moon positions — models transit/dasha scanning where the same
     // series is evaluated across many dates (the batch-amortization target).
@@ -94,6 +107,7 @@ criterion_group!(
     bench_planet,
     bench_moon,
     bench_chart,
+    bench_chart_batch,
     bench_transit_scan
 );
 criterion_main!(benches);
