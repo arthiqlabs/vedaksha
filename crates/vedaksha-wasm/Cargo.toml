@@ -36,7 +36,9 @@ wasm-bindgen-test = "0.3"
 [features]
 default = []
 
-# wasm-pack post-processing: optimize hard and keep the SIMD opcodes emitted
-# by the +simd128 build (RUSTFLAGS set in the release workflow's WASM job).
+# wasm-pack post-processing. `--all-features` lets wasm-opt accept every wasm
+# feature Rust emits (SIMD from the +simd128 build, plus bulk-memory,
+# mutable-globals, sign-ext, …) — a bare `--enable-simd` would disable the
+# others and wasm-opt's validator then rejects the bulk-memory ops.
 [package.metadata.wasm-pack.profile.release]
-wasm-opt = ['-O3', '--enable-simd']
+wasm-opt = ['-O3', '--all-features']
