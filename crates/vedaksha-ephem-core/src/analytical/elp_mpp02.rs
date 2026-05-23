@@ -580,7 +580,14 @@ fn eval_main_series(
         // Corrections in the file's native units (arcsec for S1/S2, km for
         // S3); convert to radian at the end if requested.
         let a_native = corrected_main_amplitude(
-            term.amp, term.b1, term.b2, term.b3, term.b4, term.b5, args, is_distance,
+            term.amp,
+            term.b1,
+            term.b2,
+            term.b3,
+            term.b4,
+            term.b5,
+            args,
+            is_distance,
         );
         let a = if arcsec_to_radian {
             arcsec_to_rad(a_native)
@@ -611,9 +618,7 @@ fn eval_main_series(
         }
         let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
         let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
-        for (((&a, &omega), &sin_p), &cos_p) in
-            amps.iter().zip(&omegas).zip(&sin4).zip(&cos4)
-        {
+        for (((&a, &omega), &sin_p), &cos_p) in amps.iter().zip(&omegas).zip(&sin4).zip(&cos4) {
             match kind {
                 SeriesKind::Sine => {
                     value += a * sin_p;
