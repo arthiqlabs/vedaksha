@@ -163,27 +163,27 @@ fn light_time_geocentric(
     body: Body,
     jd: f64,
 ) -> Result<[f64; 3], ComputeError> {
+    // For non-Moon bodies the geocentric vector subtracts Earth's barycentric
+    // position at the retarded time t−τ. Re-evaluating Earth there pulls the
+    // expensive ELP/MPP02 lunar series (via `earth_state`) at every iteration
+    // and for every body. Instead, anchor Earth's state once at the
+    // observation time and extrapolate to first order:
+    //   Earth(t−τ) ≈ Earth(t) + v_Earth·(−τ).
+    // τ is at most a few hours, so the (second-derivative) error in Earth's
+    // position is sub-milliarcsec on the apparent direction. The anchor's
+    // `compute_state(Moon, jd)` is shared across bodies by the memoizing
+    // provider, so a full chart evaluates the lunar series ~once per timestep
+    // instead of ~75 times. The Moon itself does not use `earth_state` (it
+    // scales the rel-EMB vector directly), so its own position is unaffected.
+    let earth_anchor = if body == Body::Moon {
+        None
+    } else {
+        Some(earth_state(provider, jd)?)
+    };
+
     let mut tau = 0.0_f64;
     for _ in 0..10 {
-        let target_state = provider.compute_state(body, jd - tau)?;
-        let target_pos = if body == Body::Moon {
-            // Convert Moon-rel-EMB to Moon-geocentric.
-            [
-                target_state.position.x * MOON_GEO_FACTOR,
-                target_state.position.y * MOON_GEO_FACTOR,
-                target_state.position.z * MOON_GEO_FACTOR,
-            ]
-        } else {
-            // Body is barycentric; subtract Earth barycentric position
-            // at the SAME retarded time t-τ (planetary aberration form).
-            let (earth_at_ret, _) = earth_state(provider, jd - tau)?;
-            [
-                target_state.position.x - earth_at_ret.x,
-                target_state.position.y - earth_at_ret.y,
-                target_state.position.z - earth_at_ret.z,
-            ]
-        };
-
+        let target_pos = retarded_geocentric(provider, body, jd, tau, earth_anchor)?;
         let r = libm::sqrt(
             target_pos[0] * target_pos[0]
                 + target_pos[1] * target_pos[1]
@@ -197,23 +197,39 @@ fn light_time_geocentric(
         tau = tau_new;
     }
 
-    // Final iteration if not converged: recompute at last tau.
+    // Not converged in 10 iterations: evaluate once more at the last τ.
+    retarded_geocentric(provider, body, jd, tau, earth_anchor)
+}
+
+/// Geocentric vector `[x, y, z]` (AU, J2000 mean equatorial) to `body` at the
+/// retarded time `jd − tau`.
+///
+/// For the Moon, scales the rel-EMB vector by `MOON_GEO_FACTOR`. For other
+/// bodies, subtracts Earth's position obtained by first-order extrapolation of
+/// `earth_anchor` (Earth's `(position, velocity)` at the observation time `jd`)
+/// to `jd − tau` — see [`light_time_geocentric`].
+fn retarded_geocentric(
+    provider: &dyn EphemerisProvider,
+    body: Body,
+    jd: f64,
+    tau: f64,
+    earth_anchor: Option<(Position, Velocity)>,
+) -> Result<[f64; 3], ComputeError> {
     let target_state = provider.compute_state(body, jd - tau)?;
-    let target_pos = if body == Body::Moon {
-        [
+    if body == Body::Moon {
+        return Ok([
             target_state.position.x * MOON_GEO_FACTOR,
             target_state.position.y * MOON_GEO_FACTOR,
             target_state.position.z * MOON_GEO_FACTOR,
-        ]
-    } else {
-        let (earth_at_ret, _) = earth_state(provider, jd - tau)?;
-        [
-            target_state.position.x - earth_at_ret.x,
-            target_state.position.y - earth_at_ret.y,
-            target_state.position.z - earth_at_ret.z,
-        ]
-    };
-    Ok(target_pos)
+        ]);
+    }
+    let (earth_pos, earth_vel) = earth_anchor.expect("non-Moon body has an Earth anchor");
+    let dt = -tau;
+    Ok([
+        target_state.position.x - (earth_pos.x + earth_vel.x * dt),
+        target_state.position.y - (earth_pos.y + earth_vel.y * dt),
+        target_state.position.z - (earth_pos.z + earth_vel.z * dt),
+    ])
 }
 
 /// Compute the apparent ecliptic position of a body at a given Julian Day.
