@@ -16,6 +16,7 @@
 
 pub mod coefficients;
 pub mod elp_mpp02;
+mod simd_trig;
 pub mod vsop87a;
 
 use crate::bodies::Body;

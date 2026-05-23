@@ -56,8 +56,11 @@
 
 use core::f64::consts::PI;
 
+use wide::f64x4;
+
 use crate::analytical::coefficients::loader::{ElpMainTerm, ElpPertTerm};
 use crate::analytical::coefficients::{moon_distance, moon_latitude, moon_longitude};
+use crate::analytical::simd_trig::sincos_f64x4;
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -537,49 +540,80 @@ fn eval_main_series(
 ) -> SeriesPart {
     let mut value = 0.0;
     let mut dot = 0.0;
-    for term in terms {
-        let (i1, i2, i3, i4, a_raw, b1, b2, b3, b4, b5) = (
-            term.i1, term.i2, term.i3, term.i4, term.amp, term.b1, term.b2, term.b3, term.b4,
-            term.b5,
-        );
-        // Apply corrections in the file's native units (arcsec for S1/S2,
-        // km for S3) — B partials are in per-σ ratios so the result stays
-        // in those units. Convert to radian at the very end if needed.
-        let a_corrected_native =
-            corrected_main_amplitude(a_raw, b1, b2, b3, b4, b5, args, is_distance);
-        let a_corrected = if arcsec_to_radian {
-            arcsec_to_rad(a_corrected_native)
-        } else {
-            a_corrected_native
-        };
 
-        // Phase φ = i1·D + i2·F + i3·l + i4·l'.
+    // Per-term corrected amplitude `a`, phase φ = i1·D + i2·F + i3·l + i4·l',
+    // and its time derivative ω. The arithmetic is identical to the scalar
+    // path — only the sin/cos evaluation is vectorized (four terms at a time),
+    // with a scalar `libm` tail for the remainder.
+    let term_pao = |term: &ElpMainTerm| -> (f64, f64, f64) {
+        // Corrections in the file's native units (arcsec for S1/S2, km for
+        // S3); convert to radian at the end if requested.
+        let a_native = corrected_main_amplitude(
+            term.amp, term.b1, term.b2, term.b3, term.b4, term.b5, args, is_distance,
+        );
+        let a = if arcsec_to_radian {
+            arcsec_to_rad(a_native)
+        } else {
+            a_native
+        };
         let mut phase = 0.0;
         let mut omega = 0.0;
         for k in 0..5 {
-            let coef = (i1 as f64) * args.del[0][k]
-                + (i2 as f64) * args.del[1][k]
-                + (i3 as f64) * args.del[2][k]
-                + (i4 as f64) * args.del[3][k];
+            let coef = (term.i1 as f64) * args.del[0][k]
+                + (term.i2 as f64) * args.del[1][k]
+                + (term.i3 as f64) * args.del[2][k]
+                + (term.i4 as f64) * args.del[3][k];
             phase += coef * t_pow[k];
             if k >= 1 {
                 omega += (k as f64) * coef * t_pow[k - 1];
             }
         }
+        (phase, omega, a)
+    };
 
-        // Single argument reduction for both sin and cos (same phase).
-        let (sin_phase, cos_phase) = libm::sincos(phase);
-        match kind {
-            SeriesKind::Sine => {
-                value += a_corrected * sin_phase;
-                dot += a_corrected * omega * cos_phase;
-            }
-            SeriesKind::Cosine => {
-                value += a_corrected * cos_phase;
-                dot += -a_corrected * omega * sin_phase;
+    let mut chunks = terms.chunks_exact(4);
+    for chunk in chunks.by_ref() {
+        let mut phases = [0.0_f64; 4];
+        let mut omegas = [0.0_f64; 4];
+        let mut amps = [0.0_f64; 4];
+        for (lane, term) in chunk.iter().enumerate() {
+            let (p, o, a) = term_pao(term);
+            phases[lane] = p;
+            omegas[lane] = o;
+            amps[lane] = a;
+        }
+        let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
+        let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
+        for (((&a, &omega), &sin_p), &cos_p) in
+            amps.iter().zip(&omegas).zip(&sin4).zip(&cos4)
+        {
+            match kind {
+                SeriesKind::Sine => {
+                    value += a * sin_p;
+                    dot += a * omega * cos_p;
+                }
+                SeriesKind::Cosine => {
+                    value += a * cos_p;
+                    dot += -a * omega * sin_p;
+                }
             }
         }
     }
+    for term in chunks.remainder() {
+        let (phase, omega, a) = term_pao(term);
+        let (sin_p, cos_p) = libm::sincos(phase);
+        match kind {
+            SeriesKind::Sine => {
+                value += a * sin_p;
+                dot += a * omega * cos_p;
+            }
+            SeriesKind::Cosine => {
+                value += a * cos_p;
+                dot += -a * omega * sin_p;
+            }
+        }
+    }
+
     SeriesPart { value, dot }
 }
 
@@ -600,6 +634,37 @@ fn eval_pert_series(
     };
     let mut value = 0.0;
     let mut dot = 0.0;
+
+    // Per-term scaled (s, c), phase φ (Delaunay + planetary + ζ multipliers),
+    // and its derivative ω. Identical arithmetic to the scalar path; sin/cos
+    // is vectorized four terms at a time below, with a scalar `libm` tail.
+    let term_poc = |term: &ElpPertTerm| -> (f64, f64, f64, f64) {
+        let mut phase = 0.0;
+        let mut omega = 0.0;
+        for k in 0..5 {
+            let coef = (term.i1 as f64) * args.del[0][k]
+                + (term.i2 as f64) * args.del[1][k]
+                + (term.i3 as f64) * args.del[2][k]
+                + (term.i4 as f64) * args.del[3][k]
+                + (term.i5 as f64) * args.pla[0][k]
+                + (term.i6 as f64) * args.pla[1][k]
+                + (term.i7 as f64) * args.pla[2][k]
+                + (term.i8 as f64) * args.pla[3][k]
+                + (term.i9 as f64) * args.pla[4][k]
+                + (term.i10 as f64) * args.pla[5][k]
+                + (term.i11 as f64) * args.pla[6][k]
+                + (term.i12 as f64) * args.pla[7][k]
+                + (term.i13 as f64) * args.zeta[k];
+            phase += coef * t_pow[k];
+            if k >= 1 {
+                omega += (k as f64) * coef * t_pow[k - 1];
+            }
+        }
+        (phase, omega, term.s * scale, term.c * scale)
+    };
+
+    // f(t)  = t^n · (s sin φ + c cos φ)
+    // f'(t) = n·t^{n-1}·(s sin φ + c cos φ) + t^n · ω · (s cos φ − c sin φ)
     for (n, &group) in groups.iter().enumerate() {
         let tn = t_pow[n];
         let dtn = if n >= 1 {
@@ -607,44 +672,41 @@ fn eval_pert_series(
         } else {
             0.0
         };
-        for term in group {
-            let (s_raw, c_raw, i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13) = (
-                term.s, term.c, term.i1, term.i2, term.i3, term.i4, term.i5, term.i6, term.i7,
-                term.i8, term.i9, term.i10, term.i11, term.i12, term.i13,
-            );
-            let s = s_raw * scale;
-            let c = c_raw * scale;
-            let mut phase = 0.0;
-            let mut omega = 0.0;
-            for k in 0..5 {
-                let coef = (i1 as f64) * args.del[0][k]
-                    + (i2 as f64) * args.del[1][k]
-                    + (i3 as f64) * args.del[2][k]
-                    + (i4 as f64) * args.del[3][k]
-                    + (i5 as f64) * args.pla[0][k]
-                    + (i6 as f64) * args.pla[1][k]
-                    + (i7 as f64) * args.pla[2][k]
-                    + (i8 as f64) * args.pla[3][k]
-                    + (i9 as f64) * args.pla[4][k]
-                    + (i10 as f64) * args.pla[5][k]
-                    + (i11 as f64) * args.pla[6][k]
-                    + (i12 as f64) * args.pla[7][k]
-                    + (i13 as f64) * args.zeta[k];
-                phase += coef * t_pow[k];
-                if k >= 1 {
-                    omega += (k as f64) * coef * t_pow[k - 1];
-                }
+
+        let mut chunks = group.chunks_exact(4);
+        for chunk in chunks.by_ref() {
+            let mut phases = [0.0_f64; 4];
+            let mut omegas = [0.0_f64; 4];
+            let mut ss = [0.0_f64; 4];
+            let mut cc = [0.0_f64; 4];
+            for (lane, term) in chunk.iter().enumerate() {
+                let (p, o, s, c) = term_poc(term);
+                phases[lane] = p;
+                omegas[lane] = o;
+                ss[lane] = s;
+                cc[lane] = c;
             }
-            let (sin_phi, cos_phi) = libm::sincos(phase);
-            // f(t) = t^n · (s sin φ + c cos φ)
-            // f'(t) = n·t^{n-1}·(s sin φ + c cos φ)
-            //       + t^n · ω · (s cos φ − c sin φ)
-            let inner = s * sin_phi + c * cos_phi;
-            let inner_dot = s * cos_phi - c * sin_phi;
+            let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
+            let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
+            for (((&s, &c), (&sin_p, &cos_p)), &omega) in
+                ss.iter().zip(&cc).zip(sin4.iter().zip(&cos4)).zip(&omegas)
+            {
+                let inner = s * sin_p + c * cos_p;
+                let inner_dot = s * cos_p - c * sin_p;
+                value += tn * inner;
+                dot += dtn * inner + tn * omega * inner_dot;
+            }
+        }
+        for term in chunks.remainder() {
+            let (phase, omega, s, c) = term_poc(term);
+            let (sin_p, cos_p) = libm::sincos(phase);
+            let inner = s * sin_p + c * cos_p;
+            let inner_dot = s * cos_p - c * sin_p;
             value += tn * inner;
             dot += dtn * inner + tn * omega * inner_dot;
         }
     }
+
     SeriesPart { value, dot }
 }
 

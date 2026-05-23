@@ -13,6 +13,9 @@ description = "Astronomy engine: JPL DE441 reader, coordinate transformations, p
 [dependencies]
 libm = "0.2"
 vedaksha-math = { version = "3.0.0", path = "../vedaksha-math" }
+# SIMD lanes (safe wrapper over core::arch; no_std). Used to vectorize the
+# ELP/MPP02 lunar-series trig evaluation.
+wide = { version = "0.7", default-features = false }
 
 [dev-dependencies]
 serde = { workspace = true }
