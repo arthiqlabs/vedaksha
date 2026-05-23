@@ -131,7 +131,7 @@ fn compute_sub_periods(
     current_level: u8,
     max_level: u8,
 ) -> Vec<AshtottariPeriod> {
-    let mut periods = Vec::new();
+    let mut periods = Vec::with_capacity(8);
     let mut current_jd = start_jd;
 
     for i in 0..8 {

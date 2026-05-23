@@ -89,7 +89,7 @@ fn compute_sub_periods(
     max_level: u8,
 ) -> Vec<DashaPeriod> {
     let parent_idx = dasha_sequence_index(parent_lord);
-    let mut periods = Vec::new();
+    let mut periods = Vec::with_capacity(9);
     let mut current_jd = start_jd;
 
     // Sub-periods start from the parent lord, then follow the sequence.
