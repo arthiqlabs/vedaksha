@@ -282,6 +282,25 @@ pub fn apparent_position(
     apparent_position_with_frames(provider, body, jd, &frame, &frame_before, &frame_after)
 }
 
+/// Apparent ecliptic coordinates **without** daily motion.
+///
+/// Identical to [`apparent_position`]'s `.ecliptic`, but skips the two extra
+/// half-day evaluations that the central-difference `longitude_speed` needs —
+/// roughly a third of the work. Use this when only position is required (e.g.
+/// muhurta/panchanga sweeps, raw ephemeris position queries); use
+/// [`apparent_position`] when daily motion / retrograde state is needed.
+///
+/// # Errors
+/// Returns [`ComputeError`] if the provider cannot compute the body's state.
+pub fn ecliptic_position(
+    provider: &dyn EphemerisProvider,
+    body: Body,
+    jd: f64,
+) -> Result<EclipticCoords, ComputeError> {
+    let frame = frame_for(delta_t::ut1_to_tt(jd));
+    compute_ecliptic_with_frame(provider, body, jd, &frame)
+}
+
 /// [`apparent_position`] with the three central-difference frames supplied by
 /// the caller, so a batch can build them once and reuse them across all bodies
 /// rather than recomputing nutation/precession/obliquity per body.
@@ -426,6 +445,34 @@ mod tests {
                 b.longitude_speed.to_bits(),
                 single.longitude_speed.to_bits(),
                 "{body:?} speed differs"
+            );
+        }
+    }
+
+    #[test]
+    fn ecliptic_position_matches_apparent_position() {
+        use crate::analytical::AnalyticalProvider;
+
+        let provider = AnalyticalProvider::new();
+        let jd = 2_460_676.5;
+        for body in [Body::Sun, Body::Moon, Body::Mars, Body::Jupiter] {
+            let full = apparent_position(&provider, body, jd).expect("apparent_position");
+            let pos = ecliptic_position(&provider, body, jd).expect("ecliptic_position");
+            // Position-only path must equal apparent_position's ecliptic exactly.
+            assert_eq!(
+                pos.longitude.to_bits(),
+                full.ecliptic.longitude.to_bits(),
+                "{body:?} longitude"
+            );
+            assert_eq!(
+                pos.latitude.to_bits(),
+                full.ecliptic.latitude.to_bits(),
+                "{body:?} latitude"
+            );
+            assert_eq!(
+                pos.distance.to_bits(),
+                full.ecliptic.distance.to_bits(),
+                "{body:?} distance"
             );
         }
     }

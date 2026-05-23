@@ -925,9 +925,11 @@ impl McpServer {
         let min_quality = input.min_quality.unwrap_or(0.5);
 
         // Muhurta needs sidereal Sun and Moon longitudes (Lahiri ayanamsha).
+        // Position only — daily motion is not used, so skip the central-
+        // difference work via `ecliptic_position` (≈3× cheaper per step).
         let get_moon_sidereal = |jd: f64| -> Option<f64> {
-            let pos = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
-            let tropical_lon = pos.ecliptic.longitude.to_degrees();
+            let pos = coordinates::ecliptic_position(&provider, Body::Moon, jd).ok()?;
+            let tropical_lon = pos.longitude.to_degrees();
             Some(vedaksha_astro::sidereal::tropical_to_sidereal(
                 tropical_lon,
                 vedaksha_astro::sidereal::Ayanamsha::Lahiri,
@@ -936,8 +938,8 @@ impl McpServer {
         };
 
         let get_sun_sidereal = |jd: f64| -> Option<f64> {
-            let pos = coordinates::apparent_position(&provider, Body::Sun, jd).ok()?;
-            let tropical_lon = pos.ecliptic.longitude.to_degrees();
+            let pos = coordinates::ecliptic_position(&provider, Body::Sun, jd).ok()?;
+            let tropical_lon = pos.longitude.to_degrees();
             Some(vedaksha_astro::sidereal::tropical_to_sidereal(
                 tropical_lon,
                 vedaksha_astro::sidereal::Ayanamsha::Lahiri,
