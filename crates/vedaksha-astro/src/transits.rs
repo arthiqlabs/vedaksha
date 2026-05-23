@@ -77,6 +77,12 @@ pub fn search_transits(
     let mut events = Vec::new();
 
     for (body_name, body_idx) in &config.transiting_bodies {
+        // Coarse-scan this body's longitudes once on the shared time grid. The
+        // longitude at a given (body, jd) is independent of the natal point and
+        // aspect, so caching it removes the `N_natal × N_aspect` redundant
+        // re-evaluation that the inner loops would otherwise trigger per step.
+        let coarse = coarse_scan(config, *body_idx, get_longitude);
+
         for (natal_name, natal_lon) in &config.natal_positions {
             for (aspect_name, aspect_angle) in &config.aspect_types {
                 // For an aspect at angle A, there are two crossing points
@@ -91,6 +97,7 @@ pub fn search_transits(
                 for &search_angle in &search_angles {
                     scan_for_crossings(
                         config,
+                        &coarse,
                         *body_idx,
                         body_name,
                         natal_name,
@@ -114,10 +121,34 @@ pub fn search_transits(
     events
 }
 
-/// Scan a single directed angle for zero-crossings of the aspect function.
+/// Evaluate one body's longitude on the coarse `step_size` grid once, so the
+/// per-(natal, aspect) crossing scans below reuse it instead of recomputing.
+///
+/// Returns `(jd, longitude)` for the same grid `scan_for_crossings` walks:
+/// `start_jd`, then each `(t + step).min(end_jd)` up to and including `end_jd`.
+fn coarse_scan(
+    config: &TransitSearchConfig,
+    body_idx: usize,
+    get_longitude: &dyn Fn(usize, f64) -> Option<f64>,
+) -> Vec<(f64, Option<f64>)> {
+    let step = config.step_size;
+    let mut grid = Vec::new();
+    let mut t = config.start_jd;
+    grid.push((t, get_longitude(body_idx, t)));
+    while t < config.end_jd {
+        let next_t = (t + step).min(config.end_jd);
+        grid.push((next_t, get_longitude(body_idx, next_t)));
+        t = next_t;
+    }
+    grid
+}
+
+/// Scan a single directed angle for zero-crossings of the aspect function,
+/// over the precomputed coarse longitude grid for this body.
 #[allow(clippy::too_many_arguments)]
 fn scan_for_crossings(
     config: &TransitSearchConfig,
+    coarse: &[(f64, Option<f64>)],
     body_idx: usize,
     body_name: &str,
     natal_name: &str,
@@ -128,13 +159,9 @@ fn scan_for_crossings(
     get_longitude: &dyn Fn(usize, f64) -> Option<f64>,
     events: &mut Vec<TransitEvent>,
 ) {
-    let step = config.step_size;
-    let mut t = config.start_jd;
-    let mut prev_lon = get_longitude(body_idx, t);
-
-    while t < config.end_jd {
-        let next_t = (t + step).min(config.end_jd);
-        let curr_lon = get_longitude(body_idx, next_t);
+    for window in coarse.windows(2) {
+        let (t, prev_lon) = window[0];
+        let (next_t, curr_lon) = window[1];
 
         if let (Some(prev), Some(curr)) = (prev_lon, curr_lon) {
             let prev_f = aspect_function(prev, natal_lon, search_angle);
@@ -169,9 +196,6 @@ fn scan_for_crossings(
                 }
             }
         }
-
-        prev_lon = curr_lon;
-        t = next_t;
     }
 }
 
@@ -254,22 +278,34 @@ fn bisect_transit(
 ) -> Option<f64> {
     let threshold = 1e-8; // ~0.86 microseconds
 
+    // Memoize the low-endpoint longitude: it only changes when `t_low` advances
+    // to the previous midpoint, in which case its longitude is `lon_mid`. This
+    // halves the bisection's ephemeris calls (one per iteration, not two).
+    let mut lon_low: Option<f64> = None;
+
     for _ in 0..max_iter {
         let t_mid = f64::midpoint(t_low, t_high);
         if (t_high - t_low) < threshold {
             return Some(t_mid);
         }
 
-        let lon_low = get_longitude(body_idx, t_low)?;
+        let low = if let Some(l) = lon_low {
+            l
+        } else {
+            let l = get_longitude(body_idx, t_low)?;
+            lon_low = Some(l);
+            l
+        };
         let lon_mid = get_longitude(body_idx, t_mid)?;
 
-        let f_low = aspect_function(lon_low, natal_lon, target_angle);
+        let f_low = aspect_function(low, natal_lon, target_angle);
         let f_mid = aspect_function(lon_mid, natal_lon, target_angle);
 
         if f_low * f_mid < 0.0 {
             t_high = t_mid;
         } else {
             t_low = t_mid;
+            lon_low = Some(lon_mid);
         }
     }
 
@@ -593,5 +629,51 @@ mod tests {
     fn longitude_crosses_basic() {
         assert!(longitude_crosses(350.0, 10.0, 0.0));
         assert!(!longitude_crosses(10.0, 20.0, 0.0));
+    }
+
+    #[test]
+    fn coarse_scan_cached_across_natal_and_aspect() {
+        use core::cell::Cell;
+
+        let calls = Cell::new(0_usize);
+        let get_lon = |_idx: usize, jd: f64| -> Option<f64> {
+            calls.set(calls.get() + 1);
+            Some((jd - BASE_JD).rem_euclid(360.0)) // 1°/day linear sweep
+        };
+
+        let config = TransitSearchConfig {
+            natal_positions: vec![
+                ("N1".into(), 10.0),
+                ("N2".into(), 40.0),
+                ("N3".into(), 70.0),
+                ("N4".into(), 130.0),
+                ("N5".into(), 200.0),
+            ],
+            start_jd: BASE_JD,
+            end_jd: BASE_JD + 365.0,
+            transiting_bodies: vec![("Sun".into(), 0)],
+            aspect_types: vec![
+                ("Conjunction".into(), 0.0),
+                ("Sextile".into(), 60.0),
+                ("Square".into(), 90.0),
+                ("Trine".into(), 120.0),
+            ],
+            max_orb: 1.0,
+            step_size: 1.0,
+        };
+
+        let events = search_transits(&config, &get_lon);
+        assert!(!events.is_empty(), "should detect crossings");
+
+        // The 366-point coarse grid is evaluated once for the body, not once
+        // per (natal × aspect × directed-angle). Uncached that would be
+        // ~366 × 5 × 4 × 1.5 ≈ 11k longitude calls; cached it is the grid plus
+        // bisection refinement on the detected crossings.
+        let total = calls.get();
+        assert!(
+            total < 3000,
+            "search_transits made {total} longitude calls; coarse scan should be \
+             cached across natal/aspect (uncached ≈ 11000)"
+        );
     }
 }
