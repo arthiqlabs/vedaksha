@@ -94,10 +94,45 @@ fn earth_state(
 /// relative to EMB. Multiplying by `(1+EMRAT)/EMRAT` gives the geocentric
 /// vector (Earth-EMB-Moon are collinear, so direction is preserved and
 /// only magnitude changes).
-fn compute_ecliptic(
+/// The time-only part of the coordinate pipeline: the combined
+/// nutation·precession rotation (J2000 mean equatorial → true equatorial of
+/// date) and the true obliquity. These depend only on the timestamp, not the
+/// body, so a chart computes them once per distinct time and reuses them
+/// across all bodies (see [`frame_for`], [`apparent_positions`]).
+#[derive(Clone, Copy, Debug)]
+pub struct CelestialFrame {
+    /// N · P — true equatorial of date from J2000 mean equatorial.
+    combined: Matrix3,
+    /// True obliquity of date (radians).
+    eps_true: f64,
+}
+
+/// Build the [`CelestialFrame`] for a given TT Julian Day.
+///
+/// Identical arithmetic to the inline form previously in `compute_ecliptic`;
+/// extracted so it can be hoisted out of the per-body loop.
+#[must_use]
+pub fn frame_for(jd_tt: f64) -> CelestialFrame {
+    let prec = precession::precession_matrix(jd_tt);
+    let (dpsi, deps) = nutation::nutation(jd_tt);
+    let eps_a = obliquity::mean_obliquity(jd_tt);
+    let eps_true = obliquity::true_obliquity(jd_tt, deps);
+
+    let nut_matrix = Matrix3::rotation_x(-eps_a - deps)
+        .multiply(&Matrix3::rotation_z(-dpsi))
+        .multiply(&Matrix3::rotation_x(eps_a));
+
+    CelestialFrame {
+        combined: nut_matrix.multiply(&prec),
+        eps_true,
+    }
+}
+
+fn compute_ecliptic_with_frame(
     provider: &dyn EphemerisProvider,
     body: Body,
     jd_ut: f64,
+    frame: &CelestialFrame,
 ) -> Result<EclipticCoords, ComputeError> {
     let jd = delta_t::ut1_to_tt(jd_ut);
 
@@ -109,30 +144,14 @@ fn compute_ecliptic(
     // adding stellar aberration on top would double-count.
     let geo = light_time_geocentric(provider, body, jd)?;
 
-    // Step 2: precession (J2000 → mean equator of date)
-    let prec = precession::precession_matrix(jd);
-
-    // Step 3: nutation (mean → true equator of date)
-    let (dpsi, deps) = nutation::nutation(jd);
-    let eps_a = obliquity::mean_obliquity(jd);
-    let eps_true = obliquity::true_obliquity(jd, deps);
-
-    let nut_matrix = Matrix3::rotation_x(-eps_a - deps)
-        .multiply(&Matrix3::rotation_z(-dpsi))
-        .multiply(&Matrix3::rotation_x(eps_a));
-
-    // Combined: true equatorial of date = N · P · v_J2000_eq.
-    // The provider returns vectors already in the J2000 mean equator frame
-    // (analytical: ecliptic→equatorial via fixed J2000 obliquity; SPK:
-    // ICRF, which agrees with J2000 mean to <25 mas — small enough to
-    // ignore at this level of accuracy).
-    let combined = nut_matrix.multiply(&prec);
-
+    // Steps 2-3: apply the precomputed nutation·precession frame (the
+    // provider returns J2000 mean-equatorial vectors; SPK ICRF agrees to
+    // <25 mas — negligible here). `frame` must correspond to this `jd`.
     let geo_vec = Vector3::new(geo[0], geo[1], geo[2]);
-    let true_eq = combined.apply(&geo_vec);
+    let true_eq = frame.combined.apply(&geo_vec);
 
     // Step 4: rotate true equatorial of date → ecliptic of date
-    let ecl_vec = Matrix3::rotation_x(eps_true).apply(&true_eq);
+    let ecl_vec = Matrix3::rotation_x(frame.eps_true).apply(&true_eq);
 
     // Step 5: extract spherical coordinates
     let distance =
@@ -255,12 +274,30 @@ pub fn apparent_position(
     body: Body,
     jd: f64,
 ) -> Result<ApparentPosition, ComputeError> {
-    let ecliptic = compute_ecliptic(provider, body, jd)?;
+    // Daily motion uses a ±0.5-day central difference, so three timestamps are
+    // involved; build each one's time-only frame once.
+    let frame = frame_for(delta_t::ut1_to_tt(jd));
+    let frame_before = frame_for(delta_t::ut1_to_tt(jd - 0.5));
+    let frame_after = frame_for(delta_t::ut1_to_tt(jd + 0.5));
+    apparent_position_with_frames(provider, body, jd, &frame, &frame_before, &frame_after)
+}
 
-    // Step 9: Daily motion via central difference (half-day step)
-    let dt = 0.5;
-    let pos_before = compute_ecliptic(provider, body, jd - dt)?;
-    let pos_after = compute_ecliptic(provider, body, jd + dt)?;
+/// [`apparent_position`] with the three central-difference frames supplied by
+/// the caller, so a batch can build them once and reuse them across all bodies
+/// rather than recomputing nutation/precession/obliquity per body.
+fn apparent_position_with_frames(
+    provider: &dyn EphemerisProvider,
+    body: Body,
+    jd: f64,
+    frame: &CelestialFrame,
+    frame_before: &CelestialFrame,
+    frame_after: &CelestialFrame,
+) -> Result<ApparentPosition, ComputeError> {
+    let ecliptic = compute_ecliptic_with_frame(provider, body, jd, frame)?;
+
+    // Step 9: Daily motion via central difference (half-day step).
+    let pos_before = compute_ecliptic_with_frame(provider, body, jd - 0.5, frame_before)?;
+    let pos_after = compute_ecliptic_with_frame(provider, body, jd + 0.5, frame_after)?;
 
     // Longitude speed with wrap-around handling
     let mut speed_rad = pos_after.longitude - pos_before.longitude;
@@ -297,9 +334,26 @@ pub fn apparent_positions(
     jd: f64,
 ) -> Vec<(Body, Result<ApparentPosition, ComputeError>)> {
     let cached = crate::cache::CachingProvider::new(provider);
+    // Time-only frames are body-independent — build the three central-difference
+    // frames once and reuse them across every body.
+    let frame = frame_for(delta_t::ut1_to_tt(jd));
+    let frame_before = frame_for(delta_t::ut1_to_tt(jd - 0.5));
+    let frame_after = frame_for(delta_t::ut1_to_tt(jd + 0.5));
     bodies
         .iter()
-        .map(|&body| (body, apparent_position(&cached, body, jd)))
+        .map(|&body| {
+            (
+                body,
+                apparent_position_with_frames(
+                    &cached,
+                    body,
+                    jd,
+                    &frame,
+                    &frame_before,
+                    &frame_after,
+                ),
+            )
+        })
         .collect()
 }
 
