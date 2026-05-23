@@ -947,13 +947,41 @@ impl McpServer {
             ))
         };
 
-        let assessments = vedaksha_vedic::muhurta::search_muhurta(
+        let mut assessments = vedaksha_vedic::muhurta::search_muhurta(
             input.start_jd,
             input.end_jd,
             &get_moon_sidereal,
             &get_sun_sidereal,
             min_quality,
         );
+
+        // Enrich the reported windows with exact tithi/nakshatra ending times.
+        // These need the Moon/Sun daily motion, so they use apparent_position
+        // (position + speed) — but only for the few windows that passed the
+        // quality filter, not the position-only scan above.
+        let moon_pos_speed = |jd: f64| -> Option<(f64, f64)> {
+            let p = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
+            Some((p.ecliptic.longitude.to_degrees(), p.longitude_speed))
+        };
+        let sun_pos_speed = |jd: f64| -> Option<(f64, f64)> {
+            let p = coordinates::apparent_position(&provider, Body::Sun, jd).ok()?;
+            Some((p.ecliptic.longitude.to_degrees(), p.longitude_speed))
+        };
+        let moon_sid_speed = |jd: f64| -> Option<(f64, f64)> {
+            let p = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
+            let sid = vedaksha_astro::sidereal::tropical_to_sidereal(
+                p.ecliptic.longitude.to_degrees(),
+                vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                jd,
+            );
+            Some((sid, p.longitude_speed))
+        };
+        for a in &mut assessments {
+            a.tithi_end_jd =
+                vedaksha_vedic::muhurta::compute_tithi_end(a.jd, &moon_pos_speed, &sun_pos_speed);
+            a.nakshatra_end_jd =
+                vedaksha_vedic::muhurta::compute_nakshatra_end(a.jd, &moon_sid_speed);
+        }
 
         let results_json: Vec<serde_json::Value> = assessments
             .iter()
@@ -963,6 +991,8 @@ impl McpServer {
                     "nakshatra": a.nakshatra.name(),
                     "tithi_number": a.tithi.number,
                     "tithi_name": a.tithi.name,
+                    "tithi_end_jd": a.tithi_end_jd,
+                    "nakshatra_end_jd": a.nakshatra_end_jd,
                     "weekday": format!("{:?}", a.weekday),
                     "quality_score": a.quality_score,
                     "factors": a.factors,

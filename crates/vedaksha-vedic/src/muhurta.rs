@@ -130,6 +130,13 @@ pub struct MuhurtaAssessment {
     pub quality_score: f64,
     /// Specific factors contributing to the score.
     pub factors: Vec<String>,
+    /// Julian Day at which the current tithi ends, if computed (requires the
+    /// Moon/Sun daily motion — see [`compute_tithi_end`]). `None` from the
+    /// position-only scan; populated for reported windows.
+    pub tithi_end_jd: Option<f64>,
+    /// Julian Day at which the current nakshatra ends, if computed (see
+    /// [`compute_nakshatra_end`]). `None` from the position-only scan.
+    pub nakshatra_end_jd: Option<f64>,
 }
 
 /// Compute the tithi from Sun and Moon sidereal longitudes.
@@ -253,7 +260,92 @@ pub fn assess_muhurta(jd: f64, moon_sidereal_lon: f64, sun_sidereal_lon: f64) ->
         weekday,
         quality_score: score,
         factors,
+        // Position-only scan does not compute boundary times; enriched later
+        // for reported windows via compute_tithi_end / compute_nakshatra_end.
+        tithi_end_jd: None,
+        nakshatra_end_jd: None,
     }
+}
+
+/// Refine the Julian Day at which a monotonically-increasing angle (degrees)
+/// reaches `target_deg`, by Newton iteration `jd ← jd + (target − angle)/rate`.
+///
+/// `angle_at(jd)` returns `(angle_deg ∈ [0, 360), rate_deg_per_day)` — the rate
+/// is the body's daily motion, i.e. the analytic derivative. The lunar and
+/// elongation angles are smooth and monotone, so this converges in a few steps.
+fn refine_crossing(
+    target_deg: f64,
+    jd_init: f64,
+    angle_at: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Option<f64> {
+    let mut jd = jd_init;
+    for _ in 0..8 {
+        let (angle, rate) = angle_at(jd)?;
+        // Signed (target − angle), wrapped to (−180, 180].
+        let mut f = (target_deg - angle).rem_euclid(360.0);
+        if f > 180.0 {
+            f -= 360.0;
+        }
+        if f.abs() < 1.0e-6 {
+            return Some(jd); // < ~0.0036 arcsec ⇒ sub-second in time
+        }
+        if rate.abs() < 1.0e-9 {
+            return None; // degenerate (no motion)
+        }
+        jd += f / rate;
+    }
+    Some(jd)
+}
+
+/// Julian Day at which the current **tithi** ends — when the Moon–Sun
+/// elongation reaches the next multiple of 12° — refined against true
+/// longitudes. The variable real duration of a tithi (≈20–27 h) comes
+/// entirely from the varying lunar speed, which is why the daily motion is
+/// required here rather than a mean-motion approximation.
+///
+/// `moon` / `sun` return `(longitude_deg, daily_motion_deg_per_day)`. Tropical
+/// or sidereal input both work — the ayanamsha cancels in the elongation and
+/// its rate.
+///
+/// # Errors / `None`
+/// Returns `None` if a callback yields `None` or the elongation rate vanishes.
+#[must_use]
+pub fn compute_tithi_end(
+    jd: f64,
+    moon: &dyn Fn(f64) -> Option<(f64, f64)>,
+    sun: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Option<f64> {
+    let (m0, _) = moon(jd)?;
+    let (s0, _) = sun(jd)?;
+    let elong = (m0 - s0).rem_euclid(360.0);
+    let next_boundary = ((elong / 12.0).floor() + 1.0) * 12.0;
+    let angle_at = |t: f64| -> Option<(f64, f64)> {
+        let (ml, ms) = moon(t)?;
+        let (sl, ss) = sun(t)?;
+        Some(((ml - sl).rem_euclid(360.0), ms - ss))
+    };
+    refine_crossing(next_boundary, jd, &angle_at)
+}
+
+/// Julian Day at which the current **nakshatra** ends — when the Moon's
+/// sidereal longitude reaches the next multiple of 360/27° — refined against
+/// the true lunar longitude.
+///
+/// `moon` returns `(sidereal_longitude_deg, daily_motion_deg_per_day)`.
+///
+/// # Errors / `None`
+/// Returns `None` if the callback yields `None` or the lunar rate vanishes.
+#[must_use]
+pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) -> Option<f64> {
+    const SPAN: f64 = 360.0 / 27.0;
+    let (m0, _) = moon(jd)?;
+    let m = m0.rem_euclid(360.0);
+    let next_boundary = ((m / SPAN).floor() + 1.0) * SPAN;
+    let angle_at = |t: f64| -> Option<(f64, f64)> {
+        let (ml, ms) = moon(t)?;
+        Some((ml.rem_euclid(360.0), ms))
+    };
+    refine_crossing(next_boundary, jd, &angle_at)
 }
 
 /// Search for auspicious muhurta windows in a date range.
@@ -627,5 +719,91 @@ mod tests {
         for d in &days {
             assert!(!d.lord().is_empty());
         }
+    }
+
+    // --- tithi / nakshatra ending times ---
+
+    #[test]
+    fn tithi_end_linear_synthetic() {
+        // Moon 13.176°/day, Sun 0.985°/day; both at 0° at j0 ⇒ elongation 0.
+        let j0 = 2_451_545.0;
+        let moon = |jd: f64| Some(((13.176 * (jd - j0)).rem_euclid(360.0), 13.176));
+        let sun = |jd: f64| Some(((0.985 * (jd - j0)).rem_euclid(360.0), 0.985));
+        let end = compute_tithi_end(j0, &moon, &sun).expect("tithi end");
+        let expected = j0 + 12.0 / (13.176 - 0.985); // first 12° elongation boundary
+        assert!((end - expected).abs() < 1e-9, "end {end} vs {expected}");
+    }
+
+    #[test]
+    fn nakshatra_end_linear_synthetic() {
+        let j0 = 2_451_545.0;
+        let moon = |jd: f64| Some(((13.176 * (jd - j0)).rem_euclid(360.0), 13.176));
+        let end = compute_nakshatra_end(j0, &moon).expect("nakshatra end");
+        let expected = j0 + (360.0 / 27.0) / 13.176;
+        assert!((end - expected).abs() < 1e-9, "end {end} vs {expected}");
+    }
+
+    #[test]
+    fn tithi_nakshatra_end_real_ephemeris() {
+        use vedaksha_astro::sidereal::{Ayanamsha, tropical_to_sidereal};
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::coordinates::apparent_position;
+
+        let provider = AnalyticalProvider::new();
+        let jd = 2_460_676.5;
+
+        // Elongation is frame-agnostic, so tropical (lon, daily-motion) is fine.
+        let moon_trop = |t: f64| {
+            apparent_position(&provider, Body::Moon, t)
+                .ok()
+                .map(|p| (p.ecliptic.longitude.to_degrees(), p.longitude_speed))
+        };
+        let sun_trop = |t: f64| {
+            apparent_position(&provider, Body::Sun, t)
+                .ok()
+                .map(|p| (p.ecliptic.longitude.to_degrees(), p.longitude_speed))
+        };
+
+        let t_end = compute_tithi_end(jd, &moon_trop, &sun_trop).expect("tithi end");
+        // A tithi lasts ≈ 20–27 h, so the boundary is < ~1.13 days ahead.
+        assert!(
+            t_end > jd && t_end - jd < 1.2,
+            "tithi end {} days away",
+            t_end - jd
+        );
+        // The end instant must land exactly on a 12° elongation boundary.
+        let (me, _) = moon_trop(t_end).unwrap();
+        let (se, _) = sun_trop(t_end).unwrap();
+        let elong = (me - se).rem_euclid(360.0);
+        let off = (elong / 12.0 - (elong / 12.0).round()).abs() * 12.0;
+        assert!(
+            off < 1e-4,
+            "elongation {elong}° not on a 12° boundary (off {off}°)"
+        );
+
+        // Nakshatra uses the sidereal Moon longitude.
+        let moon_sid = |t: f64| {
+            apparent_position(&provider, Body::Moon, t).ok().map(|p| {
+                let trop = p.ecliptic.longitude.to_degrees();
+                (
+                    tropical_to_sidereal(trop, Ayanamsha::Lahiri, t),
+                    p.longitude_speed,
+                )
+            })
+        };
+        let n_end = compute_nakshatra_end(jd, &moon_sid).expect("nakshatra end");
+        assert!(
+            n_end > jd && n_end - jd < 1.2,
+            "naksh end {} days away",
+            n_end - jd
+        );
+        let (ms, _) = moon_sid(n_end).unwrap();
+        let span = 360.0 / 27.0;
+        let off = (ms / span - (ms / span).round()).abs() * span;
+        assert!(
+            off < 1e-4,
+            "sidereal Moon {ms}° not on a nakshatra boundary (off {off}°)"
+        );
     }
 }
