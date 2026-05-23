@@ -14,12 +14,19 @@ jobs:
     strategy:
       matrix:
         include:
+          # x86-64-v3 raises the floor to AVX2 (Intel Haswell 2013+ / AMD
+          # Excavator+), which is what makes the SIMD lunar kernel run 4-wide.
+          # Hosts without AVX2 will SIGILL — lower to x86-64-v2 (or empty) if
+          # broad pre-2013 x86 support is required.
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             artifact: vedaksha-mcp
+            rustflags: "-C target-cpu=x86-64-v3"
+          # aarch64 already includes NEON at baseline; no extra flag needed.
           - target: aarch64-apple-darwin
             os: macos-latest
             artifact: vedaksha-mcp
+            rustflags: ""
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -27,6 +34,8 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
       - name: Build
+        env:
+          RUSTFLAGS: ${{ matrix.rustflags }}
         run: cargo build --release --target ${{ matrix.target }} -p vedaksha-mcp
       - name: Package
         run: |
