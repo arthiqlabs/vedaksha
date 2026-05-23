@@ -56,6 +56,12 @@ jobs:
           targets: wasm32-unknown-unknown
       - run: cargo install wasm-pack
       - name: Build WASM
+        # +simd128 makes wide's f64x4 vectorize the lunar kernel in the
+        # browser (otherwise it falls back to scalar). Universally supported
+        # by current browsers/runtimes; a runtime without simd128 cannot
+        # instantiate the module.
+        env:
+          RUSTFLAGS: "-C target-feature=+simd128"
         run: wasm-pack build --target web crates/vedaksha-wasm/
       - uses: actions/upload-artifact@v4
         with:
