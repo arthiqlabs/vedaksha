@@ -529,6 +529,27 @@ struct SeriesPart {
     dot: f64,
 }
 
+/// Reduce one degree-4 argument polynomial to its value `A = Σ_k c[k]·t^k`
+/// and time derivative `Ȧ = Σ_{k≥1} k·c[k]·t^{k-1}` at the current epoch.
+///
+/// Each series term's phase is then a dot product of its integer multipliers
+/// with these per-argument values, instead of recomputing the inner
+/// `Σ_k Σ_j` sum for every term — far fewer operations per term. (This
+/// reassociates the phase sum versus the term-by-term form, so results differ
+/// at the ULP level; validated against the oracle / paper-example nets.)
+#[inline]
+fn reduce_arg(coeffs: &[f64; 5], t_pow: &[f64; 5]) -> (f64, f64) {
+    let mut a = 0.0;
+    let mut adot = 0.0;
+    for k in 0..5 {
+        a += coeffs[k] * t_pow[k];
+        if k >= 1 {
+            adot += (k as f64) * coeffs[k] * t_pow[k - 1];
+        }
+    }
+    (a, adot)
+}
+
 /// Evaluate a main-problem series (S1, S2, or S3) with corrections.
 fn eval_main_series(
     terms: &[ElpMainTerm],
@@ -541,10 +562,20 @@ fn eval_main_series(
     let mut value = 0.0;
     let mut dot = 0.0;
 
-    // Per-term corrected amplitude `a`, phase φ = i1·D + i2·F + i3·l + i4·l',
-    // and its time derivative ω. The arithmetic is identical to the scalar
-    // path — only the sin/cos evaluation is vectorized (four terms at a time),
-    // with a scalar `libm` tail for the remainder.
+    // Precompute each Delaunay argument's value Aⱼ and derivative Ȧⱼ once;
+    // every term's phase φ = i1·D + i2·F + i3·l + i4·l' is then a 4-term dot
+    // product with its multipliers.
+    let mut a_arg = [0.0_f64; 4];
+    let mut adot_arg = [0.0_f64; 4];
+    for (d, coeffs) in args.del.iter().enumerate() {
+        let (a, adot) = reduce_arg(coeffs, t_pow);
+        a_arg[d] = a;
+        adot_arg[d] = adot;
+    }
+
+    // Per-term corrected amplitude `a`, phase φ, and its derivative ω. Only
+    // the sin/cos evaluation is vectorized below (four terms at a time), with
+    // a scalar `libm` tail for the remainder.
     let term_pao = |term: &ElpMainTerm| -> (f64, f64, f64) {
         // Corrections in the file's native units (arcsec for S1/S2, km for
         // S3); convert to radian at the end if requested.
@@ -556,18 +587,14 @@ fn eval_main_series(
         } else {
             a_native
         };
-        let mut phase = 0.0;
-        let mut omega = 0.0;
-        for k in 0..5 {
-            let coef = (term.i1 as f64) * args.del[0][k]
-                + (term.i2 as f64) * args.del[1][k]
-                + (term.i3 as f64) * args.del[2][k]
-                + (term.i4 as f64) * args.del[3][k];
-            phase += coef * t_pow[k];
-            if k >= 1 {
-                omega += (k as f64) * coef * t_pow[k - 1];
-            }
-        }
+        let phase = (term.i1 as f64) * a_arg[0]
+            + (term.i2 as f64) * a_arg[1]
+            + (term.i3 as f64) * a_arg[2]
+            + (term.i4 as f64) * a_arg[3];
+        let omega = (term.i1 as f64) * adot_arg[0]
+            + (term.i2 as f64) * adot_arg[1]
+            + (term.i3 as f64) * adot_arg[2]
+            + (term.i4 as f64) * adot_arg[3];
         (phase, omega, a)
     };
 
@@ -635,31 +662,56 @@ fn eval_pert_series(
     let mut value = 0.0;
     let mut dot = 0.0;
 
-    // Per-term scaled (s, c), phase φ (Delaunay + planetary + ζ multipliers),
-    // and its derivative ω. Identical arithmetic to the scalar path; sin/cos
-    // is vectorized four terms at a time below, with a scalar `libm` tail.
+    // Precompute the 13 argument values Aⱼ and derivatives Ȧⱼ once (4 Delaunay
+    // + 8 planetary + ζ); each term's phase is then a 13-term dot product with
+    // its multipliers rather than an inner Σ_k Σ_j sum recomputed per term.
+    let mut a_arg = [0.0_f64; 13];
+    let mut adot_arg = [0.0_f64; 13];
+    for (d, coeffs) in args.del.iter().enumerate() {
+        let (a, adot) = reduce_arg(coeffs, t_pow);
+        a_arg[d] = a;
+        adot_arg[d] = adot;
+    }
+    for (p, coeffs) in args.pla.iter().enumerate() {
+        let (a, adot) = reduce_arg(coeffs, t_pow);
+        a_arg[4 + p] = a;
+        adot_arg[4 + p] = adot;
+    }
+    {
+        let (a, adot) = reduce_arg(&args.zeta, t_pow);
+        a_arg[12] = a;
+        adot_arg[12] = adot;
+    }
+
+    // Per-term scaled (s, c), phase φ, and its derivative ω. sin/cos is
+    // vectorized four terms at a time below, with a scalar `libm` tail.
     let term_poc = |term: &ElpPertTerm| -> (f64, f64, f64, f64) {
-        let mut phase = 0.0;
-        let mut omega = 0.0;
-        for k in 0..5 {
-            let coef = (term.i1 as f64) * args.del[0][k]
-                + (term.i2 as f64) * args.del[1][k]
-                + (term.i3 as f64) * args.del[2][k]
-                + (term.i4 as f64) * args.del[3][k]
-                + (term.i5 as f64) * args.pla[0][k]
-                + (term.i6 as f64) * args.pla[1][k]
-                + (term.i7 as f64) * args.pla[2][k]
-                + (term.i8 as f64) * args.pla[3][k]
-                + (term.i9 as f64) * args.pla[4][k]
-                + (term.i10 as f64) * args.pla[5][k]
-                + (term.i11 as f64) * args.pla[6][k]
-                + (term.i12 as f64) * args.pla[7][k]
-                + (term.i13 as f64) * args.zeta[k];
-            phase += coef * t_pow[k];
-            if k >= 1 {
-                omega += (k as f64) * coef * t_pow[k - 1];
-            }
-        }
+        let phase = (term.i1 as f64) * a_arg[0]
+            + (term.i2 as f64) * a_arg[1]
+            + (term.i3 as f64) * a_arg[2]
+            + (term.i4 as f64) * a_arg[3]
+            + (term.i5 as f64) * a_arg[4]
+            + (term.i6 as f64) * a_arg[5]
+            + (term.i7 as f64) * a_arg[6]
+            + (term.i8 as f64) * a_arg[7]
+            + (term.i9 as f64) * a_arg[8]
+            + (term.i10 as f64) * a_arg[9]
+            + (term.i11 as f64) * a_arg[10]
+            + (term.i12 as f64) * a_arg[11]
+            + (term.i13 as f64) * a_arg[12];
+        let omega = (term.i1 as f64) * adot_arg[0]
+            + (term.i2 as f64) * adot_arg[1]
+            + (term.i3 as f64) * adot_arg[2]
+            + (term.i4 as f64) * adot_arg[3]
+            + (term.i5 as f64) * adot_arg[4]
+            + (term.i6 as f64) * adot_arg[5]
+            + (term.i7 as f64) * adot_arg[6]
+            + (term.i8 as f64) * adot_arg[7]
+            + (term.i9 as f64) * adot_arg[8]
+            + (term.i10 as f64) * adot_arg[9]
+            + (term.i11 as f64) * adot_arg[10]
+            + (term.i12 as f64) * adot_arg[11]
+            + (term.i13 as f64) * adot_arg[12];
         (phase, omega, term.s * scale, term.c * scale)
     };
 
