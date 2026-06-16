@@ -173,7 +173,9 @@ fn agrees_with_jpl_horizons_de441() {
         // JPL Horizons was unreachable from this runner (network timeout or
         // firewall). Skip rather than fail — the oracle validates our ephemeris
         // but is an external dependency we do not control.
-        eprintln!("SKIP: agrees_with_jpl_horizons_de441 — all Horizons fetches failed (network unreachable)");
+        eprintln!(
+            "SKIP: agrees_with_jpl_horizons_de441 — all Horizons fetches failed (network unreachable)"
+        );
         return;
     }
     assert!(failures.is_empty(), "Tier-1 violations: {failures:#?}");
