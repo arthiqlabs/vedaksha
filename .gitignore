@@ -49,3 +49,6 @@ scripts/data/
 .cleanroom-deny.yaml
 .githooks/
 scripts/setup-hooks.sh
+
+# Internal planning docs — not for public repo
+docs/prompts/
