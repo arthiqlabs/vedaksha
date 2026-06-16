@@ -219,4 +219,47 @@ mod tests {
             "psi_A at J2100 should be ~5040 arcsec, got {psi}"
         );
     }
+
+    #[test]
+    fn general_precession_long_range_sanity_1582() {
+        // Sanity check at JD 2299160.5 (1582-10-15 — Gregorian calendar reform date).
+        // This is T ≈ −4.17 Julian centuries before J2000.
+        //
+        // Expected value (accumulated precession from J2000): approximately −20 986 arcsec
+        // (≈ −5.83°). At a rate of ~5038.5 arcsec/century, 4.17 centuries gives ~21 010
+        // arcsec backward precession.
+        //
+        // Note: The prompt spec stated "~30.1°" for this date. That figure appears to
+        // reference accumulated precession from an ancient epoch (possibly ~600 BC),
+        // not from J2000. The correct return value of `general_precession_in_longitude`
+        // (which always measures from J2000) is ≈ −20 986 arcsec.
+        //
+        // Source: Capitaine, Wallace & Chapront (2003), A&A 412, 567–586, Table 1.
+        const JD_1582_OCT_15: f64 = 2_299_160.5;
+        let psi = general_precession_in_longitude(JD_1582_OCT_15);
+        // Expected: ≈ −20 986 arcsec. Tolerance: 200 arcsec (≈ 0.056°).
+        assert!(
+            (psi - (-20_986.0)).abs() < 200.0,
+            "psi_A at 1582-10-15 should be ≈ −20 986 arcsec, got {psi:.2} arcsec"
+        );
+        // Long-range polynomial must produce a negative (backward) value for past dates.
+        assert!(
+            psi < 0.0,
+            "Precession at a past date (before J2000) must be negative, got {psi}"
+        );
+        // The precession matrix at this epoch must be non-identity and orthogonal.
+        let p = precession_matrix(JD_1582_OCT_15);
+        let pt = p.transpose();
+        let ppt = p.multiply(&pt);
+        for r in 0..3 {
+            for c in 0..3 {
+                let expected = if r == c { 1.0 } else { 0.0 };
+                assert!(
+                    (ppt.data[r][c] - expected).abs() < 1e-10,
+                    "P*P^T[{r}][{c}] = {} should be {expected} at 1582-10-15",
+                    ppt.data[r][c]
+                );
+            }
+        }
+    }
 }

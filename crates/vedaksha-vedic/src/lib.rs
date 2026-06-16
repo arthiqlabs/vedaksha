@@ -17,6 +17,7 @@
 
 pub mod ashtakavarga;
 pub mod bhava;
+pub mod compatibility;
 pub mod combustion;
 pub mod dasha;
 pub mod drishti;

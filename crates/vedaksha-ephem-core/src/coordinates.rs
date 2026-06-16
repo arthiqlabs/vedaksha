@@ -450,6 +450,43 @@ mod tests {
     }
 
     #[test]
+    fn moon_longitude_at_j2000_matches_jpl_horizons() {
+        // Verifies that nutation is applied to the Moon through the full pipeline.
+        // The `apparent_position` path calls `compute_ecliptic_with_frame` which
+        // applies the combined precession × nutation matrix; this test confirms
+        // the Moon is NOT exempt from that path.
+        //
+        // Oracle: JPL Horizons DE441 apparent ecliptic longitude of the Moon at
+        //   J2000.0 (JD 2451545.0 TT) in the true ecliptic and equinox of date.
+        //   Query: COMMAND='301', CENTER='500@399', EPHEM_TYPE='OBSERVER',
+        //   QUANTITIES='31', REF_PLANE='ECLIPTIC', STEP='1d', START='2000-01-01',
+        //   STOP='2000-01-02'.
+        //   Result: apparent ecliptic longitude ≈ 223.3238° (J2000.0 TT).
+        //   Source: NASA/JPL Horizons System (https://ssd.jpl.nasa.gov/horizons/).
+        //   Tolerance: 0.006° (≈ 22 arcsec) accounts for ELP/MPP02 vs. DE441
+        //   lunar theory residual (~17 arcsec max for modern dates) plus rounding.
+        use crate::analytical::AnalyticalProvider;
+        let provider = AnalyticalProvider::new();
+        let jd_j2000 = 2_451_545.0_f64;
+
+        let pos = apparent_position(&provider, Body::Moon, jd_j2000)
+            .expect("Moon position at J2000 should succeed");
+
+        // EclipticCoords::longitude is in radians; convert to degrees for comparison.
+        let got_deg = pos.ecliptic.longitude.to_degrees();
+        let expected_deg = 223.3238_f64;
+        let mut diff = (got_deg - expected_deg).abs();
+        if diff > 180.0 {
+            diff = 360.0 - diff;
+        }
+        assert!(
+            diff < 0.006,
+            "Moon longitude at J2000.0 should be ≈223.3238° (JPL Horizons DE441); \
+             got {got_deg:.4}°, diff={diff:.4}°"
+        );
+    }
+
+    #[test]
     fn ecliptic_position_matches_apparent_position() {
         use crate::analytical::AnalyticalProvider;
 

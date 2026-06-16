@@ -212,6 +212,10 @@ mod tests {
 
     #[test]
     fn true_node_at_j2000_close_to_mean_node() {
+        // The maximum perturbation of the true node from the mean node is ≈ 1.60°
+        // (dominated by the 1.4979° sin(2(D-F)) term in Meeus Ch. 47).
+        // A tight tolerance of 1.7° confirms the perturbation is physically bounded.
+        // Reference: Meeus, "Astronomical Algorithms" 2nd ed., Ch. 47.
         let mn = mean_node(J2000);
         let tn = true_node(J2000);
         let mut diff = (tn - mn).abs();
@@ -219,13 +223,16 @@ mod tests {
             diff = 360.0 - diff;
         }
         assert!(
-            diff < 3.0,
-            "True node at J2000 should be within 3° of mean node, diff={diff:.4}°"
+            diff < 1.7,
+            "True node at J2000 should be within 1.7° of mean node, diff={diff:.4}°"
         );
     }
 
     #[test]
     fn osculating_node_at_j2000_close_to_mean_node() {
+        // The geometric osculating node (r×v method) should agree with the mean node
+        // within the maximum perturbation amplitude ≈ 1.60°; using 1.7° as the bound.
+        // Reference: Bate, Mueller & White (1971), "Fundamentals of Astrodynamics".
         let mn = mean_node(J2000);
         let osc = true_node_osculating(J2000);
         let mut diff = (osc - mn).abs();
@@ -233,8 +240,22 @@ mod tests {
             diff = 360.0 - diff;
         }
         assert!(
-            diff < 3.0,
-            "Osculating node at J2000 should be within 3° of mean node, diff={diff:.4}°"
+            diff < 1.7,
+            "Osculating node at J2000 should be within 1.7° of mean node, diff={diff:.4}°"
+        );
+    }
+
+    #[test]
+    fn osculating_ketu_is_rahu_plus_180() {
+        // Ketu (south node) is always exactly 180° opposite Rahu (north node).
+        // This verifies the geometric consistency of the osculating node calculation.
+        // Reference: BPHS standard definition; Meeus Ch. 47.
+        let rahu = true_node_osculating(J2000);
+        let ketu = south_node_osculating(J2000);
+        let expected_ketu = vedaksha_math::angle::normalize_degrees(rahu + 180.0);
+        assert!(
+            (ketu - expected_ketu).abs() < 1e-10,
+            "Ketu (osculating) should be Rahu + 180°: Rahu={rahu:.6}°, Ketu={ketu:.6}°, expected={expected_ketu:.6}°"
         );
     }
 

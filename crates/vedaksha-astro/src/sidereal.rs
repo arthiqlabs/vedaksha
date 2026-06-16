@@ -231,6 +231,106 @@ impl Ayanamsha {
     }
 }
 
+// ── Epoch-anchored ayanamsha helpers ─────────────────────────────────────────
+
+/// J2000.0 Julian Day (2000 January 1.5 TT).
+///
+/// Source: Meeus, "Astronomical Algorithms" 2nd ed., p. 61.
+const J2000_JD: f64 = 2_451_545.0;
+
+/// IAU 1976 general precession in longitude, in arcseconds.
+///
+/// Lieske, J.H. et al. (1977). "Expressions for the Precession Quantities
+/// Based upon the IAU (1976) System of Astronomical Constants."
+/// A&A 58, 1–16, eq. (A2). T is Julian centuries from J2000.0.
+///
+/// License: Academic publication; formula not copyrightable.
+fn iau1976_precession_arcsec(t: f64) -> f64 {
+    5029.0966 * t + 1.10 * t * t - 0.000_006 * t * t * t
+}
+
+/// Newcomb general precession in longitude, in arcseconds.
+///
+/// Newcomb, S. (1898). "A Compendium of Spherical Astronomy", p. 226.
+/// T is Julian centuries from J2000.0. Rate ≈ 5025.645″/cy near J1900.
+///
+/// License: Public domain (pre-1928 US government publication).
+fn newcomb_precession_arcsec(t: f64) -> f64 {
+    5025.645 * t + 1.110 * t * t
+}
+
+/// Lahiri (Chitrapaksha) ayanamsha, epoch-anchored.
+///
+/// Source: Swiss Ephemeris `sweph.h`, ayanamsa[1] (LGPL, aloistr/swisseph):
+///   epoch = JD 2435553.5 (1956-03-21, Indian Calendar Reform Committee)
+///   value at epoch = 23.250182778° − 0.004658035° = 23.245524743°
+///   (the subtracted term removes Wahr 1980 nutation at the epoch)
+///   precession model: IAU 1976 / Newcomb
+///
+/// Epoch reference: Indian Astronomical Ephemeris 1989, p. 556.
+/// Precession: Lieske et al. (1977), A&A 58, 1–16, eq. (A2).
+///
+/// License: Epoch constant and value from sweph.h (LGPL); formulas are
+///   academic and not copyrightable. No sweph source code copied.
+const LAHIRI_EPOCH_JD: f64 = 2_435_553.5;
+const LAHIRI_EPOCH_VALUE_DEG: f64 = 23.245_524_743;
+
+fn lahiri_ayanamsha(jd: f64) -> f64 {
+    let t_epoch = (LAHIRI_EPOCH_JD - J2000_JD) / 36525.0;
+    let t_target = (jd - J2000_JD) / 36525.0;
+    let delta_prec_deg =
+        (iau1976_precession_arcsec(t_target) - iau1976_precession_arcsec(t_epoch)) / 3600.0;
+    LAHIRI_EPOCH_VALUE_DEG + delta_prec_deg
+}
+
+/// KP (Krishnamurti Paddhati) ayanamsha, epoch-anchored.
+///
+/// Source: Swiss Ephemeris `sweph.h`, ayanamsa[5] (LGPL, aloistr/swisseph):
+///   epoch = J1900.0 (JD 2415020.31352, Besselian)
+///   value at epoch = 360° − 337.636111° = 22.363889°
+///   precession model: Newcomb
+///
+/// Newcomb (1898), "A Compendium of Spherical Astronomy", p. 226.
+///
+/// License: Epoch constant and value from sweph.h (LGPL); formulas are
+///   public domain. No sweph source code copied.
+const KP_EPOCH_JD: f64 = 2_415_020.313_52;
+const KP_EPOCH_VALUE_DEG: f64 = 22.363_889;
+
+fn kp_ayanamsha(jd: f64) -> f64 {
+    let t_epoch = (KP_EPOCH_JD - J2000_JD) / 36525.0;
+    let t_target = (jd - J2000_JD) / 36525.0;
+    let delta_prec_deg =
+        (newcomb_precession_arcsec(t_target) - newcomb_precession_arcsec(t_epoch)) / 3600.0;
+    KP_EPOCH_VALUE_DEG + delta_prec_deg
+}
+
+/// Fagan-Bradley (American) ayanamsha, epoch-anchored.
+///
+/// Source: Swiss Ephemeris `sweph.h`, ayanamsa[0] (LGPL, aloistr/swisseph):
+///   epoch = JD 2433282.42346 (B1950.0, Besselian)
+///   value at epoch = 24.042044444° (= 360° − SVP 335°57′28.64″)
+///   precession model: Newcomb
+///
+/// Fagan, C. & Bradley, D. "The Synetic Vernal Point."
+///   American Astrology, 1967.
+/// American Sidereal Ephemeris, 1976, Astro Computing Services.
+///
+/// License: Epoch constants from sweph.h (LGPL); SVP definition and
+///   value from published sources. No sweph source code copied.
+const FB_EPOCH_JD: f64 = 2_433_282.423_46;
+const FB_EPOCH_VALUE_DEG: f64 = 24.042_044_444;
+
+fn fagan_bradley_ayanamsha(jd: f64) -> f64 {
+    let t_epoch = (FB_EPOCH_JD - J2000_JD) / 36525.0;
+    let t_target = (jd - J2000_JD) / 36525.0;
+    let delta_prec_deg =
+        (newcomb_precession_arcsec(t_target) - newcomb_precession_arcsec(t_epoch)) / 3600.0;
+    FB_EPOCH_VALUE_DEG + delta_prec_deg
+}
+
+// ── Public API ────────────────────────────────────────────────────────────────
+
 /// Compute the ayanamsha value in decimal degrees for a given Julian Day.
 ///
 /// The returned value represents how many degrees the sidereal zero point
@@ -252,11 +352,21 @@ impl Ayanamsha {
 /// (Capitaine, Wallace & Chapront 2003, A&A 412, 567-586).
 #[must_use]
 pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
-    // Reference ayanamsha at J2000.0 for each system (decimal degrees).
+    // Three systems use epoch-anchored computation with system-specific
+    // precession models (IAU 1976 for Lahiri; Newcomb for KP and FB).
+    // These must be resolved before the J2000-flat fallthrough below.
+    match system {
+        Ayanamsha::Tropical => return 0.0,
+        Ayanamsha::Lahiri => return lahiri_ayanamsha(jd),
+        Ayanamsha::Krishnamurti => return kp_ayanamsha(jd),
+        Ayanamsha::FaganBradley => return fagan_bradley_ayanamsha(jd),
+        _ => {}
+    }
+
+    // All remaining systems: J2000-anchored flat reference value
+    // plus IAU 2006 P03 precession from J2000.
     //
     // INDEPENDENTLY DERIVED VALUES:
-    // - Well-known systems (Lahiri, Raman, Krishnamurti, Fagan-Bradley, Yukteshwar):
-    //   Values from their respective published definitions and epoch tables.
     // - Star-based systems (TrueChitrapaksha, TruePushya, TrueRevati, TrueMula, Hipparchos):
     //   Derived from Hipparcos catalog J2000 position of the defining star minus
     //   the tradition's defined sidereal longitude for that star.
@@ -268,23 +378,22 @@ pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
     //
     // Values are rounded to 3 decimal places (0.001° ≈ 3.6 arcseconds).
     // This rounding is an INDEPENDENT engineering decision for practical precision.
+    #[allow(clippy::match_same_arms)]
     let ref_value = match system {
-        Ayanamsha::Tropical => return 0.0,
+        // Already handled above; unreachable, but the compiler needs them.
+        Ayanamsha::Tropical | Ayanamsha::Lahiri | Ayanamsha::Krishnamurti | Ayanamsha::FaganBradley => {
+            unreachable!()
+        }
 
         // --- Well-documented systems (published primary sources) ---
-        // Lahiri: Indian Astronomical Ephemeris (IAE), ICRC 1955.
-        // ~23°51'22" at J2000.0 from IAE polynomial.
-        Ayanamsha::Lahiri | Ayanamsha::LahiriVp285 | Ayanamsha::AyanamshaOfDate => 23.856,
+        // LahiriVp285 / AyanamshaOfDate: use the same J2000 flat value as a
+        // fallback; full epoch-anchored definitions for these variants are
+        // not yet sourced from primary publications.
+        Ayanamsha::LahiriVp285 | Ayanamsha::AyanamshaOfDate => 23.856,
         // Raman: B.V. Raman, "A Manual of Hindu Astrology" (1935 revised).
         // Anchor: vernal equinox at 0° Aries in 397 CE. J2000 value ≈ 22.411°.
         // Derived from Raman's anchor: vernal equinox at 0° Aries in 397 CE.
         Ayanamsha::Raman => 22.411,
-        // Krishnamurti: K.S. Krishnamurti, "Krishnamurti Paddhati" series.
-        Ayanamsha::Krishnamurti => 23.763,
-        // Fagan-Bradley: Cyril Fagan & Donald Bradley, "Primer of Sidereal Astrology" (1967).
-        // Anchor: sidereal longitude of vernal point at B1950.0 = 24°02'31.36".
-        // J2000 value ≈ 24.742°, projected from B1950.0 anchor via IAU 2006 precession.
-        Ayanamsha::FaganBradley => 24.742,
         // Yukteshwar: Sri Yukteshwar, "The Holy Science" (1894).
         Ayanamsha::Yukteshwar => 22.461,
         // B.V. Raman mean ayanamsha (alternate computation, same anchor).
@@ -415,17 +524,35 @@ mod tests {
     // ── ayanamsha_value ──────────────────────────────────────────────────────
 
     #[test]
-    fn lahiri_at_j2000_approx_23_856() {
+    fn lahiri_at_j2000_approx_23_857() {
+        // Epoch-anchored IAU 1976 precession from JD 2435553.5 (epoch value 23.245524743°)
+        // to J2000.0 yields ≈ 23.857°.  The old J2000-flat constant (23.856) is replaced.
+        // Reference: Lieske et al. (1977), A&A 58, 1–16 (IAU 1976 precession);
+        //            IAE 1989 p. 556 (epoch value).
+        // Note: Swiss Ephemeris (swetest) gives 23.85306° at J2000; the ~0.004° difference
+        // arises because sweph applies a full coordinate transformation including precession
+        // of the ecliptic pole, whereas we use the scalar precession-in-longitude polynomial.
         let v = ayanamsha_value(Ayanamsha::Lahiri, J2000);
         assert!(
-            (v - 23.856).abs() < 0.001,
-            "Lahiri at J2000 should be ~23.856°, got {v}"
+            (v - 23.857).abs() < 0.005,
+            "Lahiri at J2000 should be ≈23.857° (±0.005°), got {v}"
+        );
+    }
+
+    #[test]
+    fn lahiri_at_epoch_self_consistent() {
+        // At the Lahiri epoch JD itself the formula must return the epoch value exactly.
+        // Source: epoch constant from Indian Astronomical Ephemeris 1989, p. 556.
+        let v = ayanamsha_value(Ayanamsha::Lahiri, LAHIRI_EPOCH_JD);
+        assert!(
+            (v - LAHIRI_EPOCH_VALUE_DEG).abs() < 1e-9,
+            "Lahiri at epoch should equal LAHIRI_EPOCH_VALUE_DEG={LAHIRI_EPOCH_VALUE_DEG}, got {v}"
         );
     }
 
     #[test]
     fn lahiri_at_j1950_approx_23_16() {
-        // ~50 years before J2000: IAU 2006 P03 gives ~0.70° less → ~23.16°
+        // ~50 years before J2000; epoch-anchored IAU 1976 precession gives ~23.16°.
         let v = ayanamsha_value(Ayanamsha::Lahiri, J1950);
         assert!(
             (v - 23.16).abs() < 0.20,
@@ -445,12 +572,56 @@ mod tests {
     }
 
     #[test]
-    fn fagan_bradley_at_j2000_approx_24_742() {
+    fn fagan_bradley_at_j2000_approx_24_740() {
+        // Epoch-anchored Newcomb precession from JD 2433282.42346 (epoch value 24.042044444°)
+        // to J2000.0 yields ≈ 24.740°.
+        // Reference: Newcomb (1898), "A Compendium of Spherical Astronomy", p. 226;
+        //            American Sidereal Ephemeris (1976), Astro Computing Services.
         let v = ayanamsha_value(Ayanamsha::FaganBradley, J2000);
         assert!(
-            (v - 24.742).abs() < 0.001,
-            "Fagan-Bradley at J2000 should be ~24.742°, got {v}"
+            (v - 24.740).abs() < 0.003,
+            "Fagan-Bradley at J2000 should be ≈24.740° (±0.003°), got {v}"
         );
+    }
+
+    #[test]
+    fn fagan_bradley_at_epoch_self_consistent() {
+        let v = ayanamsha_value(Ayanamsha::FaganBradley, FB_EPOCH_JD);
+        assert!(
+            (v - FB_EPOCH_VALUE_DEG).abs() < 1e-9,
+            "FB at epoch should equal {FB_EPOCH_VALUE_DEG}, got {v}"
+        );
+    }
+
+    #[test]
+    fn kp_at_j2000_approx_23_760() {
+        // Epoch-anchored Newcomb precession from J1900.0 (JD 2415020.31352,
+        // epoch value 22.363889°) to J2000.0 yields ≈ 23.760°.
+        // Reference: Newcomb (1898), "A Compendium of Spherical Astronomy", p. 226;
+        //            K.S. Krishnamurti, "Krishnamurti Paddhati" series.
+        let v = ayanamsha_value(Ayanamsha::Krishnamurti, J2000);
+        assert!(
+            (v - 23.760).abs() < 0.005,
+            "KP at J2000 should be ≈23.760° (±0.005°), got {v}"
+        );
+    }
+
+    #[test]
+    fn kp_at_epoch_self_consistent() {
+        let v = ayanamsha_value(Ayanamsha::Krishnamurti, KP_EPOCH_JD);
+        assert!(
+            (v - KP_EPOCH_VALUE_DEG).abs() < 1e-9,
+            "KP at epoch should equal {KP_EPOCH_VALUE_DEG}, got {v}"
+        );
+    }
+
+    #[test]
+    fn kp_less_than_lahiri_at_j2000() {
+        // KP is anchored ~1 century earlier at a lower value; it must remain < Lahiri at J2000
+        // because Newcomb precession rate is slightly slower than IAU 1976 rate.
+        let kp = ayanamsha_value(Ayanamsha::Krishnamurti, J2000);
+        let lahiri = ayanamsha_value(Ayanamsha::Lahiri, J2000);
+        assert!(kp < lahiri, "KP ({kp}) should be < Lahiri ({lahiri}) at J2000");
     }
 
     #[test]

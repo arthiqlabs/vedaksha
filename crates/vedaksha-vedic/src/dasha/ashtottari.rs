@@ -14,9 +14,11 @@
 //! **Lord sequence:** Sun(6), Moon(15), Mars(8), Mercury(17), Saturn(10),
 //! Jupiter(19), Rahu(12), Venus(21) = 108 years total.
 //!
-//! **Starting lord:** `nakshatra_index % 8` maps to the sequence.
+//! **Starting lord:** Determined by `ASHTOTTARI_LORDS_BY_NAK` — the Ardradi
+//! 27-element lookup table from BPHS Ch. 35, vv. 17–20. The sequence begins
+//! from Ardra (nakshatra 5) with Sun as its lord. **Not** `nakshatra_index % 8`.
 //!
-//! Source: BPHS Ch. 46 Sl. 2-11.
+//! Source: BPHS Ch. 35 vv. 17–20 (Ardradi Ashtottari variant).
 
 use serde::{Deserialize, Serialize};
 
@@ -82,6 +84,8 @@ impl AshtottariLord {
 }
 
 /// Fixed Ashtottari sequence (indices 0-7).
+///
+/// Source: BPHS Ch. 35 vv. 17–20 (Ardradi Ashtottari variant).
 pub const ASHTOTTARI_SEQUENCE: [AshtottariLord; 8] = [
     AshtottariLord::Sun,
     AshtottariLord::Moon,
@@ -92,6 +96,50 @@ pub const ASHTOTTARI_SEQUENCE: [AshtottariLord; 8] = [
     AshtottariLord::Rahu,
     AshtottariLord::Venus,
 ];
+
+/// Ardradi nakshatra-to-starting-lord mapping (27 nakshatras → 8 lords).
+///
+/// The Ashtottari system begins its cycle from Ardra (nakshatra 5) with Sun
+/// as the ruling lord. Each group of nakshatras maps to one lord in the order:
+/// Sun, Moon, Mars, Mercury, Saturn, Jupiter, Rahu, Venus (then wraps back).
+///
+/// Source: BPHS, Ch. 35, vv. 17–20 (Ardradi Ashtottari variant).
+/// Translation: S.P. Tata, referenced in astrojyoti.com/bphspage6.htm.
+/// License: Public domain (BPHS is ancient Vedic literature).
+pub const ASHTOTTARI_LORDS_BY_NAK: [AshtottariLord; 27] = [
+    // 0  Ashwini         1  Bharani
+    AshtottariLord::Rahu,    AshtottariLord::Rahu,
+    // 2  Krittika        3  Rohini          4  Mrigashira
+    AshtottariLord::Venus,   AshtottariLord::Venus,   AshtottariLord::Venus,
+    // 5  Ardra           6  Punarvasu       7  Pushya          8  Ashlesha
+    AshtottariLord::Sun,     AshtottariLord::Sun,     AshtottariLord::Sun,     AshtottariLord::Sun,
+    // 9  Magha           10 PurvaPhalguni   11 UttaraPhalguni
+    AshtottariLord::Moon,    AshtottariLord::Moon,    AshtottariLord::Moon,
+    // 12 Hasta           13 Chitra          14 Swati           15 Vishakha
+    AshtottariLord::Mars,    AshtottariLord::Mars,    AshtottariLord::Mars,    AshtottariLord::Mars,
+    // 16 Anuradha        17 Jyeshtha
+    AshtottariLord::Mercury, AshtottariLord::Mercury,
+    // 18 Moola           19 PurvaAshadha    20 UttaraAshadha
+    AshtottariLord::Mercury, AshtottariLord::Saturn,  AshtottariLord::Saturn,
+    // 21 Shravana        22 Dhanishta       23 Shatabhisha
+    AshtottariLord::Saturn,  AshtottariLord::Jupiter, AshtottariLord::Jupiter,
+    // 24 PurvaBhadrapada 25 UttaraBhadrapada 26 Revati
+    AshtottariLord::Jupiter, AshtottariLord::Rahu,    AshtottariLord::Rahu,
+];
+
+/// Return the position of a lord in [`ASHTOTTARI_SEQUENCE`] (0-7).
+fn lord_sequence_index(lord: AshtottariLord) -> usize {
+    match lord {
+        AshtottariLord::Sun => 0,
+        AshtottariLord::Moon => 1,
+        AshtottariLord::Mars => 2,
+        AshtottariLord::Mercury => 3,
+        AshtottariLord::Saturn => 4,
+        AshtottariLord::Jupiter => 5,
+        AshtottariLord::Rahu => 6,
+        AshtottariLord::Venus => 7,
+    }
+}
 
 /// A period in the Ashtottari Dasha hierarchy.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -180,9 +228,11 @@ pub fn compute_ashtottari(
     let nakshatra = Nakshatra::from_longitude(moon_sidereal_longitude);
     let nakshatra_index = nakshatra.index() as usize;
 
-    // Starting lord: nakshatra_index % 8
-    let starting_idx = nakshatra_index % 8;
-    let starting_lord = ASHTOTTARI_SEQUENCE[starting_idx];
+    // Starting lord: Ardradi lookup (BPHS Ch. 35, vv. 17–20).
+    // NOT nakshatra_index % 8 — that gives Ashwini→Sun, which is wrong.
+    // Ardradi means "starting from Ardra"; Ardra (index 5) → Sun.
+    let starting_lord = ASHTOTTARI_LORDS_BY_NAK[nakshatra_index];
+    let starting_idx = lord_sequence_index(starting_lord);
 
     // Compute balance of first Maha Dasha based on position within nakshatra.
     let position_in_nak = moon_sidereal_longitude - nakshatra.start_longitude();
@@ -301,14 +351,59 @@ mod tests {
         }
     }
 
-    // 6. Moon at 0° (Ashwini, index 0): starting lord = index 0 % 8 = 0 = Sun
+    // 6. Ardradi lord lookup: Ashwini (index 0) → Rahu (not Sun).
+    //    Source: BPHS Ch. 35, vv. 17–20.
     #[test]
-    fn moon_at_0_starting_lord_is_sun() {
+    fn moon_at_ashwini_starting_lord_is_rahu() {
         let result = compute_ashtottari(0.0, TEST_JD, 1);
-        assert_eq!(result.starting_lord, AshtottariLord::Sun);
+        assert_eq!(
+            result.starting_lord,
+            AshtottariLord::Rahu,
+            "Ashwini maps to Rahu in the Ardradi variant (BPHS Ch. 35)"
+        );
         assert!(
             (result.initial_balance - 1.0).abs() < EPS,
             "balance at nakshatra start should be 1.0"
+        );
+    }
+
+    // 7. Ardra (index 5) → Sun (the anchor of the Ardradi sequence).
+    //    Source: BPHS Ch. 35 vv. 17–20.
+    #[test]
+    fn ardra_starting_lord_is_sun() {
+        // Ardra starts at 5 * 13.333...° = 66.666...°
+        let ardra_start = 5.0 * crate::nakshatra::Nakshatra::SPAN;
+        let result = compute_ashtottari(ardra_start, TEST_JD, 1);
+        assert_eq!(
+            result.starting_lord,
+            AshtottariLord::Sun,
+            "Ardra (index 5) maps to Sun in Ardradi Ashtottari"
+        );
+    }
+
+    // 8. Krittika (index 2) → Venus.
+    //    Source: BPHS Ch. 35 vv. 17–20.
+    #[test]
+    fn krittika_starting_lord_is_venus() {
+        let krittika_start = 2.0 * crate::nakshatra::Nakshatra::SPAN;
+        let result = compute_ashtottari(krittika_start, TEST_JD, 1);
+        assert_eq!(
+            result.starting_lord,
+            AshtottariLord::Venus,
+            "Krittika (index 2) maps to Venus in Ardradi Ashtottari"
+        );
+    }
+
+    // 9. Shravana (index 21) → Saturn.
+    //    Source: BPHS Ch. 35 vv. 17–20.
+    #[test]
+    fn shravana_starting_lord_is_saturn() {
+        let shravana_start = 21.0 * crate::nakshatra::Nakshatra::SPAN;
+        let result = compute_ashtottari(shravana_start, TEST_JD, 1);
+        assert_eq!(
+            result.starting_lord,
+            AshtottariLord::Saturn,
+            "Shravana (index 21) maps to Saturn in Ardradi Ashtottari"
         );
     }
 }
