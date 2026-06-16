@@ -381,7 +381,10 @@ pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
     #[allow(clippy::match_same_arms)]
     let ref_value = match system {
         // Already handled above; unreachable, but the compiler needs them.
-        Ayanamsha::Tropical | Ayanamsha::Lahiri | Ayanamsha::Krishnamurti | Ayanamsha::FaganBradley => {
+        Ayanamsha::Tropical
+        | Ayanamsha::Lahiri
+        | Ayanamsha::Krishnamurti
+        | Ayanamsha::FaganBradley => {
             unreachable!()
         }
 
@@ -621,7 +624,10 @@ mod tests {
         // because Newcomb precession rate is slightly slower than IAU 1976 rate.
         let kp = ayanamsha_value(Ayanamsha::Krishnamurti, J2000);
         let lahiri = ayanamsha_value(Ayanamsha::Lahiri, J2000);
-        assert!(kp < lahiri, "KP ({kp}) should be < Lahiri ({lahiri}) at J2000");
+        assert!(
+            kp < lahiri,
+            "KP ({kp}) should be < Lahiri ({lahiri}) at J2000"
+        );
     }
 
     #[test]

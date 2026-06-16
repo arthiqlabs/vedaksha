@@ -108,23 +108,41 @@ pub const ASHTOTTARI_SEQUENCE: [AshtottariLord; 8] = [
 /// License: Public domain (BPHS is ancient Vedic literature).
 pub const ASHTOTTARI_LORDS_BY_NAK: [AshtottariLord; 27] = [
     // 0  Ashwini         1  Bharani
-    AshtottariLord::Rahu,    AshtottariLord::Rahu,
+    AshtottariLord::Rahu,
+    AshtottariLord::Rahu,
     // 2  Krittika        3  Rohini          4  Mrigashira
-    AshtottariLord::Venus,   AshtottariLord::Venus,   AshtottariLord::Venus,
+    AshtottariLord::Venus,
+    AshtottariLord::Venus,
+    AshtottariLord::Venus,
     // 5  Ardra           6  Punarvasu       7  Pushya          8  Ashlesha
-    AshtottariLord::Sun,     AshtottariLord::Sun,     AshtottariLord::Sun,     AshtottariLord::Sun,
+    AshtottariLord::Sun,
+    AshtottariLord::Sun,
+    AshtottariLord::Sun,
+    AshtottariLord::Sun,
     // 9  Magha           10 PurvaPhalguni   11 UttaraPhalguni
-    AshtottariLord::Moon,    AshtottariLord::Moon,    AshtottariLord::Moon,
+    AshtottariLord::Moon,
+    AshtottariLord::Moon,
+    AshtottariLord::Moon,
     // 12 Hasta           13 Chitra          14 Swati           15 Vishakha
-    AshtottariLord::Mars,    AshtottariLord::Mars,    AshtottariLord::Mars,    AshtottariLord::Mars,
+    AshtottariLord::Mars,
+    AshtottariLord::Mars,
+    AshtottariLord::Mars,
+    AshtottariLord::Mars,
     // 16 Anuradha        17 Jyeshtha
-    AshtottariLord::Mercury, AshtottariLord::Mercury,
+    AshtottariLord::Mercury,
+    AshtottariLord::Mercury,
     // 18 Moola           19 PurvaAshadha    20 UttaraAshadha
-    AshtottariLord::Mercury, AshtottariLord::Saturn,  AshtottariLord::Saturn,
+    AshtottariLord::Mercury,
+    AshtottariLord::Saturn,
+    AshtottariLord::Saturn,
     // 21 Shravana        22 Dhanishta       23 Shatabhisha
-    AshtottariLord::Saturn,  AshtottariLord::Jupiter, AshtottariLord::Jupiter,
+    AshtottariLord::Saturn,
+    AshtottariLord::Jupiter,
+    AshtottariLord::Jupiter,
     // 24 PurvaBhadrapada 25 UttaraBhadrapada 26 Revati
-    AshtottariLord::Jupiter, AshtottariLord::Rahu,    AshtottariLord::Rahu,
+    AshtottariLord::Jupiter,
+    AshtottariLord::Rahu,
+    AshtottariLord::Rahu,
 ];
 
 /// Return the position of a lord in [`ASHTOTTARI_SEQUENCE`] (0-7).
