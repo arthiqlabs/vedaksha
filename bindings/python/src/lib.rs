@@ -34,7 +34,7 @@ fn compute_dasha(moon_longitude: f64, birth_jd: f64, levels: u8) -> PyResult<Str
 /// Returns:
 ///     dict with nakshatra name, index, pada, dasha_lord
 #[pyfunction]
-fn get_nakshatra(py: Python<'_>, sidereal_longitude: f64) -> PyResult<PyObject> {
+fn get_nakshatra(py: Python<'_>, sidereal_longitude: f64) -> PyResult<Py<PyAny>> {
     let nak = vedaksha_vedic::nakshatra::Nakshatra::from_longitude(sidereal_longitude);
     let pada = vedaksha_vedic::nakshatra::Nakshatra::pada_from_longitude(sidereal_longitude);
     let lord = nak.dasha_lord();
@@ -81,7 +81,7 @@ fn compute_houses(
     latitude: f64,
     obliquity: f64,
     system: &str,
-) -> PyResult<PyObject> {
+) -> PyResult<Py<PyAny>> {
     let house_system = parse_house_system(system)?;
     let cusps = vedaksha_astro::houses::compute_houses(ramc, latitude, obliquity, house_system);
 
