@@ -291,19 +291,29 @@ mod tests {
     fn osculating_node_vs_jpl_horizons() {
         // Oracle: JPL Horizons DE441 osculating node longitude `OM` in the
         // J2000 ecliptic. Query: COMMAND='301', CENTER='500@399',
-        // EPHEM_TYPE='ELEMENTS'. Both our `true_node_osculating` and the
-        // JPL `OM` are referred to the same J2000 mean ecliptic, so the
-        // residual is bounded by the lunar-theory difference (ELP/MPP02
-        // vs DE441) plus the algorithm's sensitivity to sub-arcsec lunar
-        // velocity noise. Tolerance: 0.05°.
+        // EPHEM_TYPE='ELEMENTS', REF_PLANE='ECLIPTIC', REF_SYSTEM='J2000'.
+        // `jd` here is TDB — `true_node_osculating` feeds `elp_geocentric`
+        // directly and applies no ΔT, matching Horizons' ELEMENTS time scale.
+        //
+        // Re-measured 2026-07-16 against 2,435 Horizons rows spanning
+        // 1900-2100: mean 0.00008°, max 0.00017° (≈0.6″), flat across every
+        // era. The agreement is far tighter than this test used to imply.
+        //
+        // The J2000 and 2004 values below were previously 123.984 and 49.237 —
+        // wrong by 0.0259° and 0.0106°. The other three matched Horizons to
+        // 0.0004°, which is what exposed them: our evaluator tracks Horizons to
+        // 0.0002°, so a 0.026° "residual" was the reference being wrong, not
+        // the code. The old 0.05° tolerance existed to accommodate those bad
+        // values. Corrected, and tightened to 0.001° — ~6× the observed max,
+        // still tight enough to catch a real regression.
         //
         // Source: NASA/JPL Horizons System (https://ssd.jpl.nasa.gov/horizons/).
         let oracle = [
-            (2451545.0, 123.984, "J2000"),     // 2000-01-01
-            (2453006.0, 49.237, "2004-01-01"), // JD from Horizons
-            (2455197.5, 290.923, "2010-01-01"),
-            (2457388.5, 174.656, "2016-01-01"),
-            (2459580.5, 60.937, "2022-01-01"),
+            (2451545.0, 123.9581, "J2000"),     // 2000-01-01
+            (2453006.0, 49.2476, "2004-01-01"), // JD from Horizons
+            (2455197.5, 290.9234, "2010-01-01"),
+            (2457388.5, 174.6562, "2016-01-01"),
+            (2459580.5, 60.9368, "2022-01-01"),
         ];
 
         for (jd, jpl_node, label) in &oracle {
@@ -315,9 +325,9 @@ mod tests {
             }
 
             assert!(
-                diff < 0.05,
+                diff < 0.001,
                 "{label}: osculating vs JPL DE441 diff too large: {diff:.4}° \
-                 (ours={osc:.4}°, JPL={jpl_node:.3}°)"
+                 (ours={osc:.4}°, JPL={jpl_node:.4}°)"
             );
         }
     }

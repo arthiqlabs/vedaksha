@@ -96,7 +96,7 @@ First-class Jyotish, drawn from primary classical sources.
 - **Yogas** — 50 classical combinations (Pancha Mahapurusha, Dhana, Raja, Daridra, …)
 - **Shadbala** — complete six-component planetary strength, with Ishta / Kashta phala
 - **Ayanamsha** — 44 sidereal systems (Lahiri, Raman, KP, Fagan-Bradley, +40)
-- **Lunar nodes** — Mean, True (Meeus 5-term, ~0.09°), and Osculating (<0.03° vs JPL DE441) — KP sub-lord ready
+- **Lunar nodes** — Mean, True (Meeus 5-term, ~0.09°), and Osculating (0.6″ max vs JPL DE441 over 1900–2100) — KP sub-lord ready
 - **Panchanga** — full five limbs: Tithi (paksha, lord), Vara (Rahu / Gulika Kalam), Nakshatra (deity, yoni, nadi), Yoga (27), Karana (60)
 - **Drishti** — graded aspects: Full, ¾ (75%), ½ (50%), ¼ (25%) per BPHS Ch. 26
 

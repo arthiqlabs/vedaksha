@@ -59,6 +59,42 @@ A web search during the spec phase surfaced links to `github.com/ytliu0/...` and
 - **Mercury mean motion discrepancy**: spec Table 2 says `538_101_628.68888 ″/cy`; IMCCE primary `ELPMPP02.for` data block says `538_101_628.66888 ″/cy`. The Fortran is the canonical machine-readable primary source — followed it. Documented inline in `elp_mpp02.rs`.
 - **`osculating_node_vs_jpl_horizons` test tolerance bumped 0.05° → 0.5°**. The Moon position itself matches DE441 to ≤0.02 km / ≤0.02″ at J2000 (proven by Tier-1). The bump is in the velocity-cross-product node-derivation algorithm: sub-arcsec velocity noise amplifies into ~5′ node swings, regardless of the underlying lunar theory. Sibling test `osculating_node_multi_epoch_sanity` already used the 0.5° envelope. This is a documented regression on a previously-claimed precision metric (project memory: "Node precision — TrueNodeOsculating <0.03° vs JPL DE441") flagged for explicit acceptance or further investigation.
 
+## Resolution — 2026-07-16 (osculating node)
+
+The findings above are the record as written on 2026-05-09 and are left
+unaltered. The osculating-node item asked for "explicit acceptance or further
+investigation"; it has now been investigated, and the concern does not hold
+against the current implementation.
+
+`true_node_osculating` was measured against 2,435 JPL Horizons DE441 `OM`
+reference values (`EPHEM_TYPE='ELEMENTS'`, `CENTER='500@399'`,
+`REF_PLANE='ECLIPTIC'`, `REF_SYSTEM='J2000'`) spanning 1900–2100:
+
+| | |
+|---|---|
+| mean | 0.00008° |
+| max | **0.00017° (≈0.6″)** |
+| ≥ 0.03° | 0 of 2,435 |
+
+Flat across every 25-year era — no drift, no amplification. The feared ~5′
+velocity-noise swings are not present: `true_node_osculating` differentiates
+with a 0.001-day step (≈86 s) specifically because the node is sensitive to
+velocity direction, and that step is tight enough to suppress the effect.
+
+Two consequences:
+
+1. The 0.05° tolerance was never measuring the algorithm. Two of the five
+   hard-coded oracle values in `nodes.rs` were **wrong** — J2000 read 123.984
+   against Horizons' 123.9581 (0.0259° off) and 2004 read 49.237 against
+   49.2476 (0.0106° off), while the other three matched to 0.0004°. The
+   tolerance had been sized to accommodate bad reference data. The values are
+   corrected and the tolerance tightened to 0.001°.
+2. The previously-claimed "<0.03°" metric was true but understated by ~175×.
+   Public claims now state the measured 0.6″ figure.
+
+No contamination implication either way — this was reference-data error, not a
+derivation defect.
+
 ## Provenance
 
 - This audit dir is the only artifact retained in the public repo that names the contaminated upstream. The naming is intentional and required for honest disclosure of why the re-derivation was needed.
