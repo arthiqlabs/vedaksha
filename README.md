@@ -6,7 +6,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `sub-arcsecond vs JPL Horizons` · `870 tests + 8,700 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+`clean-room` · `sub-arcsecond vs JPL Horizons` · `851 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
 
 ---
 
@@ -28,10 +28,20 @@ npm install vedaksha-wasm   # WebAssembly
 ## Why Vedākṣha
 
 - **Clean-room, cited.** Every module that implements a cited algorithm carries a `// Source:` doc-comment pointing at the primary paper or treatise (VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini) — never derived from other software, no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/).
-- **Sub-arcsecond, proven.** Validated against JPL Horizons / DE441 — 870 tests plus 8,700 oracle reference rows on every CI run, on both Ubuntu and macOS.
+- **Sub-arcsecond, measured.** 851 tests on every push (Ubuntu and macOS); a scheduled full run adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run.
 - **Agentic-AI-native.** A 12-tool Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
 - **Runs everywhere.** One Rust codebase → native, Python, WebAssembly (no data files), and a containerized MCP server. No FFI to a C library, no platform-specific build.
 - **Jyotish in the type system.** Nakshatras, dashas, vargas, yogas, shadbala, ayanamshas — first-class, not a Western afterthought.
+
+## In production
+
+Vedākṣha is the calculation engine under ArthIQ Labs' Jyotish properties:
+
+| Product | What it is |
+|---------|------------|
+| [kundalimcp.com](https://kundalimcp.com) | The B2B/developer engine — an agentic-AI Jyotish MCP with the full computation suite (yogas, all five dasha systems, shadbala, school-specific interpretation). Builds directly on the `vedaksha-*` crates. |
+| [janampatri.net](https://janampatri.net) | Vedic astrology marketplace — expert consultations, plus BPHS-grounded charts and life-trajectory analysis. |
+| [kundali.live](https://kundali.live) | Consumer endpoint — chat-based readings and self-serve PDF reports. |
 
 ## Workspace
 
@@ -53,7 +63,7 @@ Python bindings via PyO3 live in [bindings/python](bindings/python).
 | Provider | Accuracy | Data | Use case |
 |----------|----------|------|----------|
 | **SpkReader** | Sub-arcsecond | DE440s (~31 MB on disk) | Servers, containers |
-| **AnalyticalProvider** | <15″ planets, <1″ Moon | Zero files (compiled constants) | WASM, edge, Cloudflare Workers, `no_std` |
+| **AnalyticalProvider** | <25″ planets, <1″ Moon | Zero files (compiled constants) | WASM, edge, Cloudflare Workers, `no_std` |
 
 The AnalyticalProvider evaluates VSOP87A (Bretagnon & Francou 1988) for planets and ELP/MPP02 (Chapront 2002) for the Moon — all coefficients are compile-time constants, so there are no runtime data files.
 
@@ -107,16 +117,65 @@ The tool surface is generated from the Rust definitions and locked by a snapshot
 
 ## Accuracy
 
-Validated against two independent reference ephemerides across **8,700 oracle reference rows** in [`tests/oracle_jpl/`](tests/oracle_jpl):
+Every figure below is printed by a named test. Reproduce them with
+`bash scripts/download_de440s.sh` then
+`cargo test -p vedaksha-ephem-core --release -- --include-ignored --nocapture`.
 
-| Metric | SpkReader (DE440s) | AnalyticalProvider |
-|--------|--------------------|--------------------|
-| Planetary longitude | Sub-arcsecond (avg 1.7″) | <15″ (avg 3.8″) |
-| Moon longitude | Sub-arcsecond | <1″ (0.23″ avg, 0.60″ max, 1900–2100 vs JPL Horizons) |
-| House cusps (10 systems) | <0.001° | <0.01° |
-| Ayanamsha (44 systems) | avg 0.005° | same (pure math) |
-| Dasha periods | Sum to 120 yr ± 0.01 days | same |
-| Nakshatra boundaries | Reference-accurate | matches SpkReader |
+**SpkReader vs JPL Horizons (DE441)** — `oracle_comparison.rs`, over the
+24,350 rows in [`tests/oracle_jpl/`](tests/oracle_jpl) (10 bodies × 2,435 dates,
+1900–2100). Horizons serves DE441, so this measures our DE440s pipeline against
+an independent kernel:
+
+| Era | Comparisons | Mean | Max |
+|-----|-------------|------|-----|
+| 1900–2025 (ΔT measured) | 15,350 | **0.106″** | 1.184″ (Uranus) |
+| 1900–2100 (all) | 24,350 | 0.880″ | 44.914″ (Moon, 2099) |
+
+15,349 of 15,350 comparisons before 2026 are sub-arcsecond. Past 2025 the
+residual is dominated by **ΔT prediction**, not ephemeris error: our Espenak &
+Meeus extrapolation and Horizons' own ΔT diverge by ~68 s at 2099, which shows
+up in proportion to a body's angular rate (the Moon, at 0.64″/s, picks up ~45″;
+Pluto, essentially none). At 2099-02-06 the Sun, Moon, Mercury, Venus and Mars —
+rates spanning 0.03–0.64″/s — all imply the same 66–71 s offset. ΔT beyond the
+IERS measured record is unpredictable in principle, not a defect we can fix.
+
+**AnalyticalProvider vs JPL Horizons (DE441)** — `analytical_oracle.rs`, the
+same fixture over 1900–2025 (13,815 comparisons). VSOP87A is a truncated
+analytical theory, so it is necessarily looser than the numerical kernel:
+
+| Body | Mean | Max |
+|------|------|-----|
+| Venus | 4.83″ | **24.22″** |
+| Mercury | 4.27″ | 11.49″ |
+| Sun | 4.09″ | 7.00″ |
+| Mars | 3.06″ | 18.08″ |
+| Jupiter | 0.81″ | 1.97″ |
+| Neptune | 0.50″ | 1.70″ |
+| Saturn | 0.46″ | 1.11″ |
+| Uranus | 0.33″ | 1.44″ |
+| Moon | 0.17″ | 0.61″ |
+
+Overall mean 2.06″. `analytical_accuracy.rs` reports a friendlier 13.09″ max for
+the same provider, but it samples 10 dates against this test's 2,435 per body —
+the sparse grid never lands near Venus's worst case. The table above is the
+better-sampled number and the one to trust.
+
+**ELP/MPP02 Moon vs JPL Horizons (DE441)** — `lunar_horizons.rs`, live-fetched
+over −3000…+3000 CE: **0.015″ at J2000** (tolerance 0.06″), 0.020–0.053″ across
+1500–2500 CE, degrading to 85.5″ in deep antiquity where ELP/MPP02's own
+published precision is the limit.
+
+**Ayanamsha** — Lahiri, Fagan-Bradley and KP are checked at J2000 to
+0.003–0.005° (`sidereal.rs`), propagating documented epoch anchors with IAU 1976
+/ Newcomb precession. Every anchor's origin is listed in
+[`DATA_PROVENANCE.md`](DATA_PROVENANCE.md). The other 41 systems are
+range-checked only — no accuracy figure is claimed for them.
+
+Dasha totals and nakshatra boundaries are covered by invariant tests
+(`vimshottari.rs`, `nakshatra.rs`). Those verify internal consistency — that our
+BPHS constants sum to 120 years, that boundaries tile the circle — and are not
+comparisons against an external reference. **House-cusp accuracy is not measured
+against any reference.**
 
 ## Install
 

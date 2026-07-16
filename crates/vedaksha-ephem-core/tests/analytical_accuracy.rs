@@ -7,6 +7,8 @@
 //! Validates that the truncated analytical series produce ecliptic longitudes
 //! close enough to DE440s for chart-equivalent astrology computations.
 
+mod common;
+
 use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates;
@@ -67,14 +69,10 @@ const MOON_TOLERANCE_ARCSEC: f64 = 30.0;
 
 #[test]
 fn planet_longitude_accuracy() {
-    let bsp = bsp_path();
-    if !bsp.exists() {
-        eprintln!(
-            "DE440s not found at {:?}, skipping planet_longitude_accuracy",
-            bsp
-        );
+    if !common::require_bsp() {
         return;
     }
+    let bsp = bsp_path();
     let spk = SpkReader::open(&bsp).expect("failed to open DE440s");
     let ana = AnalyticalProvider::new();
     let dates = test_dates();
@@ -157,11 +155,10 @@ fn planet_longitude_accuracy() {
 
 #[test]
 fn sun_longitude_accuracy() {
-    let bsp = bsp_path();
-    if !bsp.exists() {
-        eprintln!("DE440s not found, skipping sun_longitude_accuracy");
+    if !common::require_bsp() {
         return;
     }
+    let bsp = bsp_path();
     let spk = SpkReader::open(&bsp).expect("failed to open DE440s");
     let ana = AnalyticalProvider::new();
     let dates = test_dates();
@@ -213,11 +210,10 @@ fn sun_longitude_accuracy() {
 
 #[test]
 fn moon_longitude_accuracy() {
-    let bsp = bsp_path();
-    if !bsp.exists() {
-        eprintln!("DE440s not found, skipping moon_longitude_accuracy");
+    if !common::require_bsp() {
         return;
     }
+    let bsp = bsp_path();
     let spk = SpkReader::open(&bsp).expect("failed to open DE440s");
     let ana = AnalyticalProvider::new();
     let dates = test_dates();
@@ -269,11 +265,10 @@ fn moon_longitude_accuracy() {
 
 #[test]
 fn moon_nakshatra_boundary() {
-    let bsp = bsp_path();
-    if !bsp.exists() {
-        eprintln!("DE440s not found, skipping moon_nakshatra_boundary");
+    if !common::require_bsp() {
         return;
     }
+    let bsp = bsp_path();
     let spk = SpkReader::open(&bsp).expect("failed to open DE440s");
     let ana = AnalyticalProvider::new();
 

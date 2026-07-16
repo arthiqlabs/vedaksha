@@ -3,16 +3,31 @@
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Oracle comparison: Vedākṣha vs independent reference data.
+//! Oracle comparison: `SpkReader` (DE440s) vs JPL Horizons (DE441).
 //!
-//! Reference values are astronomical facts (planetary longitudes)
-//! generated from an independent ephemeris implementation.
+//! Reference values are astronomical facts — apparent geocentric ecliptic
+//! longitudes fetched from NASA/JPL Horizons, a public-domain US Government
+//! work. Horizons serves DE441, so this is a genuinely independent kernel
+//! from the DE440s that `SpkReader` reads: the comparison measures our
+//! Chebyshev evaluation and apparent-place pipeline against JPL's own.
+//!
+//! Regenerate the fixture with `python3 scripts/generate_horizons_oracle.py`;
+//! that script documents the frame and time-scale contract both sides must
+//! honour.
+
+mod common;
 
 use std::fs;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates;
 use vedaksha_ephem_core::jpl::EphemerisProvider;
 use vedaksha_ephem_core::jpl::reader::SpkReader;
+
+/// Fixture wrapper: `{ "_provenance": {...}, "rows": [...] }`.
+#[derive(serde::Deserialize)]
+struct OracleFixture {
+    rows: Vec<OracleDataPoint>,
+}
 
 #[derive(serde::Deserialize)]
 struct OracleDataPoint {
@@ -22,18 +37,42 @@ struct OracleDataPoint {
     description: String,
     jd: f64,
     body: String,
-    #[serde(alias = "swe_longitude")]
     ref_longitude: f64,
-    #[serde(alias = "swe_latitude")]
     #[allow(dead_code)]
     ref_latitude: f64,
-    #[serde(alias = "swe_distance")]
     #[allow(dead_code)]
     ref_distance: f64,
-    #[serde(alias = "swe_speed")]
     #[allow(dead_code)]
     ref_speed: f64,
 }
+
+/// JD of 2026-01-01 — the boundary between ΔT that is *measured* and ΔT that
+/// is *predicted* (`delta_t.rs` carries IERS values through 2025, then
+/// extrapolates).
+///
+/// This split matters. At or before this epoch the residual against Horizons
+/// reflects our ephemeris and apparent-place pipeline, and is sub-arcsecond.
+/// After it, our Espenak & Meeus ΔT extrapolation and Horizons' own ΔT
+/// prediction diverge — by ~68 s at 2099 — and that time offset shows up as a
+/// longitude error proportional to each body's angular rate. The Moon, at
+/// ~0.64″/s, picks up ~45″ of it; Pluto, at ~0.0003″/s, essentially none.
+/// Confirmed empirically: at 2099-02-06 the Sun, Moon, Mercury, Venus and Mars
+/// — rates spanning 0.03–0.64″/s — all imply the same 66–71 s offset.
+///
+/// So a future-date residual is a ΔT-prediction disagreement, not an ephemeris
+/// error, and the two get separate budgets rather than one meaningless bound.
+const MEASURED_DT_JD: f64 = 2_461_041.5;
+
+/// Per-point ceiling over the measured-ΔT era. Observed max is 1.184″ (a
+/// single Uranus point in 1900); 2.0″ leaves headroom without going slack.
+const MEASURED_MAX_ARCSEC: f64 = 2.0;
+
+/// Mean ceiling over the measured-ΔT era. Observed mean is 0.106″.
+const MEASURED_MEAN_ARCSEC: f64 = 0.20;
+
+/// Per-point ceiling over the predicted-ΔT era, sized by the ΔT divergence
+/// rather than by our ephemeris. Observed max is 44.9″ (Moon, 2099).
+const PREDICTED_MAX_ARCSEC: f64 = 60.0;
 
 fn body_from_name(name: &str) -> Option<Body> {
     match name {
@@ -76,27 +115,19 @@ fn oracle_data_path() -> std::path::PathBuf {
 
 #[test]
 fn compare_against_reference() {
+    if !common::require_bsp() || !common::require_horizons_oracle() {
+        return;
+    }
     let bsp = bsp_path();
-    if !bsp.exists() {
-        eprintln!("DE440s not found at {}. Skipping.", bsp.display());
-        return;
-    }
-
     let oracle_path = oracle_data_path();
-    if !oracle_path.exists() {
-        eprintln!(
-            "Oracle data not found at {}. Run: python3 tests/oracle_comparison.py",
-            oracle_path.display()
-        );
-        return;
-    }
 
     let reader = SpkReader::open(&bsp).expect("Failed to open DE440s");
     let (jd_min, jd_max) = reader.time_range();
 
     let oracle_json = fs::read_to_string(&oracle_path).expect("Failed to read oracle data");
-    let data_points: Vec<OracleDataPoint> =
+    let fixture: OracleFixture =
         serde_json::from_str(&oracle_json).expect("Failed to parse oracle data");
+    let data_points = fixture.rows;
 
     eprintln!("\n===========================================================================");
     eprintln!(" Vedākṣha — Accuracy Report");
@@ -113,6 +144,18 @@ fn compare_against_reference() {
     let mut max_error_date = String::new();
     let mut sum_error: f64 = 0.0;
     let mut errors: Vec<(String, String, f64, f64, f64)> = Vec::new();
+
+    // Measured-ΔT era statistics, tracked separately — see MEASURED_DT_JD.
+    let mut m_total = 0;
+    let mut m_sum: f64 = 0.0;
+    let mut m_max: f64 = 0.0;
+    let mut m_max_body = String::new();
+    let mut m_max_date = String::new();
+
+    // Predicted-ΔT era: tracked only to report and to bound the ΔT divergence.
+    let mut p_max: f64 = 0.0;
+    let mut p_max_body = String::new();
+    let mut p_max_date = String::new();
 
     for dp in &data_points {
         let body = match body_from_name(&dp.body) {
@@ -168,6 +211,20 @@ fn compare_against_reference() {
             max_error = diff_arcsec;
             max_error_body = dp.body.clone();
             max_error_date = dp.date.clone();
+        }
+
+        if dp.jd < MEASURED_DT_JD {
+            m_total += 1;
+            m_sum += diff_arcsec;
+            if diff_arcsec > m_max {
+                m_max = diff_arcsec;
+                m_max_body = dp.body.clone();
+                m_max_date = dp.date.clone();
+            }
+        } else if diff_arcsec > p_max {
+            p_max = diff_arcsec;
+            p_max_body = dp.body.clone();
+            p_max_date = dp.date.clone();
         }
 
         errors.push((
@@ -241,12 +298,46 @@ fn compare_against_reference() {
         max_error, max_error_body, max_error_date
     );
 
-    // The test passes if all positions are within 1 degree
-    // (our pipeline doesn't yet have all corrections for sub-arcsecond)
+    let m_mean = m_sum / m_total as f64;
+    eprintln!("\n--- Measured-ΔT era (JD < {MEASURED_DT_JD}, i.e. before 2026) ---");
+    eprintln!("Comparisons:          {m_total}");
+    eprintln!("Mean error:           {m_mean:.3} arcseconds");
+    eprintln!("Max error:            {m_max:.3} arcseconds ({m_max_body} at {m_max_date})");
+    eprintln!("\n--- Predicted-ΔT era (2026+; residual is ΔT divergence, not ephemeris) ---");
+    eprintln!("Max error:            {p_max:.3} arcseconds ({p_max_body} at {p_max_date})");
+
+    // Accuracy is asserted where it is actually attributable to us: the era
+    // where ΔT is measured rather than predicted. These bounds are what the
+    // published sub-arcsecond claim rests on, so they are tight enough to fail
+    // on a real regression.
     assert!(
-        within_1_degree == total,
-        "Some positions differ by more than 1 degree from reference"
+        m_max < MEASURED_MAX_ARCSEC,
+        "measured-ΔT era max error {m_max:.3}″ ({m_max_body} at {m_max_date}) exceeds \
+         {MEASURED_MAX_ARCSEC}″ — the sub-arcsecond claim no longer holds"
+    );
+    assert!(
+        m_mean < MEASURED_MEAN_ARCSEC,
+        "measured-ΔT era mean error {m_mean:.3}″ exceeds {MEASURED_MEAN_ARCSEC}″"
     );
 
-    eprintln!("\n✓ All {} positions within 1 degree of reference.", total);
+    // Future dates are bounded only against ΔT-prediction divergence. A blowout
+    // here means either our ΔT model or the ephemeris moved — worth a look, but
+    // it is not the accuracy claim.
+    assert!(
+        p_max < PREDICTED_MAX_ARCSEC,
+        "predicted-ΔT era max error {p_max:.3}″ ({p_max_body} at {p_max_date}) exceeds \
+         {PREDICTED_MAX_ARCSEC}″ — check delta_t.rs against Horizons' ΔT"
+    );
+
+    // Nothing anywhere in range should drift past an arcminute.
+    assert!(
+        within_1_arcmin == total,
+        "{} of {total} positions differ from reference by more than 1 arcminute",
+        total - within_1_arcmin
+    );
+
+    eprintln!(
+        "\n✓ {m_total} measured-ΔT comparisons: mean {m_mean:.3}″, max {m_max:.3}″ \
+         — sub-arcsecond agreement with JPL Horizons DE441."
+    );
 }

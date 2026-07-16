@@ -31,10 +31,23 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Build (release)
         run: cargo build --workspace --release --locked
+      # The SpkReader-backed tests need the 32 MB DE440s kernel, which is
+      # gitignored. Per-push CI skips them; this job exists to actually run
+      # them, so it fetches the kernel first.
+      - name: Download DE440s kernel
+        run: bash scripts/download_de440s.sh
       - name: Full test suite (release, all tests including release-only #[ignore]s)
         # `--include-ignored` picks up the #[ignore]d tests whose runtime is
         # only acceptable in release mode (e.g. mcp's 365-day transit search,
         # ephem-core's 17-min Tier-3 legacy oracle).
+        #
+        # VEDAKSHA_REQUIRE_FIXTURES turns a missing kernel or oracle fixture
+        # into a hard failure. Without it these tests return early and report
+        # green having verified nothing — which is exactly how the published
+        # accuracy claims went unchecked for so long. If this job cannot get
+        # its fixtures, it must go red rather than lie.
+        env:
+          VEDAKSHA_REQUIRE_FIXTURES: '1'
         run: cargo test --workspace --release --locked -- --include-ignored
       - name: Clippy
         env:

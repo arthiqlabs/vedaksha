@@ -5,9 +5,12 @@
 
 //! Integration tests for the coordinate transformation pipeline.
 //!
-//! These tests require the JPL DE440s ephemeris file (`data/de440s.bsp`)
-//! which is not checked into the repository. Tests are automatically
-//! skipped when the file is absent (e.g. in CI).
+//! These tests require the JPL DE440s ephemeris file (`data/de440s.bsp`),
+//! which is not checked into the repository — fetch it with
+//! `scripts/download_de440s.sh`. Absent it, they skip; under
+//! `VEDAKSHA_REQUIRE_FIXTURES` they fail instead.
+
+mod common;
 
 use core::f64::consts::PI;
 
@@ -16,23 +19,22 @@ use vedaksha_ephem_core::coordinates::apparent_position;
 use vedaksha_ephem_core::jpl::reader::SpkReader;
 use vedaksha_ephem_core::julian::J2000;
 
-/// Path to DE440s test data relative to crate root.
-const BSP_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/de440s.bsp");
-
-/// Open the SPK reader, or return `None` if the file is missing.
+/// Open the SPK reader, or return `None` if the kernel is missing.
 fn try_open_reader() -> Option<SpkReader> {
-    SpkReader::open(BSP_PATH).ok()
+    if !common::require_bsp() {
+        return None;
+    }
+    Some(SpkReader::open(common::bsp_path()).expect("de440s.bsp present but unreadable"))
 }
 
-/// Helper macro: skip the test when de440s.bsp is absent.
+/// Helper macro: skip the test when de440s.bsp is absent — unless
+/// `VEDAKSHA_REQUIRE_FIXTURES` is set, in which case `common::require_bsp`
+/// fails the run rather than letting it pass vacuously.
 macro_rules! require_bsp {
     () => {
         match try_open_reader() {
             Some(r) => r,
-            None => {
-                eprintln!("SKIPPED: de440s.bsp not found at {BSP_PATH}");
-                return;
-            }
+            None => return,
         }
     };
 }

@@ -5,28 +5,29 @@
 
 //! Integration tests for the SPK reader against DE440s data.
 //!
-//! Automatically skipped when `data/de440s.bsp` is absent (e.g. in CI).
+//! Skipped when `data/de440s.bsp` is absent (fetch it with
+//! `scripts/download_de440s.sh`), unless `VEDAKSHA_REQUIRE_FIXTURES` is set —
+//! see `common::require`.
+
+mod common;
 
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::jpl::EphemerisProvider;
 use vedaksha_ephem_core::jpl::reader::SpkReader;
 use vedaksha_ephem_core::julian::J2000;
 
-/// Path to DE440s test data relative to crate root.
-const BSP_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../data/de440s.bsp");
-
 fn try_open_reader() -> Option<SpkReader> {
-    SpkReader::open(BSP_PATH).ok()
+    if !common::require_bsp() {
+        return None;
+    }
+    Some(SpkReader::open(common::bsp_path()).expect("de440s.bsp present but unreadable"))
 }
 
 macro_rules! require_bsp {
     () => {
         match try_open_reader() {
             Some(r) => r,
-            None => {
-                eprintln!("SKIPPED: de440s.bsp not found at {BSP_PATH}");
-                return;
-            }
+            None => return,
         }
     };
 }

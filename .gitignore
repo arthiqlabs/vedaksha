@@ -48,6 +48,10 @@ scripts/data/
 .cleanroom-allow.yaml
 .cleanroom-deny.yaml
 .githooks/
+
+# Local agent workflow config + cleanroom approvals. Must never reach this
+# public repo — it is an AI-workflow marker, and cleanroom-approve appends to it.
+CLAUDE.md
 scripts/setup-hooks.sh
 
 # Internal planning docs — not for public repo
