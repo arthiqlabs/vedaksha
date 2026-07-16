@@ -80,8 +80,23 @@ def sha256_of(path: str) -> str:
     return h.hexdigest()
 
 
+class SourceUnreachable(RuntimeError):
+    """The IMCCE distribution could not be reached.
+
+    Distinct from a SHA mismatch on purpose. `--verify` exists to catch
+    upstream *drift*; an FTP timeout is not drift, it is infrastructure we do
+    not control. Conflating the two made the scheduled Full Validation job go
+    red on network flakes, which trains everyone to ignore it.
+    """
+
+
 def fetch_manifest_file(filename: str, expected_sha: str, expected_size: int) -> str:
-    """Fetch one file via FTP and verify its SHA256."""
+    """Fetch one file via FTP and verify its SHA256.
+
+    Raises `SourceUnreachable` if the fetch itself fails, and `RuntimeError`
+    if the file arrives but its SHA does not match — the latter is real drift
+    and must never be downgraded to a skip.
+    """
     os.makedirs(DATA_DIR, exist_ok=True)
     out_path = os.path.join(DATA_DIR, filename)
 
@@ -99,7 +114,7 @@ def fetch_manifest_file(filename: str, expected_sha: str, expected_size: int) ->
     try:
         urllib.request.urlretrieve(url, out_path)
     except (urllib.error.URLError, urllib.error.HTTPError, OSError) as exc:
-        raise RuntimeError(f"failed to fetch {url}: {exc}") from exc
+        raise SourceUnreachable(f"failed to fetch {url}: {exc}") from exc
 
     size = os.path.getsize(out_path)
     actual = sha256_of(out_path)
@@ -395,7 +410,16 @@ def main() -> int:
     print(f"Output:    {out_dir}")
     print()
 
-    paths = fetch_all()
+    try:
+        paths = fetch_all()
+    except SourceUnreachable as exc:
+        if args.verify:
+            # Skip, don't fail. See SourceUnreachable — a red run here would
+            # mean "the coefficients drifted", and that is not what happened.
+            print(f"\nSKIP: IMCCE distribution unreachable — {exc}")
+            print("Not a drift signal; nothing was verified. Re-run when the source is up.")
+            return 0
+        raise
     print()
 
     plan = [

@@ -55,8 +55,23 @@ BASE_URLS = [
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 
+class SourceUnreachable(RuntimeError):
+    """No IMCCE mirror could be reached.
+
+    Distinct from a SHA mismatch on purpose. `--verify` exists to catch
+    upstream *drift*; a network timeout is not drift, it is infrastructure we
+    do not control. Conflating the two made the scheduled Full Validation job
+    go red on network flakes, which trains everyone to ignore it.
+    """
+
+
 def download_file(suffix: str) -> str:
-    """Download a VSOP87A file and return its path. Tries multiple URLs."""
+    """Download a VSOP87A file and return its path. Tries multiple URLs.
+
+    Raises `SourceUnreachable` when every mirror fails. A file that downloads
+    but whose regenerated blob mismatches is real drift and is reported by the
+    `--verify` comparison below, not here.
+    """
     os.makedirs(DATA_DIR, exist_ok=True)
     filename = f"VSOP87A.{suffix}"
     filepath = os.path.join(DATA_DIR, filename)
@@ -81,7 +96,7 @@ def download_file(suffix: str) -> str:
             print(f"  Failed: {e}")
             continue
 
-    raise RuntimeError(
+    raise SourceUnreachable(
         f"Could not download VSOP87A.{suffix} from any source. "
         f"Check network connectivity or manually place the file in {DATA_DIR}/"
     )
@@ -296,7 +311,20 @@ def main():
         print(f"Processing {planet_name.capitalize()}...")
 
         # Download
-        filepath = download_file(suffix)
+        try:
+            filepath = download_file(suffix)
+        except SourceUnreachable as exc:
+            if args.verify:
+                # Skip, don't fail. See SourceUnreachable — a red run here
+                # would mean "the coefficients drifted", and that is not what
+                # happened.
+                print(f"\nSKIP: IMCCE mirrors unreachable — {exc}")
+                print(
+                    "Not a drift signal; nothing was verified. "
+                    "Re-run when the source is up."
+                )
+                return 0
+            raise
 
         # Parse
         full_series = parse_vsop87a_file(filepath)
