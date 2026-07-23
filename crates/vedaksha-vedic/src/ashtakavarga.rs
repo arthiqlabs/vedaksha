@@ -11,13 +11,13 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::planet::YogaPlanet;
+use crate::graha::Graha;
 
 /// Bhinna Ashtakavarga table for one planet.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AshtakavargaTable {
     /// The planet this table belongs to.
-    pub planet: YogaPlanet,
+    pub planet: Graha,
     /// Bindu count per zodiac sign (index 0 = Aries … 11 = Pisces).
     pub bindus: [u8; 12],
     /// Sum of all 12 bindus.
@@ -77,13 +77,13 @@ pub fn bhinna_ashtakavarga(input: &BhinnaAshtakavargaInput) -> [AshtakavargaTabl
         input.lagna,
     ];
     let target_planets = [
-        YogaPlanet::Sun,
-        YogaPlanet::Moon,
-        YogaPlanet::Mars,
-        YogaPlanet::Mercury,
-        YogaPlanet::Jupiter,
-        YogaPlanet::Venus,
-        YogaPlanet::Saturn,
+        Graha::Sun,
+        Graha::Moon,
+        Graha::Mars,
+        Graha::Mercury,
+        Graha::Jupiter,
+        Graha::Venus,
+        Graha::Saturn,
     ];
 
     core::array::from_fn(|pi| {
@@ -200,13 +200,13 @@ mod tests {
     #[test]
     fn planet_order_is_sun_moon_mars_mercury_jupiter_venus_saturn() {
         let tables = bhinna_ashtakavarga(&all_different_signs());
-        assert_eq!(tables[0].planet, YogaPlanet::Sun);
-        assert_eq!(tables[1].planet, YogaPlanet::Moon);
-        assert_eq!(tables[2].planet, YogaPlanet::Mars);
-        assert_eq!(tables[3].planet, YogaPlanet::Mercury);
-        assert_eq!(tables[4].planet, YogaPlanet::Jupiter);
-        assert_eq!(tables[5].planet, YogaPlanet::Venus);
-        assert_eq!(tables[6].planet, YogaPlanet::Saturn);
+        assert_eq!(tables[0].planet, Graha::Sun);
+        assert_eq!(tables[1].planet, Graha::Moon);
+        assert_eq!(tables[2].planet, Graha::Mars);
+        assert_eq!(tables[3].planet, Graha::Mercury);
+        assert_eq!(tables[4].planet, Graha::Jupiter);
+        assert_eq!(tables[5].planet, Graha::Venus);
+        assert_eq!(tables[6].planet, Graha::Saturn);
     }
 
     #[test]

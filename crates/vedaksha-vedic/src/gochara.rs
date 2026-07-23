@@ -13,7 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::planet::YogaPlanet;
+use crate::graha::Graha;
 
 /// Selectable vedha pair table.
 ///
@@ -47,7 +47,7 @@ pub enum GocharaEffect {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GrahaGochara {
     /// The transiting graha.
-    pub graha: YogaPlanet,
+    pub graha: Graha,
     /// Sign index (0–11) the graha currently occupies.
     pub transit_rashi: u8,
     /// Sign index (0–11) of the natal reference point.
@@ -60,7 +60,7 @@ pub struct GrahaGochara {
     /// school-specific exemption filter is applied. Empty when the
     /// transiting graha is in an unfavourable house (vedha is only
     /// classically defined against favourable transits).
-    pub vedha_candidates: Vec<YogaPlanet>,
+    pub vedha_candidates: Vec<Graha>,
     /// Optional Bhinna Ashtakavarga bindu count for this graha at this
     /// transit sign (0–8). Caller may attach it from a precomputed
     /// [`crate::ashtakavarga::AshtakavargaTable`].
@@ -81,36 +81,33 @@ pub struct TransitPositions {
 
 // BPHS Ch.29 — favourable house numbers (1-indexed) per graha.
 // Anything not listed here is unfavourable.
-const FAVOURABLE_HOUSES: [(YogaPlanet, &[u8]); 7] = [
-    (YogaPlanet::Sun, &[3, 6, 10, 11]),
-    (YogaPlanet::Moon, &[1, 3, 6, 7, 10, 11]),
-    (YogaPlanet::Mars, &[3, 6, 11]),
-    (YogaPlanet::Mercury, &[2, 4, 6, 8, 10, 11]),
-    (YogaPlanet::Jupiter, &[2, 5, 7, 9, 11]),
-    (YogaPlanet::Venus, &[1, 2, 3, 4, 5, 8, 9, 11, 12]),
-    (YogaPlanet::Saturn, &[3, 6, 11]),
+const FAVOURABLE_HOUSES: [(Graha, &[u8]); 7] = [
+    (Graha::Sun, &[3, 6, 10, 11]),
+    (Graha::Moon, &[1, 3, 6, 7, 10, 11]),
+    (Graha::Mars, &[3, 6, 11]),
+    (Graha::Mercury, &[2, 4, 6, 8, 10, 11]),
+    (Graha::Jupiter, &[2, 5, 7, 9, 11]),
+    (Graha::Venus, &[1, 2, 3, 4, 5, 8, 9, 11, 12]),
+    (Graha::Saturn, &[3, 6, 11]),
 ];
 
 // BPHS Ch.29 — vedha (obstruction) pair table.
 // (favourable_house_for_graha, vedha_house) — when another graha occupies
 // the vedha house, the favourable transit is obstructed.
-const BPHS29_VEDHA: [(YogaPlanet, &[(u8, u8)]); 7] = [
-    (YogaPlanet::Sun, &[(3, 9), (6, 12), (10, 4), (11, 5)]),
+const BPHS29_VEDHA: [(Graha, &[(u8, u8)]); 7] = [
+    (Graha::Sun, &[(3, 9), (6, 12), (10, 4), (11, 5)]),
     (
-        YogaPlanet::Moon,
+        Graha::Moon,
         &[(1, 5), (3, 9), (6, 12), (7, 2), (10, 4), (11, 8)],
     ),
-    (YogaPlanet::Mars, &[(3, 12), (6, 9), (11, 5)]),
+    (Graha::Mars, &[(3, 12), (6, 9), (11, 5)]),
     (
-        YogaPlanet::Mercury,
+        Graha::Mercury,
         &[(2, 5), (4, 3), (6, 9), (8, 1), (10, 8), (11, 12)],
     ),
+    (Graha::Jupiter, &[(2, 12), (5, 4), (7, 3), (9, 10), (11, 8)]),
     (
-        YogaPlanet::Jupiter,
-        &[(2, 12), (5, 4), (7, 3), (9, 10), (11, 8)],
-    ),
-    (
-        YogaPlanet::Venus,
+        Graha::Venus,
         &[
             (1, 8),
             (2, 7),
@@ -123,7 +120,7 @@ const BPHS29_VEDHA: [(YogaPlanet, &[(u8, u8)]); 7] = [
             (12, 3),
         ],
     ),
-    (YogaPlanet::Saturn, &[(3, 12), (6, 9), (11, 5)]),
+    (Graha::Saturn, &[(3, 12), (6, 9), (11, 5)]),
 ];
 
 #[inline]
@@ -136,7 +133,7 @@ fn house_from(reference_sign: u8, transit_sign: u8) -> u8 {
 }
 
 #[inline]
-fn favourable_houses_for(graha: YogaPlanet) -> &'static [u8] {
+fn favourable_houses_for(graha: Graha) -> &'static [u8] {
     for (g, list) in FAVOURABLE_HOUSES {
         if g == graha {
             return list;
@@ -146,7 +143,7 @@ fn favourable_houses_for(graha: YogaPlanet) -> &'static [u8] {
 }
 
 #[inline]
-fn vedha_pairs_for(graha: YogaPlanet, table: VedhaTable) -> &'static [(u8, u8)] {
+fn vedha_pairs_for(graha: Graha, table: VedhaTable) -> &'static [(u8, u8)] {
     match table {
         VedhaTable::Bphs29 => {
             for (g, pairs) in BPHS29_VEDHA {
@@ -160,7 +157,7 @@ fn vedha_pairs_for(graha: YogaPlanet, table: VedhaTable) -> &'static [(u8, u8)] 
 }
 
 #[inline]
-fn lookup_vedha_house(graha: YogaPlanet, transit_house: u8, table: VedhaTable) -> Option<u8> {
+fn lookup_vedha_house(graha: Graha, transit_house: u8, table: VedhaTable) -> Option<u8> {
     for &(fav, vedha) in vedha_pairs_for(graha, table) {
         if fav == transit_house {
             return Some(vedha);
@@ -170,27 +167,27 @@ fn lookup_vedha_house(graha: YogaPlanet, transit_house: u8, table: VedhaTable) -
 }
 
 /// All seven grahas in canonical Gochara order.
-const GOCHARA_GRAHAS: [YogaPlanet; 7] = [
-    YogaPlanet::Sun,
-    YogaPlanet::Moon,
-    YogaPlanet::Mars,
-    YogaPlanet::Mercury,
-    YogaPlanet::Jupiter,
-    YogaPlanet::Venus,
-    YogaPlanet::Saturn,
+const GOCHARA_GRAHAS: [Graha; 7] = [
+    Graha::Sun,
+    Graha::Moon,
+    Graha::Mars,
+    Graha::Mercury,
+    Graha::Jupiter,
+    Graha::Venus,
+    Graha::Saturn,
 ];
 
 #[inline]
-fn transit_sign_of(graha: YogaPlanet, t: TransitPositions) -> Option<u8> {
+fn transit_sign_of(graha: Graha, t: TransitPositions) -> Option<u8> {
     match graha {
-        YogaPlanet::Sun => Some(t.sun),
-        YogaPlanet::Moon => Some(t.moon),
-        YogaPlanet::Mars => Some(t.mars),
-        YogaPlanet::Mercury => Some(t.mercury),
-        YogaPlanet::Jupiter => Some(t.jupiter),
-        YogaPlanet::Venus => Some(t.venus),
-        YogaPlanet::Saturn => Some(t.saturn),
-        YogaPlanet::Rahu | YogaPlanet::Ketu => None,
+        Graha::Sun => Some(t.sun),
+        Graha::Moon => Some(t.moon),
+        Graha::Mars => Some(t.mars),
+        Graha::Mercury => Some(t.mercury),
+        Graha::Jupiter => Some(t.jupiter),
+        Graha::Venus => Some(t.venus),
+        Graha::Saturn => Some(t.saturn),
+        Graha::Rahu | Graha::Ketu => None,
     }
 }
 
@@ -228,7 +225,7 @@ pub fn compute_gochara(
 
         // Vedha is classically defined only against favourable transits.
         // For unfavourable transits we leave the candidate list empty.
-        let mut vedha_candidates: Vec<YogaPlanet> = Vec::new();
+        let mut vedha_candidates: Vec<Graha> = Vec::new();
         if favourable {
             if let Some(vedha_house) = lookup_vedha_house(graha, house, vedha_table) {
                 let target_sign_i =
@@ -287,10 +284,10 @@ pub fn apply_vedha_exemptions(entry: &mut GrahaGochara, school: SchoolProfile) {
             entry.vedha_candidates.retain(|other| {
                 !matches!(
                     (entry.graha, *other),
-                    (YogaPlanet::Sun, YogaPlanet::Moon)
-                        | (YogaPlanet::Moon, YogaPlanet::Sun)
-                        | (YogaPlanet::Jupiter, YogaPlanet::Mercury)
-                        | (YogaPlanet::Mercury, YogaPlanet::Jupiter)
+                    (Graha::Sun, Graha::Moon)
+                        | (Graha::Moon, Graha::Sun)
+                        | (Graha::Jupiter, Graha::Mercury)
+                        | (Graha::Mercury, Graha::Jupiter)
                 )
             });
         }
@@ -329,13 +326,13 @@ mod tests {
         for entry in &g {
             assert!(matches!(
                 entry.graha,
-                YogaPlanet::Sun
-                    | YogaPlanet::Moon
-                    | YogaPlanet::Mars
-                    | YogaPlanet::Mercury
-                    | YogaPlanet::Jupiter
-                    | YogaPlanet::Venus
-                    | YogaPlanet::Saturn
+                Graha::Sun
+                    | Graha::Moon
+                    | Graha::Mars
+                    | Graha::Mercury
+                    | Graha::Jupiter
+                    | Graha::Venus
+                    | Graha::Saturn
             ));
         }
     }
@@ -346,7 +343,7 @@ mod tests {
         let mut t = sample_transits();
         t.sun = 2;
         let g = compute_gochara(&t, 0, VedhaTable::Bphs29);
-        let sun = g.iter().find(|e| e.graha == YogaPlanet::Sun).unwrap();
+        let sun = g.iter().find(|e| e.graha == Graha::Sun).unwrap();
         assert_eq!(sun.house_from_natal, 3);
         assert_eq!(sun.classical_effect, GocharaEffect::Favourable);
     }
@@ -357,7 +354,7 @@ mod tests {
         let mut t = sample_transits();
         t.sun = 0;
         let g = compute_gochara(&t, 0, VedhaTable::Bphs29);
-        let sun = g.iter().find(|e| e.graha == YogaPlanet::Sun).unwrap();
+        let sun = g.iter().find(|e| e.graha == Graha::Sun).unwrap();
         assert_eq!(sun.house_from_natal, 1);
         assert_eq!(sun.classical_effect, GocharaEffect::Unfavourable);
         assert!(sun.vedha_candidates.is_empty());
@@ -390,9 +387,9 @@ mod tests {
         t.jupiter = 5;
         t.venus = 10;
         let g = compute_gochara(&t, 0, VedhaTable::Bphs29);
-        let sun = g.iter().find(|e| e.graha == YogaPlanet::Sun).unwrap();
+        let sun = g.iter().find(|e| e.graha == Graha::Sun).unwrap();
         assert_eq!(sun.classical_effect, GocharaEffect::Favourable);
-        assert_eq!(sun.vedha_candidates, vec![YogaPlanet::Saturn]);
+        assert_eq!(sun.vedha_candidates, vec![Graha::Saturn]);
     }
 
     #[test]
@@ -410,16 +407,16 @@ mod tests {
             saturn: 6,
         };
         let mut g = compute_gochara(&t, 0, VedhaTable::Bphs29);
-        let moon = g.iter().find(|e| e.graha == YogaPlanet::Moon).unwrap();
+        let moon = g.iter().find(|e| e.graha == Graha::Moon).unwrap();
         assert_eq!(moon.house_from_natal, 1);
-        assert!(moon.vedha_candidates.contains(&YogaPlanet::Sun));
+        assert!(moon.vedha_candidates.contains(&Graha::Sun));
 
         // Parashari profile must strip Sun from Moon's vedha candidates.
         for entry in g.iter_mut() {
             apply_vedha_exemptions(entry, SchoolProfile::Parashari);
         }
-        let moon = g.iter().find(|e| e.graha == YogaPlanet::Moon).unwrap();
-        assert!(!moon.vedha_candidates.contains(&YogaPlanet::Sun));
+        let moon = g.iter().find(|e| e.graha == Graha::Moon).unwrap();
+        assert!(!moon.vedha_candidates.contains(&Graha::Sun));
     }
 
     #[test]

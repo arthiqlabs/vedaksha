@@ -74,20 +74,20 @@ pub fn definition() -> super::ToolDefinition {
     }
 }
 
-/// Parse a planet name string to `YogaPlanet`.
+/// Parse a planet name string to `Graha`.
 ///
 /// # Errors
 /// Returns `McpError` for unknown names.
-pub fn parse_planet(name: &str) -> Result<vedaksha_vedic::planet::YogaPlanet, McpError> {
-    use vedaksha_vedic::planet::YogaPlanet;
+pub fn parse_planet(name: &str) -> Result<vedaksha_vedic::graha::Graha, McpError> {
+    use vedaksha_vedic::graha::Graha;
     match name.to_lowercase().as_str() {
-        "sun" => Ok(YogaPlanet::Sun),
-        "moon" => Ok(YogaPlanet::Moon),
-        "mars" => Ok(YogaPlanet::Mars),
-        "mercury" => Ok(YogaPlanet::Mercury),
-        "jupiter" => Ok(YogaPlanet::Jupiter),
-        "venus" => Ok(YogaPlanet::Venus),
-        "saturn" => Ok(YogaPlanet::Saturn),
+        "sun" => Ok(Graha::Sun),
+        "moon" => Ok(Graha::Moon),
+        "mars" => Ok(Graha::Mars),
+        "mercury" => Ok(Graha::Mercury),
+        "jupiter" => Ok(Graha::Jupiter),
+        "venus" => Ok(Graha::Venus),
+        "saturn" => Ok(Graha::Saturn),
         other => Err(McpError::invalid_parameter(
             "planet",
             &format!(

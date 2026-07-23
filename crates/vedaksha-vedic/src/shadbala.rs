@@ -13,7 +13,7 @@
 //!
 //! Source: BPHS Ch. 27; B.V. Raman, *Graha and Bhava Balas*.
 
-use crate::planet::{PlanetPosition, YogaPlanet};
+use crate::graha::{Graha, GrahaPosition};
 use serde::Serialize;
 
 /// Shadbala (six-fold strength) for a planet.
@@ -22,7 +22,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 pub struct Shadbala {
     /// The planet this strength applies to.
-    pub planet: YogaPlanet,
+    pub planet: Graha,
     /// Positional strength (own/exalted/friend sign).
     pub sthana_bala: f64,
     /// Directional strength (planets strong in certain houses).
@@ -49,7 +49,7 @@ pub struct Shadbala {
 #[derive(Debug, Clone, Copy)]
 pub struct ShadbalaPlanetData {
     /// The planet position.
-    pub position: PlanetPosition,
+    pub position: GrahaPosition,
     /// Daily speed in degrees/day. Negative = retrograde.
     pub speed: f64,
     /// Average daily speed for this planet (used to classify motion).
@@ -68,17 +68,17 @@ pub struct ShadbalaPlanetData {
 /// Sun (60), Moon (51.43), Venus (42.86), Jupiter (34.29),
 /// Mercury (25.71), Mars (17.14), Saturn (8.57).
 #[must_use]
-pub fn naisargika_bala(planet: YogaPlanet) -> f64 {
+pub fn naisargika_bala(planet: Graha) -> f64 {
     match planet {
-        YogaPlanet::Sun => 60.0,
-        YogaPlanet::Moon => 51.43,
-        YogaPlanet::Venus => 42.86,
-        YogaPlanet::Jupiter => 34.29,
-        YogaPlanet::Mercury => 25.71,
-        YogaPlanet::Mars => 17.14,
-        YogaPlanet::Saturn => 8.57,
+        Graha::Sun => 60.0,
+        Graha::Moon => 51.43,
+        Graha::Venus => 42.86,
+        Graha::Jupiter => 34.29,
+        Graha::Mercury => 25.71,
+        Graha::Mars => 17.14,
+        Graha::Saturn => 8.57,
         // Rahu/Ketu not traditionally part of Shadbala
-        YogaPlanet::Rahu | YogaPlanet::Ketu => 0.0,
+        Graha::Rahu | Graha::Ketu => 0.0,
     }
 }
 
@@ -91,12 +91,12 @@ pub fn naisargika_bala(planet: YogaPlanet) -> f64 {
 /// - Mercury, Jupiter -> 1st (east)
 /// - Saturn -> 7th (west)
 #[must_use]
-fn dig_bala_strong_house(planet: YogaPlanet) -> u8 {
+fn dig_bala_strong_house(planet: Graha) -> u8 {
     match planet {
-        YogaPlanet::Sun | YogaPlanet::Mars => 10,
-        YogaPlanet::Moon | YogaPlanet::Venus => 4,
-        YogaPlanet::Mercury | YogaPlanet::Jupiter | YogaPlanet::Rahu | YogaPlanet::Ketu => 1,
-        YogaPlanet::Saturn => 7,
+        Graha::Sun | Graha::Mars => 10,
+        Graha::Moon | Graha::Venus => 4,
+        Graha::Mercury | Graha::Jupiter | Graha::Rahu | Graha::Ketu => 1,
+        Graha::Saturn => 7,
     }
 }
 
@@ -106,7 +106,7 @@ fn dig_bala_strong_house(planet: YogaPlanet) -> u8 {
 /// Minimum (0) when planet is in the opposite house (6 houses away).
 /// Linear interpolation in between.
 #[must_use]
-pub fn dig_bala(planet: YogaPlanet, bhava: u8) -> f64 {
+pub fn dig_bala(planet: Graha, bhava: u8) -> f64 {
     let strong = dig_bala_strong_house(planet);
     // Distance in houses (circular, 1-indexed, max 6)
     let raw_dist = bhava.abs_diff(strong);
@@ -125,17 +125,17 @@ pub fn dig_bala(planet: YogaPlanet, bhava: u8) -> f64 {
 /// Exaltation longitude for each planet in degrees (0-360).
 ///
 /// Source: BPHS Ch. 3 Sl. 18.
-fn exaltation_longitude(planet: YogaPlanet) -> f64 {
+fn exaltation_longitude(planet: Graha) -> f64 {
     match planet {
-        YogaPlanet::Sun => 10.0,      // 10° Aries
-        YogaPlanet::Moon => 33.0,     // 3° Taurus
-        YogaPlanet::Mars => 298.0,    // 28° Capricorn
-        YogaPlanet::Mercury => 165.0, // 15° Virgo
-        YogaPlanet::Jupiter => 95.0,  // 5° Cancer
-        YogaPlanet::Venus => 357.0,   // 27° Pisces
-        YogaPlanet::Saturn => 200.0,  // 20° Libra
-        YogaPlanet::Rahu => 50.0,     // 20° Taurus
-        YogaPlanet::Ketu => 230.0,    // 20° Scorpio
+        Graha::Sun => 10.0,      // 10° Aries
+        Graha::Moon => 33.0,     // 3° Taurus
+        Graha::Mars => 298.0,    // 28° Capricorn
+        Graha::Mercury => 165.0, // 15° Virgo
+        Graha::Jupiter => 95.0,  // 5° Cancer
+        Graha::Venus => 357.0,   // 27° Pisces
+        Graha::Saturn => 200.0,  // 20° Libra
+        Graha::Rahu => 50.0,     // 20° Taurus
+        Graha::Ketu => 230.0,    // 20° Scorpio
     }
 }
 
@@ -147,7 +147,7 @@ fn exaltation_longitude(planet: YogaPlanet) -> f64 {
 ///
 /// Yields 60 virupas at exact exaltation, 0 at exact debilitation (180° away).
 #[must_use]
-pub fn sthana_bala(planet: YogaPlanet, _sign: u8, longitude: f64) -> f64 {
+pub fn sthana_bala(planet: Graha, _sign: u8, longitude: f64) -> f64 {
     let exalt_lon = exaltation_longitude(planet);
     let raw_diff = (longitude - exalt_lon).abs();
     let arc = if raw_diff > 180.0 {
@@ -171,20 +171,14 @@ pub fn sthana_bala(planet: YogaPlanet, _sign: u8, longitude: f64) -> f64 {
 ///
 /// Source: BPHS Ch. 27.
 #[must_use]
-pub fn kala_bala(planet: YogaPlanet, is_daytime: bool, moon_phase_waxing: bool) -> f64 {
+pub fn kala_bala(planet: Graha, is_daytime: bool, moon_phase_waxing: bool) -> f64 {
     let mut bala = 0.0;
 
     // Nathonnatha Bala (day/night strength)
-    let day_strong = matches!(
-        planet,
-        YogaPlanet::Sun | YogaPlanet::Jupiter | YogaPlanet::Venus
-    );
-    let night_strong = matches!(
-        planet,
-        YogaPlanet::Moon | YogaPlanet::Mars | YogaPlanet::Saturn
-    );
+    let day_strong = matches!(planet, Graha::Sun | Graha::Jupiter | Graha::Venus);
+    let night_strong = matches!(planet, Graha::Moon | Graha::Mars | Graha::Saturn);
 
-    if planet == YogaPlanet::Mercury {
+    if planet == Graha::Mercury {
         bala += 30.0; // Mercury is always strong (twilight planet)
     } else if (is_daytime && day_strong) || (!is_daytime && night_strong) {
         bala += 30.0;
@@ -193,7 +187,7 @@ pub fn kala_bala(planet: YogaPlanet, is_daytime: bool, moon_phase_waxing: bool) 
     // Paksha Bala (lunar phase strength)
     let is_benefic = matches!(
         planet,
-        YogaPlanet::Jupiter | YogaPlanet::Venus | YogaPlanet::Mercury | YogaPlanet::Moon
+        Graha::Jupiter | Graha::Venus | Graha::Mercury | Graha::Moon
     );
     if (moon_phase_waxing && is_benefic) || (!moon_phase_waxing && !is_benefic) {
         bala += 30.0;
@@ -216,13 +210,13 @@ pub fn kala_bala(planet: YogaPlanet, is_daytime: bool, moon_phase_waxing: bool) 
 ///
 /// Source: BPHS Ch. 27.
 #[must_use]
-pub fn cheshta_bala(planet: YogaPlanet, speed: f64, average_speed: f64) -> f64 {
+pub fn cheshta_bala(planet: Graha, speed: f64, average_speed: f64) -> f64 {
     // Sun and Moon have no retrograde motion — assign normal strength
-    if matches!(planet, YogaPlanet::Sun | YogaPlanet::Moon) {
+    if matches!(planet, Graha::Sun | Graha::Moon) {
         return 30.0;
     }
     // Rahu/Ketu always move retrograde but are not part of traditional Shadbala
-    if matches!(planet, YogaPlanet::Rahu | YogaPlanet::Ketu) {
+    if matches!(planet, Graha::Rahu | Graha::Ketu) {
         return 0.0;
     }
 
@@ -287,64 +281,64 @@ pub fn ishta_kashta_phala(uccha_bala: f64, cheshta_bala: f64) -> (f64, f64) {
 // ── Planet-sign helpers (reuse from yoga.rs logic) ──────────────────
 
 #[allow(dead_code)]
-fn own_signs(planet: YogaPlanet) -> &'static [u8] {
+fn own_signs(planet: Graha) -> &'static [u8] {
     match planet {
-        YogaPlanet::Sun => &[4],
-        YogaPlanet::Moon => &[3],
-        YogaPlanet::Mars => &[0, 7],
-        YogaPlanet::Mercury => &[2, 5],
-        YogaPlanet::Jupiter => &[8, 11],
-        YogaPlanet::Venus => &[1, 6],
-        YogaPlanet::Saturn => &[9, 10],
-        YogaPlanet::Rahu | YogaPlanet::Ketu => &[],
+        Graha::Sun => &[4],
+        Graha::Moon => &[3],
+        Graha::Mars => &[0, 7],
+        Graha::Mercury => &[2, 5],
+        Graha::Jupiter => &[8, 11],
+        Graha::Venus => &[1, 6],
+        Graha::Saturn => &[9, 10],
+        Graha::Rahu | Graha::Ketu => &[],
     }
 }
 
 #[allow(dead_code)]
-fn exaltation_sign(planet: YogaPlanet) -> Option<u8> {
+fn exaltation_sign(planet: Graha) -> Option<u8> {
     match planet {
-        YogaPlanet::Sun => Some(0),
-        YogaPlanet::Moon => Some(1),
-        YogaPlanet::Mars => Some(9),
-        YogaPlanet::Mercury => Some(5),
-        YogaPlanet::Jupiter => Some(3),
-        YogaPlanet::Venus => Some(11),
-        YogaPlanet::Saturn => Some(6),
-        YogaPlanet::Rahu | YogaPlanet::Ketu => None,
+        Graha::Sun => Some(0),
+        Graha::Moon => Some(1),
+        Graha::Mars => Some(9),
+        Graha::Mercury => Some(5),
+        Graha::Jupiter => Some(3),
+        Graha::Venus => Some(11),
+        Graha::Saturn => Some(6),
+        Graha::Rahu | Graha::Ketu => None,
     }
 }
 
 #[allow(dead_code)]
-fn debilitation_sign(planet: YogaPlanet) -> Option<u8> {
+fn debilitation_sign(planet: Graha) -> Option<u8> {
     exaltation_sign(planet).map(|s| (s + 6) % 12)
 }
 
 #[allow(dead_code)]
-fn is_in_own_sign(planet: YogaPlanet, sign: u8) -> bool {
+fn is_in_own_sign(planet: Graha, sign: u8) -> bool {
     own_signs(planet).contains(&sign)
 }
 
 #[allow(dead_code)]
-fn is_exalted(planet: YogaPlanet, sign: u8) -> bool {
+fn is_exalted(planet: Graha, sign: u8) -> bool {
     exaltation_sign(planet) == Some(sign)
 }
 
 #[allow(dead_code)]
-fn is_debilitated(planet: YogaPlanet, sign: u8) -> bool {
+fn is_debilitated(planet: Graha, sign: u8) -> bool {
     debilitation_sign(planet) == Some(sign)
 }
 
 /// Sign lord (ruler).
 #[allow(dead_code)]
-fn sign_lord(sign: u8) -> YogaPlanet {
+fn sign_lord(sign: u8) -> Graha {
     match sign {
-        0 | 7 => YogaPlanet::Mars,
-        1 | 6 => YogaPlanet::Venus,
-        2 | 5 => YogaPlanet::Mercury,
-        3 => YogaPlanet::Moon,
-        8 | 11 => YogaPlanet::Jupiter,
-        9 | 10 => YogaPlanet::Saturn,
-        _ => YogaPlanet::Sun, // fallback, should not happen
+        0 | 7 => Graha::Mars,
+        1 | 6 => Graha::Venus,
+        2 | 5 => Graha::Mercury,
+        3 => Graha::Moon,
+        8 | 11 => Graha::Jupiter,
+        9 | 10 => Graha::Saturn,
+        _ => Graha::Sun, // fallback, should not happen
     }
 }
 
@@ -352,28 +346,23 @@ fn sign_lord(sign: u8) -> YogaPlanet {
 ///
 /// Uses the natural friendship table (naisargika maitri).
 #[allow(dead_code)]
-fn is_friendly_sign(planet: YogaPlanet, sign: u8) -> bool {
+fn is_friendly_sign(planet: Graha, sign: u8) -> bool {
     let lord = sign_lord(sign);
     if lord == planet {
         return true; // own sign counts as friendly
     }
     matches!(
         (planet, lord),
-        (
-            YogaPlanet::Sun | YogaPlanet::Mars | YogaPlanet::Jupiter,
-            YogaPlanet::Moon
-        ) | (YogaPlanet::Sun | YogaPlanet::Jupiter, YogaPlanet::Mars)
-            | (YogaPlanet::Sun | YogaPlanet::Mars, YogaPlanet::Jupiter)
+        (Graha::Sun | Graha::Mars | Graha::Jupiter, Graha::Moon)
+            | (Graha::Sun | Graha::Jupiter, Graha::Mars)
+            | (Graha::Sun | Graha::Mars, Graha::Jupiter)
             | (
-                YogaPlanet::Moon | YogaPlanet::Mars | YogaPlanet::Mercury | YogaPlanet::Jupiter,
-                YogaPlanet::Sun,
+                Graha::Moon | Graha::Mars | Graha::Mercury | Graha::Jupiter,
+                Graha::Sun,
             )
-            | (
-                YogaPlanet::Moon | YogaPlanet::Venus | YogaPlanet::Saturn,
-                YogaPlanet::Mercury
-            )
-            | (YogaPlanet::Mercury | YogaPlanet::Saturn, YogaPlanet::Venus)
-            | (YogaPlanet::Venus, YogaPlanet::Saturn)
+            | (Graha::Moon | Graha::Venus | Graha::Saturn, Graha::Mercury)
+            | (Graha::Mercury | Graha::Saturn, Graha::Venus)
+            | (Graha::Venus, Graha::Saturn)
     )
 }
 
@@ -389,7 +378,7 @@ fn is_friendly_sign(planet: YogaPlanet, sign: u8) -> bool {
 /// * `positions` — slice of planet positions with sign and bhava
 /// * `_lagna_sign` — lagna sign (reserved for compatibility)
 #[must_use]
-pub fn compute_shadbala(positions: &[PlanetPosition], _lagna_sign: u8) -> Vec<Shadbala> {
+pub fn compute_shadbala(positions: &[GrahaPosition], _lagna_sign: u8) -> Vec<Shadbala> {
     positions
         .iter()
         .map(|pos| {
@@ -461,8 +450,8 @@ pub fn compute_shadbala_full(
 mod tests {
     use super::*;
 
-    fn pos(planet: YogaPlanet, sign: u8, bhava: u8) -> PlanetPosition {
-        PlanetPosition {
+    fn pos(planet: Graha, sign: u8, bhava: u8) -> GrahaPosition {
+        GrahaPosition {
             planet,
             sign,
             longitude: f64::from(sign) * 30.0 + 15.0,
@@ -471,7 +460,7 @@ mod tests {
     }
 
     fn planet_data(
-        planet: YogaPlanet,
+        planet: Graha,
         sign: u8,
         bhava: u8,
         speed: f64,
@@ -492,13 +481,13 @@ mod tests {
 
     #[test]
     fn sun_naisargika_bala_is_60() {
-        let bala = naisargika_bala(YogaPlanet::Sun);
+        let bala = naisargika_bala(Graha::Sun);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn saturn_naisargika_bala_is_8_57() {
-        let bala = naisargika_bala(YogaPlanet::Saturn);
+        let bala = naisargika_bala(Graha::Saturn);
         assert!((bala - 8.57).abs() < 0.01);
     }
 
@@ -506,31 +495,31 @@ mod tests {
 
     #[test]
     fn sun_dig_bala_maximum_in_10th() {
-        let bala = dig_bala(YogaPlanet::Sun, 10);
+        let bala = dig_bala(Graha::Sun, 10);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn sun_dig_bala_minimum_in_4th() {
-        let bala = dig_bala(YogaPlanet::Sun, 4);
+        let bala = dig_bala(Graha::Sun, 4);
         assert!((bala - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn moon_dig_bala_maximum_in_4th() {
-        let bala = dig_bala(YogaPlanet::Moon, 4);
+        let bala = dig_bala(Graha::Moon, 4);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn saturn_dig_bala_maximum_in_7th() {
-        let bala = dig_bala(YogaPlanet::Saturn, 7);
+        let bala = dig_bala(Graha::Saturn, 7);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn dig_bala_intermediate_values() {
-        let bala = dig_bala(YogaPlanet::Mercury, 4);
+        let bala = dig_bala(Graha::Mercury, 4);
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
@@ -539,29 +528,29 @@ mod tests {
     #[test]
     fn sthana_bala_exact_exaltation_is_60() {
         // Sun exalted at 10° Aries → 60 virupas
-        let bala = sthana_bala(YogaPlanet::Sun, 0, 10.0);
+        let bala = sthana_bala(Graha::Sun, 0, 10.0);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn sthana_bala_exact_debilitation_is_0() {
         // Sun debilitated at 190° (10+180) → 0 virupas
-        let bala = sthana_bala(YogaPlanet::Sun, 6, 190.0);
+        let bala = sthana_bala(Graha::Sun, 6, 190.0);
         assert!((bala - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn sthana_bala_midpoint_is_30() {
         // Sun at 100° → 90° from exaltation (10°) → (180-90)/3 = 30 virupas
-        let bala = sthana_bala(YogaPlanet::Sun, 3, 100.0);
+        let bala = sthana_bala(Graha::Sun, 3, 100.0);
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn sthana_bala_gradient_is_continuous() {
         // Jupiter at exact exaltation (95°) should be stronger than at 100°
-        let at_exalt = sthana_bala(YogaPlanet::Jupiter, 3, 95.0);
-        let near_exalt = sthana_bala(YogaPlanet::Jupiter, 3, 100.0);
+        let at_exalt = sthana_bala(Graha::Jupiter, 3, 95.0);
+        let near_exalt = sthana_bala(Graha::Jupiter, 3, 100.0);
         assert!(at_exalt > near_exalt);
     }
 
@@ -569,22 +558,22 @@ mod tests {
 
     #[test]
     fn sun_daytime_gets_nathonnatha() {
-        let bala = kala_bala(YogaPlanet::Sun, true, false);
+        let bala = kala_bala(Graha::Sun, true, false);
         // Daytime: 30. Sun is not benefic, Krishna paksha (non-benefic strong): +30
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn sun_nighttime_no_nathonnatha() {
-        let bala = kala_bala(YogaPlanet::Sun, false, false);
+        let bala = kala_bala(Graha::Sun, false, false);
         // Night: 0. Krishna paksha, Sun is not benefic: +30
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn mercury_always_gets_nathonnatha() {
-        let day = kala_bala(YogaPlanet::Mercury, true, true);
-        let night = kala_bala(YogaPlanet::Mercury, false, true);
+        let day = kala_bala(Graha::Mercury, true, true);
+        let night = kala_bala(Graha::Mercury, false, true);
         // Mercury: always 30 nathonnatha + benefic in shukla = +30 = 60
         assert!((day - 60.0).abs() < f64::EPSILON);
         assert!((night - 60.0).abs() < f64::EPSILON);
@@ -592,21 +581,21 @@ mod tests {
 
     #[test]
     fn moon_night_waxing() {
-        let bala = kala_bala(YogaPlanet::Moon, false, true);
+        let bala = kala_bala(Graha::Moon, false, true);
         // Night strong: 30. Benefic in waxing: 30. Total = 60
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn jupiter_day_waxing() {
-        let bala = kala_bala(YogaPlanet::Jupiter, true, true);
+        let bala = kala_bala(Graha::Jupiter, true, true);
         // Day strong: 30. Benefic in waxing: 30. Total = 60
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn saturn_night_waning() {
-        let bala = kala_bala(YogaPlanet::Saturn, false, false);
+        let bala = kala_bala(Graha::Saturn, false, false);
         // Night strong: 30. Non-benefic in waning: 30. Total = 60
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
@@ -615,38 +604,38 @@ mod tests {
 
     #[test]
     fn retrograde_planet_gets_60() {
-        let bala = cheshta_bala(YogaPlanet::Mars, -0.5, 0.5);
+        let bala = cheshta_bala(Graha::Mars, -0.5, 0.5);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn stationary_planet_gets_30() {
-        let bala = cheshta_bala(YogaPlanet::Jupiter, 0.005, 0.08);
+        let bala = cheshta_bala(Graha::Jupiter, 0.005, 0.08);
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn slow_planet_gets_15() {
-        let bala = cheshta_bala(YogaPlanet::Saturn, 0.01, 0.05);
+        let bala = cheshta_bala(Graha::Saturn, 0.01, 0.05);
         assert!((bala - 15.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn fast_planet_gets_45() {
-        let bala = cheshta_bala(YogaPlanet::Venus, 2.0, 1.0);
+        let bala = cheshta_bala(Graha::Venus, 2.0, 1.0);
         assert!((bala - 45.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn normal_speed_planet_gets_30() {
-        let bala = cheshta_bala(YogaPlanet::Mercury, 1.0, 1.2);
+        let bala = cheshta_bala(Graha::Mercury, 1.0, 1.2);
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
     #[test]
     fn sun_moon_always_30_cheshta() {
-        let sun = cheshta_bala(YogaPlanet::Sun, 1.0, 1.0);
-        let moon = cheshta_bala(YogaPlanet::Moon, 13.0, 13.0);
+        let sun = cheshta_bala(Graha::Sun, 1.0, 1.0);
+        let moon = cheshta_bala(Graha::Moon, 13.0, 13.0);
         assert!((sun - 30.0).abs() < f64::EPSILON);
         assert!((moon - 30.0).abs() < f64::EPSILON);
     }
@@ -690,7 +679,7 @@ mod tests {
 
     #[test]
     fn total_shadbala_is_sum_of_components() {
-        let positions = [pos(YogaPlanet::Sun, 0, 10)];
+        let positions = [pos(Graha::Sun, 0, 10)];
         let results = compute_shadbala(&positions, 0);
         assert_eq!(results.len(), 1);
         let sb = &results[0];
@@ -707,7 +696,7 @@ mod tests {
 
     #[test]
     fn full_shadbala_includes_all_six_components() {
-        let data = [planet_data(YogaPlanet::Jupiter, 3, 4, -0.05, 0.08, 2, 1)];
+        let data = [planet_data(Graha::Jupiter, 3, 4, -0.05, 0.08, 2, 1)];
         let results = compute_shadbala_full(&data, true, true);
         assert_eq!(results.len(), 1);
         let sb = &results[0];
@@ -735,8 +724,8 @@ mod tests {
     #[test]
     fn full_shadbala_total_equals_sum() {
         let data = [
-            planet_data(YogaPlanet::Sun, 0, 10, 1.0, 1.0, 1, 0),
-            planet_data(YogaPlanet::Saturn, 6, 7, 0.02, 0.05, 0, 2),
+            planet_data(Graha::Sun, 0, 10, 1.0, 1.0, 1, 0),
+            planet_data(Graha::Saturn, 6, 7, 0.02, 0.05, 0, 2),
         ];
         let results = compute_shadbala_full(&data, true, false);
         for sb in &results {
@@ -799,7 +788,7 @@ mod tests {
 
     #[test]
     fn full_shadbala_has_uccha_bala_matching_sthana() {
-        let data = [planet_data(YogaPlanet::Jupiter, 3, 4, -0.05, 0.08, 2, 1)];
+        let data = [planet_data(Graha::Jupiter, 3, 4, -0.05, 0.08, 2, 1)];
         let results = compute_shadbala_full(&data, true, true);
         let sb = &results[0];
         assert!((sb.uccha_bala - sb.sthana_bala).abs() < f64::EPSILON);
@@ -808,7 +797,7 @@ mod tests {
     #[test]
     fn full_shadbala_uccha_not_in_total() {
         // total must still equal sum of the original six components
-        let data = [planet_data(YogaPlanet::Sun, 0, 10, 1.0, 1.0, 1, 0)];
+        let data = [planet_data(Graha::Sun, 0, 10, 1.0, 1.0, 1, 0)];
         let results = compute_shadbala_full(&data, true, false);
         let sb = &results[0];
         let sum = sb.sthana_bala
@@ -823,7 +812,7 @@ mod tests {
     #[test]
     fn full_shadbala_saturn_nighttime() {
         let data = [planet_data(
-            YogaPlanet::Saturn,
+            Graha::Saturn,
             9, // Capricorn (own sign)
             7, // 7th house (dig bala max)
             0.02,

@@ -7,7 +7,7 @@
 //!
 //! Source: BPHS Ch.7 vv.28-29.
 
-use crate::planet::YogaPlanet;
+use crate::graha::Graha;
 
 /// Combustion state of a planet relative to the Sun.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,15 +24,15 @@ pub enum CombustionState {
 /// Combustion orb in degrees. Returns `None` for Sun, Rahu, Ketu (never combust).
 ///
 /// Source: BPHS Ch.7 vv.28-29.
-fn orb(planet: YogaPlanet, is_retrograde: bool) -> Option<f64> {
+fn orb(planet: Graha, is_retrograde: bool) -> Option<f64> {
     match planet {
-        YogaPlanet::Moon => Some(12.0),
-        YogaPlanet::Mars => Some(if is_retrograde { 8.0 } else { 17.0 }),
-        YogaPlanet::Mercury => Some(if is_retrograde { 12.0 } else { 14.0 }),
-        YogaPlanet::Jupiter => Some(11.0),
-        YogaPlanet::Venus => Some(if is_retrograde { 8.0 } else { 10.0 }),
-        YogaPlanet::Saturn => Some(16.0),
-        YogaPlanet::Sun | YogaPlanet::Rahu | YogaPlanet::Ketu => None,
+        Graha::Moon => Some(12.0),
+        Graha::Mars => Some(if is_retrograde { 8.0 } else { 17.0 }),
+        Graha::Mercury => Some(if is_retrograde { 12.0 } else { 14.0 }),
+        Graha::Jupiter => Some(11.0),
+        Graha::Venus => Some(if is_retrograde { 8.0 } else { 10.0 }),
+        Graha::Saturn => Some(16.0),
+        Graha::Sun | Graha::Rahu | Graha::Ketu => None,
     }
 }
 
@@ -48,7 +48,7 @@ fn angular_separation(a: f64, b: f64) -> f64 {
 /// Deep combustion threshold (orb/3) is a modern convention.
 #[must_use]
 pub fn combustion_state(
-    planet: YogaPlanet,
+    planet: Graha,
     planet_lon: f64,
     sun_lon: f64,
     is_retrograde: bool,
@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn sun_is_never_combust() {
         assert_eq!(
-            combustion_state(YogaPlanet::Sun, 0.0, 0.0, false),
+            combustion_state(Graha::Sun, 0.0, 0.0, false),
             CombustionState::None
         );
     }
@@ -81,11 +81,11 @@ mod tests {
     #[test]
     fn rahu_ketu_never_combust() {
         assert_eq!(
-            combustion_state(YogaPlanet::Rahu, 5.0, 0.0, false),
+            combustion_state(Graha::Rahu, 5.0, 0.0, false),
             CombustionState::None
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Ketu, 5.0, 0.0, false),
+            combustion_state(Graha::Ketu, 5.0, 0.0, false),
             CombustionState::None
         );
     }
@@ -93,7 +93,7 @@ mod tests {
     #[test]
     fn moon_orb_boundary_is_combust() {
         assert_eq!(
-            combustion_state(YogaPlanet::Moon, 11.9, 0.0, false),
+            combustion_state(Graha::Moon, 11.9, 0.0, false),
             CombustionState::Combust
         );
     }
@@ -101,7 +101,7 @@ mod tests {
     #[test]
     fn moon_exactly_at_orb_is_not_combust() {
         assert_eq!(
-            combustion_state(YogaPlanet::Moon, 12.0, 0.0, false),
+            combustion_state(Graha::Moon, 12.0, 0.0, false),
             CombustionState::None
         );
     }
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn moon_deep_combustion_below_4_degrees() {
         assert_eq!(
-            combustion_state(YogaPlanet::Moon, 3.9, 0.0, false),
+            combustion_state(Graha::Moon, 3.9, 0.0, false),
             CombustionState::DeeplyCombust
         );
     }
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn moon_at_deep_threshold_is_combust_not_deep() {
         assert_eq!(
-            combustion_state(YogaPlanet::Moon, 4.0, 0.0, false),
+            combustion_state(Graha::Moon, 4.0, 0.0, false),
             CombustionState::Combust
         );
     }
@@ -125,11 +125,11 @@ mod tests {
     #[test]
     fn mars_direct_orb_17() {
         assert_eq!(
-            combustion_state(YogaPlanet::Mars, 16.9, 0.0, false),
+            combustion_state(Graha::Mars, 16.9, 0.0, false),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Mars, 17.0, 0.0, false),
+            combustion_state(Graha::Mars, 17.0, 0.0, false),
             CombustionState::None
         );
     }
@@ -137,11 +137,11 @@ mod tests {
     #[test]
     fn mars_retrograde_orb_8() {
         assert_eq!(
-            combustion_state(YogaPlanet::Mars, 7.9, 0.0, true),
+            combustion_state(Graha::Mars, 7.9, 0.0, true),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Mars, 8.0, 0.0, true),
+            combustion_state(Graha::Mars, 8.0, 0.0, true),
             CombustionState::None
         );
     }
@@ -149,11 +149,11 @@ mod tests {
     #[test]
     fn mercury_direct_orb_14() {
         assert_eq!(
-            combustion_state(YogaPlanet::Mercury, 13.9, 0.0, false),
+            combustion_state(Graha::Mercury, 13.9, 0.0, false),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Mercury, 14.0, 0.0, false),
+            combustion_state(Graha::Mercury, 14.0, 0.0, false),
             CombustionState::None
         );
     }
@@ -161,11 +161,11 @@ mod tests {
     #[test]
     fn mercury_retrograde_orb_12() {
         assert_eq!(
-            combustion_state(YogaPlanet::Mercury, 11.9, 0.0, true),
+            combustion_state(Graha::Mercury, 11.9, 0.0, true),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Mercury, 12.0, 0.0, true),
+            combustion_state(Graha::Mercury, 12.0, 0.0, true),
             CombustionState::None
         );
     }
@@ -173,15 +173,15 @@ mod tests {
     #[test]
     fn jupiter_orb_11_same_direct_retrograde() {
         assert_eq!(
-            combustion_state(YogaPlanet::Jupiter, 10.9, 0.0, false),
+            combustion_state(Graha::Jupiter, 10.9, 0.0, false),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Jupiter, 11.0, 0.0, false),
+            combustion_state(Graha::Jupiter, 11.0, 0.0, false),
             CombustionState::None
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Jupiter, 10.9, 0.0, true),
+            combustion_state(Graha::Jupiter, 10.9, 0.0, true),
             CombustionState::Combust
         );
     }
@@ -189,11 +189,11 @@ mod tests {
     #[test]
     fn venus_direct_orb_10() {
         assert_eq!(
-            combustion_state(YogaPlanet::Venus, 9.9, 0.0, false),
+            combustion_state(Graha::Venus, 9.9, 0.0, false),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Venus, 10.0, 0.0, false),
+            combustion_state(Graha::Venus, 10.0, 0.0, false),
             CombustionState::None
         );
     }
@@ -201,11 +201,11 @@ mod tests {
     #[test]
     fn venus_retrograde_orb_8() {
         assert_eq!(
-            combustion_state(YogaPlanet::Venus, 7.9, 0.0, true),
+            combustion_state(Graha::Venus, 7.9, 0.0, true),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Venus, 8.0, 0.0, true),
+            combustion_state(Graha::Venus, 8.0, 0.0, true),
             CombustionState::None
         );
     }
@@ -213,15 +213,15 @@ mod tests {
     #[test]
     fn saturn_orb_16_same_direct_retrograde() {
         assert_eq!(
-            combustion_state(YogaPlanet::Saturn, 15.9, 0.0, false),
+            combustion_state(Graha::Saturn, 15.9, 0.0, false),
             CombustionState::Combust
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Saturn, 16.0, 0.0, false),
+            combustion_state(Graha::Saturn, 16.0, 0.0, false),
             CombustionState::None
         );
         assert_eq!(
-            combustion_state(YogaPlanet::Saturn, 15.9, 0.0, true),
+            combustion_state(Graha::Saturn, 15.9, 0.0, true),
             CombustionState::Combust
         );
     }
@@ -230,7 +230,7 @@ mod tests {
     fn angular_separation_wraps_across_360() {
         // Planet at 355°, Sun at 5° → sep = 10° (< Moon's 12°) → Combust
         assert_eq!(
-            combustion_state(YogaPlanet::Moon, 355.0, 5.0, false),
+            combustion_state(Graha::Moon, 355.0, 5.0, false),
             CombustionState::Combust
         );
     }

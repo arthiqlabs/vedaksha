@@ -484,7 +484,7 @@ impl McpServer {
 
     fn call_compute_combustion(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
         use vedaksha_vedic::combustion::{CombustionState, combustion_state};
-        use vedaksha_vedic::planet::YogaPlanet;
+        use vedaksha_vedic::graha::Graha;
 
         let input: crate::tools::compute_combustion::ComputeCombustionInput =
             serde_json::from_value(args.clone())
@@ -498,28 +498,23 @@ impl McpServer {
         };
 
         let results: Vec<serde_json::Value> = vec![
-            (YogaPlanet::Moon, input.moon, false, "Moon"),
-            (YogaPlanet::Mars, input.mars, input.mars_retrograde, "Mars"),
+            (Graha::Moon, input.moon, false, "Moon"),
+            (Graha::Mars, input.mars, input.mars_retrograde, "Mars"),
             (
-                YogaPlanet::Mercury,
+                Graha::Mercury,
                 input.mercury,
                 input.mercury_retrograde,
                 "Mercury",
             ),
             (
-                YogaPlanet::Jupiter,
+                Graha::Jupiter,
                 input.jupiter,
                 input.jupiter_retrograde,
                 "Jupiter",
             ),
+            (Graha::Venus, input.venus, input.venus_retrograde, "Venus"),
             (
-                YogaPlanet::Venus,
-                input.venus,
-                input.venus_retrograde,
-                "Venus",
-            ),
-            (
-                YogaPlanet::Saturn,
+                Graha::Saturn,
                 input.saturn,
                 input.saturn_retrograde,
                 "Saturn",
@@ -545,7 +540,7 @@ impl McpServer {
     }
 
     fn call_compute_shadbala(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_vedic::planet::PlanetPosition;
+        use vedaksha_vedic::graha::GrahaPosition;
         use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
 
         let input: crate::tools::compute_shadbala::ComputeShidbalaInput =
@@ -560,7 +555,7 @@ impl McpServer {
                 let planet = crate::tools::compute_shadbala::parse_planet(&entry.planet)
                     .expect("already validated");
                 ShadbalaPlanetData {
-                    position: PlanetPosition {
+                    position: GrahaPosition {
                         planet,
                         sign: entry.sign,
                         longitude: entry.longitude,

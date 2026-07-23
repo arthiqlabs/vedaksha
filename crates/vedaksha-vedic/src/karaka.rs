@@ -14,7 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::planet::YogaPlanet;
+use crate::graha::Graha;
 
 /// Karaka role assigned to a planet in the Jaimini scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -42,7 +42,7 @@ pub enum KarakaScheme {
 /// A single planet–karaka assignment with the degree used for ranking.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KarakaAssignment {
-    pub planet: YogaPlanet,
+    pub planet: Graha,
     pub karaka: Karaka,
     /// Effective degrees within sign used for ranking (0.0–30.0).
     pub degrees_in_sign: f64,
@@ -90,21 +90,21 @@ pub(crate) fn rahu_degrees_in_sign(longitude: f64) -> f64 {
 /// Panics if `scheme` is `Eight` and `input.rahu` is `None`.
 #[must_use]
 pub fn compute_karakas(input: &KarakaInput) -> Vec<KarakaAssignment> {
-    let mut candidates: Vec<(YogaPlanet, f64)> = vec![
-        (YogaPlanet::Sun, degrees_in_sign(input.sun)),
-        (YogaPlanet::Moon, degrees_in_sign(input.moon)),
-        (YogaPlanet::Mars, degrees_in_sign(input.mars)),
-        (YogaPlanet::Mercury, degrees_in_sign(input.mercury)),
-        (YogaPlanet::Jupiter, degrees_in_sign(input.jupiter)),
-        (YogaPlanet::Venus, degrees_in_sign(input.venus)),
-        (YogaPlanet::Saturn, degrees_in_sign(input.saturn)),
+    let mut candidates: Vec<(Graha, f64)> = vec![
+        (Graha::Sun, degrees_in_sign(input.sun)),
+        (Graha::Moon, degrees_in_sign(input.moon)),
+        (Graha::Mars, degrees_in_sign(input.mars)),
+        (Graha::Mercury, degrees_in_sign(input.mercury)),
+        (Graha::Jupiter, degrees_in_sign(input.jupiter)),
+        (Graha::Venus, degrees_in_sign(input.venus)),
+        (Graha::Saturn, degrees_in_sign(input.saturn)),
     ];
 
     if input.scheme == KarakaScheme::Eight {
         let rahu_lon = input
             .rahu
             .expect("rahu longitude required for 8-karaka scheme");
-        candidates.push((YogaPlanet::Rahu, rahu_degrees_in_sign(rahu_lon)));
+        candidates.push((Graha::Rahu, rahu_degrees_in_sign(rahu_lon)));
     }
 
     // Stable sort: equal-degree planets retain insertion order (Sun first … Rahu last).
@@ -186,14 +186,14 @@ mod tests {
     fn seven_karaka_first_is_atmakaraka() {
         let result = compute_karakas(&test_input_7());
         assert_eq!(result[0].karaka, Karaka::Atmakaraka);
-        assert_eq!(result[0].planet, YogaPlanet::Sun);
+        assert_eq!(result[0].planet, Graha::Sun);
     }
 
     #[test]
     fn seven_karaka_last_is_darakaraka() {
         let result = compute_karakas(&test_input_7());
         assert_eq!(result[6].karaka, Karaka::Darakaraka);
-        assert_eq!(result[6].planet, YogaPlanet::Saturn);
+        assert_eq!(result[6].planet, Graha::Saturn);
     }
 
     #[test]

@@ -538,7 +538,7 @@ pub fn compute_karakas(positions_json: &str, scheme: &str) -> Result<String, JsE
 
 fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<String, String> {
     use vedaksha_vedic::combustion::{CombustionState, combustion_state};
-    use vedaksha_vedic::planet::YogaPlanet;
+    use vedaksha_vedic::graha::Graha;
 
     let pos: serde_json::Value =
         serde_json::from_str(positions_json).map_err(|e| format!("invalid positions JSON: {e}"))?;
@@ -572,13 +572,13 @@ fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<St
         if diff > 180.0 { 360.0 - diff } else { diff }
     };
 
-    let entries: &[(YogaPlanet, f64, bool, &str)] = &[
-        (YogaPlanet::Moon, moon_lon, false, "Moon"),
-        (YogaPlanet::Mars, mars_lon, mars_retro, "Mars"),
-        (YogaPlanet::Mercury, mercury_lon, mercury_retro, "Mercury"),
-        (YogaPlanet::Jupiter, jupiter_lon, jupiter_retro, "Jupiter"),
-        (YogaPlanet::Venus, venus_lon, venus_retro, "Venus"),
-        (YogaPlanet::Saturn, saturn_lon, saturn_retro, "Saturn"),
+    let entries: &[(Graha, f64, bool, &str)] = &[
+        (Graha::Moon, moon_lon, false, "Moon"),
+        (Graha::Mars, mars_lon, mars_retro, "Mars"),
+        (Graha::Mercury, mercury_lon, mercury_retro, "Mercury"),
+        (Graha::Jupiter, jupiter_lon, jupiter_retro, "Jupiter"),
+        (Graha::Venus, venus_lon, venus_retro, "Venus"),
+        (Graha::Saturn, saturn_lon, saturn_retro, "Saturn"),
     ];
 
     let results: Vec<serde_json::Value> = entries
@@ -617,7 +617,7 @@ pub fn compute_combustion(positions_json: &str, retro_json: &str) -> Result<Stri
 }
 
 fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
-    use vedaksha_vedic::planet::{PlanetPosition, YogaPlanet};
+    use vedaksha_vedic::graha::{Graha, GrahaPosition};
     use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
 
     let v: serde_json::Value =
@@ -637,15 +637,15 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
         .and_then(|x| x.as_array())
         .ok_or_else(|| "missing 'planets' array".to_string())?;
 
-    let parse_planet_name = |name: &str| -> Result<YogaPlanet, String> {
+    let parse_planet_name = |name: &str| -> Result<Graha, String> {
         match name.to_lowercase().as_str() {
-            "sun" => Ok(YogaPlanet::Sun),
-            "moon" => Ok(YogaPlanet::Moon),
-            "mars" => Ok(YogaPlanet::Mars),
-            "mercury" => Ok(YogaPlanet::Mercury),
-            "jupiter" => Ok(YogaPlanet::Jupiter),
-            "venus" => Ok(YogaPlanet::Venus),
-            "saturn" => Ok(YogaPlanet::Saturn),
+            "sun" => Ok(Graha::Sun),
+            "moon" => Ok(Graha::Moon),
+            "mars" => Ok(Graha::Mars),
+            "mercury" => Ok(Graha::Mercury),
+            "jupiter" => Ok(Graha::Jupiter),
+            "venus" => Ok(Graha::Venus),
+            "saturn" => Ok(Graha::Saturn),
             other => Err(format!("unknown planet '{other}'")),
         }
     };
@@ -677,7 +677,7 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
             .and_then(|x| x.as_u64())
             .unwrap_or(0) as u32;
         planet_data.push(ShadbalaPlanetData {
-            position: PlanetPosition {
+            position: GrahaPosition {
                 planet,
                 sign,
                 longitude,

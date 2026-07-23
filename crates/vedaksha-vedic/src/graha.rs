@@ -3,13 +3,16 @@
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Shared planet identifiers and chart positions.
+//! Grahas and their placements.
 //!
 //! These types are the common currency of the Jyotish modules — ashtakavarga,
 //! combustion, gochara, karaka and shadbala all speak in terms of a graha and
-//! where it sits. They lived in `yoga` until that module was removed; the
-//! names are kept as-is so dependent code and serialized payloads do not
-//! shift in the same change that removed the yoga rules.
+//! where it sits. They lived in `yoga` as `YogaPlanet` and `PlanetPosition`
+//! until that module was removed, which left them named after a concept the
+//! crate no longer has.
+//!
+//! The variant names are unchanged, and neither type carries a serde tag or
+//! rename, so nothing on the wire moved with the rename.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +22,7 @@ use serde::{Deserialize, Serialize};
 /// enum rather than a re-export of [`vedaksha_ephem_core::bodies::Body`]:
 /// the outer planets are absent and the nodes are first-class.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum YogaPlanet {
+pub enum Graha {
     Sun,
     Moon,
     Mars,
@@ -33,9 +36,9 @@ pub enum YogaPlanet {
 
 /// A graha's placement in a chart.
 #[derive(Debug, Clone, Copy)]
-pub struct PlanetPosition {
+pub struct GrahaPosition {
     /// Which planet.
-    pub planet: YogaPlanet,
+    pub planet: Graha,
     /// Sign index (0 = Aries, 1 = Taurus, ..., 11 = Pisces).
     pub sign: u8,
     /// Sidereal longitude in degrees.
