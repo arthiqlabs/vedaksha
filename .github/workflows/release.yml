@@ -8,11 +8,12 @@ permissions:
   contents: write
 
 jobs:
-  # Every publish target reads its version from a different file. When one of
-  # them drifts, the publish does not fail — `twine upload --skip-existing`
-  # and the "already published" branch in publish-crates both treat a stale
-  # version as a no-op and go green. PyPI silently sat at 3.0.1 for two
-  # releases that way. Fail the tag before anything ships instead.
+  # A stale version does not make a publish fail — the "already published"
+  # branch in publish-crates exists so a re-run of a partially-failed release
+  # can continue, and it swallows a version that was never bumped. That is how
+  # v3.2.0 shipped with a Cargo.lock still pinning 3.1.0, and how the Python
+  # wheel sat at 3.0.1 across two releases before it was removed from this
+  # repo. Fail the tag before anything ships instead.
   version-check:
     name: Versions match the tag
     runs-on: ubuntu-latest
@@ -33,10 +34,8 @@ jobs:
           }
           check "Cargo.toml [workspace.package] version" \
             "$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
-          check "bindings/python/Cargo.toml [package] version" \
-            "$(sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"/\1/p' bindings/python/Cargo.toml)"
-          check "bindings/python/pyproject.toml [project] version" \
-            "$(sed -n '/^\[project\]/,/^\[/s/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml)"
+          check "Cargo.lock vedaksha entry" \
+            "$(sed -n '/^name = "vedaksha"$/{n;s/^version = "\(.*\)"/\1/p;}' Cargo.lock | head -1)"
           exit $fail
 
   build-mcp:
@@ -153,46 +152,6 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
 
-  publish-pypi:
-    name: Build Python wheels
-    needs: [version-check]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install maturin
-        run: pip install maturin
-      - name: Build wheel (x86_64)
-        working-directory: bindings/python
-        run: maturin build --release -i python3
-      - uses: actions/upload-artifact@v4
-        with:
-          name: wheels
-          path: bindings/python/target/wheels/*.whl
-
-  upload-pypi:
-    name: Upload to PyPI
-    needs: [publish-pypi]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: wheels
-          path: dist/
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Install twine
-        run: pip install twine
-      - name: Upload to PyPI
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/* --skip-existing
-
   docker:
     name: Push Docker image
     needs: [version-check]
@@ -227,10 +186,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: vedaksha-wasm
-      - uses: actions/download-artifact@v4
-        with:
-          name: wheels
-          path: wheels/
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -238,4 +193,3 @@ jobs:
           files: |
             mcp-*/**/*
             vedaksha-wasm/**/*
-            wheels/**/*

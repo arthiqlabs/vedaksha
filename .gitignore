@@ -16,10 +16,8 @@ Thumbs.db
 .env
 .env.local
 
-# Python bindings
-bindings/python/target/
-bindings/python/*.egg-info/
-bindings/python/.venv/
+# Python — the generator scripts in scripts/ only; there are no bindings in
+# this repo. The Python engine lives in its own repo.
 __pycache__/
 *.pyc
 

@@ -21,7 +21,6 @@ let chart = compute_chart(jd, 28.6139, 77.2090, &ChartConfig::vedic());
 
 ```bash
 cargo add vedaksha          # Rust
-pip install vedaksha        # Python (PyO3)
 npm install vedaksha-wasm   # WebAssembly
 ```
 
@@ -55,8 +54,6 @@ Vedākṣha is the calculation engine under ArthIQ Labs' Jyotish properties:
 | [vedaksha-graph](crates/vedaksha-graph) | Property-graph ontology (10 node types, 13 edge types) + Cypher / SurrealQL / JSON-LD emitters |
 | [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 12 JSON-RPC tools for AI agents |
 | [vedaksha-wasm](crates/vedaksha-wasm) | WebAssembly bindings — full chart computation in the browser, no data files |
-
-Python bindings via PyO3 live in [bindings/python](bindings/python).
 
 ## Two ephemeris providers
 
@@ -182,12 +179,11 @@ against any reference.**
 | Platform | Install | Notes |
 |----------|---------|-------|
 | Rust | `cargo add vedaksha` | full pipeline |
-| Python | `pip install vedaksha` | PyO3, type stubs |
 | WASM | `npm install vedaksha-wasm` | browser & edge, no data files |
 | MCP | `cargo install vedaksha-mcp` | 12 tools, stdio + HTTP |
 | Docker | `docker run ghcr.io/arthiqlabs/vedaksha-mcp` | MCP server on port 3100 |
 
-**Published:** crates.io — 7 crates (`vedaksha`, `vedaksha-math`, `vedaksha-ephem-core`, `vedaksha-astro`, `vedaksha-vedic`, `vedaksha-graph`, `vedaksha-mcp`) · PyPI `vedaksha` · npm `vedaksha-wasm` · Docker `ghcr.io/arthiqlabs/vedaksha-mcp`.
+**Published:** crates.io — 7 crates (`vedaksha`, `vedaksha-math`, `vedaksha-ephem-core`, `vedaksha-astro`, `vedaksha-vedic`, `vedaksha-graph`, `vedaksha-mcp`) · npm `vedaksha-wasm` · Docker `ghcr.io/arthiqlabs/vedaksha-mcp`.
 
 ## License
 
