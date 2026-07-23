@@ -8,6 +8,37 @@ permissions:
   contents: write
 
 jobs:
+  # Every publish target reads its version from a different file. When one of
+  # them drifts, the publish does not fail — `twine upload --skip-existing`
+  # and the "already published" branch in publish-crates both treat a stale
+  # version as a no-op and go green. PyPI silently sat at 3.0.1 for two
+  # releases that way. Fail the tag before anything ships instead.
+  version-check:
+    name: Versions match the tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Assert published versions equal ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          fail=0
+          check() {
+            if [ "$2" = "$tag" ]; then
+              echo "ok: $1 = $2"
+            else
+              echo "::error::$1 is '$2', expected '$tag'"
+              fail=1
+            fi
+          }
+          check "Cargo.toml [workspace.package] version" \
+            "$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
+          check "bindings/python/Cargo.toml [package] version" \
+            "$(sed -n '/^\[package\]/,/^\[/s/^version = "\(.*\)"/\1/p' bindings/python/Cargo.toml)"
+          check "bindings/python/pyproject.toml [project] version" \
+            "$(sed -n '/^\[project\]/,/^\[/s/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml)"
+          exit $fail
+
   build-mcp:
     name: Build MCP binary (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
@@ -70,6 +101,7 @@ jobs:
 
   publish-crates:
     name: Publish to crates.io
+    needs: [version-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -103,7 +135,7 @@ jobs:
 
   publish-npm:
     name: Publish to npm
-    needs: [wasm]
+    needs: [wasm, version-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,6 +155,7 @@ jobs:
 
   publish-pypi:
     name: Build Python wheels
+    needs: [version-check]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -162,6 +195,7 @@ jobs:
 
   docker:
     name: Push Docker image
+    needs: [version-check]
     runs-on: ubuntu-latest
     permissions:
       contents: read
