@@ -149,20 +149,6 @@ impl GraphEmitter for EmbeddingTextEmitter {
             }
         }
 
-        // Yogas
-        for node in &graph.nodes {
-            if node.node_type == NodeType::Yoga {
-                if let NodeProperties::Yoga {
-                    name,
-                    yoga_type,
-                    description,
-                } = &node.properties
-                {
-                    lines.push(format!("{name} ({yoga_type}): {description}"));
-                }
-            }
-        }
-
         // Dasha periods
         for node in &graph.nodes {
             if node.node_type == NodeType::DashaPeriod {
@@ -259,7 +245,6 @@ fn node_display_name(node: &Node) -> Option<String> {
         NodeProperties::Planet { name, .. }
         | NodeProperties::Sign { name, .. }
         | NodeProperties::Nakshatra { name, .. }
-        | NodeProperties::Yoga { name, .. }
         | NodeProperties::FixedStar { name, .. } => Some(name.clone()),
         NodeProperties::DashaPeriod { lord, .. } => Some(lord.clone()),
         _ => None,
@@ -336,17 +321,6 @@ mod tests {
             },
         });
 
-        // Ruchaka Yoga
-        g.add_node(Node {
-            id: NodeId::chart_scoped("test", "yoga", "ruchaka"),
-            node_type: NodeType::Yoga,
-            properties: NodeProperties::Yoga {
-                name: "Ruchaka Yoga".to_string(),
-                yoga_type: "Pancha Mahapurusha".to_string(),
-                description: "Mars in own/exalted sign in kendra.".to_string(),
-            },
-        });
-
         // Mars placed in Capricorn
         g.add_edge(Edge {
             edge_type: EdgeType::PlacedIn,
@@ -416,11 +390,6 @@ mod tests {
         assert!(
             output.contains("aspects Jupiter (Trine"),
             "should describe aspect in English"
-        );
-        // Yoga description
-        assert!(
-            output.contains("Ruchaka Yoga"),
-            "should describe yoga by name"
         );
         // Sign description
         assert!(

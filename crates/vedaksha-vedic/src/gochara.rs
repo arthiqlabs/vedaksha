@@ -13,7 +13,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::yoga::YogaPlanet;
+use crate::planet::YogaPlanet;
 
 /// Selectable vedha pair table.
 ///

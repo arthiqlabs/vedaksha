@@ -7,7 +7,7 @@
 //!
 //! Source: BPHS Ch.7 vv.28-29.
 
-use crate::yoga::YogaPlanet;
+use crate::planet::YogaPlanet;
 
 /// Combustion state of a planet relative to the Sun.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -14,7 +14,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::yoga::YogaPlanet;
+use crate::planet::YogaPlanet;
 
 /// Karaka role assigned to a planet in the Jaimini scheme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

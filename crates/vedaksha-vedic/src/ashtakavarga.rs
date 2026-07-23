@@ -11,7 +11,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::yoga::YogaPlanet;
+use crate::planet::YogaPlanet;
 
 /// Bhinna Ashtakavarga table for one planet.
 #[derive(Debug, Clone, Serialize, Deserialize)]

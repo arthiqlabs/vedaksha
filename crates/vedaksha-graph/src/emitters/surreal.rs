@@ -76,7 +76,6 @@ fn node_type_table(t: NodeType) -> &'static str {
         NodeType::Pada => "pada",
         NodeType::Pattern => "pattern",
         NodeType::DashaPeriod => "dasha_period",
-        NodeType::Yoga => "yoga",
         NodeType::FixedStar => "fixed_star",
     }
 }
@@ -95,7 +94,6 @@ fn edge_type_table(t: EdgeType) -> &'static str {
         EdgeType::ConjunctStar => "conjunct_star",
         EdgeType::DashaLord => "dasha_lord",
         EdgeType::ContainsPeriod => "contains_period",
-        EdgeType::HasYoga => "has_yoga",
     }
 }
 
@@ -195,16 +193,6 @@ fn node_properties_surreal(props: &NodeProperties) -> String {
             format!(
                 "lord = '{lord}', level = {level}, start_jd = {start_jd}, end_jd = {end_jd}, duration_days = {duration_days}"
             )
-        }
-        NodeProperties::Yoga {
-            name,
-            yoga_type,
-            description,
-        } => {
-            let name = escape_surreal_string(name);
-            let yt = escape_surreal_string(yoga_type);
-            let desc = escape_surreal_string(description);
-            format!("name = '{name}', yoga_type = '{yt}', description = '{desc}'")
         }
         NodeProperties::FixedStar {
             name,

@@ -78,8 +78,8 @@ pub fn definition() -> super::ToolDefinition {
 ///
 /// # Errors
 /// Returns `McpError` for unknown names.
-pub fn parse_planet(name: &str) -> Result<vedaksha_vedic::yoga::YogaPlanet, McpError> {
-    use vedaksha_vedic::yoga::YogaPlanet;
+pub fn parse_planet(name: &str) -> Result<vedaksha_vedic::planet::YogaPlanet, McpError> {
+    use vedaksha_vedic::planet::YogaPlanet;
     match name.to_lowercase().as_str() {
         "sun" => Ok(YogaPlanet::Sun),
         "moon" => Ok(YogaPlanet::Moon),

@@ -18,7 +18,6 @@
 pub mod ashtakavarga;
 pub mod bhava;
 pub mod combustion;
-pub mod compatibility;
 pub mod dasha;
 pub mod drishti;
 pub mod gochara;
@@ -26,6 +25,6 @@ pub mod karaka;
 pub mod muhurta;
 pub mod nakshatra;
 pub mod panchanga;
+pub mod planet;
 pub mod shadbala;
 pub mod varga;
-pub mod yoga;

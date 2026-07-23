@@ -484,7 +484,7 @@ impl McpServer {
 
     fn call_compute_combustion(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
         use vedaksha_vedic::combustion::{CombustionState, combustion_state};
-        use vedaksha_vedic::yoga::YogaPlanet;
+        use vedaksha_vedic::planet::YogaPlanet;
 
         let input: crate::tools::compute_combustion::ComputeCombustionInput =
             serde_json::from_value(args.clone())
@@ -545,8 +545,8 @@ impl McpServer {
     }
 
     fn call_compute_shadbala(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::planet::PlanetPosition;
         use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
-        use vedaksha_vedic::yoga::PlanetPosition;
 
         let input: crate::tools::compute_shadbala::ComputeShidbalaInput =
             serde_json::from_value(args.clone())

@@ -29,7 +29,6 @@ pub mod nakshatras;
 pub mod panchanga_yogas;
 pub mod planets;
 pub mod signs;
-pub mod yogas;
 
 /// Supported Tier 1 languages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -336,11 +335,6 @@ mod tests {
             panchanga_yogas::panchanga_yoga_name(0, Language::Sanskrit),
             "विष्कम्भः"
         );
-    }
-
-    #[test]
-    fn sanskrit_yoga_gajakesari_devanagari() {
-        assert_eq!(yogas::yoga_name(0, Language::Sanskrit), "गजकेसरी");
     }
 
     #[test]

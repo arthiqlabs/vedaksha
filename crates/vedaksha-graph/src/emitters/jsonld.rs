@@ -47,7 +47,6 @@ fn build_context() -> serde_json::Value {
         "Pada": "vedaksha:Pada",
         "Pattern": "vedaksha:Pattern",
         "DashaPeriod": "vedaksha:DashaPeriod",
-        "Yoga": "vedaksha:Yoga",
         "FixedStar": "vedaksha:FixedStar",
         "PlacedIn": "vedaksha:PlacedIn",
         "Occupies": "vedaksha:Occupies",
@@ -61,7 +60,6 @@ fn build_context() -> serde_json::Value {
         "ConjunctStar": "vedaksha:ConjunctStar",
         "DashaLord": "vedaksha:DashaLord",
         "ContainsPeriod": "vedaksha:ContainsPeriod",
-        "HasYoga": "vedaksha:HasYoga",
     })
 }
 
@@ -208,15 +206,6 @@ fn node_to_jsonld(node: &Node) -> serde_json::Value {
             obj["endJd"] = serde_json::json!(end_jd);
             obj["durationDays"] = serde_json::json!(duration_days);
         }
-        NodeProperties::Yoga {
-            name,
-            yoga_type,
-            description,
-        } => {
-            obj["name"] = serde_json::Value::String(name.clone());
-            obj["yogaType"] = serde_json::Value::String(yoga_type.clone());
-            obj["description"] = serde_json::Value::String(description.clone());
-        }
         NodeProperties::FixedStar {
             name,
             longitude,
@@ -243,7 +232,6 @@ fn node_type_term(t: NodeType) -> &'static str {
         NodeType::Pada => "Pada",
         NodeType::Pattern => "Pattern",
         NodeType::DashaPeriod => "DashaPeriod",
-        NodeType::Yoga => "Yoga",
         NodeType::FixedStar => "FixedStar",
     }
 }
@@ -262,7 +250,6 @@ fn edge_type_term(t: EdgeType) -> &'static str {
         EdgeType::ConjunctStar => "ConjunctStar",
         EdgeType::DashaLord => "DashaLord",
         EdgeType::ContainsPeriod => "ContainsPeriod",
-        EdgeType::HasYoga => "HasYoga",
     }
 }
 

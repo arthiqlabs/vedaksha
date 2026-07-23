@@ -30,7 +30,7 @@ npm install vedaksha-wasm   # WebAssembly
 - **Sub-arcsecond, measured.** 851 tests on every push (Ubuntu and macOS); a scheduled full run adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run.
 - **Agentic-AI-native.** A 12-tool Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
 - **Runs everywhere.** One Rust codebase → native, Python, WebAssembly (no data files), and a containerized MCP server. No FFI to a C library, no platform-specific build.
-- **Jyotish in the type system.** Nakshatras, dashas, vargas, yogas, shadbala, ayanamshas — first-class, not a Western afterthought.
+- **Jyotish in the type system.** Nakshatras, dashas, vargas, shadbala, ayanamshas — first-class, not a Western afterthought.
 
 ## In production
 
@@ -50,8 +50,8 @@ Vedākṣha is the calculation engine under ArthIQ Labs' Jyotish properties:
 | [vedaksha-math](crates/vedaksha-math) | Chebyshev polynomials, angle arithmetic, interpolation, rotation matrices |
 | [vedaksha-ephem-core](crates/vedaksha-ephem-core) | JPL DE440 SPK reader, **AnalyticalProvider** (VSOP87A + ELP/MPP02), coordinate pipeline, precession, nutation, ΔT |
 | [vedaksha-astro](crates/vedaksha-astro) | 10 house systems, 44 ayanamshas (IAU 2006 P03 5th-order), aspects, dignities, transits |
-| [vedaksha-vedic](crates/vedaksha-vedic) | 27 nakshatras, 5 dasha systems, 16 vargas, 50 yogas, Shadbala |
-| [vedaksha-graph](crates/vedaksha-graph) | Property-graph ontology (10 node types, 13 edge types) + Cypher / SurrealQL / JSON-LD emitters |
+| [vedaksha-vedic](crates/vedaksha-vedic) | 27 nakshatras, 5 dasha systems, 16 vargas, Shadbala |
+| [vedaksha-graph](crates/vedaksha-graph) | Property-graph ontology (9 node types, 12 edge types) + Cypher / SurrealQL / JSON-LD emitters |
 | [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 12 JSON-RPC tools for AI agents |
 | [vedaksha-wasm](crates/vedaksha-wasm) | WebAssembly bindings — full chart computation in the browser, no data files |
 
@@ -90,7 +90,6 @@ First-class Jyotish, drawn from primary classical sources.
 - **Nakshatras** — 27 lunar mansions with padas, lords, symbols, deities
 - **Dashas** — Vimshottari (120-yr), Yogini (36-yr), Ashtottari (108-yr), and Chara & Narayana (Jaimini, sign-based)
 - **Vargas** — all 16 divisional charts (D-1 Rashi → D-60 Shashtiamsha)
-- **Yogas** — 50 classical combinations (Pancha Mahapurusha, Dhana, Raja, Daridra, …)
 - **Shadbala** — complete six-component planetary strength, with Ishta / Kashta phala
 - **Ayanamsha** — 44 sidereal systems (Lahiri, Raman, KP, Fagan-Bradley, +40)
 - **Lunar nodes** — Mean, True (Meeus 5-term, ~0.09°), and Osculating (0.6″ max vs JPL DE441 over 1900–2100) — KP sub-lord ready

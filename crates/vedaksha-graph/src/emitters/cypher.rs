@@ -76,7 +76,6 @@ fn node_type_label(t: NodeType) -> &'static str {
         NodeType::Pada => "Pada",
         NodeType::Pattern => "Pattern",
         NodeType::DashaPeriod => "DashaPeriod",
-        NodeType::Yoga => "Yoga",
         NodeType::FixedStar => "FixedStar",
     }
 }
@@ -95,7 +94,6 @@ fn edge_type_label(t: EdgeType) -> &'static str {
         EdgeType::ConjunctStar => "CONJUNCT_STAR",
         EdgeType::DashaLord => "DASHA_LORD",
         EdgeType::ContainsPeriod => "CONTAINS_PERIOD",
-        EdgeType::HasYoga => "HAS_YOGA",
     }
 }
 
@@ -189,16 +187,6 @@ fn node_properties_cypher(props: &NodeProperties) -> String {
             format!(
                 ", lord: '{lord}', level: {level}, start_jd: {start_jd}, end_jd: {end_jd}, duration_days: {duration_days}"
             )
-        }
-        NodeProperties::Yoga {
-            name,
-            yoga_type,
-            description,
-        } => {
-            let name = escape_single_quotes(name);
-            let yt = escape_single_quotes(yoga_type);
-            let desc = escape_single_quotes(description);
-            format!(", name: '{name}', yoga_type: '{yt}', description: '{desc}'")
         }
         NodeProperties::FixedStar {
             name,

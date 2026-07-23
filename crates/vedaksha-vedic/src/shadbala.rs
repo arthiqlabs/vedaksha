@@ -13,7 +13,7 @@
 //!
 //! Source: BPHS Ch. 27; B.V. Raman, *Graha and Bhava Balas*.
 
-use crate::yoga::{PlanetPosition, YogaPlanet};
+use crate::planet::{PlanetPosition, YogaPlanet};
 use serde::Serialize;
 
 /// Shadbala (six-fold strength) for a planet.

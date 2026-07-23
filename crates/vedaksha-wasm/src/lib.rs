@@ -538,7 +538,7 @@ pub fn compute_karakas(positions_json: &str, scheme: &str) -> Result<String, JsE
 
 fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<String, String> {
     use vedaksha_vedic::combustion::{CombustionState, combustion_state};
-    use vedaksha_vedic::yoga::YogaPlanet;
+    use vedaksha_vedic::planet::YogaPlanet;
 
     let pos: serde_json::Value =
         serde_json::from_str(positions_json).map_err(|e| format!("invalid positions JSON: {e}"))?;
@@ -617,8 +617,8 @@ pub fn compute_combustion(positions_json: &str, retro_json: &str) -> Result<Stri
 }
 
 fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
+    use vedaksha_vedic::planet::{PlanetPosition, YogaPlanet};
     use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
-    use vedaksha_vedic::yoga::{PlanetPosition, YogaPlanet};
 
     let v: serde_json::Value =
         serde_json::from_str(input_json).map_err(|e| format!("invalid JSON: {e}"))?;

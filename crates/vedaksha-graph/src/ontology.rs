@@ -36,7 +36,6 @@ pub enum NodeType {
     Pada,
     Pattern,
     DashaPeriod,
-    Yoga,
     FixedStar,
 }
 
@@ -100,12 +99,6 @@ pub enum NodeProperties {
         end_jd: f64,
         duration_days: f64,
     },
-    /// An astrological yoga.
-    Yoga {
-        name: String,
-        yoga_type: String,
-        description: String,
-    },
     /// A fixed star.
     FixedStar {
         name: String,
@@ -159,8 +152,6 @@ pub enum EdgeType {
     DashaLord,
     /// `DashaPeriod` contains child `DashaPeriod`.
     ContainsPeriod,
-    /// Chart has Yoga.
-    HasYoga,
 }
 
 /// Properties on edges (optional, depends on edge type).
