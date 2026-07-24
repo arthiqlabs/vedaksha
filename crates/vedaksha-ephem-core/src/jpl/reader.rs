@@ -43,7 +43,20 @@ impl SpkReader {
             detail: e.to_string(),
         })?;
 
-        let daf = DafFile::parse(&raw)?;
+        Self::from_bytes(&raw)
+    }
+
+    /// Builds a reader from an in-memory SPK file image.
+    ///
+    /// This is the whole of the reader's logic; [`Self::open`] is a thin
+    /// filesystem wrapper around it. Hosts without a filesystem — wasm being
+    /// the motivating case — supply the bytes themselves.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ComputeError::InvalidFormat`] if the DAF structure is invalid.
+    pub fn from_bytes(raw: &[u8]) -> Result<Self, ComputeError> {
+        let daf = DafFile::parse(raw)?;
 
         // Convert entire file to f64 array (little-endian)
         // Pad to multiple of 8 if needed

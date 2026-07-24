@@ -146,3 +146,24 @@ fn time_range_covers_expected_period() {
     assert!(min_jd < 2_400_000.0, "min JD should be before 1849");
     assert!(max_jd > 2_500_000.0, "max JD should be after 2150");
 }
+
+#[test]
+fn from_bytes_matches_open() {
+    // The no-filesystem entry point must produce a reader identical to the
+    // path-based one — this is what wasm and other embedded hosts rely on.
+    if !common::require_bsp() {
+        return;
+    }
+    let via_open = SpkReader::open(common::bsp_path()).expect("open");
+    let raw = std::fs::read(common::bsp_path()).expect("read bsp");
+    let via_bytes = SpkReader::from_bytes(&raw).expect("from_bytes");
+
+    for body in [Body::Sun, Body::Moon, Body::Mars, Body::Pluto] {
+        let a = via_open.compute_state(body, J2000).expect("open state");
+        let b = via_bytes.compute_state(body, J2000).expect("bytes state");
+        assert_eq!(a.position.x, b.position.x, "{body:?} x");
+        assert_eq!(a.position.y, b.position.y, "{body:?} y");
+        assert_eq!(a.position.z, b.position.z, "{body:?} z");
+        assert_eq!(a.velocity.x, b.velocity.x, "{body:?} vx");
+    }
+}
