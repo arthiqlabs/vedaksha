@@ -1,0 +1,60 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vedaksha"
+version = "3.3.0"
+description = "Clean-room Vedic astronomy & Jyotish engine — the Rust Vedākṣha engine hosted from Python via WebAssembly"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "BUSL-1.1"
+authors = [{ name = "ArthIQ Labs LLC", email = "info@arthiq.net" }]
+keywords = ["astronomy", "ephemeris", "vedic", "jyotish", "astrology", "wasm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = ["wasmtime>=20"]
+
+[project.optional-dependencies]
+rest = ["fastapi>=0.110", "uvicorn>=0.29"]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[project.scripts]
+vedaksha = "vedaksha.cli:main"
+
+[project.urls]
+Homepage = "https://vedaksha.net"
+Source = "https://github.com/arthiqlabs/vedaksha/tree/main/bindings/python"
+Engine = "https://github.com/arthiqlabs/vedaksha"
+
+# The wasm blob is a build artifact (not committed): run scripts/build-wasm.sh
+# to produce src/vedaksha/_wasm/vedaksha.wasm before building the wheel/sdist.
+# Both dists carry the blob so end users never need a Rust toolchain.
+[tool.hatch.build.targets.wheel]
+packages = ["src/vedaksha"]
+artifacts = ["src/vedaksha/_wasm/vedaksha.wasm"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/vedaksha/_wasm/vedaksha.wasm" = "vedaksha/_wasm/vedaksha.wasm"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/vedaksha", "engine", "scripts", "tests", "README.md", "ARCHITECTURE.md"]
+artifacts = ["src/vedaksha/_wasm/vedaksha.wasm"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "B", "RUF"]
+# B008: FastAPI's `= Body(...)` / `= Header(...)` defaults are the framework idiom.
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

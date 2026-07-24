@@ -9,6 +9,7 @@ members = [
     "crates/vedaksha-vedic",
     "crates/vedaksha-mcp",
     "crates/vedaksha-wasm",
+    "bindings/python/engine",
 ]
 
 [workspace.package]

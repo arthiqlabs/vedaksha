@@ -683,6 +683,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "vedaksha-py-engine"
+version = "3.3.0"
+dependencies = [
+ "vedaksha-ephem-core",
+ "vedaksha-mcp",
+]
+
+[[package]]
 name = "vedaksha-vedic"
 version = "3.3.0"
 dependencies = [

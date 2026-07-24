@@ -16,10 +16,17 @@ Thumbs.db
 .env
 .env.local
 
-# Python — the generator scripts in scripts/ only; there are no bindings in
-# this repo. The Python engine lives in its own repo.
+# Python
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+bindings/python/dist/
+bindings/python/build/
+# The wasm blob is a build artifact produced by bindings/python/scripts/build-wasm.sh,
+# not committed — it is rebuilt from the engine source before packaging.
+bindings/python/src/vedaksha/_wasm/
 
 # WASM build
 crates/vedaksha-wasm/pkg/

@@ -46,8 +46,41 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
-      - name: Check WASM
-        run: cargo check -p vedaksha-wasm --target wasm32-unknown-unknown --locked
+      - name: Check WASM (npm binding + Python-host shim)
+        run: |
+          cargo check -p vedaksha-wasm --target wasm32-unknown-unknown --locked
+          cargo check -p vedaksha-py-engine --target wasm32-unknown-unknown --locked
+
+  python:
+    name: Python binding (py${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+    defaults:
+      run:
+        working-directory: bindings/python
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Build the wasm blob from engine source
+        run: ./scripts/build-wasm.sh
+      - name: Regenerate the parity fixture from the native engine
+        run: python tests/conformance/generate_fixture.py
+      - name: Install (with test + rest extras)
+        run: pip install -e ".[dev,rest]" httpx
+      - name: Lint
+        run: ruff check src tests
+      - name: Test
+        # Parity vs the native engine runs here; SPK tests skip without a kernel.
+        run: pytest -q
 
   no-std:
     name: no_std Check
