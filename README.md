@@ -36,7 +36,7 @@ Python, WebAssembly, or as an MCP server for AI agents.
 - **Clean-room, cited.** Every module that implements a cited algorithm carries a `// Source:` doc-comment pointing at the primary paper or treatise (VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini) — never derived from other software, no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/).
 - **Sub-arcsecond, measured.** 820 tests on every push (Ubuntu and macOS); a scheduled full run adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run.
 - **Agentic-AI-native.** A 15-tool Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
-- **Runs everywhere.** One Rust codebase → native, WebAssembly (no data files), and a containerized MCP server. No FFI to a C library, no platform-specific build.
+- **Runs everywhere.** One Rust codebase → native, **Python** (`pip install vedaksha`, the engine hosted via WebAssembly — no Rust toolchain, one `py3-none-any` wheel), in-browser WebAssembly (no data files), and a multi-arch containerized MCP server. No FFI to a C library, no platform-specific build.
 - **Jyotish in the type system.** Nakshatras, dashas, vargas, shadbala, ayanamshas — first-class, not a Western afterthought.
 
 ## In production
@@ -187,11 +187,14 @@ against any reference.**
 | Platform | Install | Notes |
 |----------|---------|-------|
 | Rust | `cargo add vedaksha` | full pipeline |
+| Python | `pip install vedaksha` | engine via WebAssembly, `py3-none-any`, any Python ≥ 3.9 — no Rust toolchain |
 | WASM | `npm install vedaksha-wasm` | browser & edge, no data files |
-| MCP | `cargo install vedaksha-mcp` | 15 tools, stdio + HTTP |
-| Docker | `docker run ghcr.io/arthiqlabs/vedaksha-mcp` | MCP server on port 3100 |
+| MCP | `cargo install vedaksha-mcp` | 15 tools, stdio + HTTP (bearer auth) |
+| Docker | `docker run -e VEDAKSHA_MCP_TOKEN=… ghcr.io/arthiqlabs/vedaksha-mcp` | MCP server on :3100, multi-arch (amd64 + arm64) |
 
-**Published:** crates.io — 7 crates (`vedaksha`, `vedaksha-math`, `vedaksha-ephem-core`, `vedaksha-astro`, `vedaksha-vedic`, `vedaksha-graph`, `vedaksha-mcp`) · npm `vedaksha-wasm` · Docker `ghcr.io/arthiqlabs/vedaksha-mcp`.
+**Published:** crates.io — 7 crates (`vedaksha`, `vedaksha-math`, `vedaksha-ephem-core`, `vedaksha-astro`, `vedaksha-vedic`, `vedaksha-graph`, `vedaksha-mcp`) · PyPI `vedaksha` · npm `vedaksha-wasm` · Docker `ghcr.io/arthiqlabs/vedaksha-mcp` (multi-arch).
+
+See [`bindings/python/`](bindings/python/) for the Python package (library, `vedaksha` CLI, self-hostable MCP server, and optional FastAPI REST).
 
 ## License
 

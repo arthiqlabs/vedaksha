@@ -1,7 +1,11 @@
-# Vedākṣha for Python
+# Vedākṣha for Python — Vedic astrology & ephemeris
 
 The clean-room [Vedākṣha](https://vedaksha.net) Vedic-astronomy and Jyotish engine,
-runnable from Python with **no Rust toolchain and no per-platform build**.
+runnable from Python with **no Rust toolchain and no per-platform build**. Compute
+**kundali / janam kundali** (natal charts), **panchanga**, **vimshottari and other
+dashas**, **nakshatras**, **vargas** (divisional charts), **shadbala**, **ashtakavarga**,
+**muhurta**, and **transits / gochara** — from a sub-arcsecond ephemeris (VSOP87A,
+ELP/MPP02, JPL DE440s/DE441).
 
 This package is not a reimplementation. It ships the real Rust engine compiled to
 WebAssembly and runs it via [`wasmtime`](https://pypi.org/project/wasmtime/). Every value it
@@ -27,13 +31,14 @@ vk = Vedaksha()
 for tool in vk.list_tools():
     print(tool["name"])
 
-# Convenience wrappers for the common ones (analytical ephemeris tier):
+# Typed wrapper for a natal chart / kundali (analytical ephemeris tier):
 chart = vk.natal_chart(julian_day=2451545.0, latitude=28.6139, longitude=77.2090)
-panch = vk.panchanga(julian_day=2451545.0, latitude=28.6139, longitude=77.2090)
 
-# Or call any tool generically:
+# Every tool is callable by name — inspect its inputs with list_tools():
 vargas = vk.call_tool("compute_vargas", julian_day=2451545.0,
-                      latitude=28.6, longitude=77.2)
+                      latitude=28.6, longitude=77.2, divisions=["D9"])
+panchanga = vk.call_tool("compute_panchanga", jd=2451545.0, sun=280.0, moon=120.4)
+dasha = vk.call_tool("compute_dasha", birth_jd=2451545.0, moon_longitude=120.4)
 ```
 
 ### Sub-arcsecond positions (SPK tier)
