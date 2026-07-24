@@ -119,7 +119,11 @@ pub fn find_vedic_aspects(planets: &[(VedicPlanet, u8)]) -> Vec<VedicAspect> {
                 aspects.push(VedicAspect {
                     aspecting_planet: planet,
                     aspecting_sign: sign,
-                    aspected_sign: (sign + houses) % 12,
+                    // Houses are counted inclusively in Jyotish: the sign a
+                    // graha occupies is the 1st, so the 7th from Aries is
+                    // Libra. Hence `houses - 1`, matching the 1-based house
+                    // numbers `aspect_strength` grades.
+                    aspected_sign: (sign + houses - 1) % 12,
                     strength,
                     houses_away: houses,
                 });
@@ -371,13 +375,71 @@ mod tests {
 
     #[test]
     fn find_vedic_aspects_aspected_sign_wraps_correctly() {
-        // Mars in sign 10, aspects 7 houses including 4th (10+4=14 → 14%12=2),
-        // 7th (17%12=5), 8th (18%12=6)
+        // Houses count inclusively, so from Aquarius (10) the 4th is Taurus
+        // (10→11→0→1), the 7th is Leo (4) and the 8th is Virgo (5).
         let planets = [(VedicPlanet::Mars, 10_u8)];
         let aspects = find_vedic_aspects(&planets);
         let aspected: Vec<u8> = aspects.iter().map(|a| a.aspected_sign).collect();
-        assert!(aspected.contains(&2)); // 4th house aspect
-        assert!(aspected.contains(&5)); // 7th house aspect
-        assert!(aspected.contains(&6)); // 8th house aspect
+        assert!(aspected.contains(&1), "4th house aspect should be Taurus");
+        assert!(aspected.contains(&4), "7th house aspect should be Leo");
+        assert!(aspected.contains(&5), "8th house aspect should be Virgo");
+    }
+
+    /// The 7th-from-self aspect is the one every graha casts, so it pins the
+    /// counting convention: from Aries the 7th is Libra, not Scorpio. This is
+    /// the assertion whose absence let an off-by-one live in `aspected_sign`
+    /// while every `aspect_strength` test passed.
+    #[test]
+    fn seventh_aspect_lands_on_the_opposite_sign() {
+        for (sign, expected) in [(0_u8, 6_u8), (3, 9), (6, 0), (11, 5)] {
+            let aspects = find_vedic_aspects(&[(VedicPlanet::Sun, sign)]);
+            let seventh = aspects
+                .iter()
+                .find(|a| a.houses_away == 7)
+                .expect("every graha aspects the 7th");
+            assert_eq!(
+                seventh.aspected_sign, expected,
+                "7th from sign {sign} should be {expected}"
+            );
+            assert_eq!(seventh.strength, AspectStrength::Full);
+        }
+    }
+
+    #[test]
+    fn special_aspects_land_on_the_classical_signs() {
+        // From Aries (0): Saturn 3rd = Gemini (2), 10th = Capricorn (9);
+        // Jupiter 5th = Leo (4), 9th = Sagittarius (8);
+        // Mars 4th = Cancer (3), 8th = Scorpio (7).
+        let full_targets = |planet: VedicPlanet| -> Vec<u8> {
+            let mut v: Vec<u8> = find_vedic_aspects(&[(planet, 0)])
+                .iter()
+                .filter(|a| a.strength == AspectStrength::Full)
+                .map(|a| a.aspected_sign)
+                .collect();
+            v.sort_unstable();
+            v
+        };
+        assert_eq!(full_targets(VedicPlanet::Saturn), vec![2, 6, 9]);
+        assert_eq!(full_targets(VedicPlanet::Jupiter), vec![4, 6, 8]);
+        assert_eq!(full_targets(VedicPlanet::Mars), vec![3, 6, 7]);
+    }
+
+    #[test]
+    fn a_graha_never_aspects_its_own_sign() {
+        for sign in 0_u8..12 {
+            for planet in [
+                VedicPlanet::Sun,
+                VedicPlanet::Mars,
+                VedicPlanet::Jupiter,
+                VedicPlanet::Saturn,
+            ] {
+                assert!(
+                    find_vedic_aspects(&[(planet, sign)])
+                        .iter()
+                        .all(|a| a.aspected_sign != sign),
+                    "{planet:?} in sign {sign} must not aspect itself"
+                );
+            }
+        }
     }
 }
