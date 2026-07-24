@@ -8,11 +8,14 @@
 use serde::{Deserialize, Serialize};
 
 pub mod compute_ashtakavarga;
+pub mod compute_bhavas;
 pub mod compute_combustion;
 pub mod compute_dasha;
+pub mod compute_drishti;
 pub mod compute_gochara;
 pub mod compute_karakas;
 pub mod compute_natal;
+pub mod compute_panchanga;
 pub mod compute_shadbala;
 pub mod compute_transit;
 pub mod compute_vargas;
@@ -44,6 +47,9 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         search_muhurta::definition(),
         compute_ashtakavarga::definition(),
         compute_gochara::definition(),
+        compute_panchanga::definition(),
+        compute_drishti::definition(),
+        compute_bhavas::definition(),
     ]
 }
 
@@ -81,9 +87,13 @@ mod tests {
         }
     }
 
+    /// Guards against a tool being registered or dropped by accident. Update
+    /// the count deliberately when the surface genuinely changes — the
+    /// committed `tools/mcp-tools.json` snapshot must be regenerated in the
+    /// same commit.
     #[test]
-    fn exactly_twelve_tools_are_registered() {
-        assert_eq!(tool_definitions().len(), 12);
+    fn expected_number_of_tools_are_registered() {
+        assert_eq!(tool_definitions().len(), 15);
     }
 
     #[test]

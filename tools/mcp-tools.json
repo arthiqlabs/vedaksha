@@ -631,6 +631,111 @@
         "type": "object"
       },
       "name": "compute_gochara"
+    },
+    {
+      "description": "Compute the panchanga — the five limbs of the Vedic almanac — for an instant: tithi (lunar day, with paksha and lord), vara (weekday, with lord and Rahu Kalam slot), nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), and karana (half-tithi). Takes sidereal longitudes; the caller is responsible for timezone conversion, as all times are UT.",
+      "inputSchema": {
+        "properties": {
+          "jd": {
+            "description": "Julian Day (UT), used for the vara",
+            "type": "number"
+          },
+          "moon": {
+            "description": "Sidereal longitude of Moon [0, 360)",
+            "type": "number"
+          },
+          "sun": {
+            "description": "Sidereal longitude of Sun [0, 360)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "jd",
+          "sun",
+          "moon"
+        ],
+        "type": "object"
+      },
+      "name": "compute_panchanga"
+    },
+    {
+      "description": "Compute graha drishti — Vedic sign aspects — for all nine grahas. Unlike Western aspects, drishti is cast from sign to sign and is asymmetric: every graha aspects the 7th from itself, and Mars additionally aspects the 4th and 8th, Jupiter the 5th and 9th, Saturn the 3rd and 10th. Returns each aspect with its graded strength (Full, ThreeQuarter, Half, Quarter) and the house distance.",
+      "inputSchema": {
+        "properties": {
+          "jupiter": {
+            "description": "Sidereal longitude of Jupiter [0, 360)",
+            "type": "number"
+          },
+          "ketu": {
+            "description": "Sidereal longitude of Ketu [0, 360)",
+            "type": "number"
+          },
+          "mars": {
+            "description": "Sidereal longitude of Mars [0, 360)",
+            "type": "number"
+          },
+          "mercury": {
+            "description": "Sidereal longitude of Mercury [0, 360)",
+            "type": "number"
+          },
+          "moon": {
+            "description": "Sidereal longitude of Moon [0, 360)",
+            "type": "number"
+          },
+          "rahu": {
+            "description": "Sidereal longitude of Rahu [0, 360)",
+            "type": "number"
+          },
+          "saturn": {
+            "description": "Sidereal longitude of Saturn [0, 360)",
+            "type": "number"
+          },
+          "sun": {
+            "description": "Sidereal longitude of Sun [0, 360)",
+            "type": "number"
+          },
+          "venus": {
+            "description": "Sidereal longitude of Venus [0, 360)",
+            "type": "number"
+          }
+        },
+        "required": [
+          "sun",
+          "moon",
+          "mars",
+          "mercury",
+          "jupiter",
+          "venus",
+          "saturn",
+          "rahu",
+          "ketu"
+        ],
+        "type": "object"
+      },
+      "name": "compute_drishti"
+    },
+    {
+      "description": "Compute the whole-sign bhava (house) chart from an ascendant. In the Vedic whole-sign system the entire sign containing the ascendant is the 1st bhava, the next sign the 2nd, and so on — houses do not have cusps within signs. Returns the sign of each of the twelve bhavas with its kendra / trikona / dusthana / upachaya classification, and optionally places supplied grahas into their bhavas.",
+      "inputSchema": {
+        "properties": {
+          "ascendant": {
+            "description": "Sidereal longitude of the ascendant [0, 360)",
+            "type": "number"
+          },
+          "planets": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Optional map of graha name to sidereal longitude, e.g. {\"Mars\": 200.4}. Each is placed into its bhava.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "ascendant"
+        ],
+        "type": "object"
+      },
+      "name": "compute_bhavas"
     }
   ]
 }

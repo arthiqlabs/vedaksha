@@ -225,6 +225,9 @@ impl McpServer {
             "compute_transit" => Self::call_compute_transit(&arguments),
             "search_transits" => Self::call_search_transits(&arguments),
             "search_muhurta" => Self::call_search_muhurta(&arguments),
+            "compute_panchanga" => Self::call_compute_panchanga(&arguments),
+            "compute_drishti" => Self::call_compute_drishti(&arguments),
+            "compute_bhavas" => Self::call_compute_bhavas(&arguments),
             _ => Err(McpError::invalid_parameter(
                 "name",
                 &format!("Unknown tool: {tool_name}"),
@@ -537,6 +540,170 @@ impl McpServer {
         .collect();
 
         Ok(serde_json::json!(results))
+    }
+
+    fn call_compute_panchanga(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, weekday_from_jd};
+        use vedaksha_vedic::nakshatra::Nakshatra;
+        use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
+
+        let input: crate::tools::compute_panchanga::ComputePanchangaInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_panchanga::validate(&input)?;
+
+        let tithi = compute_tithi(input.moon, input.sun);
+        let weekday = weekday_from_jd(input.jd);
+        let nakshatra = Nakshatra::from_longitude(input.moon);
+        let pada = Nakshatra::pada_from_longitude(input.moon);
+        let yoga = compute_panchanga_yoga(input.sun, input.moon);
+        let karana = compute_karana(input.moon, input.sun);
+
+        let weekday_name = match weekday {
+            Weekday::Sunday => "Sunday",
+            Weekday::Monday => "Monday",
+            Weekday::Tuesday => "Tuesday",
+            Weekday::Wednesday => "Wednesday",
+            Weekday::Thursday => "Thursday",
+            Weekday::Friday => "Friday",
+            Weekday::Saturday => "Saturday",
+        };
+        let paksha = match tithi.paksha() {
+            Paksha::Shukla => "Shukla",
+            Paksha::Krishna => "Krishna",
+        };
+
+        Ok(serde_json::json!({
+            "tithi": {
+                "number": tithi.number,
+                "name": tithi.name,
+                "paksha": paksha,
+                "lord": tithi.lord(),
+            },
+            "vara": {
+                "weekday": weekday_name,
+                "lord": weekday.lord(),
+                "rahu_kalam_slot": weekday.rahu_kalam_slot(),
+            },
+            "nakshatra": {
+                "index": nakshatra.index(),
+                "name": nakshatra.name(),
+                "pada": pada,
+            },
+            "yoga": {
+                "index": yoga.index,
+                "name": yoga.name,
+                "remaining_degrees": yoga.remaining_degrees,
+            },
+            "karana": {
+                "index": karana.index,
+                "name": karana.name,
+                "is_fixed": karana.is_fixed,
+            },
+        }))
+    }
+
+    fn call_compute_drishti(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::drishti::{AspectStrength, VedicPlanet, find_vedic_aspects};
+
+        let input: crate::tools::compute_drishti::ComputeDrishtiInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_drishti::validate(&input)?;
+
+        // Drishti is cast sign-to-sign, so the longitude only matters via its sign.
+        let sign = |lon: f64| (lon / 30.0).floor() as u8 % 12;
+
+        let placements = [
+            (VedicPlanet::Sun, sign(input.sun)),
+            (VedicPlanet::Moon, sign(input.moon)),
+            (VedicPlanet::Mars, sign(input.mars)),
+            (VedicPlanet::Mercury, sign(input.mercury)),
+            (VedicPlanet::Jupiter, sign(input.jupiter)),
+            (VedicPlanet::Venus, sign(input.venus)),
+            (VedicPlanet::Saturn, sign(input.saturn)),
+            (VedicPlanet::Rahu, sign(input.rahu)),
+            (VedicPlanet::Ketu, sign(input.ketu)),
+        ];
+
+        let planet_name = |p: VedicPlanet| match p {
+            VedicPlanet::Sun => "Sun",
+            VedicPlanet::Moon => "Moon",
+            VedicPlanet::Mars => "Mars",
+            VedicPlanet::Mercury => "Mercury",
+            VedicPlanet::Jupiter => "Jupiter",
+            VedicPlanet::Venus => "Venus",
+            VedicPlanet::Saturn => "Saturn",
+            VedicPlanet::Rahu => "Rahu",
+            VedicPlanet::Ketu => "Ketu",
+        };
+
+        let aspects: Vec<serde_json::Value> = find_vedic_aspects(&placements)
+            .into_iter()
+            .map(|a| {
+                let strength = match a.strength {
+                    AspectStrength::Full => "Full",
+                    AspectStrength::ThreeQuarter => "ThreeQuarter",
+                    AspectStrength::Half => "Half",
+                    AspectStrength::Quarter => "Quarter",
+                    AspectStrength::None => "None",
+                };
+                serde_json::json!({
+                    "aspecting_planet": planet_name(a.aspecting_planet),
+                    "aspecting_sign": a.aspecting_sign,
+                    "aspected_sign": a.aspected_sign,
+                    "strength": strength,
+                    "houses_away": a.houses_away,
+                })
+            })
+            .collect();
+
+        Ok(serde_json::json!(aspects))
+    }
+
+    fn call_compute_bhavas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_vedic::bhava::{
+            compute_bhavas, is_dusthana, is_kendra, is_trikona, is_upachaya, planet_bhava,
+        };
+
+        let input: crate::tools::compute_bhavas::ComputeBhavasInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_bhavas::validate(&input)?;
+
+        let chart = compute_bhavas(input.ascendant);
+
+        let houses: Vec<serde_json::Value> = (1u8..=12)
+            .map(|bhava| {
+                serde_json::json!({
+                    "bhava": bhava,
+                    "sign": chart.house_signs[(bhava - 1) as usize],
+                    "is_kendra": is_kendra(bhava),
+                    "is_trikona": is_trikona(bhava),
+                    "is_dusthana": is_dusthana(bhava),
+                    "is_upachaya": is_upachaya(bhava),
+                })
+            })
+            .collect();
+
+        let placements: Vec<serde_json::Value> = input
+            .planets
+            .iter()
+            .map(|(name, lon)| {
+                let planet_sign = (lon / 30.0).floor() as u8 % 12;
+                serde_json::json!({
+                    "planet": name,
+                    "sign": planet_sign,
+                    "bhava": planet_bhava(planet_sign, &chart),
+                })
+            })
+            .collect();
+
+        Ok(serde_json::json!({
+            "lagna_sign": chart.lagna_sign,
+            "houses": houses,
+            "planets": placements,
+        }))
     }
 
     fn call_compute_shadbala(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -1099,13 +1266,17 @@ mod tests {
     // ── tools/list ────────────────────────────────────────────────────────────
 
     #[test]
-    fn tools_list_returns_twelve_tools() {
+    fn tools_list_returns_every_registered_tool() {
         let s = server();
         let resp =
             s.handle_request(r#"{"jsonrpc":"2.0","id":3,"method":"tools/list","params":null}"#);
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         let tools = val["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 12, "expected exactly 12 tools");
+        assert_eq!(
+            tools.len(),
+            crate::tools::tool_definitions().len(),
+            "tools/list must expose the whole registry"
+        );
     }
 
     #[test]
