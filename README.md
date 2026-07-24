@@ -6,7 +6,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `sub-arcsecond vs JPL Horizons` · `851 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+`clean-room` · `sub-arcsecond vs JPL Horizons` · `820 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
 
 ---
 
@@ -27,9 +27,9 @@ npm install vedaksha-wasm   # WebAssembly
 ## Why Vedākṣha
 
 - **Clean-room, cited.** Every module that implements a cited algorithm carries a `// Source:` doc-comment pointing at the primary paper or treatise (VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini) — never derived from other software, no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/).
-- **Sub-arcsecond, measured.** 851 tests on every push (Ubuntu and macOS); a scheduled full run adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run.
-- **Agentic-AI-native.** A 12-tool Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
-- **Runs everywhere.** One Rust codebase → native, Python, WebAssembly (no data files), and a containerized MCP server. No FFI to a C library, no platform-specific build.
+- **Sub-arcsecond, measured.** 820 tests on every push (Ubuntu and macOS); a scheduled full run adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run.
+- **Agentic-AI-native.** A 15-tool Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
+- **Runs everywhere.** One Rust codebase → native, WebAssembly (no data files), and a containerized MCP server. No FFI to a C library, no platform-specific build.
 - **Jyotish in the type system.** Nakshatras, dashas, vargas, shadbala, ayanamshas — first-class, not a Western afterthought.
 
 ## In production
@@ -52,7 +52,7 @@ Vedākṣha is the calculation engine under ArthIQ Labs' Jyotish properties:
 | [vedaksha-astro](crates/vedaksha-astro) | 10 house systems, 44 ayanamshas (IAU 2006 P03 5th-order), aspects, dignities, transits |
 | [vedaksha-vedic](crates/vedaksha-vedic) | 27 nakshatras, 5 dasha systems, 16 vargas, Shadbala |
 | [vedaksha-graph](crates/vedaksha-graph) | Property-graph ontology (9 node types, 12 edge types) + Cypher / SurrealQL / JSON-LD emitters |
-| [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 12 JSON-RPC tools for AI agents |
+| [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — 15 JSON-RPC tools for AI agents |
 | [vedaksha-wasm](crates/vedaksha-wasm) | WebAssembly bindings — full chart computation in the browser, no data files |
 
 ## Two ephemeris providers
@@ -98,9 +98,9 @@ First-class Jyotish, drawn from primary classical sources.
 
 ## AI-native: MCP + property graph
 
-Every computation produces a **property graph**, not flat structs — so an agent can ask "which planets aspect the 7th-house lord?" as a graph query instead of re-implementing chart logic. The MCP server exposes 12 tools, discoverable with a single `tools/list` call:
+Every computation produces a **property graph**, not flat structs — so an agent can ask "which planets aspect the 7th-house lord?" as a graph query instead of re-implementing chart logic. The MCP server exposes 15 tools, discoverable with a single `tools/list` call:
 
-`compute_natal_chart` · `compute_dasha` · `compute_vargas` · `compute_karakas` · `compute_combustion` · `compute_shadbala` · `compute_ashtakavarga` · `compute_transit` · `compute_gochara` · `search_transits` · `search_muhurta` · `emit_graph`
+`compute_natal_chart` · `compute_dasha` · `compute_vargas` · `compute_karakas` · `compute_combustion` · `compute_shadbala` · `compute_ashtakavarga` · `compute_transit` · `compute_gochara` · `search_transits` · `search_muhurta` · `compute_panchanga` · `compute_drishti` · `compute_bhavas` · `emit_graph`
 
 ```bash
 cargo install vedaksha-mcp
@@ -179,7 +179,7 @@ against any reference.**
 |----------|---------|-------|
 | Rust | `cargo add vedaksha` | full pipeline |
 | WASM | `npm install vedaksha-wasm` | browser & edge, no data files |
-| MCP | `cargo install vedaksha-mcp` | 12 tools, stdio + HTTP |
+| MCP | `cargo install vedaksha-mcp` | 15 tools, stdio + HTTP |
 | Docker | `docker run ghcr.io/arthiqlabs/vedaksha-mcp` | MCP server on port 3100 |
 
 **Published:** crates.io — 7 crates (`vedaksha`, `vedaksha-math`, `vedaksha-ephem-core`, `vedaksha-astro`, `vedaksha-vedic`, `vedaksha-graph`, `vedaksha-mcp`) · npm `vedaksha-wasm` · Docker `ghcr.io/arthiqlabs/vedaksha-mcp`.

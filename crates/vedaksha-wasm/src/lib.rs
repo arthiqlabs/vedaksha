@@ -1084,6 +1084,241 @@ mod karaka_tests {
     }
 }
 
+/// Compute the panchanga — the five limbs of the Vedic almanac — for an instant.
+///
+/// # Arguments
+/// * `jd` — Julian Day (UT); determines the vara
+/// * `sun` — Sun's sidereal longitude in degrees [0, 360)
+/// * `moon` — Moon's sidereal longitude in degrees [0, 360)
+///
+/// # Returns
+/// JSON string with tithi, vara, nakshatra, yoga and karana.
+///
+/// # Errors
+/// Returns [`JsError`] when a longitude is outside [0, 360) or `jd` is not finite.
+#[wasm_bindgen]
+pub fn compute_panchanga(jd: f64, sun: f64, moon: f64) -> Result<String, JsError> {
+    compute_panchanga_inner(jd, sun, moon).map_err(|e| JsError::new(&e))
+}
+
+fn compute_panchanga_inner(jd: f64, sun: f64, moon: f64) -> Result<String, String> {
+    use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, weekday_from_jd};
+    use vedaksha_vedic::nakshatra::Nakshatra;
+    use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
+
+    if !jd.is_finite() {
+        return Err("jd must be a finite number".to_string());
+    }
+    for (name, lon) in [("sun", sun), ("moon", moon)] {
+        if !lon.is_finite() || !(0.0..360.0).contains(&lon) {
+            return Err(format!("{name} must be a finite number in [0, 360)"));
+        }
+    }
+
+    let tithi = compute_tithi(moon, sun);
+    let weekday = weekday_from_jd(jd);
+    let nakshatra = Nakshatra::from_longitude(moon);
+    let pada = Nakshatra::pada_from_longitude(moon);
+    let yoga = compute_panchanga_yoga(sun, moon);
+    let karana = compute_karana(moon, sun);
+
+    let weekday_name = match weekday {
+        Weekday::Sunday => "Sunday",
+        Weekday::Monday => "Monday",
+        Weekday::Tuesday => "Tuesday",
+        Weekday::Wednesday => "Wednesday",
+        Weekday::Thursday => "Thursday",
+        Weekday::Friday => "Friday",
+        Weekday::Saturday => "Saturday",
+    };
+    let paksha = match tithi.paksha() {
+        Paksha::Shukla => "Shukla",
+        Paksha::Krishna => "Krishna",
+    };
+
+    let out = serde_json::json!({
+        "tithi": {
+            "number": tithi.number,
+            "name": tithi.name,
+            "paksha": paksha,
+            "lord": tithi.lord(),
+        },
+        "vara": {
+            "weekday": weekday_name,
+            "lord": weekday.lord(),
+            "rahu_kalam_slot": weekday.rahu_kalam_slot(),
+        },
+        "nakshatra": {
+            "index": nakshatra.index(),
+            "name": nakshatra.name(),
+            "pada": pada,
+        },
+        "yoga": {
+            "index": yoga.index,
+            "name": yoga.name,
+            "remaining_degrees": yoga.remaining_degrees,
+        },
+        "karana": {
+            "index": karana.index,
+            "name": karana.name,
+            "is_fixed": karana.is_fixed,
+        },
+    });
+    serde_json::to_string(&out).map_err(|e| format!("serialization failed: {e}"))
+}
+
+/// Compute graded graha drishti (Vedic sign aspects) for the nine grahas.
+///
+/// # Arguments
+/// * `positions_json` — JSON object of graha name to sidereal longitude, e.g.
+///   `{"sun":10.0,"moon":100.0,...}`. All nine grahas are required.
+///
+/// # Returns
+/// JSON array of aspects with aspecting/aspected sign, strength and house distance.
+///
+/// # Errors
+/// Returns [`JsError`] when the JSON is malformed or a graha is missing or out of range.
+#[wasm_bindgen]
+pub fn compute_drishti(positions_json: &str) -> Result<String, JsError> {
+    compute_drishti_inner(positions_json).map_err(|e| JsError::new(&e))
+}
+
+fn compute_drishti_inner(positions_json: &str) -> Result<String, String> {
+    use vedaksha_vedic::drishti::{AspectStrength, VedicPlanet, find_vedic_aspects};
+
+    let pos: serde_json::Value =
+        serde_json::from_str(positions_json).map_err(|e| format!("invalid positions JSON: {e}"))?;
+
+    let get_sign = |key: &str| -> Result<u8, String> {
+        let lon = pos
+            .get(key)
+            .and_then(serde_json::Value::as_f64)
+            .ok_or_else(|| format!("missing or invalid field '{key}'"))?;
+        if !lon.is_finite() || !(0.0..360.0).contains(&lon) {
+            return Err(format!("{key} must be a finite number in [0, 360)"));
+        }
+        Ok((lon / 30.0).floor() as u8 % 12)
+    };
+
+    let placements = [
+        (VedicPlanet::Sun, get_sign("sun")?),
+        (VedicPlanet::Moon, get_sign("moon")?),
+        (VedicPlanet::Mars, get_sign("mars")?),
+        (VedicPlanet::Mercury, get_sign("mercury")?),
+        (VedicPlanet::Jupiter, get_sign("jupiter")?),
+        (VedicPlanet::Venus, get_sign("venus")?),
+        (VedicPlanet::Saturn, get_sign("saturn")?),
+        (VedicPlanet::Rahu, get_sign("rahu")?),
+        (VedicPlanet::Ketu, get_sign("ketu")?),
+    ];
+
+    let planet_name = |p: VedicPlanet| match p {
+        VedicPlanet::Sun => "Sun",
+        VedicPlanet::Moon => "Moon",
+        VedicPlanet::Mars => "Mars",
+        VedicPlanet::Mercury => "Mercury",
+        VedicPlanet::Jupiter => "Jupiter",
+        VedicPlanet::Venus => "Venus",
+        VedicPlanet::Saturn => "Saturn",
+        VedicPlanet::Rahu => "Rahu",
+        VedicPlanet::Ketu => "Ketu",
+    };
+
+    let aspects: Vec<serde_json::Value> = find_vedic_aspects(&placements)
+        .into_iter()
+        .map(|a| {
+            let strength = match a.strength {
+                AspectStrength::Full => "Full",
+                AspectStrength::ThreeQuarter => "ThreeQuarter",
+                AspectStrength::Half => "Half",
+                AspectStrength::Quarter => "Quarter",
+                AspectStrength::None => "None",
+            };
+            serde_json::json!({
+                "aspecting_planet": planet_name(a.aspecting_planet),
+                "aspecting_sign": a.aspecting_sign,
+                "aspected_sign": a.aspected_sign,
+                "strength": strength,
+                "houses_away": a.houses_away,
+            })
+        })
+        .collect();
+
+    serde_json::to_string(&aspects).map_err(|e| format!("serialization failed: {e}"))
+}
+
+/// Compute the whole-sign bhava (house) chart from an ascendant.
+///
+/// # Arguments
+/// * `ascendant` — sidereal longitude of the ascendant in degrees [0, 360)
+/// * `planets_json` — JSON object of graha name to sidereal longitude, or `"{}"`
+///   to omit placements
+///
+/// # Returns
+/// JSON string with the lagna sign, the twelve bhavas with their
+/// kendra/trikona/dusthana/upachaya classification, and any placed grahas.
+///
+/// # Errors
+/// Returns [`JsError`] when the JSON is malformed or a longitude is out of range.
+#[wasm_bindgen]
+pub fn compute_bhavas(ascendant: f64, planets_json: &str) -> Result<String, JsError> {
+    compute_bhavas_inner(ascendant, planets_json).map_err(|e| JsError::new(&e))
+}
+
+fn compute_bhavas_inner(ascendant: f64, planets_json: &str) -> Result<String, String> {
+    use vedaksha_vedic::bhava::{
+        compute_bhavas, is_dusthana, is_kendra, is_trikona, is_upachaya, planet_bhava,
+    };
+
+    if !ascendant.is_finite() || !(0.0..360.0).contains(&ascendant) {
+        return Err("ascendant must be a finite number in [0, 360)".to_string());
+    }
+    let supplied: serde_json::Value =
+        serde_json::from_str(planets_json).map_err(|e| format!("invalid planets JSON: {e}"))?;
+
+    let chart = compute_bhavas(ascendant);
+
+    let houses: Vec<serde_json::Value> = (1u8..=12)
+        .map(|bhava| {
+            serde_json::json!({
+                "bhava": bhava,
+                "sign": chart.house_signs[(bhava - 1) as usize],
+                "is_kendra": is_kendra(bhava),
+                "is_trikona": is_trikona(bhava),
+                "is_dusthana": is_dusthana(bhava),
+                "is_upachaya": is_upachaya(bhava),
+            })
+        })
+        .collect();
+
+    let mut placements = Vec::new();
+    if let Some(map) = supplied.as_object() {
+        for (name, value) in map {
+            let lon = value
+                .as_f64()
+                .ok_or_else(|| format!("longitude for '{name}' must be a number"))?;
+            if !lon.is_finite() || !(0.0..360.0).contains(&lon) {
+                return Err(format!(
+                    "longitude for '{name}' must be a finite number in [0, 360)"
+                ));
+            }
+            let sign = (lon / 30.0).floor() as u8 % 12;
+            placements.push(serde_json::json!({
+                "planet": name,
+                "sign": sign,
+                "bhava": planet_bhava(sign, &chart),
+            }));
+        }
+    }
+
+    let out = serde_json::json!({
+        "lagna_sign": chart.lagna_sign,
+        "houses": houses,
+        "planets": placements,
+    });
+    serde_json::to_string(&out).map_err(|e| format!("serialization failed: {e}"))
+}
+
 #[cfg(test)]
 mod combustion_tests {
     use super::*;
@@ -1193,5 +1428,67 @@ mod gochara_tests {
             "natal_reference_sign":0
         }"#;
         assert!(compute_gochara_inner(input).is_err());
+    }
+}
+
+#[cfg(test)]
+mod panchanga_drishti_bhava_tests {
+    use super::*;
+
+    #[test]
+    fn compute_panchanga_inner_j2000_is_saturday() {
+        let out = compute_panchanga_inner(2_451_545.0, 280.0, 223.3238).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["vara"]["weekday"], "Saturday");
+        assert_eq!(v["vara"]["lord"], "Saturn");
+        assert_eq!(v["nakshatra"]["name"], "Anuradha");
+        assert_eq!(v["tithi"]["paksha"], "Krishna");
+    }
+
+    #[test]
+    fn compute_panchanga_inner_rejects_out_of_range() {
+        assert!(compute_panchanga_inner(2_451_545.0, 360.0, 10.0).is_err());
+        assert!(compute_panchanga_inner(f64::NAN, 10.0, 10.0).is_err());
+    }
+
+    #[test]
+    fn compute_drishti_inner_seventh_is_opposite_sign() {
+        let positions = r#"{"sun":5.0,"moon":35.0,"mars":65.0,"mercury":95.0,
+            "jupiter":125.0,"venus":155.0,"saturn":185.0,"rahu":215.0,"ketu":35.0}"#;
+        let out = compute_drishti_inner(positions).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let seventh = v
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|a| a["aspecting_planet"] == "Sun" && a["houses_away"] == 7)
+            .expect("Sun casts a 7th aspect");
+        // Sun at 5 deg is in Aries (0); the 7th is Libra (6).
+        assert_eq!(seventh["aspected_sign"], 6);
+        assert_eq!(seventh["strength"], "Full");
+    }
+
+    #[test]
+    fn compute_drishti_inner_rejects_missing_graha() {
+        assert!(compute_drishti_inner(r#"{"sun":5.0}"#).is_err());
+    }
+
+    #[test]
+    fn compute_bhavas_inner_places_grahas() {
+        let out = compute_bhavas_inner(95.0, r#"{"Mars":200.4}"#).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        // 95 deg is Cancer (3), so the lagna is Cancer and the 1st bhava is Cancer.
+        assert_eq!(v["lagna_sign"], 3);
+        assert_eq!(v["houses"][0]["sign"], 3);
+        assert_eq!(v["houses"][0]["is_kendra"], true);
+        // Mars at 200.4 deg is Libra (6); from a Cancer lagna that is the 4th.
+        assert_eq!(v["planets"][0]["sign"], 6);
+        assert_eq!(v["planets"][0]["bhava"], 4);
+    }
+
+    #[test]
+    fn compute_bhavas_inner_rejects_bad_input() {
+        assert!(compute_bhavas_inner(360.0, "{}").is_err());
+        assert!(compute_bhavas_inner(10.0, "not json").is_err());
     }
 }
