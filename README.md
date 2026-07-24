@@ -104,10 +104,12 @@ Every computation produces a **property graph**, not flat structs — so an agen
 
 ```bash
 cargo install vedaksha-mcp
-vedaksha-mcp                      # stdio (Claude Desktop, Cursor, VS Code)
-vedaksha-mcp --http --port 3100   # HTTP transport
-docker run -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp
+vedaksha-mcp                                          # stdio (Claude Desktop, Cursor, VS Code)
+VEDAKSHA_MCP_TOKEN=… vedaksha-mcp --http --port 3100  # HTTP transport (auth required)
+docker run -e VEDAKSHA_MCP_TOKEN=… -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp
 ```
+
+HTTP mode requires a bearer token (`Authorization: Bearer <token>` on every POST); the server refuses to start without `VEDAKSHA_MCP_TOKEN` unless you pass `--insecure-no-auth` for a trusted-network deployment. `/health` and the informational `GET` stay open. The Docker image is multi-arch (amd64 + arm64).
 
 The tool surface is generated from the Rust definitions and locked by a snapshot test, so the published catalog can't silently drift from the code.
 
