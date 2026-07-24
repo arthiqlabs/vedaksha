@@ -33,7 +33,7 @@ def create_app(*, token: Optional[str] = None) -> "FastAPI":
     """Build the FastAPI app. If ``token`` is set, all tool routes require it."""
     app = FastAPI(
         title="Vedākṣha",
-        version="3.3.0",
+        version="4.0.0",
         description="REST projection of the Vedākṣha engine's 15 tools.",
     )
     vk = Vedaksha()

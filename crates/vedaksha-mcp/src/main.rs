@@ -91,7 +91,9 @@ impl AuthConfig {
     /// mode is requested without a token and without `--insecure-no-auth`.
     fn resolve(args: &[String]) -> Self {
         let insecure = args.iter().any(|a| a == "--insecure-no-auth");
-        let token = std::env::var("VEDAKSHA_MCP_TOKEN").ok().filter(|t| !t.is_empty());
+        let token = std::env::var("VEDAKSHA_MCP_TOKEN")
+            .ok()
+            .filter(|t| !t.is_empty());
 
         match (insecure, token) {
             (true, _) => {
@@ -158,7 +160,11 @@ fn run_http(port: u16, args: &[String]) {
         }
     };
 
-    let auth_state = if auth.token.is_some() { "auth required" } else { "AUTH DISABLED" };
+    let auth_state = if auth.token.is_some() {
+        "auth required"
+    } else {
+        "AUTH DISABLED"
+    };
     eprintln!("Vedākṣha MCP server listening on http://{addr}/mcp  ({auth_state})");
 
     let mcp = vedaksha_mcp::server::McpServer::new();
@@ -267,7 +273,9 @@ fn cors_origin_header() -> tiny_http::Header {
     format!("Access-Control-Allow-Origin: {origin}")
         .parse::<tiny_http::Header>()
         .unwrap_or_else(|_| {
-            "Access-Control-Allow-Origin: *".parse::<tiny_http::Header>().unwrap()
+            "Access-Control-Allow-Origin: *"
+                .parse::<tiny_http::Header>()
+                .unwrap()
         })
 }
 
@@ -323,7 +331,9 @@ mod tests {
 
     #[test]
     fn enabled_auth_requires_exact_bearer_token() {
-        let auth = AuthConfig { token: Some("s3cr3t".to_string()) };
+        let auth = AuthConfig {
+            token: Some("s3cr3t".to_string()),
+        };
         assert!(auth.authorized(Some("Bearer s3cr3t")));
         assert!(!auth.authorized(Some("Bearer wrong")));
         assert!(!auth.authorized(Some("s3cr3t"))); // missing "Bearer " prefix

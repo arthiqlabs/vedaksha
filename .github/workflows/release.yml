@@ -36,6 +36,14 @@ jobs:
             "$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml)"
           check "Cargo.lock vedaksha entry" \
             "$(sed -n '/^name = "vedaksha"$/{n;s/^version = "\(.*\)"/\1/p;}' Cargo.lock | head -1)"
+          # The Python wheel sat at 3.0.1 across two releases before it was
+          # removed — assert it too, so a stale binding fails the tag.
+          check "bindings/python pyproject version" \
+            "$(sed -n 's/^version = "\(.*\)"/\1/p' bindings/python/pyproject.toml | head -1)"
+          check "bindings/python __version__" \
+            "$(sed -n 's/^__version__ = "\(.*\)"/\1/p' bindings/python/src/vedaksha/__init__.py)"
+          check "MCP tool snapshot engineVersion" \
+            "$(sed -n 's/.*"engineVersion": "\(.*\)".*/\1/p' tools/mcp-tools.json)"
           exit $fail
 
   build-mcp:
@@ -152,8 +160,38 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
 
+  publish-pypi:
+    name: Publish to PyPI
+    needs: [version-check]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build the wasm blob from engine source
+        working-directory: bindings/python
+        run: ./scripts/build-wasm.sh
+      - name: Build wheel + sdist
+        working-directory: bindings/python
+        run: |
+          pip install build twine
+          python -m build
+      - name: Publish to PyPI
+        working-directory: bindings/python
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        # --skip-existing is safe here because version-check already guarantees
+        # the version was bumped; it only no-ops on a re-run of this same tag.
+        run: twine upload --skip-existing dist/*
+
   docker:
-    name: Push Docker image
+    name: Push Docker image (multi-arch)
     needs: [version-check]
     runs-on: ubuntu-latest
     permissions:
@@ -161,6 +199,8 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -170,6 +210,9 @@ jobs:
         with:
           context: .
           push: true
+          # TARGETARCH in the Dockerfile selects codegen per platform, so the
+          # AVX2 flag applies only to amd64 and arm64 builds on NEON baseline.
+          platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/arthiqlabs/vedaksha-mcp:latest
             ghcr.io/arthiqlabs/vedaksha-mcp:${{ github.ref_name }}

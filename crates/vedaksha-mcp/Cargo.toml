@@ -8,7 +8,9 @@ repository.workspace = true
 license.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
-description = "MCP server for AI agent chart computation via JSON-RPC"
+description = "MCP server for AI-agent Vedic astrology — kundali, panchanga, dashas, and ephemeris via JSON-RPC"
+keywords = ["mcp", "astrology", "ephemeris", "jyotish", "kundali"]
+categories = ["science", "api-bindings"]
 
 [[bin]]
 name = "vedaksha-mcp"
@@ -19,11 +21,11 @@ name = "dump-tools-list"
 path = "src/bin/dump_tools_list.rs"
 
 [dependencies]
-vedaksha-math = { version = "3.0.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "3.0.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "3.0.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "3.0.0", path = "../vedaksha-vedic" }
-vedaksha-graph = { version = "3.0.0", path = "../vedaksha-graph", features = ["emitters"] }
+vedaksha-math = { version = "4.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "4.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "4.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "4.0.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "4.0.0", path = "../vedaksha-graph", features = ["emitters"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

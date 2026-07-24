@@ -21,8 +21,15 @@ let chart = compute_chart(jd, 28.6139, 77.2090, &ChartConfig::vedic());
 
 ```bash
 cargo add vedaksha          # Rust
-npm install vedaksha-wasm   # WebAssembly
+pip install vedaksha        # Python (runs the engine via WebAssembly)
+npm install vedaksha-wasm   # WebAssembly / JavaScript
 ```
+
+Compute **janam kundali** (natal charts), **panchanga** (the five limbs of the
+day), **vimshottari and other dashas**, **nakshatras**, **vargas** (divisional
+charts), **shadbala**, **ashtakavarga**, **muhurta**, and **transits/gochara** —
+from a sub-arcsecond ephemeris (VSOP87A, ELP/MPP02, JPL DE440s/DE441), in Rust,
+Python, WebAssembly, or as an MCP server for AI agents.
 
 ## Why Vedākṣha
 
