@@ -1108,7 +1108,6 @@ mod karaka_tests {
 /// Returns [`JsError`] when a longitude is outside [0, 360), `jd` is not
 /// finite, or an observer coordinate is out of range or non-finite.
 #[wasm_bindgen]
-#[allow(clippy::too_many_arguments)]
 pub fn compute_panchanga(
     jd: f64,
     sun: f64,
@@ -1130,7 +1129,6 @@ pub fn compute_panchanga(
     .map_err(|e| JsError::new(&e))
 }
 
-#[allow(clippy::too_many_arguments)]
 fn compute_panchanga_inner(
     jd: f64,
     sun: f64,
@@ -1588,7 +1586,7 @@ mod panchanga_drishti_bhava_tests {
         ));
         assert!(close(
             v["vara"]["gulika_kalam"]["end_jd"].as_f64().unwrap(),
-            2_451_544.601_552_453_4
+            2_451_544.601_552_454
         ));
         assert!(close(
             v["vara"]["rahu_kalam"]["start_jd"].as_f64().unwrap(),
