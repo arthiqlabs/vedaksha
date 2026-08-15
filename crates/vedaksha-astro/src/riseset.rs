@@ -326,7 +326,34 @@ fn search_rise(
     } else {
         -SCAN_STEP_DAYS
     };
-    let mut near = anchor;
+    // The backward walk seeds one step AHEAD of `anchor` (`forward` seeds at
+    // `anchor` itself, unchanged) so both directions' FIRST examined bracket
+    // is `[anchor, anchor + SCAN_STEP_DAYS]` — the one whose LOWER edge is
+    // `anchor` — rather than backward's old first bracket `[anchor −
+    // SCAN_STEP_DAYS, anchor]`, whose UPPER edge is `anchor`.
+    //
+    // This matters when `anchor` is itself a rise this same function
+    // returned: the bisection that produced it can leave `rel_alt(anchor)` a
+    // sub-ULP NEGATIVE residual (order 1e-9 to 1e-7 degrees, measured — see
+    // the `anchoring_exactly_on_a_rise_respects_the_strictness_of_each_side`
+    // test below) rather than exactly zero — bisection narrows a bracket, it
+    // does not guarantee the midpoint it returns evaluates to exactly zero.
+    // The old backward seed tested that residual via the bracket's
+    // `hi_alt >= 0.0` guard (`hi =
+    // anchor`), which a sub-ULP-negative value fails, so the one bracket
+    // containing `anchor` was skipped entirely and the walk returned the
+    // PREVIOUS rotation's rise instead — silently violating `previous_rise`'s
+    // "at or before" contract. Seeding ahead instead tests that same
+    // sub-ULP-negative residual via `lo_alt < 0.0` (`lo = anchor`), which it
+    // satisfies, so the bracket is examined and its bisected root — landing
+    // at or within float noise of `anchor` — passes the existing `root <=
+    // anchor` acceptance test. No tolerance is introduced: the acceptance
+    // test is unchanged, only which bracket reaches it.
+    let mut near = if forward {
+        anchor
+    } else {
+        anchor + SCAN_STEP_DAYS
+    };
     let mut near_alt = rel_alt(near)?;
 
     for _ in 0..RISE_SEARCH_STEPS {
@@ -781,30 +808,71 @@ mod tests {
 
     /// The inequalities are strict in the one direction each and inclusive in
     /// the other, so anchoring exactly ON a rise must not return that same
-    /// instant from `next_rise`. `previous_rise` may — "at or before".
+    /// instant from `next_rise`, but MUST return it — exactly — from
+    /// `previous_rise` ("at or before").
+    ///
+    /// Regression for the sub-ULP-negative-altitude bug: `search_rise`'s old
+    /// backward seed tested `rel_alt(anchor)` via the `[anchor -
+    /// SCAN_STEP_DAYS, anchor]` bracket's `hi_alt >= 0.0` guard, which a
+    /// rise's own sub-ULP-negative residual fails, so the bracket containing
+    /// `anchor` was skipped and `previous_rise` silently returned the
+    /// PREVIOUS rotation's rise -- a bracket TWO rotations wide instead of
+    /// one. The old assertion here (`prev <= rise`) could not catch this: it
+    /// is satisfied by `rise - one_rotation` too. This version asserts
+    /// bit-exact equality and a one-rotation bracket width instead.
+    ///
+    /// Two longitudes are checked because the sign of `rel_alt(anchor)`'s
+    /// sub-ULP residual is not guaranteed by construction — it depends on
+    /// which way the bisection's last halving happened to round for that
+    /// specific instant, not on longitude as such. Measured directly against
+    /// THIS test's own anchors (`flat_sun` fixture, lat 0, window start JD
+    /// 2,451,544.5 — MUTATION-CHECK output, see below): `rel_alt(rise) =
+    /// -8.40e-9` deg at lon 0 (the sign that triggers the bug) and `+1.13e-7`
+    /// deg at lon 174 (the sign that happened to pass by luck on the old
+    /// code). Both are exercised so the fix is proven independent of which
+    /// sign the residual takes.
+    ///
+    /// Rotation spacing is derived, not assumed to be 1.0 d: this fixture's
+    /// Sun is held at fixed right ascension, so consecutive rises are one
+    /// SIDEREAL day apart -- `360 / 360.98564736629` (GMST rate, Meeus eq.
+    /// 12.4) = `SIDEREAL_ROTATION_DAYS`, derived where that constant is
+    /// defined above -- not one solar day.
     #[test]
     fn anchoring_exactly_on_a_rise_respects_the_strictness_of_each_side() {
-        let (lat, lon) = (0.0, 0.0);
-        let rise = sun_rise_set(2_451_544.5, lat, lon, 0.0, &flat_sun)
-            .rise
-            .expect("the fixture rises at the equator");
+        for lon in [0.0_f64, 174.0_f64] {
+            let lat = 0.0;
+            let rise = sun_rise_set(2_451_544.5, lat, lon, 0.0, &flat_sun)
+                .rise
+                .unwrap_or_else(|| panic!("lon={lon}: the fixture rises at the equator"));
 
-        let next = next_rise(rise, lat, lon, 0.0, &flat_sun).expect("a rise follows");
-        assert!(
-            next > rise,
-            "next_rise must be STRICTLY after its anchor: anchor {rise}, got {next}"
-        );
-        assert!(
-            libm::fabs((next - rise) - SIDEREAL_ROTATION_DAYS) < 1e-6,
-            "the rise after a rise is one rotation later, got {} d",
-            next - rise
-        );
+            let next = next_rise(rise, lat, lon, 0.0, &flat_sun)
+                .unwrap_or_else(|| panic!("lon={lon}: a rise follows"));
+            assert!(
+                next > rise,
+                "lon={lon}: next_rise must be STRICTLY after its anchor: anchor {rise}, got {next}"
+            );
 
-        let prev = previous_rise(rise, lat, lon, 0.0, &flat_sun).expect("a rise is at or before");
-        assert!(
-            prev <= rise,
-            "previous_rise must be at or before its anchor: anchor {rise}, got {prev}"
-        );
+            let prev = previous_rise(rise, lat, lon, 0.0, &flat_sun)
+                .unwrap_or_else(|| panic!("lon={lon}: a rise is at or before"));
+            assert_eq!(
+                prev, rise,
+                "lon={lon}: previous_rise(rise) must equal rise EXACTLY (bit-equal): \
+                 anchor {rise}, got {prev} -- a mismatch of one rotation here is the \
+                 sub-ULP-negative-altitude bug this test guards"
+            );
+
+            // Width must be ONE rotation, not two: the bug this test guards
+            // produces exactly a two-rotation width by returning the
+            // previous rotation's rise instead of `rise` itself.
+            let width = next - prev;
+            assert!(
+                libm::fabs(width - SIDEREAL_ROTATION_DAYS) < 1e-6,
+                "lon={lon}: [previous_rise(rise), next_rise(rise)) width = {width} d, \
+                 expected one sidereal rotation ({SIDEREAL_ROTATION_DAYS} d) -- a width \
+                 near {} d would mean previous_rise returned the WRONG (earlier) rotation",
+                2.0 * SIDEREAL_ROTATION_DAYS
+            );
+        }
     }
 
     /// Polar night: the search must run out its bound and report `None` rather

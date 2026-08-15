@@ -22,9 +22,12 @@ pub const MAX_TRANSIT_SEARCH_DAYS: f64 = 36_525.0;
 /// `search_muhurta` is far more expensive per day of range than a transit
 /// search: every 0.5-day step needs Sun/Moon sidereal longitudes, and each
 /// distinct vara needs a `vara_with_validity` call (`vedaksha_vedic::muhurta`)
-/// — two 5-minute-resolution horizon scans of up to ~288 steps each
-/// (`previous_rise` for the opening sunrise, `next_rise` for the closing
-/// one, both anchored on the query instant), plus a
+/// — two 5-minute-resolution horizon scans, typically ~288 steps each but
+/// with a hard bound of 1152 steps / 4 days
+/// (`vedaksha_astro::riseset::RISE_SEARCH_STEPS`, the margin kept for
+/// latitudes just inside the polar circles) (`previous_rise` for the opening
+/// sunrise, `next_rise` for the closing one, both anchored on the query
+/// instant), plus a
 /// `compute_tithi_end`/`compute_nakshatra_end` refinement for every window
 /// that passes `min_quality`. Measured directly in release mode (not
 /// extrapolated): a real 30-day `search_muhurta` call at Chennai (lat 13.08,

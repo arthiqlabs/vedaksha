@@ -644,11 +644,15 @@ pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) 
 ///
 /// # Performance
 ///
-/// One [`vara_with_validity`] call costs roughly 2 × (up to 288 coarse scan
+/// One [`vara_with_validity`] call costs roughly 2 × (up to 1152 coarse scan
 /// steps + bisection) `equatorial` evaluations: the backward and forward
 /// searches each step outward from `jd_ut` at 5-minute resolution and stop at
-/// the first horizon crossing, which is at most one rotation — 288 steps —
-/// away. Deriving the vara fresh at every 0.5-day step would put a one-year
+/// the first horizon crossing. Away from the polar circles that crossing is
+/// at most one rotation away — typically ~288 steps — but the search's hard
+/// bound (`vedaksha_astro::riseset::RISE_SEARCH_STEPS`) is 1152 steps (4
+/// days), the margin kept for latitudes just inside the polar circles, where
+/// a body can fail to clear the horizon on one rotation and clear it on the
+/// next. Deriving the vara fresh at every 0.5-day step would put a one-year
 /// search near 420,000 evaluations — a latency regression measured in minutes
 /// on a tool that is otherwise fast. The vara is constant
 /// over `[start, end)` — sunrise to the next sunrise — so this memoises on
@@ -1270,12 +1274,23 @@ mod tests {
     /// 2451554.4998116544 — and reports only the first. The old return was
     /// vara **Monday**, `[2451553.502542088, 2451554.499811655)`, which does
     /// not even contain `jd_ut` = 2451554.75: the instant lands 0.2502 d PAST
-    /// `end`. The truth, from a 1-second brute-force scan of the altitude
-    /// crossings over `[jd − 2, jd + 2]` (independent of every window
-    /// primitive in this workspace): rises at JD 2451553.5025420883,
-    /// 2451554.4998116544, 2451555.4970812206, 2451556.4943507873, so the
-    /// vara containing `jd_ut` opens at JD 2451554.4998116544 — a **Tuesday**
-    /// at tz +660.
+    /// `end`. A coarse 1-second scan of the altitude crossings over `[jd − 2,
+    /// jd + 2]` located WHICH rotation is correct — rises near JD
+    /// 2451553.5025420883, 2451554.4998116544, 2451555.4970812206,
+    /// 2451556.4943507873 — identifying that the vara containing `jd_ut`
+    /// opens at the second of those (a **Tuesday** at tz +660), not the first
+    /// (**Monday**) the old code returned. That coarse scan's own resolution
+    /// (~1 s ≈ 1.16e-5 d) does not, by itself, support the ~1e-10-day
+    /// precision of the literals asserted below: those are `start`/`end` as
+    /// this test's own call to `vara_with_validity` — i.e. the bisected roots
+    /// `previous_rise`/`next_rise` converge to (`search_rise`'s `bisect`, 40
+    /// halvings of a 5-minute bracket, resolution ≈3e-15 d) — actually
+    /// produced, re-measured directly against the fixed implementation: the
+    /// residual between the literal below and a fresh run was ≤4.7e-10 d
+    /// (one ULP at this JD's magnitude). The 1e-6 d assertion tolerance is
+    /// therefore not tied to the coarse scan's resolution; it is kept three
+    /// orders of magnitude looser than that measured ULP-level residual on
+    /// purpose, for headroom, not because 1e-6 d is the achieved precision.
     ///
     /// ⚠️ `tz_offset_minutes` MUST be non-zero here. At tz 0 the two candidate
     /// sunrises usually floor to the same weekday, which is exactly why every
@@ -1301,12 +1316,12 @@ mod tests {
         );
         assert!(
             libm::fabs(start - 2_451_554.499_811_654_4) < 1e-6,
-            "start {start} must be the brute-force-derived sunrise \
+            "start {start} must be the bisection-derived sunrise \
              JD 2451554.4998116544"
         );
         assert!(
             libm::fabs(end - 2_451_555.497_081_220_6) < 1e-6,
-            "end {end} must be the brute-force-derived next sunrise \
+            "end {end} must be the bisection-derived next sunrise \
              JD 2451555.4970812206"
         );
     }
@@ -1321,12 +1336,21 @@ mod tests {
     ///
     /// Measured at lat −9.0, lon 87.668, tz +660, jd 2459113.4. The old code
     /// returned vara **Saturday**, `[2459111.500415422, 2459112.49999942)` —
-    /// `jd_ut` sits 0.9001 d past `end`, a full vara out. Truth, from the same
-    /// independent 1-second brute-force altitude scan: rises at JD
+    /// `jd_ut` sits 0.9001 d past `end`, a full vara out. A coarse 1-second
+    /// altitude scan located WHICH rotation is correct: rises near JD
     /// 2459111.500415422, 2459112.49999942, 2459113.499583689,
-    /// 2459114.4991684277, so the vara containing `jd_ut` opens at JD
-    /// 2459112.49999942 and closes at JD 2459113.499583689 — a **Sunday** at
-    /// tz +660.
+    /// 2459114.4991684277, identifying that the vara containing `jd_ut` opens
+    /// at the second of those and closes at the third — a **Sunday** at tz
+    /// +660, not the old code's Saturday. As in the `flat_sun` regression
+    /// above, that scan's own ~1-second (~1.16e-5 d) resolution is coarser
+    /// than the ~1e-10-day precision of the literals asserted below; those
+    /// are `start`/`end` as this test's own call to `vara_with_validity`
+    /// actually produces — the bisected roots `previous_rise`/`next_rise`
+    /// converge to (`search_rise`'s `bisect`, resolution ≈3e-15 d) —
+    /// re-measured directly against the fixed implementation with a residual
+    /// of 0 (bit-exact) between the literal and a fresh run. The 1e-6 d
+    /// tolerance below is headroom over that measured residual, not a
+    /// restatement of the coarse scan's resolution.
     #[test]
     fn vara_with_validity_pins_the_real_sun_two_sunrises_regression() {
         use vedaksha_astro::riseset::sun_equatorial_deg;
@@ -1352,12 +1376,12 @@ mod tests {
         );
         assert!(
             libm::fabs(start - 2_459_112.499_999_42) < 1e-6,
-            "start {start} must be the brute-force-derived sunrise \
+            "start {start} must be the bisection-derived sunrise \
              JD 2459112.49999942"
         );
         assert!(
             libm::fabs(end - 2_459_113.499_583_688_6) < 1e-6,
-            "end {end} must be the brute-force-derived next sunrise \
+            "end {end} must be the bisection-derived next sunrise \
              JD 2459113.499583689"
         );
     }
