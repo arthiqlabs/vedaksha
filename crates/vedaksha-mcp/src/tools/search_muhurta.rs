@@ -24,6 +24,12 @@ pub struct SearchMuhurtaInput {
     /// Minimum quality score (0.0–1.0) for a muhurta to be included.
     /// Defaults to 0.5 when absent.
     pub min_quality: Option<f64>,
+    /// Offset of the observer's civil clock from UT, in minutes. Names the
+    /// vara (weekday) reported for each candidate — it does not affect
+    /// which sunrise bounds the vara, only what that vara is called.
+    /// Defaults to 0 (UT) when absent.
+    #[serde(default)]
+    pub tz_offset_minutes: Option<i32>,
 }
 
 /// Tool metadata for MCP tool-listing.
@@ -33,17 +39,22 @@ pub fn definition() -> super::ToolDefinition {
         name: "search_muhurta",
         description: "Search for auspicious time windows (muhurta) within a given period for a \
             geographic location. Returns ranked muhurta candidates with quality scores based on \
-            tithi, nakshatra, yoga, karana, and planetary positions.",
+            tithi, nakshatra, yoga, karana, and planetary positions. The search window is capped \
+            at 30 days (see MUHURTA_SEARCH_RANGE_TOO_LARGE) — the per-candidate vara and \
+            tithi/nakshatra refinement make this tool far more expensive per day of range than \
+            a transit search, so a wider span would make a single call take minutes.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
                 "start_jd": {
                     "type": "number",
-                    "description": "Start of the search window as a Julian Day (TDB)"
+                    "description": "Start of the search window as a Julian Day (TDB). The span \
+                                    from start_jd to end_jd must not exceed 30 days."
                 },
                 "end_jd": {
                     "type": "number",
-                    "description": "End of the search window as a Julian Day (TDB)"
+                    "description": "End of the search window as a Julian Day (TDB). The span \
+                                    from start_jd to end_jd must not exceed 30 days."
                 },
                 "latitude": {
                     "type": "number",
@@ -59,6 +70,16 @@ pub fn definition() -> super::ToolDefinition {
                     "minimum": 0.0,
                     "maximum": 1.0,
                     "default": 0.5
+                },
+                "tz_offset_minutes": {
+                    "type": "integer",
+                    "description": "Offset of the observer's civil clock from UT, in minutes. \
+                                    Names the vara (weekday) reported for each candidate — it \
+                                    does not change which sunrise bounds the vara, only what \
+                                    that vara is called. Default 0 (UT).",
+                    "minimum": -720,
+                    "maximum": 840,
+                    "default": 0
                 }
             },
             "required": ["start_jd", "end_jd", "latitude", "longitude"]
@@ -72,7 +93,7 @@ pub fn definition() -> super::ToolDefinition {
 ///
 /// Returns the first [`McpError`] encountered.
 pub fn validate(input: &SearchMuhurtaInput) -> Result<(), McpError> {
-    validation::validate_search_span(input.start_jd, input.end_jd)?;
+    validation::validate_muhurta_search_span(input.start_jd, input.end_jd)?;
     validation::validate_latitude(input.latitude)?;
     validation::validate_longitude(input.longitude)?;
 
@@ -83,6 +104,10 @@ pub fn validate(input: &SearchMuhurtaInput) -> Result<(), McpError> {
                 "min_quality must be a finite number in [0.0, 1.0]",
             ));
         }
+    }
+
+    if let Some(tz) = input.tz_offset_minutes {
+        validation::validate_tz_offset_minutes(tz)?;
     }
 
     Ok(())
@@ -100,6 +125,7 @@ mod tests {
             latitude: 13.08,
             longitude: 80.27,
             min_quality: None,
+            tz_offset_minutes: None,
         }
     }
 
@@ -129,7 +155,26 @@ mod tests {
         let mut input = valid_input();
         input.end_jd = input.start_jd + 40_000.0;
         let err = validate(&input).unwrap_err();
-        assert_eq!(err.error_code, "SEARCH_RANGE_TOO_LARGE");
+        assert_eq!(err.error_code, "MUHURTA_SEARCH_RANGE_TOO_LARGE");
+    }
+
+    /// FINDING 3. `search_muhurta`'s cap is the tighter
+    /// `MAX_MUHURTA_SEARCH_DAYS` (30), not the 100-year
+    /// `MAX_TRANSIT_SEARCH_DAYS` `compute_transit`-style tools use — a span
+    /// well under the transit cap must still be rejected here.
+    #[test]
+    fn validate_rejects_a_span_within_the_transit_cap_but_over_the_muhurta_cap() {
+        let mut input = valid_input();
+        input.end_jd = input.start_jd + 90.0; // < 100 years, > 30 days
+        let err = validate(&input).unwrap_err();
+        assert_eq!(err.error_code, "MUHURTA_SEARCH_RANGE_TOO_LARGE");
+    }
+
+    #[test]
+    fn validate_accepts_the_muhurta_cap_exactly() {
+        let mut input = valid_input();
+        input.end_jd = input.start_jd + crate::validation::MAX_MUHURTA_SEARCH_DAYS;
+        assert!(validate(&input).is_ok());
     }
 
     #[test]
@@ -164,5 +209,47 @@ mod tests {
         assert!(names.contains(&"end_jd"));
         assert!(names.contains(&"latitude"));
         assert!(names.contains(&"longitude"));
+        // tz_offset_minutes is optional (defaults to 0/UT), not required.
+        assert!(!names.contains(&"tz_offset_minutes"));
+    }
+
+    #[test]
+    fn definition_schema_declares_tz_offset_minutes() {
+        let def = definition();
+        let props = &def.input_schema["properties"];
+        assert!(
+            props["tz_offset_minutes"].is_object(),
+            "schema must declare tz_offset_minutes"
+        );
+        assert_eq!(props["tz_offset_minutes"]["default"], 0);
+    }
+
+    // --- tz_offset_minutes ---
+
+    #[test]
+    fn validate_accepts_missing_tz_offset_minutes() {
+        assert!(validate(&valid_input()).is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_tz_offset_minutes_at_the_boundaries() {
+        let mut input = valid_input();
+        input.tz_offset_minutes = Some(-720);
+        assert!(validate(&input).is_ok());
+        input.tz_offset_minutes = Some(840);
+        assert!(validate(&input).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_tz_offset_minutes_out_of_range() {
+        let mut input = valid_input();
+        input.tz_offset_minutes = Some(-721);
+        let err = validate(&input).unwrap_err();
+        assert_eq!(err.error_code, "INVALID_PARAMETER");
+
+        let mut input = valid_input();
+        input.tz_offset_minutes = Some(841);
+        let err = validate(&input).unwrap_err();
+        assert_eq!(err.error_code, "INVALID_PARAMETER");
     }
 }

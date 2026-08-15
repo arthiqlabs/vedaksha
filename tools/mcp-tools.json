@@ -450,11 +450,11 @@
       "name": "search_transits"
     },
     {
-      "description": "Search for auspicious time windows (muhurta) within a given period for a geographic location. Returns ranked muhurta candidates with quality scores based on tithi, nakshatra, yoga, karana, and planetary positions.",
+      "description": "Search for auspicious time windows (muhurta) within a given period for a geographic location. Returns ranked muhurta candidates with quality scores based on tithi, nakshatra, yoga, karana, and planetary positions. The search window is capped at 30 days (see MUHURTA_SEARCH_RANGE_TOO_LARGE) — the per-candidate vara and tithi/nakshatra refinement make this tool far more expensive per day of range than a transit search, so a wider span would make a single call take minutes.",
       "inputSchema": {
         "properties": {
           "end_jd": {
-            "description": "End of the search window as a Julian Day (TDB)",
+            "description": "End of the search window as a Julian Day (TDB). The span from start_jd to end_jd must not exceed 30 days.",
             "type": "number"
           },
           "latitude": {
@@ -473,8 +473,15 @@
             "type": "number"
           },
           "start_jd": {
-            "description": "Start of the search window as a Julian Day (TDB)",
+            "description": "Start of the search window as a Julian Day (TDB). The span from start_jd to end_jd must not exceed 30 days.",
             "type": "number"
+          },
+          "tz_offset_minutes": {
+            "default": 0,
+            "description": "Offset of the observer's civil clock from UT, in minutes. Names the vara (weekday) reported for each candidate — it does not change which sunrise bounds the vara, only what that vara is called. Default 0 (UT).",
+            "maximum": 840,
+            "minimum": -720,
+            "type": "integer"
           }
         },
         "required": [

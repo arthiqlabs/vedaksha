@@ -125,12 +125,19 @@ pub struct KalamWindow {
 }
 
 /// Rahu Kalam and Gulika Kalam as actual time windows for the vara containing
-/// `jd_ut`, at the given observer.
+/// `jd_ut`, at the given observer — plus the vara itself, so a caller (e.g.
+/// `compute_panchanga`'s handler) that needs both never has to run a second,
+/// separate sunrise scan (via [`vara_at`]) to get the vara alone.
 ///
-/// Both are defined as one eighth of the daytime — sunrise to sunset divided
-/// into eight equal parts — with the vara selecting which eighth. Returns
-/// `(rahu, gulika)`, or `None` where the Sun does not both rise and set (polar
-/// day and polar night), which is when the definition has no daytime to divide.
+/// Both windows are defined as one eighth of the daytime — sunrise to sunset
+/// divided into eight equal parts — with the vara selecting which eighth.
+/// Returns `(vara, Some((rahu, gulika)))` normally, or `(vara, None)` where
+/// the Sun does not both rise and set (polar day and polar night), which is
+/// when the definition has no daytime to divide. The vara itself is returned
+/// in BOTH cases: inside the polar day/night this function's own walk-back
+/// finds no sunrise either, so `vara` here falls back to the local civil
+/// weekday — the same documented convention [`vara_at`] uses — rather than
+/// being withheld just because the windows are undefined.
 ///
 /// Source: Kalaprakashika (Rahu Kalam); Muhurtha Chintamani (Gulika Kalam).
 #[must_use]
@@ -141,7 +148,9 @@ pub fn kalam_windows(
     elevation_m: f64,
     tz_offset_minutes: i32,
     equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
-) -> Option<(KalamWindow, KalamWindow)> {
+) -> (Weekday, Option<(KalamWindow, KalamWindow)>) {
+    let local_weekday =
+        |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
     // ⚠️ `sun_rise_set` returns the FIRST rise and FIRST set inside its
     // 24-hour scan window, and they need not be in that order. Naively
     // pairing them can give a negative daytime and eight backwards windows.
@@ -178,17 +187,14 @@ pub fn kalam_windows(
         }
         day_start -= 1.0;
     }
-    let sunrise = opening_sunrise?;
-    let sunset = vedaksha_astro::riseset::sun_rise_set(
-        sunrise,
-        lat_deg,
-        lon_deg_east,
-        elevation_m,
-        equatorial,
-    )
-    .set?;
-
-    let eighth = (sunset - sunrise) / 8.0;
+    let Some(sunrise) = opening_sunrise else {
+        // Polar day/night: this walk-back's own scan found no sunrise at
+        // or before `jd_ut` in any of the 4 days tried, so there is no
+        // daytime to divide into eighths. The vara still falls back to the
+        // local civil weekday — same documented convention as `vara_at` —
+        // rather than being withheld.
+        return (local_weekday(jd_ut), None);
+    };
 
     // Derived directly from `sunrise` (the walk-back result above) rather than
     // by calling `vara_at` again: `vara_at` re-runs the same backward walk
@@ -199,7 +205,25 @@ pub fn kalam_windows(
     // helper `vara_at` applies to its own found rise, so this is the same
     // rule applied to a consistent sunrise, not a new one — and it avoids
     // repeating the walk-back a second time.
-    let vara = weekday_from_day_index(sunrise + f64::from(tz_offset_minutes) / 1440.0);
+    let vara = local_weekday(sunrise);
+
+    let Some(sunset) = vedaksha_astro::riseset::sun_rise_set(
+        sunrise,
+        lat_deg,
+        lon_deg_east,
+        elevation_m,
+        equatorial,
+    )
+    .set
+    else {
+        // Sunrise found but no matching sunset — pathologically only
+        // possible if `equatorial` starts failing partway through the
+        // forward scan. The vara (anchored on a real sunrise) is still
+        // valid; there is just no daytime to divide.
+        return (vara, None);
+    };
+
+    let eighth = (sunset - sunrise) / 8.0;
     let window = |slot: u8| {
         // INVARIANT: `slot - 1` cannot underflow. Only `rahu_kalam_slot` and
         // `gulika_kalam_slot` ever feed this closure, and both are exhaustive
@@ -216,10 +240,13 @@ pub fn kalam_windows(
         }
     };
 
-    Some((
-        window(vara.rahu_kalam_slot()),
-        window(vara.gulika_kalam_slot()),
-    ))
+    (
+        vara,
+        Some((
+            window(vara.rahu_kalam_slot()),
+            window(vara.gulika_kalam_slot()),
+        )),
+    )
 }
 
 /// Muhurta quality assessment for a given moment.
@@ -344,13 +371,46 @@ pub fn vara_at(
     tz_offset_minutes: i32,
     equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
 ) -> Weekday {
+    vara_with_validity(jd_ut, lat_deg, lon_deg_east, tz_offset_minutes, equatorial).0
+}
+
+/// The vara for `jd_ut`, plus the half-open Julian-Day interval `[start,
+/// end)` over which that same vara holds — i.e. `[the sunrise that opened
+/// it, the next sunrise)`.
+///
+/// This is the ONE derivation `vara_at` wraps: the interval is exact by
+/// construction, so a caller (e.g. [`search_muhurta`]'s memo) that recomputes
+/// only when its cached `jd` falls outside `[start, end)` can never go stale
+/// — unlike memoising on the civil-UT day, which drifts out of sync with the
+/// sunrise boundary and hands the wrong vara to any sample that falls between
+/// local midnight and local sunrise.
+///
+/// Returns `None` for the interval — "not derivable, do not cache" — in
+/// exactly two cases: the polar fallback (no sunrise bounds the vara at all,
+/// so there is no interval to report), and a forward search for the closing
+/// sunrise that fails within its own four-day bound (which includes the
+/// `equatorial` closure returning `None` throughout that search). The
+/// `Weekday` itself is still correct in both cases; only the cached interval
+/// is withheld.
+///
+/// Source: Muhurta Chintamani; Kalaprakashika (the sunrise reckoning).
+#[must_use]
+pub fn vara_with_validity(
+    jd_ut: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    tz_offset_minutes: i32,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> (Weekday, Option<(f64, f64)>) {
     let local_weekday =
         |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
 
-    // 0h UT of the civil UT day containing `jd_ut`, then walk back until a
-    // sunrise at or before the instant is found. Four days is ample: only the
-    // polar cases fail, and they fail for every day.
+    // Step 1 (identical to the old `vara_at` body): 0h UT of the civil UT
+    // day containing `jd_ut`, then walk back until a sunrise at or before
+    // the instant is found. Four days is ample: only the polar cases fail,
+    // and they fail for every day.
     let mut day_start = libm::floor(jd_ut - 0.5) + 0.5;
+    let mut opening: Option<(f64, f64)> = None; // (sunrise, the day_start it was found at)
     for _ in 0..4 {
         // NOTE: written as a nested `if let`, not a let-chain. The workspace
         // `rust-version` is 1.85 and let-chains did not stabilise until 1.88,
@@ -361,12 +421,63 @@ pub fn vara_at(
                 .rise
         {
             if rise <= jd_ut {
-                return local_weekday(rise);
+                opening = Some((rise, day_start));
+                break;
             }
         }
         day_start -= 1.0;
     }
-    local_weekday(jd_ut)
+
+    let Some((sunrise, opening_day_start)) = opening else {
+        // Polar day/night, or `equatorial` returned `None` at every
+        // `day_start` tried: fall back to the local civil weekday, same
+        // documented convention as the old `vara_at`. No sunrise was found
+        // at all, so there is no interval to report.
+        return (local_weekday(jd_ut), None);
+    };
+    let weekday = local_weekday(sunrise);
+
+    // Step 2: find the sunrise that CLOSES this vara, by walking FORWARD
+    // from the civil-UT day after the one `sunrise` was found on. Mirrors
+    // step 1's walk-back exactly (same 4-day bound, same "polar cases fail
+    // for every day" reasoning) — the average sunrise-to-sunrise interval is
+    // one solar day, so the very next civil-UT day's scan window almost
+    // always contains it; the bound only matters near the poles or across a
+    // large sidereal/solar drift (as with the `flat_sun` test fixture).
+    //
+    // Starting from `opening_day_start + 1.0` rather than from `sunrise`
+    // itself is deliberate: `sunrise` sits within numerical noise of its own
+    // horizon crossing (it IS the bisected zero), so scanning forward from
+    // that exact instant risks re-detecting the same crossing as a spurious
+    // "next" rise. `opening_day_start + 1.0` is a full day-window past the
+    // start of the day `sunrise` fell in, so it is unambiguously later.
+    let mut next_day_start = opening_day_start + 1.0;
+    for _ in 0..4 {
+        if let Some(next_rise) = vedaksha_astro::riseset::sun_rise_set(
+            next_day_start,
+            lat_deg,
+            lon_deg_east,
+            0.0,
+            equatorial,
+        )
+        .rise
+        {
+            // Always true by construction (`next_day_start > sunrise`, and a
+            // rise found scanning forward from it is `>= next_day_start`),
+            // documented rather than trusted silently — the same defensive
+            // style as `if rise <= jd_ut` in step 1.
+            if next_rise > sunrise {
+                return (weekday, Some((sunrise, next_rise)));
+            }
+        }
+        next_day_start += 1.0;
+    }
+
+    // The opening sunrise exists but the closing one could not be found
+    // within the bound (polar onset, or `equatorial` failing throughout the
+    // forward search): the weekday is still correct, but the interval isn't
+    // derivable, so the caller must not cache it.
+    (weekday, None)
 }
 
 /// Assess muhurta quality for a given moment.
@@ -571,15 +682,19 @@ pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) 
 ///
 /// # Performance
 ///
-/// One [`vara_at`] call costs roughly 2 × (288 coarse scan steps + bisection)
-/// `equatorial` evaluations, because each `sun_rise_set` scans a day at
-/// 5-minute resolution and the walk-back always consumes two iterations.
-/// Deriving the vara fresh at every 0.5-day step would put a one-year search
-/// near 420,000 evaluations — a latency regression measured in minutes on a
-/// tool that is otherwise fast. The vara changes at most once per civil day,
-/// so this memoises on `libm::floor(jd - 0.5) + 0.5` (the same civil-day-start
-/// `vara_at` computes internally) and recomputes only when it changes: one
-/// `vara_at` call per civil day in the range, not one per step.
+/// One [`vara_with_validity`] call costs roughly 2 × (288 coarse scan steps +
+/// bisection) `equatorial` evaluations, because each `sun_rise_set` scans a
+/// day at 5-minute resolution and the walk-back/walk-forward each consume a
+/// couple of iterations. Deriving the vara fresh at every 0.5-day step would
+/// put a one-year search near 420,000 evaluations — a latency regression
+/// measured in minutes on a tool that is otherwise fast. The vara is constant
+/// over `[start, end)` — sunrise to the next sunrise — so this memoises on
+/// that exact interval (as returned by [`vara_with_validity`]) and recomputes
+/// only when `jd` falls outside it. That is not an approximation: unlike
+/// memoising on the civil-UT day (which drifts out of sync with the sunrise
+/// boundary — a step landing between local midnight and local sunrise gets
+/// the *previous* civil day's stale vara, not the one actually in force), the
+/// cached interval **is** the vara's real extent, so it cannot go stale.
 // The ninth argument is the observer's tz offset, needed alongside lat/lon to
 // derive the vara per candidate instant (see the performance note above) —
 // splitting it into a struct would obscure the callback wiring more than it
@@ -602,26 +717,27 @@ pub fn search_muhurta(
     let mut jd = start_jd;
     let step = 0.5; // check every half day
 
-    // (civil_day_start, vara) of the most recently computed vara. Recomputed
-    // only when the civil day changes — see the performance note above.
-    let mut memo: Option<(f64, Weekday)> = None;
+    // (vara, [start, end)) — the vara's own real extent, as returned by
+    // `vara_with_validity`. Recomputed only when `jd` falls outside that
+    // interval — see the performance note above. `None` (from a polar case,
+    // or `equatorial` failing) means the last computation isn't cacheable at
+    // all, so the next step recomputes unconditionally too.
+    let mut memo: Option<(Weekday, f64, f64)> = None;
 
     while jd <= end_jd {
         if let (Some(moon), Some(sun)) = (get_moon_lon(jd), get_sun_lon(jd)) {
-            let day_start = libm::floor(jd - 0.5) + 0.5;
-            // Exact equality is intentional, not a tolerance bug: both sides
-            // come from the identical `libm::floor(jd - 0.5) + 0.5` formula
-            // (this line and `vara_at`'s internal day-start walk), so they
-            // are bit-identical whenever `jd` falls in the same civil day —
-            // there is no accumulated float error to compare within.
-            #[allow(clippy::float_cmp)]
-            let same_day =
-                matches!(memo, Some((cached_day_start, _)) if cached_day_start == day_start);
+            let still_valid = matches!(memo, Some((_, start, end)) if jd >= start && jd < end);
             let vara = match memo {
-                Some((_, cached_vara)) if same_day => cached_vara,
+                Some((cached_vara, _, _)) if still_valid => cached_vara,
                 _ => {
-                    let v = vara_at(jd, lat_deg, lon_deg_east, tz_offset_minutes, equatorial);
-                    memo = Some((day_start, v));
+                    let (v, validity) = vara_with_validity(
+                        jd,
+                        lat_deg,
+                        lon_deg_east,
+                        tz_offset_minutes,
+                        equatorial,
+                    );
+                    memo = validity.map(|(start, end)| (v, start, end));
                     v
                 }
             };
@@ -1065,60 +1181,98 @@ mod tests {
         assert_eq!(count, 3);
     }
 
-    /// Pins the memoisation actually firing: without it, `search_muhurta`
-    /// would call `vara_at` (and so `equatorial`) once per 0.5-day STEP;
-    /// with it, once per distinct CIVIL DAY. This counts `equatorial`
-    /// invocations with a `Cell<u32>` rather than asserting a hand-derived
-    /// number, because the exact per-`vara_at`-call cost (walk-back count ×
-    /// scan resolution × bisection iterations) is an implementation detail
-    /// of `vara_at`/`sun_rise_set` this test should not have to know. The
-    /// reference count is instead measured directly: call `vara_at` once
-    /// per expected trigger point (unmemoised) and sum, then assert the
-    /// memoised `search_muhurta` run costs exactly that much — not more (no
-    /// regression to per-step) and not less (memoisation isn't skipping a
-    /// day it should have priced).
+    /// FINDING 1 fix. The old memo keyed on `libm::floor(jd - 0.5) + 0.5`
+    /// (civil-UT midnight) instead of the vara's real sunrise-to-sunrise
+    /// extent, so a sample landing between local midnight and local sunrise
+    /// got the PREVIOUS civil day's stale vara. Proven at Chennai (lat
+    /// 13.08, lon 80.27, tz +330): measured directly (see the fix-pass
+    /// report), the correct fresh-every-step sequence over 9 samples from JD
+    /// 2_451_545.5 is `[Sat, Sun, Sun, Mon, Mon, Tue, Tue, Wed, Wed]` while
+    /// the old civil-day-keyed memo produced `[Sat, Sat, Sun, Sun, Mon, Mon,
+    /// Tue, Tue, Wed]` — 4 of 9 wrong.
+    ///
+    /// Rather than paste that hand sequence in as the assertion, this
+    /// derives the reference independently at test time: `vara_at` called
+    /// completely fresh (no memo of any kind) at each of the 9 sample
+    /// instants `search_muhurta` itself would visit. That reference is
+    /// compared value-by-value against what the memoised `search_muhurta`
+    /// actually returns, so this fails on ANY divergence, not just the
+    /// specific one measured above.
     #[test]
-    fn search_muhurta_memoises_vara_per_civil_day_not_per_step() {
+    fn search_muhurta_memoised_vara_matches_unmemoised_reference_at_chennai() {
+        let (lat, lon, tz) = (13.08, 80.27, 330);
+        let start = 2_451_545.5;
+        let end = start + 4.0; // 9 samples at the 0.5-day step (0..=8 half-days)
+
+        let moon_lon = 94.0_f64; // Pushya — arbitrary, fixed across both runs
+        let sun_lon = 64.0_f64;
+
+        let mut expected = Vec::new();
+        let mut jd = start;
+        while jd <= end {
+            expected.push(vara_at(jd, lat, lon, tz, &flat_sun));
+            jd += 0.5;
+        }
+        assert_eq!(
+            expected.len(),
+            9,
+            "sanity: 9 samples over a 4-day span at a 0.5-day step"
+        );
+
+        // min_quality 0.0 keeps every sample regardless of score, so the
+        // result count and order line up 1:1 with `expected` above.
+        let results = search_muhurta(
+            start,
+            end,
+            lat,
+            lon,
+            tz,
+            &|_| Some(moon_lon),
+            &|_| Some(sun_lon),
+            &flat_sun,
+            0.0,
+        );
+        assert_eq!(results.len(), 9, "min_quality 0.0 must keep every sample");
+        let actual: Vec<Weekday> = results.iter().map(|a| a.weekday).collect();
+
+        assert_eq!(
+            actual, expected,
+            "search_muhurta's memoised vara must match the unmemoised \
+             reference sample-by-sample — a civil-UT-day-keyed memo hands \
+             the previous day's stale vara to any sample that falls between \
+             local midnight and local sunrise"
+        );
+    }
+
+    /// Secondary check (not the load-bearing one above): the memo still
+    /// saves work relative to deriving the vara fresh at every 0.5-day step.
+    /// Unlike the retired civil-day version, the fix's memo interval is the
+    /// vara's actual sunrise-to-sunrise extent, which is not aligned to a
+    /// fixed civil-day schedule — there is no "exactly one trigger per
+    /// calendar day" model to assert an exact count against here. So this
+    /// only bounds it: memoised calls must be strictly fewer than one
+    /// `vara_at` call per step (some memoisation fired) and at least one
+    /// (the memo is not accidentally skipping the vara computation
+    /// entirely).
+    #[test]
+    fn search_muhurta_memoisation_still_saves_equatorial_calls() {
         use std::cell::Cell;
 
-        let (lat, lon, tz) = (0.0, 0.0, 0);
-
-        // `start` is chosen to already equal a civil-day-start
-        // (`libm::floor(jd - 0.5) + 0.5 == jd`, since 2_451_545.5 - 0.5 =
-        // 2_451_545.0 is an integer) so every one of the 5 civil-day
-        // boundaries below is crossed at the SAME 0.0 offset into its day —
-        // otherwise the first (partial) day would cost a different number of
-        // `equatorial` calls than the other four and the two independently
-        // measured totals below would not need to agree even under correct
-        // memoisation.
+        let (lat, lon, tz) = (13.08, 80.27, 330);
         let start = 2_451_545.5;
-        let end = start + 4.0; // 4 civil days later
-        // With a 0.5-day step, start..=end is 9 samples (8 steps of 0.5 sum
-        // exactly to 4.0 in f64, since 0.5 is a power-of-two fraction) but
-        // only 5 distinct civil-day-starts: start, start+1.0, ..., start+4.0
-        // — verified by the `results.len() == 9` assertion below and by
-        // `libm::floor(jd - 0.5) + 0.5` being identical for `start + k` and
-        // `start + k + 0.5` for each integer k in 0..4.
-        let trigger_jds = [start, start + 1.0, start + 2.0, start + 3.0, start + 4.0];
+        let end = start + 4.0; // 9 steps
 
-        // Reference: sum of `equatorial` calls from 5 direct, unmemoised
-        // `vara_at` calls — one at each expected memoisation trigger point.
-        // This is exactly what a correctly memoising `search_muhurta` should
-        // cost in total, however many `equatorial` evaluations one `vara_at`
-        // call happens to take.
-        let expected_calls = Cell::new(0u32);
-        for &jd in &trigger_jds {
+        let per_step_calls = Cell::new(0u32);
+        let mut jd = start;
+        while jd <= end {
             let counted = |t: f64| {
-                expected_calls.set(expected_calls.get() + 1);
+                per_step_calls.set(per_step_calls.get() + 1);
                 flat_sun(t)
             };
             let _ = vara_at(jd, lat, lon, tz, &counted);
+            jd += 0.5;
         }
-        let expected = expected_calls.get();
-        assert!(
-            expected > 0,
-            "sanity: vara_at must call `equatorial` at least once"
-        );
+        let unmemoised_total = per_step_calls.get();
 
         let actual_calls = Cell::new(0u32);
         let counted = |t: f64| {
@@ -1136,17 +1290,17 @@ mod tests {
             &counted,
             0.0,
         );
-        assert_eq!(
-            results.len(),
-            9,
-            "9 samples at a 0.5-day step over a 4-day span"
+        assert_eq!(results.len(), 9);
+        assert!(
+            actual_calls.get() > 0,
+            "sanity: some `equatorial` evaluation must happen"
         );
-        assert_eq!(
-            actual_calls.get(),
-            expected,
-            "memoisation must cost exactly 5 direct `vara_at` calls' worth of \
-             `equatorial` invocations ({expected}) — one per distinct civil \
-             day — not one per of the 9 steps"
+        assert!(
+            actual_calls.get() < unmemoised_total,
+            "memoisation should cost fewer `equatorial` calls than \
+             recomputing per step: {} memoised vs {unmemoised_total} \
+             unmemoised",
+            actual_calls.get()
         );
     }
 
@@ -1263,8 +1417,8 @@ mod tests {
     /// must sit inside sunrise..sunset.
     #[test]
     fn rahu_kalam_is_one_eighth_of_the_daytime() {
-        let (rahu, gulika) =
-            kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun).expect("sun rises here");
+        let (_, windows) = kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun);
+        let (rahu, gulika) = windows.expect("sun rises here");
         let rs = vedaksha_astro::riseset::sun_rise_set(2_451_544.5, 0.0, 0.0, 0.0, &flat_sun);
         let (sunrise, sunset) = (rs.rise.unwrap(), rs.set.unwrap());
         let eighth = (sunset - sunrise) / 8.0;
@@ -1288,8 +1442,8 @@ mod tests {
     #[test]
     fn saturday_gulika_starts_at_sunrise() {
         // 2000-01-01 12:00 UT is a Saturday at longitude 0.
-        let (_, gulika) =
-            kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun).expect("sun rises here");
+        let (_, windows) = kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun);
+        let (_, gulika) = windows.expect("sun rises here");
         let rs = vedaksha_astro::riseset::sun_rise_set(2_451_544.5, 0.0, 0.0, 0.0, &flat_sun);
         assert!(
             (gulika.start_jd - rs.rise.unwrap()).abs() < 1e-9,
@@ -1327,10 +1481,10 @@ mod tests {
     #[test]
     fn kalam_windows_uses_the_observers_own_weekday_not_the_ut_one() {
         let jd = 2_459_015.75;
-        let (rahu_correct, gulika_correct) =
-            kalam_windows(jd, 0.0, 165.0, 0.0, 660, &flat_sun).expect("sun rises here");
-        let (rahu_wrong, _) =
-            kalam_windows(jd, 0.0, 165.0, 0.0, 0, &flat_sun).expect("sun rises here");
+        let (_, windows_correct) = kalam_windows(jd, 0.0, 165.0, 0.0, 660, &flat_sun);
+        let (rahu_correct, gulika_correct) = windows_correct.expect("sun rises here");
+        let (_, windows_wrong) = kalam_windows(jd, 0.0, 165.0, 0.0, 0, &flat_sun);
+        let (rahu_wrong, _) = windows_wrong.expect("sun rises here");
         assert!(
             (rahu_correct.start_jd - rahu_wrong.start_jd).abs() > 0.25,
             "dropping tz_offset_minutes must select a materially different slot: honoured {} vs dropped {}",
@@ -1424,8 +1578,12 @@ mod tests {
         let (rahu_start, rahu_end) = expected(vara.rahu_kalam_slot());
         let (gulika_start, gulika_end) = expected(vara.gulika_kalam_slot());
 
-        let (rahu, gulika) =
-            kalam_windows(jd, 0.0, lon, 0.0, tz, &flat_sun).expect("sun rises here");
+        let (returned_vara, windows) = kalam_windows(jd, 0.0, lon, 0.0, tz, &flat_sun);
+        assert_eq!(
+            returned_vara, vara,
+            "kalam_windows must return the same vara it used to select the slots"
+        );
+        let (rahu, gulika) = windows.expect("sun rises here");
 
         assert!(
             rahu.end_jd > rahu.start_jd,
@@ -1487,8 +1645,8 @@ mod tests {
     #[test]
     fn kalam_windows_run_forwards_in_the_far_west() {
         let jd = 2_459_015.75; // 2020-06-15 06:00Z == 2020-06-14 20:00 Honolulu
-        let (rahu, gulika) =
-            kalam_windows(jd, 21.3069, -157.8583, 0.0, -600, &flat_sun).expect("sun rises here");
+        let (_, windows) = kalam_windows(jd, 21.3069, -157.8583, 0.0, -600, &flat_sun);
+        let (rahu, gulika) = windows.expect("sun rises here");
         assert!(
             rahu.end_jd > rahu.start_jd,
             "rahu kalam ran backwards: {} .. {}",
@@ -1546,11 +1704,21 @@ mod tests {
         );
     }
 
-    /// Polar night has no daytime to divide into eighths.
+    /// Polar night has no daytime to divide into eighths — but FINDING 2's
+    /// contract requires the vara to still come back (the local-civil
+    /// fallback), even though the windows cannot. Same instant/observer as
+    /// `vara_falls_back_where_the_sun_does_not_rise` above, which pins the
+    /// fallback weekday directly: Saturday.
     #[test]
     fn no_kalam_windows_where_the_sun_does_not_rise() {
         let southern_sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
-        assert!(kalam_windows(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun).is_none());
+        let (vara, windows) = kalam_windows(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun);
+        assert!(windows.is_none(), "polar night has no daytime to divide");
+        assert_eq!(
+            vara,
+            Weekday::Saturday,
+            "the vara must still fall back to the local civil weekday even with no windows"
+        );
     }
 
     /// Exercises `elevation_m` end-to-end, and is built to actually
@@ -1656,8 +1824,8 @@ mod tests {
              gulika slot, or this test cannot distinguish them positionally"
         );
 
-        let (_, gulika) =
-            kalam_windows(jd_ut, 0.0, 0.0, elevation_m, 0, &flat_sun).expect("sun rises here");
+        let (_, windows) = kalam_windows(jd_ut, 0.0, 0.0, elevation_m, 0, &flat_sun);
+        let (_, gulika) = windows.expect("sun rises here");
 
         // This is the fix's actual contract: THE SLOT `kalam_windows`
         // SELECTS must be the elevation-aware vara's slot, anchored at the

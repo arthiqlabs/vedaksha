@@ -17,6 +17,27 @@ pub const JD_MAX: f64 = 2_597_641.5; // ~2400 CE
 /// Maximum transit search span in days (100 years).
 pub const MAX_TRANSIT_SEARCH_DAYS: f64 = 36_525.0;
 
+/// Maximum `search_muhurta` search span in days.
+///
+/// `search_muhurta` is far more expensive per day of range than a transit
+/// search: every 0.5-day step needs Sun/Moon sidereal longitudes, and each
+/// distinct vara needs a `vara_with_validity` call (`vedaksha_vedic::muhurta`)
+/// — two ~288-step, 5-minute-resolution `sun_rise_set` scans (walk-back
+/// for the opening sunrise, walk-forward for the closing one), plus a
+/// `compute_tithi_end`/`compute_nakshatra_end` refinement for every window
+/// that passes `min_quality`. Measured directly in release mode (not
+/// extrapolated): a real 30-day `search_muhurta` call at Chennai (lat 13.08,
+/// lon 80.27) via the full MCP handler took ~15.9 s — about 530 ms per day
+/// of range. [`MAX_TRANSIT_SEARCH_DAYS`] (100 years) applied to this tool
+/// would be ~36,525 × 0.53 s ≈ 5.4 **hours**, which is a tool call that
+/// would appear to hang rather than fail fast. 30 days keeps worst-case
+/// latency at the ~16 s actually measured — slow for a synchronous call but
+/// not indefinite — and still comfortably covers the practical use case
+/// (electing an auspicious date within the next few weeks); a caller
+/// wanting a longer horizon should issue several shorter searches rather
+/// than one that risks timing out its own client.
+pub const MAX_MUHURTA_SEARCH_DAYS: f64 = 30.0;
+
 /// Structured MCP error response with a machine-readable code and
 /// an optional hint for the calling agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +87,24 @@ impl McpError {
                 "Transit search span {days} days exceeds maximum {MAX_TRANSIT_SEARCH_DAYS}"
             ),
             suggested_action: Some("Limit search range to 100 years (36525 days) or less.".into()),
+        }
+    }
+
+    /// Muhurta search window is larger than [`MAX_MUHURTA_SEARCH_DAYS`]. A
+    /// distinct error code from [`Self::search_range_too_large`] because the
+    /// two tools have very different per-day costs and so very different
+    /// limits — see [`MAX_MUHURTA_SEARCH_DAYS`] for the derivation.
+    #[must_use]
+    pub fn muhurta_search_range_too_large(days: f64) -> Self {
+        Self {
+            error_code: "MUHURTA_SEARCH_RANGE_TOO_LARGE".into(),
+            message: format!(
+                "Muhurta search span {days} days exceeds maximum {MAX_MUHURTA_SEARCH_DAYS}"
+            ),
+            suggested_action: Some(format!(
+                "Limit the muhurta search range to {MAX_MUHURTA_SEARCH_DAYS} days or less, or \
+                 issue several shorter searches."
+            )),
         }
     }
 
@@ -148,6 +187,51 @@ pub fn validate_search_span(start_jd: f64, end_jd: f64) -> Result<(), McpError> 
         Err(McpError::search_range_too_large(span))
     } else {
         Ok(())
+    }
+}
+
+/// Validate a `search_muhurta` window defined by two Julian Days.
+///
+/// Both endpoints are validated individually and the absolute span must not
+/// exceed [`MAX_MUHURTA_SEARCH_DAYS`] — a much tighter bound than
+/// [`validate_search_span`]'s [`MAX_TRANSIT_SEARCH_DAYS`], because
+/// `search_muhurta` costs roughly two orders of magnitude more per day of
+/// range (see [`MAX_MUHURTA_SEARCH_DAYS`]'s derivation).
+///
+/// # Errors
+///
+/// Returns the first validation error encountered.
+pub fn validate_muhurta_search_span(start_jd: f64, end_jd: f64) -> Result<(), McpError> {
+    validate_jd(start_jd)?;
+    validate_jd(end_jd)?;
+    let span = (end_jd - start_jd).abs();
+    if span > MAX_MUHURTA_SEARCH_DAYS {
+        Err(McpError::muhurta_search_range_too_large(span))
+    } else {
+        Ok(())
+    }
+}
+
+/// Validate a civil-clock offset from UT, in minutes.
+///
+/// Real-world UTC offsets range from −12:00 (e.g. Baker Island) to +14:00
+/// (e.g. Kiribati's Line Islands), i.e. −720..=840 minutes. A wider value
+/// would not correspond to any real observer's civil clock, so it is
+/// rejected rather than silently accepted and fed into a weekday-naming
+/// calculation that could never match a real calendar.
+///
+/// # Errors
+///
+/// Returns [`McpError::invalid_parameter`] when `minutes` is outside
+/// −720..=840.
+pub fn validate_tz_offset_minutes(minutes: i32) -> Result<(), McpError> {
+    if (-720..=840).contains(&minutes) {
+        Ok(())
+    } else {
+        Err(McpError::invalid_parameter(
+            "tz_offset_minutes",
+            "must be between -720 and 840 (UTC-12:00 to UTC+14:00)",
+        ))
     }
 }
 
@@ -270,5 +354,58 @@ mod tests {
         let start = 2_451_545.0;
         let end = start + 365.25;
         assert!(validate_search_span(start, end).is_ok());
+    }
+
+    // ── validate_muhurta_search_span ────────────────────────────────────────
+
+    #[test]
+    fn validate_muhurta_search_span_accepts_the_limit() {
+        let start = 2_451_545.0;
+        let end = start + MAX_MUHURTA_SEARCH_DAYS;
+        assert!(validate_muhurta_search_span(start, end).is_ok());
+    }
+
+    #[test]
+    fn validate_muhurta_search_span_rejects_just_over_the_limit() {
+        let start = 2_451_545.0;
+        let end = start + MAX_MUHURTA_SEARCH_DAYS + 1.0;
+        let err = validate_muhurta_search_span(start, end).unwrap_err();
+        assert_eq!(err.error_code, "MUHURTA_SEARCH_RANGE_TOO_LARGE");
+    }
+
+    #[test]
+    fn validate_muhurta_search_span_rejects_a_span_that_validate_search_span_would_accept() {
+        // Proves the two limits are actually different, not just named
+        // differently: a 1-year window (well under MAX_TRANSIT_SEARCH_DAYS)
+        // must still be rejected here.
+        let start = 2_451_545.0;
+        let end = start + 365.25;
+        assert!(validate_search_span(start, end).is_ok());
+        assert!(validate_muhurta_search_span(start, end).is_err());
+    }
+
+    // ── validate_tz_offset_minutes ──────────────────────────────────────────
+
+    #[test]
+    fn validate_tz_offset_minutes_accepts_zero() {
+        assert!(validate_tz_offset_minutes(0).is_ok());
+    }
+
+    #[test]
+    fn validate_tz_offset_minutes_accepts_the_boundaries() {
+        assert!(validate_tz_offset_minutes(-720).is_ok());
+        assert!(validate_tz_offset_minutes(840).is_ok());
+    }
+
+    #[test]
+    fn validate_tz_offset_minutes_rejects_beyond_the_boundaries() {
+        assert_eq!(
+            validate_tz_offset_minutes(-721).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
+        assert_eq!(
+            validate_tz_offset_minutes(841).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
     }
 }

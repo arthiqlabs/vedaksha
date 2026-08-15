@@ -545,7 +545,7 @@ impl McpServer {
     fn call_compute_panchanga(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
         use vedaksha_astro::riseset::sun_equatorial_deg;
         use vedaksha_ephem_core::analytical::AnalyticalProvider;
-        use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, vara_at};
+        use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi};
         use vedaksha_vedic::nakshatra::Nakshatra;
         use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
 
@@ -560,14 +560,12 @@ impl McpServer {
         // accessor in this file; do not invent one.
         let provider = AnalyticalProvider;
         let sun_eq = |jd: f64| sun_equatorial_deg(&provider, jd);
-        let weekday = vara_at(
-            input.jd,
-            input.latitude,
-            input.longitude,
-            input.tz_offset_minutes,
-            &sun_eq,
-        );
-        let kalams = vedaksha_vedic::muhurta::kalam_windows(
+        // ONE sunrise scan for both the vara and the kalam windows:
+        // `kalam_windows` now returns the vara it derived internally, so
+        // there is no second, separate `vara_at` call here re-running the
+        // same ~2100-evaluation 5-minute day scan a second time. See the
+        // fix-pass report for the measured before/after cost.
+        let (weekday, kalams) = vedaksha_vedic::muhurta::kalam_windows(
             input.jd,
             input.latitude,
             input.longitude,
@@ -1144,16 +1142,17 @@ impl McpServer {
             ))
         };
 
-        // The tool has no timezone parameter, so the vara's weekday name is
-        // reckoned on UT (offset 0) — only the sunrise instant depends on
-        // latitude/longitude, and that is unaffected by this offset.
+        // `tz_offset_minutes` (default 0/UT) names the vara's weekday only —
+        // the sunrise instant that bounds the vara depends only on
+        // latitude/longitude and is unaffected by this offset.
+        let tz_offset_minutes = input.tz_offset_minutes.unwrap_or(0);
         let sun_eq = |jd: f64| sun_equatorial_deg(&provider, jd);
         let mut assessments = vedaksha_vedic::muhurta::search_muhurta(
             input.start_jd,
             input.end_jd,
             input.latitude,
             input.longitude,
-            0,
+            tz_offset_minutes,
             &get_moon_sidereal,
             &get_sun_sidereal,
             &sun_eq,
