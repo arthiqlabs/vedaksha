@@ -21,6 +21,14 @@ pub struct SearchMuhurtaInput {
     pub latitude: f64,
     /// Geographic longitude in degrees \[-180, +180\], east positive.
     pub longitude: f64,
+    /// Observer elevation above sea level in metres. Defaults to 0.
+    ///
+    /// A determinant of each candidate's vara, not a refinement of it: the
+    /// horizon dip moves sunrise, and the vara is reckoned from sunrise. Same
+    /// parameter and same default as `compute_panchanga` — the two tools
+    /// must be given the same observer to be expected to agree.
+    #[serde(default)]
+    pub elevation_m: Option<f64>,
     /// Minimum quality score (0.0–1.0) for a muhurta to be included.
     /// Defaults to 0.5 when absent.
     pub min_quality: Option<f64>,
@@ -63,6 +71,19 @@ pub fn definition() -> super::ToolDefinition {
                 "longitude": {
                     "type": "number",
                     "description": "Geographic longitude in degrees [-180, +180], east positive"
+                },
+                "elevation_m": {
+                    "type": "number",
+                    "description": "Observer elevation in metres above sea level [-500, 9000] \
+                                    (default 0). Lowers the horizon by the dip and so moves \
+                                    sunrise, which is what each candidate's vara is reckoned \
+                                    from — at 3650 m (Lhasa) 9.2 minutes earlier. Pass the \
+                                    same value as compute_panchanga for the same observer, or \
+                                    the two tools can report different weekdays for one \
+                                    instant.",
+                    "minimum": -500,
+                    "maximum": 9000,
+                    "default": 0
                 },
                 "min_quality": {
                     "type": "number",
@@ -110,6 +131,10 @@ pub fn validate(input: &SearchMuhurtaInput) -> Result<(), McpError> {
         validation::validate_tz_offset_minutes(tz)?;
     }
 
+    if let Some(elevation_m) = input.elevation_m {
+        validation::validate_elevation_m(elevation_m)?;
+    }
+
     Ok(())
 }
 
@@ -124,6 +149,7 @@ mod tests {
             end_jd: 2_451_545.0 + 30.0,
             latitude: 13.08,
             longitude: 80.27,
+            elevation_m: None,
             min_quality: None,
             tz_offset_minutes: None,
         }
@@ -211,6 +237,76 @@ mod tests {
         assert!(names.contains(&"longitude"));
         // tz_offset_minutes is optional (defaults to 0/UT), not required.
         assert!(!names.contains(&"tz_offset_minutes"));
+        // elevation_m likewise defaults to 0 (sea level).
+        assert!(!names.contains(&"elevation_m"));
+    }
+
+    // --- elevation_m ---
+
+    /// `elevation_m` must be DECLARED in the schema, not merely accepted by
+    /// the deserialiser. An agent picks its arguments from the schema, so an
+    /// undeclared field is an argument no caller will ever pass — which is
+    /// how `search_muhurta` came to derive its vara at sea level while
+    /// `compute_panchanga` was elevation-aware.
+    #[test]
+    fn definition_schema_declares_elevation_m() {
+        let def = definition();
+        let props = &def.input_schema["properties"];
+        assert!(
+            props["elevation_m"].is_object(),
+            "schema must declare elevation_m"
+        );
+        assert_eq!(props["elevation_m"]["default"], 0);
+        assert_eq!(props["elevation_m"]["minimum"], -500);
+        assert_eq!(props["elevation_m"]["maximum"], 9000);
+    }
+
+    /// The declared bounds and the executed bounds must be the same bounds —
+    /// a schema `minimum`/`maximum` is advisory to the caller, and only
+    /// `validate` actually refuses.
+    #[test]
+    fn validate_accepts_elevation_m_at_the_boundaries() {
+        let mut input = valid_input();
+        input.elevation_m = Some(crate::validation::ELEVATION_MIN_M);
+        assert!(validate(&input).is_ok());
+        input.elevation_m = Some(crate::validation::ELEVATION_MAX_M);
+        assert!(validate(&input).is_ok());
+        input.elevation_m = Some(3650.0); // Lhasa
+        assert!(validate(&input).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_elevation_m_out_of_range() {
+        for bad in [
+            crate::validation::ELEVATION_MIN_M - 1.0,
+            crate::validation::ELEVATION_MAX_M + 1.0,
+            1e9,
+            f64::NAN,
+            f64::INFINITY,
+        ] {
+            let mut input = valid_input();
+            input.elevation_m = Some(bad);
+            let err = validate(&input).unwrap_err();
+            assert_eq!(err.error_code, "INVALID_PARAMETER", "accepted {bad}");
+        }
+    }
+
+    #[test]
+    fn validate_accepts_missing_elevation_m() {
+        assert!(validate(&valid_input()).is_ok());
+    }
+
+    /// The field must actually deserialise from the wire under its schema
+    /// name — a `#[serde(rename)]` slip or a typo in the schema would leave
+    /// the value silently at `None` and the tool silently at sea level.
+    #[test]
+    fn elevation_m_deserialises_from_the_schema_name() {
+        let input: SearchMuhurtaInput = serde_json::from_value(serde_json::json!({
+            "start_jd": 2_451_545.0, "end_jd": 2_451_546.0,
+            "latitude": 29.65, "longitude": 91.13, "elevation_m": 3650.0
+        }))
+        .expect("deserialises");
+        assert_eq!(input.elevation_m, Some(3650.0));
     }
 
     #[test]

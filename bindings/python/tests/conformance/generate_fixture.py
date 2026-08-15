@@ -31,6 +31,18 @@ MCP_CASES = [
         "params": {"name": "compute_panchanga", "arguments": {
             "jd": 2451545.0, "sun": 280.0, "moon": 120.4,
             "latitude": 28.6139, "longitude": 77.2090}}}),
+    # Ny-Ålesund (78.22 N, 15.65 E) at JD 2459016.0 = 2020-06-15 12:00 UT,
+    # under the midnight sun: no sunrise exists, so `vara.weekday` is the
+    # local CIVIL weekday fallback and `vara.from_sunrise` is false while
+    # `rahu_kalam`/`gulika_kalam` are null. The mid-latitude "panchanga" case
+    # above covers the true branch. Both branches are pinned here because the
+    # native and wasm builds must agree on the flag byte-for-byte, and a case
+    # that only ever exercises `true` cannot catch a surface that hardcodes it.
+    ("panchanga_polar", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_panchanga", "arguments": {
+            "jd": 2459016.0, "sun": 84.0, "moon": 200.0,
+            "latitude": 78.22, "longitude": 15.65, "tz_offset_minutes": 60}}}),
     ("tools_list", {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
 ]
 

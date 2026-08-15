@@ -713,6 +713,7 @@ dependencies = [
  "vedaksha-ephem-core",
  "vedaksha-graph",
  "vedaksha-math",
+ "vedaksha-mcp",
  "vedaksha-vedic",
  "wasm-bindgen",
  "wasm-bindgen-test",

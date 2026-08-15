@@ -453,6 +453,13 @@
       "description": "Search for auspicious time windows (muhurta) within a given period for a geographic location. Returns ranked muhurta candidates with quality scores based on tithi, nakshatra, yoga, karana, and planetary positions. The search window is capped at 30 days (see MUHURTA_SEARCH_RANGE_TOO_LARGE) — the per-candidate vara and tithi/nakshatra refinement make this tool far more expensive per day of range than a transit search, so a wider span would make a single call take minutes.",
       "inputSchema": {
         "properties": {
+          "elevation_m": {
+            "default": 0,
+            "description": "Observer elevation in metres above sea level [-500, 9000] (default 0). Lowers the horizon by the dip and so moves sunrise, which is what each candidate's vara is reckoned from — at 3650 m (Lhasa) 9.2 minutes earlier. Pass the same value as compute_panchanga for the same observer, or the two tools can report different weekdays for one instant.",
+            "maximum": 9000,
+            "minimum": -500,
+            "type": "number"
+          },
           "end_jd": {
             "description": "End of the search window as a Julian Day (TDB). The span from start_jd to end_jd must not exceed 30 days.",
             "type": "number"
@@ -640,12 +647,14 @@
       "name": "compute_gochara"
     },
     {
-      "description": "Compute the panchanga — the five limbs of the Vedic almanac — for an instant: tithi (lunar day, with paksha and lord), vara (weekday reckoned from local sunrise, with its lord and the Rahu and Gulika Kalam windows as Julian Days), nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), and karana (half-tithi). Takes sidereal longitudes; all returned instants are Julian Days (UT).",
+      "description": "Compute the panchanga — the five limbs of the Vedic almanac — for an instant: tithi (lunar day, with paksha and lord), vara (weekday reckoned from local sunrise, with its lord and the Rahu and Gulika Kalam windows as Julian Days), nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), and karana (half-tithi). Takes sidereal longitudes; all returned instants are Julian Days (UT). vara.from_sunrise reports HOW the weekday was reckoned: true means it was taken from an actual local sunrise (the Vedic definition); false means no sunrise exists to reckon from — the polar day or polar night, above about ±66.5° latitude — and the value is the observer's local CIVIL weekday as a documented fallback, which is a different quantity. Check it before presenting the vara at high latitude. vara.rahu_kalam being null is NOT the same signal: the Kalam windows can also be null while from_sunrise is true.",
       "inputSchema": {
         "properties": {
           "elevation_m": {
             "default": 0,
-            "description": "Observer elevation in metres above sea level; shifts sunrise slightly via the horizon dip.",
+            "description": "Observer elevation in metres above sea level [-500, 9000]; lowers the horizon by the dip and so moves sunrise — at 3650 m (Lhasa) 9.2 minutes earlier, enough to change the vara in that window.",
+            "maximum": 9000,
+            "minimum": -500,
             "type": "number"
           },
           "jd": {

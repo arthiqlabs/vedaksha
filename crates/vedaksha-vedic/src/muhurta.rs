@@ -124,20 +124,49 @@ pub struct KalamWindow {
     pub end_jd: f64,
 }
 
+/// What [`kalam_windows`] derived for one instant and one observer.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KalamReckoning {
+    /// The vara in force at the instant.
+    pub vara: Weekday,
+    /// `true` when [`Self::vara`] was reckoned from a real sunrise — i.e. the
+    /// backward search found the sunrise that opened the Vedic day — and
+    /// `false` when it is the **civil-weekday fallback**, which is what the
+    /// polar day and polar night (no sunrise exists to reckon from) and an
+    /// unavailable ephemeris both produce.
+    ///
+    /// This is the caller's ONLY way to tell the two apart, and it must be
+    /// surfaced wherever the vara is: a civil weekday presented as a vara is
+    /// precisely the defect the sunrise reckoning exists to fix, so above
+    /// roughly ±66.5° latitude in the local summer or winter it would
+    /// otherwise reappear silently.
+    ///
+    /// [`Self::windows`] is NOT a substitute for this flag. `windows` is
+    /// `None` in a third case too — a sunrise was found but the following
+    /// sunset was not — where the vara IS sunrise-reckoned and this flag is
+    /// `true`. Reading `windows.is_none()` as "the vara is a fallback" is
+    /// therefore wrong in both directions of consequence.
+    pub from_sunrise: bool,
+    /// `(rahu, gulika)` as real time windows, or `None` where the Sun does not
+    /// both rise and set within the day — polar day and polar night — so
+    /// there is no daytime to divide into eighths.
+    pub windows: Option<(KalamWindow, KalamWindow)>,
+}
+
 /// Rahu Kalam and Gulika Kalam as actual time windows for the vara containing
-/// `jd_ut`, at the given observer — plus the vara itself, so a caller (e.g.
-/// `compute_panchanga`'s handler) that needs both never has to run a second,
-/// separate sunrise scan (via [`vara_at`]) to get the vara alone.
+/// `jd_ut`, at the given observer — plus the vara itself and how it was
+/// reckoned, so a caller (e.g. `compute_panchanga`'s handler) that needs all
+/// three never has to run a second, separate sunrise scan (via [`vara_at`]).
 ///
 /// Both windows are defined as one eighth of the daytime — sunrise to sunset
 /// divided into eight equal parts — with the vara selecting which eighth.
-/// Returns `(vara, Some((rahu, gulika)))` normally, or `(vara, None)` where
-/// the Sun does not both rise and set (polar day and polar night), which is
-/// when the definition has no daytime to divide. The vara itself is returned
-/// in BOTH cases: inside the polar day/night this function's own sunrise
-/// search finds no sunrise either, so `vara` here falls back to the local civil
-/// weekday — the same documented convention [`vara_at`] uses — rather than
-/// being withheld just because the windows are undefined.
+///
+/// [`KalamReckoning::vara`] is always populated. Inside the polar day/night
+/// this function's own sunrise search finds no sunrise, so the vara falls back
+/// to the local civil weekday — the same documented convention [`vara_at`]
+/// uses — rather than being withheld just because the windows are undefined;
+/// [`KalamReckoning::from_sunrise`] is what distinguishes that fallback from a
+/// genuine sunrise-reckoned vara.
 ///
 /// Source: Kalaprakashika (Rahu Kalam); Muhurtha Chintamani (Gulika Kalam).
 #[must_use]
@@ -148,7 +177,7 @@ pub fn kalam_windows(
     elevation_m: f64,
     tz_offset_minutes: i32,
     equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
-) -> (Weekday, Option<(KalamWindow, KalamWindow)>) {
+) -> KalamReckoning {
     let local_weekday =
         |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
     // (a) The sunrise that OPENS the vara containing `jd_ut`, from the
@@ -162,10 +191,10 @@ pub fn kalam_windows(
     // [`vara_with_validity`].
     //
     // `elevation_m` (not 0.0) is passed here deliberately: the slot SELECTION
-    // and the window ANCHOR must come from the same horizon. `vara_at` uses
-    // the sea-level convention, so calling it instead would, at a non-zero
-    // elevation, pick a different sunrise than the one these windows are
-    // anchored to.
+    // and the window ANCHOR must come from the same horizon. `vara_at` and
+    // `vara_with_validity` now take the observer's elevation for the same
+    // reason, so all three agree by construction rather than by coincidence at
+    // sea level.
     let Some(sunrise) = vedaksha_astro::riseset::previous_rise(
         jd_ut,
         lat_deg,
@@ -176,8 +205,14 @@ pub fn kalam_windows(
         // Polar day/night, or `equatorial` unavailable: no sunrise bounds the
         // vara, so there is no daytime to divide into eighths. The vara still
         // falls back to the local civil weekday — same documented convention
-        // as `vara_at` — rather than being withheld.
-        return (local_weekday(jd_ut), None);
+        // as `vara_at` — rather than being withheld, and `from_sunrise: false`
+        // is what tells the caller that is what happened. This is the ONLY
+        // return site that sets it false.
+        return KalamReckoning {
+            vara: local_weekday(jd_ut),
+            from_sunrise: false,
+            windows: None,
+        };
     };
 
     // `weekday_from_day_index` is the same private helper `vara_at` applies to
@@ -215,8 +250,14 @@ pub fn kalam_windows(
         // Sunrise found but no matching sunset — pathologically only
         // possible if `equatorial` starts failing partway through the
         // forward scan. The vara (anchored on a real sunrise) is still
-        // valid; there is just no daytime to divide.
-        return (vara, None);
+        // valid, so `from_sunrise` stays TRUE here even though the windows
+        // are absent; there is just no daytime to divide. This is the case
+        // that makes `windows.is_none()` an unsound proxy for the fallback.
+        return KalamReckoning {
+            vara,
+            from_sunrise: true,
+            windows: None,
+        };
     };
 
     let eighth = (sunset - sunrise) / 8.0;
@@ -236,13 +277,14 @@ pub fn kalam_windows(
         }
     };
 
-    (
+    KalamReckoning {
         vara,
-        Some((
+        from_sunrise: true,
+        windows: Some((
             window(vara.rahu_kalam_slot()),
             window(vara.gulika_kalam_slot()),
         )),
-    )
+    }
 }
 
 /// Muhurta quality assessment for a given moment.
@@ -334,6 +376,20 @@ fn weekday_from_day_index(jd: f64) -> Weekday {
 /// * `jd_ut` — the instant, Julian Day (UT)
 /// * `lat_deg` — observer latitude, degrees
 /// * `lon_deg_east` — observer longitude, degrees, east positive
+/// * `elevation_m` — observer elevation above sea level, metres. **A
+///   determinant of the answer, not a refinement**: it lowers the visible
+///   horizon by the dip `−0.0293°·√(elevation_m)`
+///   ([`vedaksha_astro::riseset::horizon_dip_deg`], Meeus Ch. 16), which moves
+///   sunrise earlier and so moves the sunrise-to-sunrise boundary this
+///   function reckons against. At Lhasa (29.65 N, 91.13 E, 3650 m) the dip is
+///   −0.0293·√3650 = −1.7702°, which moved sunrise on 2020-06-15 from JD
+///   2459015.454732473 to 2459015.448311250 — 9.2466 minutes earlier,
+///   measured, not estimated. That is a window every day in which an observer
+///   passing `0.0` here and one passing `3650.0` are in DIFFERENT varas. Pass
+///   the observer's real elevation, or `0.0` to ask for the sea-level horizon
+///   deliberately; there is no default, because a silent sea-level assumption
+///   is exactly the kind of hidden determinant that made the UT-weekday
+///   defect this function replaced so hard to see.
 /// * `tz_offset_minutes` — offset from UT of the observer's civil clock
 /// * `equatorial` — the Sun's apparent `(right_ascension_deg, declination_deg)`
 ///   at a Julian Day (UT), or `None` where unavailable
@@ -347,16 +403,30 @@ fn weekday_from_day_index(jd: f64) -> Weekday {
 /// `equatorial` itself. That fallback is a documented convention, not a
 /// classical rule.
 ///
+/// ⚠️ Because that fallback is silent in the return value, a caller that
+/// SURFACES this weekday to a user should surface with it whether a sunrise
+/// was actually found — [`kalam_windows`] reports exactly that as
+/// [`KalamReckoning::from_sunrise`], derived from the same single scan.
+///
 /// Source: Muhurta Chintamani; Kalaprakashika (the sunrise reckoning).
 #[must_use]
 pub fn vara_at(
     jd_ut: f64,
     lat_deg: f64,
     lon_deg_east: f64,
+    elevation_m: f64,
     tz_offset_minutes: i32,
     equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
 ) -> Weekday {
-    vara_with_validity(jd_ut, lat_deg, lon_deg_east, tz_offset_minutes, equatorial).0
+    vara_with_validity(
+        jd_ut,
+        lat_deg,
+        lon_deg_east,
+        elevation_m,
+        tz_offset_minutes,
+        equatorial,
+    )
+    .0
 }
 
 /// The vara for `jd_ut`, plus the half-open Julian-Day interval `[start,
@@ -369,6 +439,10 @@ pub fn vara_at(
 /// — unlike memoising on the civil-UT day, which drifts out of sync with the
 /// sunrise boundary and hands the wrong vara to any sample that falls between
 /// local midnight and local sunrise.
+///
+/// `elevation_m` is the observer's height above sea level in metres and is a
+/// determinant of BOTH ends of that interval, not a refinement of them — see
+/// the `elevation_m` note on [`vara_at`].
 ///
 /// Returns `None` for the interval — "not derivable, do not cache" — in
 /// exactly two cases: the polar fallback (no sunrise bounds the vara at all,
@@ -405,6 +479,7 @@ pub fn vara_with_validity(
     jd_ut: f64,
     lat_deg: f64,
     lon_deg_east: f64,
+    elevation_m: f64,
     tz_offset_minutes: i32,
     equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
 ) -> (Weekday, Option<(f64, f64)>) {
@@ -412,12 +487,18 @@ pub fn vara_with_validity(
         |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
 
     // The sunrise that OPENED the vara containing `jd_ut`: the most recent one
-    // at or before the instant. Elevation 0.0 — `vara_at`'s documented
-    // sea-level convention; `kalam_windows` passes the observer's own
-    // elevation to the same primitive.
-    let Some(start) =
-        vedaksha_astro::riseset::previous_rise(jd_ut, lat_deg, lon_deg_east, 0.0, equatorial)
-    else {
+    // at or before the instant, on the observer's OWN horizon — `elevation_m`
+    // is threaded through rather than hardcoded to 0.0, so that this and
+    // `kalam_windows` (which has always passed the observer's elevation) can
+    // never land on different sunrises and report different varas for the same
+    // observer. See the `elevation_m` note on `vara_at`.
+    let Some(start) = vedaksha_astro::riseset::previous_rise(
+        jd_ut,
+        lat_deg,
+        lon_deg_east,
+        elevation_m,
+        equatorial,
+    ) else {
         // Polar day/night, or `equatorial` returned `None`: fall back to the
         // local civil weekday, the same documented convention as before. No
         // sunrise was found at all, so there is no interval to report.
@@ -430,7 +511,7 @@ pub fn vara_with_validity(
     // end` true by construction; anchoring on `start` would reintroduce an
     // argument about whether the search can overshoot.
     let Some(end) =
-        vedaksha_astro::riseset::next_rise(jd_ut, lat_deg, lon_deg_east, 0.0, equatorial)
+        vedaksha_astro::riseset::next_rise(jd_ut, lat_deg, lon_deg_east, elevation_m, equatorial)
     else {
         // The opening sunrise exists but the closing one is beyond the search
         // bound (polar onset, or `equatorial` failing through the forward
@@ -634,8 +715,13 @@ pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) 
 /// # Arguments
 /// * `start_jd` — start of search range
 /// * `end_jd` — end of search range
-/// * `lat_deg` / `lon_deg_east` / `tz_offset_minutes` — the observer, needed
-///   to derive the vara (see [`vara_at`]) for each candidate instant.
+/// * `lat_deg` / `lon_deg_east` / `elevation_m` / `tz_offset_minutes` — the
+///   observer, needed to derive the vara (see [`vara_at`]) for each candidate
+///   instant. `elevation_m` is part of that observer for the same reason the
+///   other three are: it moves the sunrise that bounds the vara (see the
+///   `elevation_m` note on [`vara_at`]), and a candidate's `quality_score`
+///   depends on its vara. Omitting it would let this function and
+///   [`kalam_windows`] report different weekdays for one observer.
 /// * `get_moon_lon` — callback returning Moon sidereal longitude at JD
 /// * `get_sun_lon` — callback returning Sun sidereal longitude at JD
 /// * `equatorial` — the Sun's apparent `(right_ascension_deg, declination_deg)`
@@ -674,6 +760,7 @@ pub fn search_muhurta(
     end_jd: f64,
     lat_deg: f64,
     lon_deg_east: f64,
+    elevation_m: f64,
     tz_offset_minutes: i32,
     get_moon_lon: &dyn Fn(f64) -> Option<f64>,
     get_sun_lon: &dyn Fn(f64) -> Option<f64>,
@@ -701,6 +788,7 @@ pub fn search_muhurta(
                         jd,
                         lat_deg,
                         lon_deg_east,
+                        elevation_m,
                         tz_offset_minutes,
                         equatorial,
                     );
@@ -848,7 +936,7 @@ mod tests {
             Weekday::Monday,
             "precondition: the UT weekday really is Monday here"
         );
-        let vara = vara_at(jd, 21.3069, -157.8583, -600, &flat_sun);
+        let vara = vara_at(jd, 21.3069, -157.8583, 0.0, -600, &flat_sun);
         // Not because 20:00 "is still evening, before local midnight" — vara_at
         // does not reckon from midnight, and that framing would just be
         // re-describing the UT-day defect this test exists to catch. Derived
@@ -886,8 +974,8 @@ mod tests {
     #[test]
     fn far_east_and_far_west_cannot_share_a_vara_at_one_instant() {
         let jd = 2_459_015.75; // 2020-06-15 06:00Z
-        let east = vara_at(jd, 0.0, 165.0, 660, &flat_sun); // UTC+11
-        let west = vara_at(jd, 0.0, -165.0, -660, &flat_sun); // UTC−11
+        let east = vara_at(jd, 0.0, 165.0, 0.0, 660, &flat_sun); // UTC+11
+        let west = vara_at(jd, 0.0, -165.0, 0.0, -660, &flat_sun); // UTC−11
         assert_ne!(
             east, west,
             "observers 22 civil hours apart must not share a vara at one instant"
@@ -908,7 +996,7 @@ mod tests {
             // Civil clock approximated by the nearest whole hour of solar time.
             // Integer arithmetic throughout — no float casts to placate clippy.
             let tz_minutes = (lon_i / 15) * 60;
-            if vara_at(jd, 0.0, f64::from(lon_i), tz_minutes, &flat_sun) == ut {
+            if vara_at(jd, 0.0, f64::from(lon_i), 0.0, tz_minutes, &flat_sun) == ut {
                 agreeing += 1;
             } else {
                 differing += 1;
@@ -946,12 +1034,12 @@ mod tests {
 
         let one_hour = 1.0 / 24.0;
         assert_eq!(
-            vara_at(rise - one_hour, 0.0, 0.0, 0, &flat_sun),
+            vara_at(rise - one_hour, 0.0, 0.0, 0.0, 0, &flat_sun),
             Weekday::Friday,
             "before sunrise the vara is still the previous day's"
         );
         assert_eq!(
-            vara_at(rise + one_hour, 0.0, 0.0, 0, &flat_sun),
+            vara_at(rise + one_hour, 0.0, 0.0, 0.0, 0, &flat_sun),
             Weekday::Saturday,
             "after sunrise the vara has turned"
         );
@@ -964,11 +1052,103 @@ mod tests {
     fn vara_falls_back_where_the_sun_does_not_rise() {
         let southern_sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
         // Longyearbyen in midwinter.
-        let v = vara_at(2_451_544.5, 78.22, 15.65, 60, &southern_sun);
+        let v = vara_at(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun);
         assert_eq!(
             v,
             Weekday::Saturday,
             "must fall back to the local civil weekday"
+        );
+    }
+
+    /// FIX 2. `elevation_m` is a determinant of the vara, so it has to be in
+    /// `vara_at`'s signature and has to reach `previous_rise`. Before the fix
+    /// `vara_at` hardcoded 0.0 and there was no parameter to pass, which is
+    /// how it and `kalam_windows` (which always passed the observer's own
+    /// elevation) came to disagree at altitude.
+    ///
+    /// Same fixture and reasoning as
+    /// `kalam_windows_selects_the_elevation_aware_vara_not_the_sea_level_one`
+    /// below: at lat 0°/lon 0° with the fixed-RA `flat_sun`, an elevation of
+    /// 15,000 m moves the rise 14.3 min earlier than sea level, and the
+    /// midpoint of that gap is in the LATER vara for the elevated observer
+    /// and still in the earlier one at sea level. The gap and the ordering
+    /// are asserted rather than assumed, so this cannot silently degenerate
+    /// into comparing a value with itself.
+    #[test]
+    fn vara_at_honours_the_observers_elevation() {
+        let day_start = 2_451_544.5; // 2000-01-01 00:00 UT
+        let elevation_m = 15_000.0;
+
+        let sea_rise = vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, 0.0, &flat_sun)
+            .rise
+            .expect("sun rises at sea level");
+        let high_rise =
+            vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, elevation_m, &flat_sun)
+                .rise
+                .expect("sun rises for the elevated observer");
+        assert!(
+            high_rise < sea_rise,
+            "elevation must move the rise EARLIER: sea={sea_rise} high={high_rise}"
+        );
+
+        let jd_ut = 0.5 * (sea_rise + high_rise);
+        let sea_vara = vara_at(jd_ut, 0.0, 0.0, 0.0, 0, &flat_sun);
+        let high_vara = vara_at(jd_ut, 0.0, 0.0, elevation_m, 0, &flat_sun);
+        assert_ne!(
+            sea_vara, high_vara,
+            "the same instant is in different varas for the two observers, so \
+             elevation_m must change vara_at's answer: sea {sea_vara:?} vs \
+             elevated {high_vara:?}"
+        );
+        // The elevated answer is the one anchored on the elevated sunrise.
+        assert_eq!(high_vara, weekday_from_day_index(high_rise));
+        // At sea level the same-rotation rise is still in the future at
+        // `jd_ut`, so the search falls back to the previous rotation's rise —
+        // derived here rather than assumed to be exactly one day earlier
+        // (for a fixed-RA Sun the gap is one SIDEREAL day, 0.99727 d).
+        let sea_anchor =
+            vedaksha_astro::riseset::previous_rise(jd_ut, 0.0, 0.0, 0.0, &flat_sun).unwrap();
+        assert!(sea_anchor < high_rise, "the fallback is a rotation earlier");
+        assert_eq!(sea_vara, weekday_from_day_index(sea_anchor));
+    }
+
+    /// FIX 2, at the `search_muhurta` level: the elevation the caller supplies
+    /// has to survive the memo and reach `vara_with_validity`, or the tool
+    /// answers for a sea-level observer whatever it was asked.
+    #[test]
+    fn search_muhurta_honours_the_observers_elevation() {
+        let day_start = 2_451_544.5;
+        let elevation_m = 15_000.0;
+        let sea_rise = vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, 0.0, &flat_sun)
+            .rise
+            .expect("sun rises at sea level");
+        let high_rise =
+            vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, elevation_m, &flat_sun)
+                .rise
+                .expect("sun rises for the elevated observer");
+        let jd_ut = 0.5 * (sea_rise + high_rise);
+
+        let run = |elev: f64| {
+            search_muhurta(
+                jd_ut,
+                jd_ut,
+                0.0,
+                0.0,
+                elev,
+                0,
+                &|_| Some(94.0),
+                &|_| Some(64.0),
+                &flat_sun,
+                0.0,
+            )
+        };
+        let sea = run(0.0);
+        let high = run(elevation_m);
+        assert_eq!(sea.len(), 1, "one candidate at the single sampled instant");
+        assert_eq!(high.len(), 1);
+        assert_ne!(
+            sea[0].weekday, high[0].weekday,
+            "elevation_m must reach the vara derivation inside search_muhurta"
         );
     }
 
@@ -1052,6 +1232,7 @@ mod tests {
             2_451_546.0,
             0.0,
             0.0,
+            0.0,
             0,
             &|_| Some(moon_lon),
             &|_| Some(sun_lon),
@@ -1073,6 +1254,7 @@ mod tests {
             2_451_555.0,
             0.0,
             0.0,
+            0.0,
             0,
             &|_| Some(moon_lon),
             &|_| Some(sun_lon),
@@ -1082,6 +1264,7 @@ mod tests {
         let high_threshold = search_muhurta(
             2_451_545.0,
             2_451_555.0,
+            0.0,
             0.0,
             0.0,
             0,
@@ -1101,6 +1284,7 @@ mod tests {
         let results = search_muhurta(
             2_451_545.0,
             2_451_550.0,
+            0.0,
             0.0,
             0.0,
             0,
@@ -1124,6 +1308,7 @@ mod tests {
             2_451_546.0,
             0.0,
             0.0,
+            0.0,
             0,
             &|_| Some(94.0),
             &|_jd| Some(64.0),
@@ -1135,6 +1320,7 @@ mod tests {
         let results = search_muhurta(
             2_451_545.0,
             2_451_546.0,
+            0.0,
             0.0,
             0.0,
             0,
@@ -1206,7 +1392,7 @@ mod tests {
         let mut lon_tenths = -1800_i32;
         while lon_tenths <= 1800 {
             let lon = f64::from(lon_tenths) / 10.0;
-            let (_weekday, validity) = vara_with_validity(jd, lat, lon, 0, &flat_sun);
+            let (_weekday, validity) = vara_with_validity(jd, lat, lon, 0.0, 0, &flat_sun);
             let (start, end) = validity.unwrap_or_else(|| {
                 panic!("lon={lon}: the equatorial sun rises and sets at every non-polar latitude")
             });
@@ -1234,7 +1420,7 @@ mod tests {
     #[test]
     fn vara_with_validity_pins_the_reported_two_vara_regression() {
         let (lat, lon, jd) = (0.0, 158.4, 2_451_554.75);
-        let (_weekday, validity) = vara_with_validity(jd, lat, lon, 0, &flat_sun);
+        let (_weekday, validity) = vara_with_validity(jd, lat, lon, 0.0, 0, &flat_sun);
         let (start, end) = validity.expect("equatorial sun rises and sets at lat 0");
         let length = end - start;
 
@@ -1299,7 +1485,7 @@ mod tests {
     #[test]
     fn vara_with_validity_pins_the_two_sunrises_in_one_window_regression() {
         let (lat, lon, tz, jd) = (-9.0, 159.4, 660, 2_451_554.75);
-        let (vara, validity) = vara_with_validity(jd, lat, lon, tz, &flat_sun);
+        let (vara, validity) = vara_with_validity(jd, lat, lon, 0.0, tz, &flat_sun);
         let (start, end) = validity.expect("the fixture rises daily at lat -9");
 
         assert_eq!(
@@ -1360,7 +1546,7 @@ mod tests {
         let real_sun = |j: f64| sun_equatorial_deg(&provider, j);
 
         let (lat, lon, tz, jd) = (-9.0, 87.668, 660, 2_459_113.4);
-        let (vara, validity) = vara_with_validity(jd, lat, lon, tz, &real_sun);
+        let (vara, validity) = vara_with_validity(jd, lat, lon, 0.0, tz, &real_sun);
         let (start, end) = validity.expect("the sun rises daily at lat -9");
 
         assert_eq!(
@@ -1421,7 +1607,7 @@ mod tests {
         const TOLERANCE_DAYS: f64 = 1e-6;
 
         let check = |lat: f64, lon: f64, tz: i32, jd: f64| {
-            let (_vara, validity) = vara_with_validity(jd, lat, lon, tz, &flat_sun);
+            let (_vara, validity) = vara_with_validity(jd, lat, lon, 0.0, tz, &flat_sun);
             let (start, end) = validity.unwrap_or_else(|| {
                 panic!("lat={lat} lon={lon}: the fixture rises at every non-polar latitude")
             });
@@ -1492,7 +1678,7 @@ mod tests {
         let mut expected = Vec::new();
         let mut jd = start;
         while jd <= end {
-            expected.push(vara_at(jd, lat, lon, tz, &flat_sun));
+            expected.push(vara_at(jd, lat, lon, 0.0, tz, &flat_sun));
             jd += 0.5;
         }
         assert_eq!(
@@ -1508,6 +1694,7 @@ mod tests {
             end,
             lat,
             lon,
+            0.0,
             tz,
             &|_| Some(moon_lon),
             &|_| Some(sun_lon),
@@ -1551,7 +1738,7 @@ mod tests {
                 per_step_calls.set(per_step_calls.get() + 1);
                 flat_sun(t)
             };
-            let _ = vara_at(jd, lat, lon, tz, &counted);
+            let _ = vara_at(jd, lat, lon, 0.0, tz, &counted);
             jd += 0.5;
         }
         let unmemoised_total = per_step_calls.get();
@@ -1566,6 +1753,7 @@ mod tests {
             end,
             lat,
             lon,
+            0.0,
             tz,
             &|_| Some(94.0),
             &|_| Some(64.0),
@@ -1699,7 +1887,7 @@ mod tests {
     /// must sit inside sunrise..sunset.
     #[test]
     fn rahu_kalam_is_one_eighth_of_the_daytime() {
-        let (_, windows) = kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun);
+        let windows = kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun).windows;
         let (rahu, gulika) = windows.expect("sun rises here");
         let rs = vedaksha_astro::riseset::sun_rise_set(2_451_544.5, 0.0, 0.0, 0.0, &flat_sun);
         let (sunrise, sunset) = (rs.rise.unwrap(), rs.set.unwrap());
@@ -1724,7 +1912,7 @@ mod tests {
     #[test]
     fn saturday_gulika_starts_at_sunrise() {
         // 2000-01-01 12:00 UT is a Saturday at longitude 0.
-        let (_, windows) = kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun);
+        let windows = kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun).windows;
         let (_, gulika) = windows.expect("sun rises here");
         let rs = vedaksha_astro::riseset::sun_rise_set(2_451_544.5, 0.0, 0.0, 0.0, &flat_sun);
         assert!(
@@ -1736,9 +1924,9 @@ mod tests {
     /// `tz_offset_minutes` selects which weekday's slot table applies, and
     /// Rahu sits in a different eighth on different weekdays. Derived by
     /// direct computation while writing this test (not restated from the
-    /// brief): at lon 165°E, `vara_at(2_459_015.75, 0.0, 165.0, 660,
+    /// brief): at lon 165°E, `vara_at(2_459_015.75, 0.0, 165.0, 0.0, 660,
     /// flat_sun)` (tz honoured) is Monday — rahu slot 2 — while
-    /// `vara_at(2_459_015.75, 0.0, 165.0, 0, flat_sun)` (tz dropped) is
+    /// `vara_at(2_459_015.75, 0.0, 165.0, 0.0, 0, flat_sun)` (tz dropped) is
     /// Sunday — rahu slot 8. Slot 2 sits in the first quarter of the
     /// daytime and slot 8 is the last eighth, ending at sunset, so
     /// `kalam_windows` under the two tz values must place rahu's start more
@@ -1764,9 +1952,9 @@ mod tests {
     #[test]
     fn kalam_windows_uses_the_observers_own_weekday_not_the_ut_one() {
         let jd = 2_459_015.75;
-        let (_, windows_correct) = kalam_windows(jd, 0.0, 165.0, 0.0, 660, &flat_sun);
+        let windows_correct = kalam_windows(jd, 0.0, 165.0, 0.0, 660, &flat_sun).windows;
         let (rahu_correct, gulika_correct) = windows_correct.expect("sun rises here");
-        let (_, windows_wrong) = kalam_windows(jd, 0.0, 165.0, 0.0, 0, &flat_sun);
+        let windows_wrong = kalam_windows(jd, 0.0, 165.0, 0.0, 0, &flat_sun).windows;
         let (rahu_wrong, _) = windows_wrong.expect("sun rises here");
         assert!(
             (rahu_correct.start_jd - rahu_wrong.start_jd).abs() > 0.25,
@@ -1868,12 +2056,16 @@ mod tests {
         let (rahu_start, rahu_end) = expected(vara.rahu_kalam_slot());
         let (gulika_start, gulika_end) = expected(vara.gulika_kalam_slot());
 
-        let (returned_vara, windows) = kalam_windows(jd, 0.0, lon, 0.0, tz, &flat_sun);
+        let reckoning = kalam_windows(jd, 0.0, lon, 0.0, tz, &flat_sun);
         assert_eq!(
-            returned_vara, vara,
+            reckoning.vara, vara,
             "kalam_windows must return the same vara it used to select the slots"
         );
-        let (rahu, gulika) = windows.expect("sun rises here");
+        assert!(
+            reckoning.from_sunrise,
+            "a sunrise was found here, so the vara is not the civil fallback"
+        );
+        let (rahu, gulika) = reckoning.windows.expect("sun rises here");
 
         assert!(
             rahu.end_jd > rahu.start_jd,
@@ -1935,7 +2127,7 @@ mod tests {
     #[test]
     fn kalam_windows_run_forwards_in_the_far_west() {
         let jd = 2_459_015.75; // 2020-06-15 06:00Z == 2020-06-14 20:00 Honolulu
-        let (_, windows) = kalam_windows(jd, 21.3069, -157.8583, 0.0, -600, &flat_sun);
+        let windows = kalam_windows(jd, 21.3069, -157.8583, 0.0, -600, &flat_sun).windows;
         let (rahu, gulika) = windows.expect("sun rises here");
         assert!(
             rahu.end_jd > rahu.start_jd,
@@ -1994,10 +2186,18 @@ mod tests {
     #[test]
     fn no_kalam_windows_where_the_sun_does_not_rise() {
         let southern_sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
-        let (vara, windows) = kalam_windows(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun);
-        assert!(windows.is_none(), "polar night has no daytime to divide");
+        let reckoning = kalam_windows(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun);
+        assert!(
+            reckoning.windows.is_none(),
+            "polar night has no daytime to divide"
+        );
+        assert!(
+            !reckoning.from_sunrise,
+            "polar night found no sunrise, so the vara is the civil fallback \
+             and must say so"
+        );
         assert_eq!(
-            vara,
+            reckoning.vara,
             Weekday::Saturday,
             "the vara must still fall back to the local civil weekday even with no windows"
         );
@@ -2011,7 +2211,7 @@ mod tests {
     /// elevation-adjusted and the sea-level sunrise on that day — so both
     /// derivations landed on the same day's sunrise and hence the same
     /// weekday; verified by actually reverting the `vara` line in
-    /// `kalam_windows` to `vara_at(jd_ut, lat_deg, lon_deg_east,
+    /// `kalam_windows` to `vara_at(jd_ut, lat_deg, lon_deg_east, 0.0,
     /// tz_offset_minutes, equatorial)` and re-running the old test, which
     /// still passed. See the fix-pass report for that failure-to-fail
     /// evidence.
@@ -2043,11 +2243,15 @@ mod tests {
     ///   ~7.16 min inside each edge.
     /// - `weekday_from_day_index(elevated_rise)` = Saturday (gulika slot 1,
     ///   starts exactly at sunrise).
-    /// - `vara_at(mid, 0.0, 0.0, 0, flat_sun)` = Friday (gulika slot 2,
-    ///   starts one eighth-daytime AFTER sunrise) — confirmed by direct
-    ///   call, not hand-derived: `vara_at` rejects the same-day sea-level
-    ///   rise (after `mid`) and falls back to the previous day's sea-level
-    ///   rise, JD 2451543.9714440051 (Dec 31, 1999, a Friday).
+    /// - `vara_at(mid, 0.0, 0.0, 0.0, 0, flat_sun)` — note the explicit
+    ///   `0.0` elevation, which since the FIX 2 pass is an ARGUMENT rather
+    ///   than an unstated convention, so this test now asks for the
+    ///   sea-level derivation deliberately instead of receiving it by
+    ///   default — = Friday (gulika slot 2, starts one eighth-daytime AFTER
+    ///   sunrise), confirmed by direct call, not hand-derived: at sea level
+    ///   the search rejects the same-day rise (after `mid`) and falls back to
+    ///   the previous day's rise, JD 2451543.9714440051 (Dec 31, 1999, a
+    ///   Friday).
     #[test]
     fn kalam_windows_selects_the_elevation_aware_vara_not_the_sea_level_one() {
         let day_start = 2_451_544.5; // 2000-01-01 00:00 UT, a Saturday.
@@ -2086,9 +2290,11 @@ mod tests {
         // does not reimplement `kalam_windows`'s sunrise search, it just names
         // the weekday of the sunrise instant already derived above.
         let elevation_vara = weekday_from_day_index(elevated_rise);
-        // The sea-level vara: `vara_at` called DIRECTLY, the actual "wrong"
-        // derivation a reverted `vara` line would substitute in.
-        let sea_vara = vara_at(jd_ut, 0.0, 0.0, 0, &flat_sun);
+        // The sea-level vara: `vara_at` called DIRECTLY with elevation 0.0,
+        // the actual "wrong" derivation a reverted `vara` line would
+        // substitute in — and, since FIX 2, a derivation the caller has to
+        // ask for explicitly rather than one the API hands out silently.
+        let sea_vara = vara_at(jd_ut, 0.0, 0.0, 0.0, 0, &flat_sun);
         assert_ne!(
             elevation_vara, sea_vara,
             "the two derivations must disagree at this instant, or the \
@@ -2105,7 +2311,7 @@ mod tests {
              gulika slot, or this test cannot distinguish them positionally"
         );
 
-        let (_, windows) = kalam_windows(jd_ut, 0.0, 0.0, elevation_m, 0, &flat_sun);
+        let windows = kalam_windows(jd_ut, 0.0, 0.0, elevation_m, 0, &flat_sun).windows;
         let (_, gulika) = windows.expect("sun rises here");
 
         // This is the fix's actual contract: THE SLOT `kalam_windows`

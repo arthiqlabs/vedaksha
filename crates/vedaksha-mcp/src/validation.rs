@@ -239,6 +239,52 @@ pub fn validate_tz_offset_minutes(minutes: i32) -> Result<(), McpError> {
     }
 }
 
+/// Lowest accepted observer elevation, metres above sea level.
+///
+/// The lowest exposed land surface on Earth is the Dead Sea shore, currently
+/// about −430 m and still falling; −500 m rounds that outward with margin.
+/// Below it the horizon dip is clamped to zero anyway
+/// (`vedaksha_astro::riseset::horizon_dip_deg` returns 0 at or below sea
+/// level), so a large negative value would be silently accepted and silently
+/// ignored — worse than an error.
+pub const ELEVATION_MIN_M: f64 = -500.0;
+
+/// Highest accepted observer elevation, metres above sea level.
+///
+/// The highest point on Earth's land surface is the summit of Mount Everest at
+/// 8,848.86 m (2020 China–Nepal joint survey); 9,000 m rounds that outward.
+/// Above it two things stop holding at once: there is no terrestrial observer,
+/// and the horizon dip `−0.0293°·√(elevation_m)`
+/// (`vedaksha_astro::riseset::horizon_dip_deg`, Meeus Ch. 16) — already
+/// −2.78° at this bound — is a low-altitude approximation being extrapolated.
+/// An airliner at cruise (≈11,000 m) is therefore out of range by design, not
+/// by oversight.
+pub const ELEVATION_MAX_M: f64 = 9_000.0;
+
+/// Validate an observer elevation in metres above sea level.
+///
+/// Finiteness alone is not enough: a non-finite value is caught here, but so
+/// is a merely absurd finite one (`1e9` m), which would otherwise be accepted
+/// and silently produce a horizon dip of −926° — a "sunrise" search that can
+/// never find a crossing, reported as a polar-style fallback rather than as
+/// the bad input it is.
+///
+/// # Errors
+///
+/// Returns [`McpError::invalid_parameter`] when `elevation_m` is non-finite or
+/// outside [`ELEVATION_MIN_M`]…[`ELEVATION_MAX_M`].
+pub fn validate_elevation_m(elevation_m: f64) -> Result<(), McpError> {
+    if elevation_m.is_finite() && (ELEVATION_MIN_M..=ELEVATION_MAX_M).contains(&elevation_m) {
+        Ok(())
+    } else {
+        Err(McpError::invalid_parameter(
+            "elevation_m",
+            "must be a finite number of metres above sea level between \
+             -500 (below the Dead Sea shore) and 9000 (above Everest)",
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

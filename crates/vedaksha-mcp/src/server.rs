@@ -565,7 +565,7 @@ impl McpServer {
         // there is no second, separate `vara_at` call here re-running the
         // same 5-minute-resolution horizon scan a second time. See the
         // fix-pass report for the measured before/after cost.
-        let (weekday, kalams) = vedaksha_vedic::muhurta::kalam_windows(
+        let reckoning = vedaksha_vedic::muhurta::kalam_windows(
             input.jd,
             input.latitude,
             input.longitude,
@@ -573,6 +573,7 @@ impl McpServer {
             input.tz_offset_minutes,
             &sun_eq,
         );
+        let (weekday, kalams) = (reckoning.vara, reckoning.windows);
         let nakshatra = Nakshatra::from_longitude(input.moon);
         let pada = Nakshatra::pada_from_longitude(input.moon);
         let yoga = compute_panchanga_yoga(input.sun, input.moon);
@@ -601,6 +602,16 @@ impl McpServer {
             },
             "vara": {
                 "weekday": weekday_name,
+                // How `weekday` was reckoned. `true` = from an actual local
+                // sunrise (a vara). `false` = the civil-weekday fallback,
+                // which is what the polar day/night produces and is a
+                // DIFFERENT quantity — emitting it unflagged would be the
+                // original UT-weekday defect surviving at high latitude.
+                // Deliberately not inferable from `rahu_kalam`: those are
+                // null in a third case (sunrise found, sunset not) where this
+                // is still true. Key and semantics are mirrored exactly in
+                // `vedaksha-wasm`'s `compute_panchanga`.
+                "from_sunrise": reckoning.from_sunrise,
                 "lord": weekday.lord(),
                 "rahu_kalam_slot": weekday.rahu_kalam_slot(),
                 "gulika_kalam_slot": weekday.gulika_kalam_slot(),
@@ -1146,12 +1157,21 @@ impl McpServer {
         // the sunrise instant that bounds the vara depends only on
         // latitude/longitude and is unaffected by this offset.
         let tz_offset_minutes = input.tz_offset_minutes.unwrap_or(0);
+        // `elevation_m` (default 0/sea level) DOES change which sunrise bounds
+        // each candidate's vara, unlike `tz_offset_minutes` above: the horizon
+        // dip moves sunrise, and a candidate whose vara flips also has its
+        // `quality_score` shift by the weekday term. It is threaded through
+        // for the same reason `compute_panchanga` takes it — so that the two
+        // tools, given the same observer, cannot report different weekdays for
+        // the same instant.
+        let elevation_m = input.elevation_m.unwrap_or(0.0);
         let sun_eq = |jd: f64| sun_equatorial_deg(&provider, jd);
         let mut assessments = vedaksha_vedic::muhurta::search_muhurta(
             input.start_jd,
             input.end_jd,
             input.latitude,
             input.longitude,
+            elevation_m,
             tz_offset_minutes,
             &get_moon_sidereal,
             &get_sun_sidereal,
@@ -1209,6 +1229,13 @@ impl McpServer {
             "end_jd": input.end_jd,
             "latitude": input.latitude,
             "longitude": input.longitude,
+            // Echoed alongside the other two observer coordinates it now sits
+            // with. A caller comparing this tool's `weekday` against
+            // `compute_panchanga`'s can otherwise not see which horizon this
+            // answer was computed on, which is the whole reason the two could
+            // disagree. `search_muhurta` has no `vedaksha-wasm` twin, so this
+            // key has no mirror to keep in sync.
+            "elevation_m": elevation_m,
             "min_quality": min_quality,
             "result_count": results_json.len(),
             "results": results_json,
@@ -1818,11 +1845,256 @@ mod tests {
             v["vara"]["weekday"], "Sunday",
             "20:00 Sunday evening in Honolulu is Ravivara, not Monday"
         );
-        assert!(
-            v["vara"]["rahu_kalam"]["start_jd"].is_number(),
-            "rahu kalam must be a real window, not a slot index"
+
+        // `.is_number()` alone (what this test used to assert) passes for a
+        // wrong anchor, a wrong slot, or a window running backwards. Pin the
+        // three properties that actually define a Kalam window instead,
+        // against values DERIVED from the sunrise/sunset primitives rather
+        // than restated: with the Sun's own ephemeris at this observer,
+        //
+        //   sunrise = previous_rise(jd)          = JD 2459015.159156623
+        //   sunset  = first set after sunrise    = JD 2459015.718493310
+        //   daytime = sunset - sunrise           = 0.559336687 d (13.4241 h)
+        //   eighth  = daytime / 8                = 0.069917086 d (100.68 min)
+        //
+        // Sunday's slots are rahu 8 and gulika 7 (Kalaprakashika; Muhurtha
+        // Chintamani), so rahu spans [sunrise + 7·eighth, sunset] and gulika
+        // [sunrise + 6·eighth, sunrise + 7·eighth) — adjacent, gulika first.
+        // The derivation is re-run here from the primitives rather than
+        // hardcoded, so this cannot drift from the engine while still
+        // constraining it: a wrong anchor or a wrong slot inside
+        // `kalam_windows` changes the engine's answer without changing the
+        // reference.
+        let sunrise =
+            vedaksha_astro::riseset::previous_rise(2_459_015.75, 21.3069, -157.8583, 0.0, &|jd| {
+                vedaksha_astro::riseset::sun_equatorial_deg(
+                    &vedaksha_ephem_core::analytical::AnalyticalProvider,
+                    jd,
+                )
+            })
+            .expect("the Sun rises in Honolulu");
+        let sunset =
+            vedaksha_astro::riseset::sun_rise_set(sunrise, 21.3069, -157.8583, 0.0, &|jd| {
+                vedaksha_astro::riseset::sun_equatorial_deg(
+                    &vedaksha_ephem_core::analytical::AnalyticalProvider,
+                    jd,
+                )
+            })
+            .set
+            .expect("and sets again");
+        let eighth = (sunset - sunrise) / 8.0;
+
+        let f = |path: [&str; 2]| {
+            v["vara"][path[0]][path[1]]
+                .as_f64()
+                .unwrap_or_else(|| panic!("{path:?} must be a number"))
+        };
+        let (rahu_start, rahu_end) = (f(["rahu_kalam", "start_jd"]), f(["rahu_kalam", "end_jd"]));
+        let (gulika_start, gulika_end) = (
+            f(["gulika_kalam", "start_jd"]),
+            f(["gulika_kalam", "end_jd"]),
         );
-        assert!(v["vara"]["gulika_kalam"]["end_jd"].is_number());
+
+        // (1) Ordering — each window runs forwards.
+        assert!(
+            rahu_end > rahu_start,
+            "rahu ran backwards: {rahu_start} .. {rahu_end}"
+        );
+        assert!(
+            gulika_end > gulika_start,
+            "gulika ran backwards: {gulika_start} .. {gulika_end}"
+        );
+
+        // (2) Width — each window is exactly one eighth of the daytime.
+        // 1e-9 d ≈ 86 µs, far below the ~100 min a whole eighth spans.
+        assert!(
+            (rahu_end - rahu_start - eighth).abs() < 1e-9,
+            "rahu width {} d != one eighth of the daytime {eighth} d",
+            rahu_end - rahu_start
+        );
+        assert!(
+            (gulika_end - gulika_start - eighth).abs() < 1e-9,
+            "gulika width {} d != one eighth of the daytime {eighth} d",
+            gulika_end - gulika_start
+        );
+
+        // (3) Anchor — each start is `sunrise + (slot - 1) · eighth` for the
+        // slot the response itself reports, so a slot/window mismatch fails.
+        let rahu_slot = v["vara"]["rahu_kalam_slot"].as_u64().expect("slot");
+        let gulika_slot = v["vara"]["gulika_kalam_slot"].as_u64().expect("slot");
+        assert_eq!((rahu_slot, gulika_slot), (8, 7), "Sunday's classical slots");
+        #[expect(
+            clippy::cast_precision_loss,
+            reason = "slot is 1..=8 by construction (Weekday::rahu_kalam_slot / \
+                      gulika_kalam_slot are exhaustive matches over literals in that \
+                      range), so the u64 -> f64 conversion is exact"
+        )]
+        let anchor = |slot: u64| sunrise + (slot - 1) as f64 * eighth;
+        assert!(
+            (rahu_start - anchor(rahu_slot)).abs() < 1e-9,
+            "rahu anchored at {rahu_start}, not at slot {rahu_slot}'s {}",
+            anchor(rahu_slot)
+        );
+        assert!(
+            (gulika_start - anchor(gulika_slot)).abs() < 1e-9,
+            "gulika anchored at {gulika_start}, not at slot {gulika_slot}'s {}",
+            anchor(gulika_slot)
+        );
+
+        // (4) Both windows lie inside the daytime they divide.
+        assert!(gulika_start >= sunrise - 1e-9 && rahu_end <= sunset + 1e-9);
+    }
+
+    /// FIX 1. `vara.from_sunrise` must be `true` wherever a sunrise actually
+    /// bounds the vara — the mid-latitude case, which is every observer this
+    /// tool is normally asked about. Paired with
+    /// `compute_panchanga_from_sunrise_is_false_in_the_polar_summer` below:
+    /// a flag hardcoded to either constant fails one of the two.
+    #[test]
+    fn compute_panchanga_from_sunrise_is_true_at_a_mid_latitude() {
+        // Chennai, J2000.0. `previous_rise` finds JD 2451544.542324732.
+        let chennai = serde_json::json!({
+            "jd": 2_451_545.0, "sun": 280.0, "moon": 223.3238,
+            "latitude": 13.08, "longitude": 80.27, "tz_offset_minutes": 330
+        });
+        let v = McpServer::call_compute_panchanga(&chennai).expect("valid input");
+        assert_eq!(v["vara"]["from_sunrise"], true);
+        // Sanity: a real sunrise was found, so the windows exist too.
+        assert!(v["vara"]["rahu_kalam"]["start_jd"].is_number());
+    }
+
+    /// FIX 1, the case that matters. Above the Arctic Circle in local summer
+    /// the Sun never sets and so never rises: `previous_rise` returns `None`
+    /// and the reported `weekday` is the observer's CIVIL weekday, a
+    /// different quantity from a vara. Before this flag existed that fallback
+    /// was emitted with no error and no marker — the original UT-weekday
+    /// defect surviving at high latitude — and `rahu_kalam: null` was not a
+    /// usable substitute, since the windows are also null when a sunrise WAS
+    /// found but the sunset was not.
+    ///
+    /// Ny-Ålesund (78.22 N, 15.65 E) at JD 2459016.0 = 2020-06-15 12:00 UT,
+    /// midnight sun. Verified by direct call: `previous_rise` there is
+    /// `None`. `tz_offset_minutes = 60` (CEST-less Svalbard standard time)
+    /// names the fallback Monday — 2020-06-15 was a Monday.
+    #[test]
+    fn compute_panchanga_from_sunrise_is_false_in_the_polar_summer() {
+        let svalbard = serde_json::json!({
+            "jd": 2_459_016.0, "sun": 84.0, "moon": 200.0,
+            "latitude": 78.22, "longitude": 15.65, "tz_offset_minutes": 60
+        });
+        let v = McpServer::call_compute_panchanga(&svalbard).expect("valid input");
+        assert_eq!(
+            v["vara"]["from_sunrise"], false,
+            "the midnight sun has no sunrise to reckon a vara from"
+        );
+        assert_eq!(v["vara"]["weekday"], "Monday", "the civil weekday fallback");
+
+        // The key must be PRESENT and boolean on both branches, not omitted
+        // on one — `serde_json` indexing cannot tell absent from null.
+        let vara = v["vara"].as_object().expect("vara object");
+        assert!(vara.contains_key("from_sunrise"));
+        assert!(vara["from_sunrise"].is_boolean());
+    }
+
+    /// FIX 2. `search_muhurta` derived its vara at sea level while
+    /// `compute_panchanga` was elevation-aware, so at altitude the two tools
+    /// disagreed about the weekday for the same instant and observer, with no
+    /// parameter a caller could set to reconcile them.
+    ///
+    /// Lhasa (29.65 N, 91.13 E, 3650 m), tz +480. Derived by direct call, not
+    /// restated: the horizon dip at 3650 m is −0.0293·√3650 = −1.7702°, which
+    /// puts sunrise on 2020-06-15 at JD 2459015.448311250 instead of the
+    /// sea-level JD 2459015.454732473 — 9.2466 minutes earlier. (The review
+    /// brief estimated ~8 minutes; the measured figure is 9.25.) Every
+    /// instant in between is in one vara for a sea-level observer and the
+    /// NEXT vara for the observer actually standing in Lhasa.
+    ///
+    /// The search window is collapsed to a single instant at the midpoint of
+    /// that gap, JD 2459015.451521861, with `min_quality: 0.0` so the one
+    /// candidate is kept regardless of score.
+    #[test]
+    fn search_muhurta_vara_uses_the_supplied_elevation() {
+        let at = |elevation_m: f64| {
+            serde_json::json!({
+                "start_jd": 2_459_015.451_521_861_f64, "end_jd": 2_459_015.451_521_861_f64,
+                "latitude": 29.65, "longitude": 91.13,
+                "elevation_m": elevation_m, "tz_offset_minutes": 480,
+                "min_quality": 0.0
+            })
+        };
+        let sea = McpServer::call_search_muhurta(&at(0.0)).expect("valid input");
+        let lhasa = McpServer::call_search_muhurta(&at(3650.0)).expect("valid input");
+
+        assert_eq!(sea["result_count"].as_u64(), Some(1));
+        assert_eq!(lhasa["result_count"].as_u64(), Some(1));
+
+        assert_eq!(sea["results"][0]["weekday"], "Sunday");
+        assert_eq!(
+            lhasa["results"][0]["weekday"], "Monday",
+            "elevation_m must reach the vara derivation inside search_muhurta \
+             — dropping it (e.g. hardcoding 0.0) makes this Sunday too"
+        );
+
+        // The disagreement is not cosmetic: the vara feeds `quality_score`.
+        // `assess_muhurta` adds +0.1 for Monday and nothing for Sunday, so
+        // the two scores must differ by exactly that.
+        let score = |v: &serde_json::Value| v["results"][0]["quality_score"].as_f64().unwrap();
+        assert!(
+            (score(&lhasa) - score(&sea) - 0.1).abs() < 1e-12,
+            "expected the Monday/Sunday weekday term to shift the score by \
+             0.1: sea {} vs Lhasa {}",
+            score(&sea),
+            score(&lhasa)
+        );
+
+        // And the answer says which horizon it was computed on.
+        assert_eq!(sea["elevation_m"].as_f64(), Some(0.0));
+        assert_eq!(lhasa["elevation_m"].as_f64(), Some(3650.0));
+    }
+
+    /// FIX 2's other half: the two tools must now AGREE, given the same
+    /// observer. Same instant, same coordinates, same elevation — the vara
+    /// `compute_panchanga` reports and the vara `search_muhurta` reports for
+    /// its single candidate must be the same weekday, at altitude as well as
+    /// at sea level.
+    #[test]
+    fn search_muhurta_and_compute_panchanga_agree_on_the_vara_at_altitude() {
+        for elevation_m in [0.0_f64, 3650.0] {
+            let jd = 2_459_015.451_521_861_f64;
+            let p = McpServer::call_compute_panchanga(&serde_json::json!({
+                "jd": jd, "sun": 84.0, "moon": 200.0,
+                "latitude": 29.65, "longitude": 91.13,
+                "elevation_m": elevation_m, "tz_offset_minutes": 480
+            }))
+            .expect("valid input");
+            let s = McpServer::call_search_muhurta(&serde_json::json!({
+                "start_jd": jd, "end_jd": jd,
+                "latitude": 29.65, "longitude": 91.13,
+                "elevation_m": elevation_m, "tz_offset_minutes": 480,
+                "min_quality": 0.0
+            }))
+            .expect("valid input");
+            assert_eq!(
+                p["vara"]["weekday"], s["results"][0]["weekday"],
+                "the two tools disagreed about the weekday at elevation \
+                 {elevation_m} m for one instant and one observer"
+            );
+        }
+    }
+
+    /// The declared elevation bounds must be enforced, not decorative.
+    #[test]
+    fn compute_panchanga_and_search_muhurta_reject_an_absurd_elevation() {
+        let p = serde_json::json!({
+            "jd": 2_451_545.0, "sun": 84.0, "moon": 200.0,
+            "latitude": 13.08, "longitude": 80.27, "elevation_m": 1e9
+        });
+        assert!(McpServer::call_compute_panchanga(&p).is_err());
+        let s = serde_json::json!({
+            "start_jd": 2_451_545.0, "end_jd": 2_451_546.0,
+            "latitude": 13.08, "longitude": 80.27, "elevation_m": -1e9
+        });
+        assert!(McpServer::call_search_muhurta(&s).is_err());
     }
 
     /// The MCP wiring must actually pass `tz_offset_minutes` through to

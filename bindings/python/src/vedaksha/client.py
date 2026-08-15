@@ -95,7 +95,15 @@ class Vedaksha:
     # ``list_tools``. Example:
     #
     #     vk.call_tool("compute_dasha", birth_jd=2451545.0, moon_longitude=120.4)
-    #     vk.call_tool("compute_panchanga", jd=2451545.0, sun=280.0, moon=120.4)
+    #     vk.call_tool("compute_panchanga", jd=2451545.0, sun=280.0, moon=120.4,
+    #                  latitude=28.6139, longitude=77.2090,
+    #                  elevation_m=216.0, tz_offset_minutes=330)
+    #
+    # ``compute_panchanga`` requires an observer: its vara (weekday) runs
+    # local-sunrise to local-sunrise, so ``latitude``/``longitude`` are
+    # mandatory and a call without them is rejected. ``elevation_m``
+    # (default 0) moves sunrise via the horizon dip and ``tz_offset_minutes``
+    # (default 0) names the resulting weekday.
 
     # -- sub-arcsecond ephemeris (SPK tier) ---------------------------------
 

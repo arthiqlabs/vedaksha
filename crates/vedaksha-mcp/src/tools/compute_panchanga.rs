@@ -38,7 +38,13 @@ pub fn definition() -> super::ToolDefinition {
             sunrise, with its lord and the Rahu and Gulika Kalam windows as Julian Days), \
             nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), \
             and karana (half-tithi). Takes sidereal longitudes; all returned instants are \
-            Julian Days (UT).",
+            Julian Days (UT). vara.from_sunrise reports HOW the weekday was reckoned: true \
+            means it was taken from an actual local sunrise (the Vedic definition); false means \
+            no sunrise exists to reckon from — the polar day or polar night, above about ±66.5° \
+            latitude — and the value is the observer's local CIVIL weekday as a documented \
+            fallback, which is a different quantity. Check it before presenting the vara at high \
+            latitude. vara.rahu_kalam being null is NOT the same signal: the Kalam windows can \
+            also be null while from_sunrise is true.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -56,8 +62,11 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "elevation_m": {
                     "type": "number", "default": 0,
-                    "description": "Observer elevation in metres above sea level; shifts sunrise \
-                                    slightly via the horizon dip."
+                    "minimum": -500, "maximum": 9000,
+                    "description": "Observer elevation in metres above sea level [-500, 9000]; \
+                                    lowers the horizon by the dip and so moves sunrise — at \
+                                    3650 m (Lhasa) 9.2 minutes earlier, enough to change \
+                                    the vara in that window."
                 },
                 "tz_offset_minutes": {
                     "type": "integer", "default": 0,
@@ -102,12 +111,7 @@ pub fn validate(input: &ComputePanchangaInput) -> Result<(), McpError> {
             "must be a finite number in [-180, 180]",
         ));
     }
-    if !input.elevation_m.is_finite() {
-        return Err(McpError::invalid_parameter(
-            "elevation_m",
-            "must be a finite number",
-        ));
-    }
+    crate::validation::validate_elevation_m(input.elevation_m)?;
     Ok(())
 }
 

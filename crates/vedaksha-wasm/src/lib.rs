@@ -1094,19 +1094,41 @@ mod karaka_tests {
 ///   is reckoned from local sunrise, so it depends on the observer, not `jd`
 ///   alone.
 /// * `longitude` — Observer longitude in degrees [-180, 180], east positive
-/// * `elevation_m` — Observer elevation above sea level in metres; shifts
-///   sunrise slightly via the horizon dip
+/// * `elevation_m` — Observer elevation above sea level in metres, in
+///   [−500, 9000] (default the caller's own 0.0 for sea level). Lowers the
+///   horizon by the dip and so moves sunrise — at 3650 m (Lhasa) 9.2 minutes
+///   earlier, measured — which can change the vara itself, not merely refine
+///   the Kalam windows.
 /// * `tz_offset_minutes` — Offset of the observer's civil clock from UT, in
-///   minutes; used only to name the vara's weekday
+///   minutes, in [−720, 840] (UTC−12:00 to UTC+14:00); used only to name the
+///   vara's weekday
 ///
 /// # Returns
 /// JSON string with tithi, vara (weekday reckoned from local sunrise, with
 /// its lord and the Rahu and Gulika Kalam windows as Julian Days),
 /// nakshatra, yoga and karana.
 ///
+/// `vara.from_sunrise` reports HOW the weekday was reckoned. `true` means it
+/// came from an actual local sunrise — the Vedic definition. `false` means no
+/// sunrise exists to reckon from (the polar day or polar night, above about
+/// ±66.5° latitude, or an ephemeris the engine could not evaluate) and the
+/// value is the observer's local **civil** weekday, emitted as a documented
+/// fallback. Those are different quantities, and a caller presenting a vara at
+/// high latitude must check this flag: an unflagged civil weekday is exactly
+/// the defect the sunrise reckoning exists to fix.
+///
+/// `vara.rahu_kalam == null` is NOT the same signal. The Kalam windows are
+/// also null when a sunrise WAS found but the following sunset was not, where
+/// `from_sunrise` is still `true`.
+///
+/// The key is spelled and positioned identically in `vedaksha-mcp`'s
+/// `compute_panchanga`; the two surfaces are compared by exact JSON equality.
+///
 /// # Errors
 /// Returns [`JsError`] when a longitude is outside [0, 360), `jd` is not
-/// finite, or an observer coordinate is out of range or non-finite.
+/// finite, an observer coordinate is out of range or non-finite,
+/// `elevation_m` is outside [−500, 9000], or `tz_offset_minutes` is outside
+/// [−720, 840].
 #[wasm_bindgen]
 pub fn compute_panchanga(
     jd: f64,
@@ -1158,8 +1180,29 @@ fn compute_panchanga_inner(
     if !longitude.is_finite() || !(-180.0..=180.0).contains(&longitude) {
         return Err("longitude must be a finite number in [-180, 180]".to_string());
     }
-    if !elevation_m.is_finite() {
-        return Err("elevation_m must be a finite number".to_string());
+    // Bounds, not just finiteness — and the SAME bounds `vedaksha-mcp`'s
+    // `validation::validate_elevation_m` applies (−500 m, below the Dead Sea
+    // shore, to 9000 m, above Everest). An absurd finite value such as 1e9
+    // would otherwise be accepted and produce a horizon dip of −926°, a
+    // sunrise search that can never find a crossing, reported as a
+    // polar-style fallback rather than as the bad input it is.
+    if !elevation_m.is_finite() || !(-500.0..=9000.0).contains(&elevation_m) {
+        return Err(
+            "elevation_m must be a finite number of metres above sea level in [-500, 9000]"
+                .to_string(),
+        );
+    }
+    // `tz_offset_minutes` was previously unvalidated HERE while
+    // `vedaksha-mcp` rejected the same value outside −720..=840
+    // (`validation::validate_tz_offset_minutes`) — one engine, two contracts,
+    // with the wasm caller silently getting a wrong vara where the MCP caller
+    // got an error. Real UTC offsets run from −12:00 (Baker Island) to +14:00
+    // (Kiribati's Line Islands); anything outside that names no real
+    // observer's civil clock.
+    if !(-720..=840).contains(&tz_offset_minutes) {
+        return Err(
+            "tz_offset_minutes must be between -720 and 840 (UTC-12:00 to UTC+14:00)".to_string(),
+        );
     }
 
     let tithi = compute_tithi(moon, sun);
@@ -1171,7 +1214,7 @@ fn compute_panchanga_inner(
     // MCP handler exactly: `kalam_windows` returns the vara it derived
     // internally, so there is no second, separate `vara_at` call here
     // re-running the same day scan a second time.
-    let (weekday, kalams) = vedaksha_vedic::muhurta::kalam_windows(
+    let reckoning = vedaksha_vedic::muhurta::kalam_windows(
         jd,
         latitude,
         longitude,
@@ -1179,6 +1222,7 @@ fn compute_panchanga_inner(
         tz_offset_minutes,
         &sun_eq,
     );
+    let (weekday, kalams) = (reckoning.vara, reckoning.windows);
     let nakshatra = Nakshatra::from_longitude(moon);
     let pada = Nakshatra::pada_from_longitude(moon);
     let yoga = compute_panchanga_yoga(sun, moon);
@@ -1207,6 +1251,13 @@ fn compute_panchanga_inner(
         },
         "vara": {
             "weekday": weekday_name,
+            // Mirrors `vedaksha-mcp`'s `call_compute_panchanga` key for key:
+            // `true` = reckoned from an actual local sunrise (a vara),
+            // `false` = the civil-weekday fallback of the polar day/night,
+            // which is a different quantity. The Python conformance harness
+            // compares the two surfaces' JSON by exact equality, so the
+            // spelling and the position of this key must not drift.
+            "from_sunrise": reckoning.from_sunrise,
             "lord": weekday.lord(),
             "rahu_kalam_slot": weekday.rahu_kalam_slot(),
             "gulika_kalam_slot": weekday.gulika_kalam_slot(),
@@ -1651,6 +1702,96 @@ mod panchanga_drishti_bhava_tests {
         assert!(vara.contains_key("gulika_kalam"), "key must be present");
         assert!(vara["rahu_kalam"].is_null());
         assert!(vara["gulika_kalam"].is_null());
+    }
+
+    /// FIX 1. `vara.from_sunrise` must be `true` wherever a sunrise actually
+    /// bounds the vara. Same observer and instant as
+    /// `compute_panchanga_inner_j2000_is_saturday` above, and the exact
+    /// mirror of `vedaksha-mcp`'s
+    /// `compute_panchanga_from_sunrise_is_true_at_a_mid_latitude` — the two
+    /// surfaces are compared by exact JSON equality, so the key must exist,
+    /// be spelled the same, and carry the same value on both.
+    #[test]
+    fn compute_panchanga_inner_from_sunrise_is_true_at_a_mid_latitude() {
+        let out =
+            compute_panchanga_inner(2_451_545.0, 280.0, 223.3238, 13.08, 80.27, 0.0, 330).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["vara"]["from_sunrise"], true);
+        assert!(v["vara"]["rahu_kalam"]["start_jd"].is_number());
+    }
+
+    /// FIX 1, the case that matters. Above the Arctic Circle in local summer
+    /// the Sun never sets and so never rises: the reported `weekday` is the
+    /// observer's CIVIL weekday, a different quantity from a vara, and this
+    /// flag is the only thing that says so. Emitting the fallback unflagged
+    /// was the original UT-weekday defect surviving at high latitude.
+    ///
+    /// Ny-Ålesund (78.22 N, 15.65 E) at JD 2459016.0 = 2020-06-15 12:00 UT,
+    /// midnight sun. Verified by direct call: `previous_rise` is `None`
+    /// there. `tz_offset_minutes = 60` names the fallback Monday, and
+    /// 2020-06-15 was a Monday.
+    ///
+    /// This is also the discriminating half of the pair: a flag hardcoded to
+    /// `true` fails here, one hardcoded to `false` fails the mid-latitude
+    /// test above.
+    #[test]
+    fn compute_panchanga_inner_from_sunrise_is_false_in_the_polar_summer() {
+        let out = compute_panchanga_inner(2_459_016.0, 84.0, 200.0, 78.22, 15.65, 0.0, 60).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(
+            v["vara"]["from_sunrise"], false,
+            "the midnight sun has no sunrise to reckon a vara from"
+        );
+        assert_eq!(v["vara"]["weekday"], "Monday", "the civil weekday fallback");
+
+        // Present and boolean on this branch too — `serde_json` indexing
+        // cannot tell an absent key from a null one.
+        let vara = v["vara"].as_object().unwrap();
+        assert!(vara.contains_key("from_sunrise"));
+        assert!(vara["from_sunrise"].is_boolean());
+
+        // And `rahu_kalam: null` is NOT the same signal — it is null here,
+        // but it is also null in the sunrise-found/sunset-missing case where
+        // `from_sunrise` is true, which is why the flag exists separately.
+        assert!(vara["rahu_kalam"].is_null());
+    }
+
+    /// FIX 3. `tz_offset_minutes` was validated by `vedaksha-mcp`
+    /// (`validation::validate_tz_offset_minutes`, −720..=840) and not
+    /// validated at all here: one engine, two contracts, with the wasm caller
+    /// silently getting a wrong vara where the MCP caller got an error. The
+    /// boundaries are the real extremes of civil time — UTC−12:00 (Baker
+    /// Island) and UTC+14:00 (Kiribati's Line Islands).
+    #[test]
+    fn compute_panchanga_inner_validates_tz_offset_minutes_like_the_mcp_surface() {
+        let call =
+            |tz: i32| compute_panchanga_inner(2_451_545.0, 280.0, 223.3238, 13.08, 80.27, 0.0, tz);
+        assert!(call(-720).is_ok(), "UTC-12:00 is a real offset");
+        assert!(call(840).is_ok(), "UTC+14:00 is a real offset");
+        assert!(call(-721).is_err());
+        assert!(call(841).is_err());
+        assert!(call(100_000).is_err());
+    }
+
+    /// FIX 3. `elevation_m` was finiteness-checked only, on both surfaces. A
+    /// finite but absurd 1e9 m yields a horizon dip of −0.0293·√1e9 = −926°,
+    /// a "sunrise" the search can never find — reported as a polar-style
+    /// fallback rather than as the bad input it is. Bounds mirror
+    /// `vedaksha-mcp`'s `validation::ELEVATION_MIN_M`/`ELEVATION_MAX_M`:
+    /// −500 m (below the −430 m Dead Sea shore, the lowest exposed land) to
+    /// 9000 m (above Everest's 8848.86 m).
+    #[test]
+    fn compute_panchanga_inner_validates_elevation_range_like_the_mcp_surface() {
+        let call =
+            |e: f64| compute_panchanga_inner(2_451_545.0, 280.0, 223.3238, 13.08, 80.27, e, 330);
+        assert!(call(-500.0).is_ok());
+        assert!(call(0.0).is_ok());
+        assert!(call(3650.0).is_ok(), "Lhasa is a real observer");
+        assert!(call(9000.0).is_ok());
+        assert!(call(-500.1).is_err());
+        assert!(call(9000.1).is_err());
+        assert!(call(1e9).is_err());
+        assert!(call(f64::NAN).is_err());
     }
 
     #[test]

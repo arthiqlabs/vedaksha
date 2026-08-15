@@ -181,6 +181,33 @@ pub fn rise_set(
         let h = normalize_degrees(local_sidereal_degrees(jd, lon_deg_east) - ra);
         Some(if h > 180.0 { h - 360.0 } else { h })
     };
+    // Both of the above from ONE `equatorial` evaluation, for the coarse scan.
+    //
+    // The scan needs the relative altitude (for the rise/set brackets) and the
+    // hour angle (for the transit bracket) at the same instant, and both are
+    // pure functions of the SAME `(ra, dec)` at that instant. Calling `rel_alt`
+    // and `hour_angle` separately asked the caller's `equatorial` closure for
+    // that pair twice per step; since the closure's contract is "the body's
+    // apparent coordinates AT `jd_ut`" — a function of the instant, not of the
+    // call — the second answer is by construction identical to the first, and
+    // asking once and reusing it is bit-for-bit equivalent, not an
+    // approximation. It is worth doing because `equatorial` is the expensive
+    // part: for the Sun it is a full VSOP87 evaluation plus an obliquity
+    // rotation, while everything downstream of it here is a handful of
+    // trigonometric calls. Measured on the Chennai panchanga fixture
+    // (`sun_rise_set` anchored on the 2000-01-01 sunrise, lat 13.08, lon
+    // 80.27): 660 `equatorial` evaluations before, 371 after — see the
+    // fix-pass report.
+    //
+    // `rel_alt` and `hour_angle` are still used, unchanged, by the bisections:
+    // each refines a bracket against ONE of the two functions, so neither pays
+    // for the other there.
+    let alt_and_hour_angle = |jd: f64| -> Option<(f64, f64)> {
+        let (ra, dec) = equatorial(jd)?;
+        let alt = geometric_altitude_deg(ra, dec, jd, lat_deg, lon_deg_east) - h0_deg;
+        let h = normalize_degrees(local_sidereal_degrees(jd, lon_deg_east) - ra);
+        Some((alt, if h > 180.0 { h - 360.0 } else { h }))
+    };
 
     let mut out = RiseSet {
         rise: None,
@@ -189,13 +216,13 @@ pub fn rise_set(
     };
 
     let mut prev_jd = jd_ut_day_start;
-    let (Some(mut prev_alt), Some(mut prev_ha)) = (rel_alt(prev_jd), hour_angle(prev_jd)) else {
+    let Some((mut prev_alt, mut prev_ha)) = alt_and_hour_angle(prev_jd) else {
         return out;
     };
 
     let mut jd = jd_ut_day_start + SCAN_STEP_DAYS;
     while jd <= jd_ut_day_start + 1.0 + 1e-9 {
-        let (Some(alt), Some(ha)) = (rel_alt(jd), hour_angle(jd)) else {
+        let Some((alt, ha)) = alt_and_hour_angle(jd) else {
             return out;
         };
 
