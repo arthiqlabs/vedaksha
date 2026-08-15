@@ -370,6 +370,13 @@ mod tests {
     /// dependent, so it is the one system that is genuinely NOT covariant
     /// under this rotation. See
     /// `whole_sign_bhavas_follow_the_sidereal_sign_of_the_ascendant`.
+    ///
+    /// The latitude grid runs from the equator to ±85°, crossing
+    /// `houses::POLAR_LAT_THRESHOLD` (66.56°) in both hemispheres so the
+    /// Placidus/Koch fallback to Equal houses is covered rather than merely
+    /// assumed rotation-safe. It is: Equal cusps are `asc + k·30°`, which
+    /// commutes with a rigid rotation. Measured, 0 mismatches across all
+    /// 9 systems at every polar latitude in the grid.
     #[test]
     fn house_assignment_is_invariant_under_ayanamsha_rotation() {
         use crate::sidereal::{Ayanamsha, ayanamsha_value};
@@ -388,13 +395,39 @@ mod tests {
             HouseSystem::Sripathi,
         ];
         // (ramc, latitude, jd) — different epochs so the ayanamsha differs,
-        // and latitudes from the equator to just inside the polar circle.
+        // and latitudes from the equator through the polar circle to 85°.
+        //
+        // The last six straddle `houses::POLAR_LAT_THRESHOLD` = 66.56°, above
+        // which Placidus and Koch abandon the semi-arc method and fall back to
+        // Equal houses with `polar_fallback = true`. That fallback path was
+        // uncovered here while the grid stopped at 60°: the substituted system
+        // is a *different* function of the ascendant, so nothing in this test
+        // had shown it is rotation-covariant. It is — Equal cusps are
+        // asc + k·30°, which commutes with a rigid rotation — and the
+        // `polar_fallback_exercised` assertion below pins that the path is
+        // genuinely entered rather than merely available.
+        //
+        // Both hemispheres and both sides of the threshold are present so a
+        // sign error in the `libm::fabs(latitude) > POLAR_LAT_THRESHOLD` guard
+        // cannot hide. 66.0° is deliberately *below* the 66.56° threshold, not
+        // at the 66.5° Arctic circle, so it is a genuine no-fallback control.
         let charts = [
             (30.0, 0.0, 2_433_282.5),       // 1950-01-01 UT, equator
             (177.17, 28.6139, JD),          // 2000-01-01 UT, Delhi
             (264.78, 40.7128, 2_461_100.0), // 2026-02-28 UT, New York
             (95.0, 60.0, 2_461_100.0),      // high but sub-polar
+            (95.0, 66.0, 2_461_100.0),      // just below the 66.56° threshold
+            (95.0, 67.0, 2_461_100.0),      // just above it — fallback engages
+            (211.4, 75.0, 2_433_282.5),     // deep Arctic
+            (348.9, 85.0, JD),              // near the north pole
+            (211.4, -67.0, JD),             // southern mirror, just past
+            (348.9, -85.0, 2_461_100.0),    // near the south pole
         ];
+        // Set when a chart in the grid actually took the Placidus/Koch polar
+        // substitution. Asserted non-zero at the end: without it, raising
+        // POLAR_LAT_THRESHOLD past 85° would silently un-cover the path again
+        // while this test stayed green.
+        let mut polar_fallback_exercised = 0_usize;
         // 24 planets at 15° spacing, so every house is populated and the
         // 0°/360° wrap is crossed.
         let data: Vec<_> = (0..24)
@@ -414,6 +447,21 @@ mod tests {
 
                 let trop = compute_chart(&data, ramc, lat, OBL, jd, &trop_cfg);
                 let sid = compute_chart(&data, ramc, lat, OBL, jd, &sid_cfg);
+
+                // The fallback decision is a function of latitude alone, so it
+                // must be identical in both frames. If it were not, the two
+                // charts would be comparing different house systems and every
+                // assertion below would be meaningless.
+                assert_eq!(
+                    trop.houses.polar_fallback, sid.houses.polar_fallback,
+                    "{system:?} @ramc {ramc} lat {lat} jd {jd}: polar_fallback \
+                     differs between frames ({} vs {}) — the two charts are not \
+                     the same house system and cannot be compared",
+                    trop.houses.polar_fallback, sid.houses.polar_fallback
+                );
+                if trop.houses.polar_fallback {
+                    polar_fallback_exercised += 1;
+                }
 
                 // Longitudes rotate by exactly the ayanamsha.
                 for (t, s) in trop.planets.iter().zip(sid.planets.iter()) {
@@ -462,6 +510,25 @@ mod tests {
                 }
             }
         }
+
+        // Derived, not observed-and-copied. Of the 10 charts in the grid, 5
+        // sit above the 66.56° threshold — 67, 75, 85, −67, −85; the sixth
+        // added latitude, 66.0, is deliberately below it. Exactly 2 of the 9
+        // systems substitute Equal up there, Placidus and Koch; the other
+        // seven are closed-form in the RAMC and the ascendant and never set
+        // the flag. 5 × 2 = 10.
+        //
+        // The equality (rather than `> 0`) is what pins the reviewer's
+        // finding: a count above 10 would mean a system started falling back
+        // that previously did not, and a count below 10 that the grid or the
+        // threshold moved.
+        assert_eq!(
+            polar_fallback_exercised, 10,
+            "expected the Placidus/Koch polar substitution on 5 polar charts × \
+             2 systems = 10 charts; saw {polar_fallback_exercised}. A count of 0 \
+             means the grid no longer reaches past POLAR_LAT_THRESHOLD and the \
+             fallback path is uncovered again."
+        );
     }
 
     /// Whole-Sign on a sidereal chart must anchor on the **sidereal** sign of

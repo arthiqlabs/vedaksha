@@ -12,7 +12,14 @@ use crate::validation::{self, McpError};
 /// Input parameters for the `compute_natal_chart` tool.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ComputeNatalInput {
-    /// Julian Day number (TDB).
+    /// Julian Day number in **UT1** (Universal Time) — not TT, not TDB.
+    ///
+    /// The engine converts this to TT internally for the dynamical terms
+    /// (planetary positions, nutation, obliquity) and evaluates the
+    /// Earth-rotation term — sidereal time, and hence the ascendant, the MC
+    /// and all twelve house cusps — at this UT1 value directly. Supplying a
+    /// TDB Julian Day rotates every cusp by ΔT worth of Earth rotation:
+    /// 0.289° (17.3′) at today's ΔT ≈ 69 s.
     pub julian_day: f64,
     /// Geographic latitude in degrees \[-90, +90\].
     pub latitude: f64,
@@ -44,7 +51,13 @@ pub fn definition() -> super::ToolDefinition {
             "properties": {
                 "julian_day": {
                     "type": "number",
-                    "description": "Julian Day number (TDB)"
+                    "description": "Julian Day number in UT1 (Universal Time) \
+                        — not TT, not TDB. The engine converts to TT internally for the \
+                        dynamical terms (planetary positions, nutation, obliquity) and \
+                        evaluates the Earth-rotation term — sidereal time, and hence the \
+                        ascendant, the MC and all twelve house cusps — at this UT1 value \
+                        directly. Supplying a TDB Julian Day rotates every cusp by 0.289° \
+                        (17.3') at today's ΔT ≈ 69 s."
                 },
                 "latitude": {
                     "type": "number",

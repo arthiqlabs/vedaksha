@@ -13,13 +13,17 @@ use crate::validation::{self, McpError};
 /// Input parameters for the `compute_transit` tool.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ComputeTransitInput {
-    /// Julian Day of the natal chart (TDB).
+    /// Julian Day of the natal chart in **UT1** (Universal Time) — not TT,
+    /// not TDB. The engine converts to TT internally for the dynamical terms
+    /// (planetary positions, nutation, obliquity).
     pub natal_jd: f64,
     /// Natal geographic latitude in degrees \[-90, +90\].
     pub natal_lat: f64,
     /// Natal geographic longitude in degrees \[-180, +180\], east positive.
     pub natal_lon: f64,
-    /// Julian Day of the transit moment to compute (TDB).
+    /// Julian Day of the transit moment to compute, in **UT1** (Universal
+    /// Time) — not TT, not TDB. The engine converts to TT internally for the
+    /// dynamical terms.
     pub transit_jd: f64,
 }
 
@@ -36,7 +40,9 @@ pub fn definition() -> super::ToolDefinition {
             "properties": {
                 "natal_jd": {
                     "type": "number",
-                    "description": "Julian Day of the natal chart (TDB)"
+                    "description": "Julian Day of the natal chart in UT1 \
+                        (Universal Time) — not TT, not TDB. The engine converts to TT \
+                        internally for the dynamical terms."
                 },
                 "natal_lat": {
                     "type": "number",
@@ -48,7 +54,9 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "transit_jd": {
                     "type": "number",
-                    "description": "Julian Day of the transit moment to compute (TDB)"
+                    "description": "Julian Day of the transit moment to compute, \
+                        in UT1 (Universal Time) — not TT, not TDB. The engine converts to \
+                        TT internally for the dynamical terms."
                 }
             },
             "required": ["natal_jd", "natal_lat", "natal_lon", "transit_jd"]

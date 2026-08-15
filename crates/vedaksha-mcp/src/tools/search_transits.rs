@@ -24,9 +24,13 @@ pub struct NatalPosition {
 pub struct SearchTransitsInput {
     /// Natal planet positions to check transits against.
     pub natal_positions: Vec<NatalPosition>,
-    /// Start of the search window as a Julian Day (TDB).
+    /// Start of the search window as a Julian Day in **UT1** (Universal
+    /// Time) — not TT, not TDB. The engine converts to TT internally for the
+    /// dynamical terms. `exact_jd` in each returned event is on the same UT1
+    /// scale.
     pub start_jd: f64,
-    /// End of the search window as a Julian Day (TDB).
+    /// End of the search window as a Julian Day in **UT1** (Universal Time) —
+    /// not TT, not TDB.
     pub end_jd: f64,
     /// Transiting bodies to include (e.g. `["Mars", "Jupiter"]`).
     /// Defaults to all planets when absent.
@@ -70,11 +74,15 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "start_jd": {
                     "type": "number",
-                    "description": "Start of the search window as a Julian Day (TDB)"
+                    "description": "Start of the search window as a Julian Day in \
+                        UT1 (Universal Time) — not TT, not TDB. The engine converts to TT \
+                        internally for the dynamical terms; each event's exact_jd is \
+                        returned on this same UT1 scale."
                 },
                 "end_jd": {
                     "type": "number",
-                    "description": "End of the search window as a Julian Day (TDB)"
+                    "description": "End of the search window as a Julian Day in UT1 \
+                        (Universal Time) — not TT, not TDB."
                 },
                 "bodies": {
                     "type": "array",

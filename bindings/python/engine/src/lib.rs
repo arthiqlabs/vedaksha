@@ -157,6 +157,12 @@ fn body_from_naif(id: i32) -> Option<Body> {
 /// Compute the state vector of the NAIF body `naif_id` at Julian Day `jd`,
 /// writing `[x, y, z, vx, vy, vz]` (AU, AU/day, ICRS) to `out[..6]`.
 ///
+/// `jd` is **TDB**, not UT1 — unlike the MCP tools, which take UT1. This is a
+/// raw SPK segment query: `SpkReader::compute_state` turns `jd` straight into
+/// seconds past J2000 to index the segment's Chebyshev coefficients, which are
+/// tabulated against TDB, and no Delta T conversion is applied anywhere on
+/// this path. [`vk_spk_range`] reports its bounds on the same TDB scale.
+///
 /// Returns 0 on success, or a negative error: [`ERR_UNKNOWN_BODY`],
 /// [`ERR_NO_READER`] (no kernel loaded), [`ERR_COMPUTE`] (out of range, etc.).
 ///

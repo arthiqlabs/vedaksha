@@ -59,7 +59,13 @@ impl DashaSystem {
 pub struct ComputeDashaInput {
     /// Dasha system. Defaults to `"Vimshottari"`.
     pub system: Option<String>,
-    /// Birth Julian Day (TDB) used as the dasha epoch.
+    /// Birth Julian Day used as the dasha epoch, in **UT1** (Universal
+    /// Time) — not TT, not TDB, i.e. the same scale as
+    /// `compute_natal_chart`'s `julian_day`.
+    ///
+    /// Dasha computation is ephemeris-free — this epoch is only added to, so
+    /// the scale is carried through rather than converted, and every returned
+    /// `start_jd`/`end_jd` is on the same UT1 scale as the input.
     pub birth_jd: f64,
     /// Natal Moon sidereal longitude in degrees \[0, 360).
     /// Required for Vimshottari, Ashtottari, Yogini.
@@ -99,7 +105,12 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "birth_jd": {
                     "type": "number",
-                    "description": "Birth Julian Day (TDB) used as the dasha epoch"
+                    "description": "Birth Julian Day used as the dasha epoch, in \
+                        UT1 (Universal Time) — not TT, not TDB, i.e. the same scale as \
+                        compute_natal_chart's julian_day. Dasha computation is \
+                        ephemeris-free, so this epoch is carried through rather than \
+                        converted: every returned start_jd/end_jd is on the same UT1 \
+                        scale as the input."
                 },
                 "moon_longitude": {
                     "type": "number",

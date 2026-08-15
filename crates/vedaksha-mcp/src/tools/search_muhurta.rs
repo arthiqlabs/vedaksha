@@ -13,9 +13,14 @@ use crate::validation::{self, McpError};
 /// Input parameters for the `search_muhurta` tool.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SearchMuhurtaInput {
-    /// Start of the search window as a Julian Day (TDB).
+    /// Start of the search window as a Julian Day in **UT1** (Universal
+    /// Time) — not TT, not TDB. The engine converts to TT internally for the
+    /// dynamical terms and uses UT1 directly for sunrise, which is what each
+    /// candidate's vara is reckoned from. Every returned `jd`, `tithi_end_jd`
+    /// and `nakshatra_end_jd` is on the same UT1 scale.
     pub start_jd: f64,
-    /// End of the search window as a Julian Day (TDB).
+    /// End of the search window as a Julian Day in **UT1** (Universal Time) —
+    /// not TT, not TDB.
     pub end_jd: f64,
     /// Geographic latitude in degrees \[-90, +90\].
     pub latitude: f64,
@@ -56,13 +61,19 @@ pub fn definition() -> super::ToolDefinition {
             "properties": {
                 "start_jd": {
                     "type": "number",
-                    "description": "Start of the search window as a Julian Day (TDB). The span \
-                                    from start_jd to end_jd must not exceed 30 days."
+                    "description": "Start of the search window as a Julian Day in \
+                                    UT1 (Universal Time) — not TT, not TDB. The engine \
+                                    converts to TT internally for the dynamical terms and \
+                                    uses UT1 directly for sunrise, which each candidate's \
+                                    vara is reckoned from; every returned jd, tithi_end_jd \
+                                    and nakshatra_end_jd is on this same UT1 scale. The \
+                                    span from start_jd to end_jd must not exceed 30 days."
                 },
                 "end_jd": {
                     "type": "number",
-                    "description": "End of the search window as a Julian Day (TDB). The span \
-                                    from start_jd to end_jd must not exceed 30 days."
+                    "description": "End of the search window as a Julian Day in UT1 \
+                                    (Universal Time) — not TT, not TDB. The span from \
+                                    start_jd to end_jd must not exceed 30 days."
                 },
                 "latitude": {
                     "type": "number",

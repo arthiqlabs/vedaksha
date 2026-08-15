@@ -16,7 +16,7 @@
             "type": "string"
           },
           "julian_day": {
-            "description": "Julian Day number (TDB)",
+            "description": "Julian Day number in UT1 (Universal Time) — not TT, not TDB. The engine converts to TT internally for the dynamical terms (planetary positions, nutation, obliquity) and evaluates the Earth-rotation term — sidereal time, and hence the ascendant, the MC and all twelve house cusps — at this UT1 value directly. Supplying a TDB Julian Day rotates every cusp by 0.289° (17.3') at today's ΔT ≈ 69 s.",
             "type": "number"
           },
           "latitude": {
@@ -42,7 +42,7 @@
       "inputSchema": {
         "properties": {
           "birth_jd": {
-            "description": "Birth Julian Day (TDB) used as the dasha epoch",
+            "description": "Birth Julian Day used as the dasha epoch, in UT1 (Universal Time) — not TT, not TDB, i.e. the same scale as compute_natal_chart's julian_day. Dasha computation is ephemeris-free, so this epoch is carried through rather than converted: every returned start_jd/end_jd is on the same UT1 scale as the input.",
             "type": "number"
           },
           "lagna_sign": {
@@ -297,7 +297,7 @@
             "type": "array"
           },
           "julian_day": {
-            "description": "Julian Day number (TDB)",
+            "description": "Julian Day number in UT1 (Universal Time) — not TT, not TDB. Same scale as compute_natal_chart's julian_day: the engine converts to TT internally for the dynamical terms and uses UT1 directly for the Earth-rotation term.",
             "type": "number"
           },
           "latitude": {
@@ -360,7 +360,7 @@
       "inputSchema": {
         "properties": {
           "natal_jd": {
-            "description": "Julian Day of the natal chart (TDB)",
+            "description": "Julian Day of the natal chart in UT1 (Universal Time) — not TT, not TDB. The engine converts to TT internally for the dynamical terms.",
             "type": "number"
           },
           "natal_lat": {
@@ -372,7 +372,7 @@
             "type": "number"
           },
           "transit_jd": {
-            "description": "Julian Day of the transit moment to compute (TDB)",
+            "description": "Julian Day of the transit moment to compute, in UT1 (Universal Time) — not TT, not TDB. The engine converts to TT internally for the dynamical terms.",
             "type": "number"
           }
         },
@@ -405,7 +405,7 @@
             "type": "array"
           },
           "end_jd": {
-            "description": "End of the search window as a Julian Day (TDB)",
+            "description": "End of the search window as a Julian Day in UT1 (Universal Time) — not TT, not TDB.",
             "type": "number"
           },
           "max_orb": {
@@ -436,7 +436,7 @@
             "type": "array"
           },
           "start_jd": {
-            "description": "Start of the search window as a Julian Day (TDB)",
+            "description": "Start of the search window as a Julian Day in UT1 (Universal Time) — not TT, not TDB. The engine converts to TT internally for the dynamical terms; each event's exact_jd is returned on this same UT1 scale.",
             "type": "number"
           }
         },
@@ -461,7 +461,7 @@
             "type": "number"
           },
           "end_jd": {
-            "description": "End of the search window as a Julian Day (TDB). The span from start_jd to end_jd must not exceed 30 days.",
+            "description": "End of the search window as a Julian Day in UT1 (Universal Time) — not TT, not TDB. The span from start_jd to end_jd must not exceed 30 days.",
             "type": "number"
           },
           "latitude": {
@@ -480,7 +480,7 @@
             "type": "number"
           },
           "start_jd": {
-            "description": "Start of the search window as a Julian Day (TDB). The span from start_jd to end_jd must not exceed 30 days.",
+            "description": "Start of the search window as a Julian Day in UT1 (Universal Time) — not TT, not TDB. The engine converts to TT internally for the dynamical terms and uses UT1 directly for sunrise, which each candidate's vara is reckoned from; every returned jd, tithi_end_jd and nakshatra_end_jd is on this same UT1 scale. The span from start_jd to end_jd must not exceed 30 days.",
             "type": "number"
           },
           "tz_offset_minutes": {

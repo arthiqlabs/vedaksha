@@ -19,6 +19,16 @@ let jd = calendar_to_jd(2024, 3, 20, 12.0);
 let chart = compute_chart(jd, 28.6139, 77.2090, &ChartConfig::vedic());
 ```
 
+Every Julian Day on the public surfaces — the Rust API, the 15 MCP tools, the
+Python client, the WASM bindings — is **UT1** (Universal Time), not TT and not
+TDB. The engine converts to TT internally for the dynamical terms (planetary
+positions, nutation, obliquity) and uses UT1 directly for the Earth's rotation,
+which fixes the ascendant, the MC and all twelve house cusps. Handing it a TDB
+Julian Day instead adds ΔT worth of rotation rather than removing it — 0.289°
+(17.3′) at today's ΔT ≈ 69 s, straight onto every cusp. The one exception is
+the raw JPL SPK query (`state_vector` in the Python client), which indexes the
+kernel's Chebyshev coefficients directly and therefore takes TDB.
+
 ```bash
 cargo add vedaksha          # Rust
 pip install vedaksha        # Python (runs the engine via WebAssembly)

@@ -480,3 +480,198 @@ fn served_ramc_is_built_from_ut1_not_tt() {
          path passed TT where UT1 belongs."
     );
 }
+
+/// A **served** sidereal request must produce a **sidereal** chart.
+///
+/// This is the tool-boundary counterpart to
+/// `vedaksha_astro::chart::house_assignment_is_invariant_under_ayanamsha_rotation`.
+/// That test proves `compute_chart` rotates planets and cusps together, but it
+/// calls the astro layer directly and hands it a `ChartConfig` it built itself.
+/// It says nothing about whether the caller's `ayanamsha` argument survives
+/// the MCP handler's string parsing and reaches that config.
+///
+/// It did not, as far as the suite was concerned: mutating
+/// `server.rs::call_compute_natal_chart` to discard the parsed ayanamsha and
+/// force `ayanamsha: None` left the entire `vedaksha-mcp` + `vedaksha-wasm`
+/// suite green. Every Jyotish caller would have silently received a tropical
+/// chart. The hole was structural — the two frame tests are `vedaksha-astro`
+/// unit tests over synthetic RAMCs, `served_ramc_is_built_from_ut1_not_tt`
+/// above uses the tropical default, both Python fixture natal cases are
+/// `Zodiac: Tropical`, and `mcp_surface_parity` covers only
+/// `compute_panchanga`. Nothing served a sidereal chart and looked at it.
+///
+/// # The property
+///
+/// Two `compute_natal_chart` calls at the same instant, the same observer and
+/// the same house system, differing only in `ayanamsha`. Sidereal must equal
+/// tropical rotated by exactly the ayanamsha, on every reported longitude:
+///
+/// ```text
+/// sidereal_x = normalize(tropical_x − ayanamsha_value(Lahiri, jd))
+/// ```
+///
+/// for `asc`, `mc` and all twelve cusps. No external oracle: the right-hand
+/// side is computed here from `vedaksha_astro::sidereal::ayanamsha_value`, the
+/// same public function a caller would use, and the identity is the definition
+/// of a sidereal frame rather than a measured figure.
+///
+/// # Derivation of the numbers asserted
+///
+/// At `jd = 2451544.5` (2000-01-01 00:00 UT), 28.6139° N, 77.2090° E, Placidus:
+///
+/// - `ayanamsha_value(Lahiri, 2451544.5)` = 23.857073774210527°
+/// - served tropical `asc`  = 255.288134034110612°, `mc` = 176.919476718792396°
+/// - served sidereal `asc`  = 231.431060259900079°, `mc` = 153.062402944581862°
+/// - 255.288134034110612 − 23.857073774210527 = 231.431060259900085
+///
+/// which matches the served sidereal `asc` to the last bit the subtraction can
+/// carry. Every one of the twelve cusps shows the same 23.857073774211°
+/// offset. The tolerance below is 1e-9°, five orders looser than the observed
+/// residual (< 1e-13°) and eleven orders tighter than the failure it must
+/// catch — so it is a floating-point allowance, not a figure sized to pass.
+///
+/// # Mutation, measured
+///
+/// Forcing `ayanamsha: None` in the handler makes both calls return the
+/// tropical chart, so the measured offset collapses from 23.857073774211° to
+/// 0° — a miss of 23.857° against a 1e-9° tolerance. The test fails on `asc`,
+/// on `mc` and on all twelve cusps.
+#[test]
+fn served_sidereal_request_yields_a_sidereal_chart() {
+    let jd_ut1 = 2_451_544.5_f64;
+    let lat = 28.6139_f64;
+    let lon = 77.2090_f64;
+
+    let served = |ayanamsha: &str| -> serde_json::Value {
+        let server = vedaksha_mcp::server::McpServer::new();
+        let request = serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {"name": "compute_natal_chart", "arguments": {
+                "julian_day": jd_ut1,
+                "latitude": lat,
+                "longitude": lon,
+                "house_system": "Placidus",
+                "ayanamsha": ayanamsha,
+            }}
+        });
+        let response: serde_json::Value =
+            serde_json::from_str(&server.handle_request(&serde_json::to_string(&request).unwrap()))
+                .unwrap();
+        let text = response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_else(|| panic!("compute_natal_chart({ayanamsha}) returned no content"));
+        serde_json::from_str(text).unwrap()
+    };
+
+    let trop = served("Tropical");
+    let sid = served("Lahiri");
+
+    // Guard: a degenerate ayanamsha would make every assertion below vacuous.
+    // Lahiri at J2000 is ~23.86°; anything under 20° means the reference
+    // itself has broken and the comparison proves nothing.
+    let ayan = sidereal::ayanamsha_value(Ayanamsha::Lahiri, jd_ut1);
+    assert!(
+        ayan > 20.0,
+        "ayanamsha_value(Lahiri, {jd_ut1}) = {ayan}°, expected ~23.86°. With a \
+         near-zero ayanamsha the sidereal/tropical comparison below cannot \
+         distinguish a sidereal chart from a tropical one."
+    );
+
+    // Signed shortest angular separation, so the 0°/360° wrap cannot mask a
+    // failure or manufacture one.
+    let sep = |a: f64, b: f64| -> f64 {
+        let d = normalize_degrees(a - b);
+        if d > 180.0 { d - 360.0 } else { d }
+    };
+    const TOL: f64 = 1e-9;
+
+    let mut checked = 0_usize;
+    let mut angles: Vec<(String, f64, f64)> = vec![
+        (
+            "asc".to_string(),
+            trop["houses"]["asc"].as_f64().expect("houses.asc missing"),
+            sid["houses"]["asc"].as_f64().expect("houses.asc missing"),
+        ),
+        (
+            "mc".to_string(),
+            trop["houses"]["mc"].as_f64().expect("houses.mc missing"),
+            sid["houses"]["mc"].as_f64().expect("houses.mc missing"),
+        ),
+    ];
+    for i in 0..12 {
+        angles.push((
+            format!("cusp {}", i + 1),
+            trop["houses"]["cusps"][i]
+                .as_f64()
+                .unwrap_or_else(|| panic!("houses.cusps[{i}] missing")),
+            sid["houses"]["cusps"][i]
+                .as_f64()
+                .unwrap_or_else(|| panic!("houses.cusps[{i}] missing")),
+        ));
+    }
+
+    for (label, t, s) in &angles {
+        let offset = sep(*t, *s);
+        assert!(
+            (offset - ayan).abs() < TOL,
+            "served {label}: tropical {t}°, sidereal {s}° — offset {offset}°, \
+             expected the ayanamsha {ayan}° (±{TOL}). An offset of 0° means the \
+             requested ayanamsha never reached the chart config and the caller \
+             was served a tropical chart under a sidereal label."
+        );
+        checked += 1;
+    }
+
+    // Planet longitudes rotate by the same amount — the cusps and the bodies
+    // must land in one frame, which is the defect `4b1bb58` fixed inside
+    // `compute_chart` and this asserts is still true when served.
+    let tp = trop["planets"].as_array().expect("planets missing");
+    let sp = sid["planets"].as_array().expect("planets missing");
+    assert_eq!(tp.len(), sp.len());
+    assert!(
+        tp.len() >= 9,
+        "expected the 9 Jyotish bodies, got {}",
+        tp.len()
+    );
+    for (t, s) in tp.iter().zip(sp.iter()) {
+        let name = t["name"].as_str().unwrap_or("<unnamed>");
+        assert_eq!(name, s["name"].as_str().unwrap_or("<unnamed>"));
+        let (tl, sl) = (
+            t["longitude"].as_f64().expect("planet longitude missing"),
+            s["longitude"].as_f64().expect("planet longitude missing"),
+        );
+        let offset = sep(tl, sl);
+        assert!(
+            (offset - ayan).abs() < TOL,
+            "served planet {name}: tropical {tl}°, sidereal {sl}° — offset \
+             {offset}°, expected the ayanamsha {ayan}° (±{TOL})"
+        );
+        // House number is invariant under a rigid rotation of the whole chart.
+        assert_eq!(
+            t["house"], s["house"],
+            "served planet {name} changed house between frames — a uniform \
+             rotation of the zodiac cannot move a planet between houses"
+        );
+        checked += 1;
+    }
+
+    assert!(
+        checked >= 23,
+        "only {checked} angles compared; the served-frame check must cover \
+         asc, mc, 12 cusps and every returned body"
+    );
+
+    // Secondary, and deliberately last: the frame the chart *reports*. This is
+    // a label check, weaker than the arithmetic above — a mutation could keep
+    // the summary honest while computing the wrong frame, or vice versa — so
+    // it runs only after the numbers have already proved the frame.
+    assert_eq!(
+        trop["config_summary"].as_str().unwrap(),
+        "Houses: Placidus, Zodiac: Tropical, Rulership: Traditional"
+    );
+    assert_eq!(
+        sid["config_summary"].as_str().unwrap(),
+        "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",
+        "the served chart reports a frame other than the one requested"
+    );
+}

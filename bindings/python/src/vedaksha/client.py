@@ -128,6 +128,15 @@ class Vedaksha:
 
         ``body`` is a NAIF id or a name in :data:`NAIF_IDS`. Requires a kernel
         loaded via :meth:`load_ephemeris`.
+
+        .. note::
+
+           ``julian_day`` here is **TDB**, unlike the MCP tools above (which
+           take UT1). This is a raw SPK segment query: the kernel's Chebyshev
+           coefficients are indexed by TDB seconds past J2000 and nothing on
+           this path applies a Delta T conversion, so the argument is passed
+           through to the kernel unchanged. :meth:`ephemeris_range` bounds are
+           on the same TDB scale.
         """
         naif = body if isinstance(body, int) else NAIF_IDS[body.lower()]
         x, y, z, vx, vy, vz = self._engine.spk_state(naif, julian_day)

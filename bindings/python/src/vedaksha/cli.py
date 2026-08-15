@@ -21,7 +21,13 @@ def _emit(obj: Any) -> None:
 
 
 def _add_location(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--julian-day", type=float, required=True, help="Julian Day (TT)")
+    p.add_argument(
+        "--julian-day",
+        type=float,
+        required=True,
+        help="Julian Day in UT1 (Universal Time), not TT/TDB — the engine "
+        "converts to TT internally for the dynamical terms",
+    )
     p.add_argument("--latitude", type=float, required=True)
     p.add_argument("--longitude", type=float, required=True)
 

@@ -31,7 +31,11 @@ vk = Vedaksha()
 for tool in vk.list_tools():
     print(tool["name"])
 
-# Typed wrapper for a natal chart / kundali (analytical ephemeris tier):
+# Typed wrapper for a natal chart / kundali (analytical ephemeris tier).
+# Every Julian Day on the tool surface is UT1 (Universal Time) — not TT, not
+# TDB. The engine converts to TT internally for the dynamical terms and uses
+# UT1 directly for the Earth's rotation, which sets the ascendant and all
+# twelve house cusps; passing TDB rotates every cusp by ~0.29 degrees.
 chart = vk.natal_chart(julian_day=2451545.0, latitude=28.6139, longitude=77.2090)
 
 # Every tool is callable by name — inspect its inputs with list_tools():
@@ -55,6 +59,9 @@ needs no data files. For sub-arcsecond accuracy, supply a JPL DE440s kernel:
 with open("de440s.bsp", "rb") as f:
     vk.load_ephemeris(f.read())
 
+# NOTE: this one Julian Day is TDB, not UT1. It is a raw SPK segment query —
+# the kernel's coefficients are tabulated against TDB and no Delta T
+# conversion is applied on this path.
 vk.state_vector("moon", julian_day=2451545.0)
 # {'x': ..., 'y': ..., 'z': ..., 'vx': ..., 'vy': ..., 'vz': ...}  # AU, ICRS
 ```

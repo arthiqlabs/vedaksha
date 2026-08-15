@@ -12,7 +12,11 @@ use crate::validation::{self, McpError};
 /// Input parameters for the `compute_vargas` tool.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ComputeVargasInput {
-    /// Julian Day number (TDB).
+    /// Julian Day number in **UT1** (Universal Time) — not TT, not TDB.
+    ///
+    /// Same scale as `compute_natal_chart`'s `julian_day`: the engine
+    /// converts to TT internally for the dynamical terms and uses UT1
+    /// directly for the Earth-rotation term.
     pub julian_day: f64,
     /// Geographic latitude in degrees \[-90, +90\].
     pub latitude: f64,
@@ -47,7 +51,11 @@ pub fn definition() -> super::ToolDefinition {
             "properties": {
                 "julian_day": {
                     "type": "number",
-                    "description": "Julian Day number (TDB)"
+                    "description": "Julian Day number in UT1 (Universal Time) \
+                        — not TT, not TDB. Same scale as compute_natal_chart's \
+                        julian_day: the engine converts to TT internally for the \
+                        dynamical terms and uses UT1 directly for the Earth-rotation \
+                        term."
                 },
                 "latitude": {
                     "type": "number",

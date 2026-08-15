@@ -14,7 +14,11 @@ use wasm_bindgen::prelude::*;
 ///
 /// # Arguments
 /// * `moon_longitude` — Moon's sidereal longitude in degrees [0, 360)
-/// * `birth_jd` — Julian Day of birth
+/// * `birth_jd` — Julian Day of birth, in **UT1** (Universal Time) — not TT,
+///   not TDB, i.e. the same scale the MCP `compute_dasha` tool takes. Dasha
+///   computation is ephemeris-free, so the epoch is carried through rather
+///   than converted and every returned `start_jd`/`end_jd` is on this same
+///   UT1 scale.
 /// * `levels` — Depth of sub-periods (1-5, default 3)
 ///
 /// # Returns
@@ -400,7 +404,13 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
 /// Optional: `second` (0), `ayanamsha` ("Lahiri"), `house_system` ("Placidus"),
 ///           `bodies` (default 9 Jyotish graha + nodes)
 ///
-/// Input datetime is UTC.
+/// Input datetime is **UTC** — a civil clock reading, not TT and not TDB.
+/// It is used directly as the UT1 rotational argument for sidereal time (and
+/// hence the ascendant, the MC and all twelve house cusps), and converted to
+/// TT internally for the dynamical terms (planetary positions, nutation,
+/// obliquity). UTC stands in for UT1 here: leap seconds hold |UT1 − UTC| ≤
+/// 0.9 s, worth 360.98564736629 °/day × 0.9 s / 86400 s = 0.0038° (13.5″) of
+/// RAMC — two orders below the 0.289° a TT/TDB argument would cost.
 ///
 /// # Returns
 /// JSON string with planets, houses, aspects, ayanamsha value, Julian Day.
@@ -955,6 +965,180 @@ mod tests {
         assert!(
             (ayan - 23.856).abs() < 0.1,
             "Lahiri should be ~23.856°, got {ayan}"
+        );
+    }
+
+    /// A **served** sidereal request must produce a **sidereal** chart —
+    /// the `vedaksha-wasm` twin of
+    /// `vedaksha-mcp/tests/invariants.rs::served_sidereal_request_yields_a_sidereal_chart`.
+    ///
+    /// This surface exposes exactly the same chart path as the MCP handler
+    /// (`compute_chart` fed a UT1 RAMC and a `ChartConfig`), so it inherits
+    /// the same gap: nothing checked that the caller's `ayanamsha` string
+    /// reached the config. `compute_natal_chart_inner_known_chart` above looks
+    /// like it covers this and does not — `ayanamsha_value` is serialised from
+    /// `ayanamsha_system` directly, on a separate line from the `ChartConfig`,
+    /// so forcing `ayanamsha: Some(Ayanamsha::Tropical)` into the config
+    /// leaves that assertion reading a healthy 23.856° while every longitude
+    /// in the chart is tropical.
+    ///
+    /// # The property
+    ///
+    /// Two charts at the same instant, observer and house system, differing
+    /// only in the `ayanamsha` field:
+    ///
+    /// ```text
+    /// sidereal_x = normalize(tropical_x − ayanamsha_value(Lahiri, jd))
+    /// ```
+    ///
+    /// for `asc`, `mc`, all twelve cusps and every planet longitude. No
+    /// external oracle — the right-hand side comes from the same public
+    /// `ayanamsha_value` a caller would use, and the identity is the
+    /// definition of a sidereal frame.
+    ///
+    /// # Derivation
+    ///
+    /// 2000-01-01 00:00 UTC is `calendar_to_jd(2000, 1, 1.0)` = 2451544.5, so
+    /// this is the same instant and observer as the MCP twin and must produce
+    /// the same numbers:
+    ///
+    /// - `ayanamsha_value(Lahiri, 2451544.5)` = 23.857073774210527°
+    /// - tropical `asc` = 255.288134034110612°, sidereal `asc` = 231.431060259900079°
+    /// - 255.288134034110612 − 23.857073774210527 = 231.431060259900085
+    ///
+    /// Tolerance 1e-9° is a floating-point allowance: the observed residual is
+    /// below 1e-13°, and the failure it must catch is 23.857°.
+    ///
+    /// # Mutation, measured
+    ///
+    /// Forcing `ayanamsha: Some(vedaksha_astro::sidereal::Ayanamsha::Tropical)`
+    /// into the `ChartConfig` collapses the measured offset from
+    /// 23.857073774211° to 0° and fails this test on `asc`, `mc`, all twelve
+    /// cusps and every planet — while `compute_natal_chart_inner_known_chart`
+    /// stays green.
+    #[test]
+    fn served_sidereal_request_yields_a_sidereal_chart() {
+        use vedaksha_astro::sidereal::{Ayanamsha, ayanamsha_value};
+        use vedaksha_math::angle::normalize_degrees;
+
+        let served = |ayanamsha: &str| -> serde_json::Value {
+            let input = NatalChartInput {
+                year: 2000,
+                month: 1,
+                day: 1,
+                hour: 0,
+                minute: 0,
+                second: 0,
+                latitude: 28.6139,
+                longitude: 77.209,
+                ayanamsha: ayanamsha.to_string(),
+                house_system: "Placidus".to_string(),
+                bodies: default_bodies(),
+            };
+            let json = compute_natal_chart_inner(input)
+                .unwrap_or_else(|e| panic!("compute_natal_chart_inner({ayanamsha}) failed: {e}"));
+            serde_json::from_str(&json).unwrap()
+        };
+
+        let trop = served("Tropical");
+        let sid = served("Lahiri");
+
+        let jd = trop["julian_day"].as_f64().expect("julian_day missing");
+        assert!(
+            (jd - 2_451_544.5).abs() < 1e-9,
+            "expected calendar_to_jd(2000, 1, 1.0) = 2451544.5, got {jd}"
+        );
+        assert!(
+            (sid["julian_day"].as_f64().unwrap() - jd).abs() < 1e-9,
+            "the two charts must be at the same instant"
+        );
+
+        // Guard: a degenerate ayanamsha makes every assertion below vacuous.
+        let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
+        assert!(
+            ayan > 20.0,
+            "ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected ~23.86°. With a \
+             near-zero ayanamsha this test cannot tell a sidereal chart from a \
+             tropical one."
+        );
+
+        // Signed shortest separation, so the 0°/360° wrap cannot mask a
+        // failure or manufacture one.
+        let sep = |a: f64, b: f64| -> f64 {
+            let d = normalize_degrees(a - b);
+            if d > 180.0 { d - 360.0 } else { d }
+        };
+        const TOL: f64 = 1e-9;
+
+        let mut angles: Vec<(String, f64, f64)> = vec![
+            (
+                "asc".to_string(),
+                trop["houses"]["asc"].as_f64().expect("houses.asc missing"),
+                sid["houses"]["asc"].as_f64().expect("houses.asc missing"),
+            ),
+            (
+                "mc".to_string(),
+                trop["houses"]["mc"].as_f64().expect("houses.mc missing"),
+                sid["houses"]["mc"].as_f64().expect("houses.mc missing"),
+            ),
+        ];
+        for i in 0..12 {
+            angles.push((
+                format!("cusp {}", i + 1),
+                trop["houses"]["cusps"][i]
+                    .as_f64()
+                    .unwrap_or_else(|| panic!("houses.cusps[{i}] missing")),
+                sid["houses"]["cusps"][i]
+                    .as_f64()
+                    .unwrap_or_else(|| panic!("houses.cusps[{i}] missing")),
+            ));
+        }
+
+        for (label, t, s) in &angles {
+            let offset = sep(*t, *s);
+            assert!(
+                (offset - ayan).abs() < TOL,
+                "served {label}: tropical {t}°, sidereal {s}° — offset {offset}°, \
+                 expected the ayanamsha {ayan}° (±{TOL}). An offset of 0° means \
+                 the requested ayanamsha never reached the ChartConfig and the \
+                 caller was served a tropical chart under a sidereal label."
+            );
+        }
+
+        let tp = trop["planets"].as_array().expect("planets missing");
+        let sp = sid["planets"].as_array().expect("planets missing");
+        assert_eq!(tp.len(), sp.len());
+        assert_eq!(tp.len(), 9, "expected the 9 default Jyotish bodies");
+        for (t, s) in tp.iter().zip(sp.iter()) {
+            let name = t["name"].as_str().unwrap_or("<unnamed>");
+            let (tl, sl) = (
+                t["longitude"].as_f64().expect("planet longitude missing"),
+                s["longitude"].as_f64().expect("planet longitude missing"),
+            );
+            let offset = sep(tl, sl);
+            assert!(
+                (offset - ayan).abs() < TOL,
+                "served planet {name}: tropical {tl}°, sidereal {sl}° — offset \
+                 {offset}°, expected the ayanamsha {ayan}° (±{TOL})"
+            );
+            assert_eq!(
+                t["house"], s["house"],
+                "served planet {name} changed house between frames — a uniform \
+                 rotation of the zodiac cannot move a planet between houses"
+            );
+        }
+
+        // Secondary, deliberately last: the frame the chart *reports*. Weaker
+        // than the arithmetic above, so it runs only after the numbers have
+        // already proved the frame.
+        assert_eq!(
+            trop["config_summary"].as_str().unwrap(),
+            "Houses: Placidus, Zodiac: Tropical, Rulership: Traditional"
+        );
+        assert_eq!(
+            sid["config_summary"].as_str().unwrap(),
+            "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",
+            "the served chart reports a frame other than the one requested"
         );
     }
 
