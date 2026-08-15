@@ -567,11 +567,13 @@ impl McpServer {
         // accessor in this file; do not invent one.
         let provider = AnalyticalProvider;
         let sun_eq = |jd: f64| sun_equatorial_deg(&provider, jd);
-        // ONE sunrise scan for both the vara and the kalam windows:
-        // `kalam_windows` now returns the vara it derived internally, so
-        // there is no second, separate `vara_at` call here re-running the
-        // same 5-minute-resolution horizon scan a second time. See the
-        // fix-pass report for the measured before/after cost.
+        // ONE sunrise search for both the vara and the kalam windows:
+        // `kalam_windows` returns the vara it derived internally, so there is
+        // no second, separate `vara_at` call here repeating the same horizon
+        // search. That mattered more when the search was a 5-minute scan and
+        // still matters now that it is analytic (Meeus eq. 15.1, see
+        // `vedaksha_astro::riseset`), because the ephemeris evaluation behind
+        // it is the expensive part either way.
         let reckoning = vedaksha_vedic::muhurta::kalam_windows(
             input.jd,
             input.latitude,

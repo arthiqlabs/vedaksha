@@ -19,27 +19,38 @@ pub const MAX_TRANSIT_SEARCH_DAYS: f64 = 36_525.0;
 
 /// Maximum `search_muhurta` search span in days.
 ///
-/// `search_muhurta` is far more expensive per day of range than a transit
-/// search: every 0.5-day step needs Sun/Moon sidereal longitudes, and each
-/// distinct vara needs a `vara_with_validity` call (`vedaksha_vedic::muhurta`)
-/// — two 5-minute-resolution horizon scans, typically ~288 steps each but
-/// with a hard bound of 1152 steps / 4 days
-/// (`vedaksha_astro::riseset::RISE_SEARCH_STEPS`, the margin kept for
-/// latitudes just inside the polar circles) (`previous_rise` for the opening
-/// sunrise, `next_rise` for the closing one, both anchored on the query
-/// instant), plus a
-/// `compute_tithi_end`/`compute_nakshatra_end` refinement for every window
-/// that passes `min_quality`. Measured directly in release mode (not
-/// extrapolated): a real 30-day `search_muhurta` call at Chennai (lat 13.08,
-/// lon 80.27) via the full MCP handler took ~15.9 s — about 530 ms per day
-/// of range. [`MAX_TRANSIT_SEARCH_DAYS`] (100 years) applied to this tool
-/// would be ~36,525 × 0.53 s ≈ 5.4 **hours**, which is a tool call that
-/// would appear to hang rather than fail fast. 30 days keeps worst-case
-/// latency at the ~16 s actually measured — slow for a synchronous call but
-/// not indefinite — and still comfortably covers the practical use case
-/// (electing an auspicious date within the next few weeks); a caller
-/// wanting a longer horizon should issue several shorter searches rather
-/// than one that risks timing out its own client.
+/// # This is a RATIFIED PRODUCT LIMIT, not a derived one
+///
+/// 30 days is the horizon this tool supports, decided as product scope and
+/// ratified by the owner. It must **not** be raised, and in particular it must
+/// not be recomputed from whatever the engine's current per-day cost happens
+/// to be.
+///
+/// That warning is here because this constant used to justify itself from a
+/// measurement: the sunrise search behind every vara was a 5-minute horizon
+/// scan (up to 1152 steps per direction), a 30-day call at Chennai measured
+/// ~15.9 s end to end, and 30 was presented as "the span that keeps worst-case
+/// latency near 16 s". That derivation is now **false**:
+/// `vedaksha_astro::riseset` finds sunrise analytically from Meeus eq. 15.1
+/// instead of scanning, which cut the cost of the search by more than an order
+/// of magnitude. Anyone re-deriving the limit from the new cost would arrive
+/// at a much larger number — and would be answering a question the limit was
+/// never an answer to.
+///
+/// The reasons the limit stands are unchanged by any performance work:
+///
+/// * It covers the actual use case. Electing an auspicious date is a
+///   next-few-weeks activity; a caller wanting a longer horizon should issue
+///   several shorter searches, which also gives them partial results sooner.
+/// * It bounds a synchronous tool call. [`MAX_TRANSIT_SEARCH_DAYS`] (100
+///   years) applied here would still be three orders of magnitude more work
+///   than 30 days, however fast a day becomes — a call that appears to hang
+///   rather than failing fast.
+/// * A validated, rejected request is a better outcome for a calling agent
+///   than a slow one: the error names the limit and suggests the fix.
+///
+/// If the limit should change, that is a product decision to take with the
+/// owner, not a number to recompute here.
 pub const MAX_MUHURTA_SEARCH_DAYS: f64 = 30.0;
 
 /// Structured MCP error response with a machine-readable code and
@@ -96,8 +107,8 @@ impl McpError {
 
     /// Muhurta search window is larger than [`MAX_MUHURTA_SEARCH_DAYS`]. A
     /// distinct error code from [`Self::search_range_too_large`] because the
-    /// two tools have very different per-day costs and so very different
-    /// limits — see [`MAX_MUHURTA_SEARCH_DAYS`] for the derivation.
+    /// two tools have very different limits — see
+    /// [`MAX_MUHURTA_SEARCH_DAYS`], which is a ratified product limit.
     #[must_use]
     pub fn muhurta_search_range_too_large(days: f64) -> Self {
         Self {
@@ -198,9 +209,10 @@ pub fn validate_search_span(start_jd: f64, end_jd: f64) -> Result<(), McpError> 
 ///
 /// Both endpoints are validated individually and the absolute span must not
 /// exceed [`MAX_MUHURTA_SEARCH_DAYS`] — a much tighter bound than
-/// [`validate_search_span`]'s [`MAX_TRANSIT_SEARCH_DAYS`], because
-/// `search_muhurta` costs roughly two orders of magnitude more per day of
-/// range (see [`MAX_MUHURTA_SEARCH_DAYS`]'s derivation).
+/// [`validate_search_span`]'s [`MAX_TRANSIT_SEARCH_DAYS`]. That bound is a
+/// ratified product limit rather than a performance figure; see
+/// [`MAX_MUHURTA_SEARCH_DAYS`], and do not re-derive it from the engine's
+/// current cost.
 ///
 /// # Errors
 ///

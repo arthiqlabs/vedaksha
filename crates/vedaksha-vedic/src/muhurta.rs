@@ -730,17 +730,17 @@ pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) 
 ///
 /// # Performance
 ///
-/// One [`vara_with_validity`] call costs roughly 2 × (up to 1152 coarse scan
-/// steps + bisection) `equatorial` evaluations: the backward and forward
-/// searches each step outward from `jd_ut` at 5-minute resolution and stop at
-/// the first horizon crossing. Away from the polar circles that crossing is
-/// at most one rotation away — typically ~288 steps — but the search's hard
-/// bound (`vedaksha_astro::riseset::RISE_SEARCH_STEPS`) is 1152 steps (4
-/// days), the margin kept for latitudes just inside the polar circles, where
-/// a body can fail to clear the horizon on one rotation and clear it on the
-/// next. Deriving the vara fresh at every 0.5-day step would put a one-year
-/// search near 420,000 evaluations — a latency regression measured in minutes
-/// on a tool that is otherwise fast. The vara is constant
+/// One [`vara_with_validity`] call costs roughly 2 × a dozen `equatorial`
+/// evaluations: the backward and forward searches each converge on their
+/// horizon crossing analytically from Meeus eq. 15.1
+/// (`vedaksha_astro::riseset`), re-evaluating the Sun's position only once per
+/// iteration. That replaced a 5-minute outward scan whose cost was 2 × (up to
+/// 1152 steps + bisection) — typically ~288 steps a direction, with the
+/// four-day hard bound reserved for latitudes just inside the polar circles,
+/// where a body can fail to clear the horizon on one rotation and clear it on
+/// the next. Even at the new cost, deriving the vara fresh at every 0.5-day
+/// step would repeat that work ~730 times for a one-year search, so the memo
+/// below still earns its place. The vara is constant
 /// over `[start, end)` — sunrise to the next sunrise — so this memoises on
 /// that exact interval (as returned by [`vara_with_validity`]) and recomputes
 /// only when `jd` falls outside it. That is not an approximation: unlike
@@ -1370,10 +1370,13 @@ mod tests {
     /// sunrise-to-sunrise interval — takes `360 / 360.98564736629` days =
     /// `0.9972695663290739` d, about 3 min 56 s short of a solar day. This
     /// was verified independently against this exact code (temporary probe,
-    /// since removed): at the pinned worst case below the fixed function
-    /// returns a `0.9972695661708713`-day interval, matching the closed form
-    /// to 9 significant figures — the tiny residual is the GMST polynomial's
-    /// `T²` term (negligible over one day) plus bisection resolution, not a
+    /// since removed): at the pinned worst case below (lat 0, lon 158.4) the
+    /// fixed function returned a `0.9972695661708713`-day interval, and
+    /// re-measured against the analytic Meeus Ch. 15 search that replaced the
+    /// 5-minute scan it returns `0.9972695666365325` d — the two differ by
+    /// 4.7e-10 d, one ULP. Both match the closed form to 9 significant
+    /// figures; the tiny residual is the GMST polynomial's `T²` term
+    /// (negligible over one day) plus the resolution of the root finder, not a
     /// modeling gap.
     #[test]
     fn vara_with_validity_never_spans_more_than_one_vara() {
@@ -1382,10 +1385,13 @@ mod tests {
         // sunrise-to-sunrise spacing, not the caller-facing solar day.
         const SIDEREAL_SPACING_DAYS: f64 = 0.997_269_566_329_073_9;
         // Measured bound on how far any single sample's interval length
-        // strayed from that constant across this exact sweep (max observed
-        // 7.7e-10 d, from the GMST polynomial's tiny T² term plus bisection
-        // resolution) — 1e-6 leaves three orders of margin without being
-        // loose enough to let a real one-day slip through undetected.
+        // strayed from that constant across this exact sweep: 7.7e-10 d
+        // against the 5-minute scan plus bisection, re-measured at
+        // 3.0745861412384556e-10 d (worst at lon −180) against the analytic
+        // Meeus Ch. 15 search that replaced it — both from the GMST
+        // polynomial's tiny T² term plus the root finder's own ULP-scale
+        // resolution. 1e-6 leaves three orders of margin over either without
+        // being loose enough to let a real one-day slip through undetected.
         const TOLERANCE_DAYS: f64 = 1e-6;
 
         let lat = 0.0;
@@ -1472,15 +1478,25 @@ mod tests {
     /// (**Monday**) the old code returned. That coarse scan's own resolution
     /// (~1 s ≈ 1.16e-5 d) does not, by itself, support the ~1e-10-day
     /// precision of the literals asserted below: those are `start`/`end` as
-    /// this test's own call to `vara_with_validity` — i.e. the bisected roots
-    /// `previous_rise`/`next_rise` converge to (`search_rise`'s `bisect`, 40
-    /// halvings of a 5-minute bracket, resolution ≈3e-15 d) — actually
-    /// produced, re-measured directly against the fixed implementation: the
-    /// residual between the literal below and a fresh run was ≤4.7e-10 d
-    /// (one ULP at this JD's magnitude). The 1e-6 d assertion tolerance is
-    /// therefore not tied to the coarse scan's resolution; it is kept three
-    /// orders of magnitude looser than that measured ULP-level residual on
-    /// purpose, for headroom, not because 1e-6 d is the achieved precision.
+    /// this test's own call to `vara_with_validity` — i.e. the roots
+    /// `previous_rise`/`next_rise` converge to — actually produced,
+    /// re-measured directly against the implementation: the residual between
+    /// the literal below and a fresh run was ≤4.7e-10 d (one ULP at this JD's
+    /// magnitude). The 1e-6 d assertion tolerance is therefore not tied to the
+    /// coarse scan's resolution; it is kept three orders of magnitude looser
+    /// than that measured ULP-level residual on purpose, for headroom, not
+    /// because 1e-6 d is the achieved precision.
+    ///
+    /// ⚠️ That headroom means this assertion does NOT constrain the last
+    /// digits. When the sunrise search moved from a 5-minute scan plus
+    /// bisection to the analytic Meeus Ch. 15 iteration, `start` moved from
+    /// 2451554.4998116549104452 to 2451554.4998116544447839 and `end` from
+    /// 2451555.4970812210813165 to 2451555.4970812206156552 — one ULP each,
+    /// 4.0e-5 s — and this test could not have seen it. The literals below
+    /// were re-derived from the current implementation anyway (they already
+    /// happened to match its value, not the old one); the assertion that
+    /// actually pins the search at ULP resolution is
+    /// `vedaksha_astro::riseset`'s scan-oracle sweep.
     ///
     /// ⚠️ `tz_offset_minutes` MUST be non-zero here. At tz 0 the two candidate
     /// sunrises usually floor to the same weekday, which is exactly why every
@@ -1535,12 +1551,21 @@ mod tests {
     /// above, that scan's own ~1-second (~1.16e-5 d) resolution is coarser
     /// than the ~1e-10-day precision of the literals asserted below; those
     /// are `start`/`end` as this test's own call to `vara_with_validity`
-    /// actually produces — the bisected roots `previous_rise`/`next_rise`
-    /// converge to (`search_rise`'s `bisect`, resolution ≈3e-15 d) —
-    /// re-measured directly against the fixed implementation with a residual
-    /// of 0 (bit-exact) between the literal and a fresh run. The 1e-6 d
-    /// tolerance below is headroom over that measured residual, not a
-    /// restatement of the coarse scan's resolution.
+    /// actually produces — the roots `previous_rise`/`next_rise` converge to —
+    /// re-measured directly against the implementation with a residual of 0
+    /// (bit-exact) between the literal and a fresh run. The 1e-6 d tolerance
+    /// below is headroom over that measured residual, not a restatement of the
+    /// coarse scan's resolution.
+    ///
+    /// ⚠️ As in the `flat_sun` regression above, that headroom means the
+    /// assertion does not constrain the last digits. Moving the sunrise search
+    /// from the 5-minute scan plus bisection to the analytic Meeus Ch. 15
+    /// iteration left `start` BIT-EXACTLY unchanged
+    /// (2459112.4999994197860360) and moved `end` by one ULP, from
+    /// 2459113.4995836885645986 to 2459113.4995836890302598 — 4.0e-5 s. Both
+    /// literals were re-derived from the current implementation; the test that
+    /// pins the search at ULP resolution is `vedaksha_astro::riseset`'s
+    /// scan-oracle sweep.
     #[test]
     fn vara_with_validity_pins_the_real_sun_two_sunrises_regression() {
         use vedaksha_astro::riseset::sun_equatorial_deg;
