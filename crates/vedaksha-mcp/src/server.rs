@@ -563,7 +563,7 @@ impl McpServer {
         // ONE sunrise scan for both the vara and the kalam windows:
         // `kalam_windows` now returns the vara it derived internally, so
         // there is no second, separate `vara_at` call here re-running the
-        // same ~2100-evaluation 5-minute day scan a second time. See the
+        // same 5-minute-resolution horizon scan a second time. See the
         // fix-pass report for the measured before/after cost.
         let (weekday, kalams) = vedaksha_vedic::muhurta::kalam_windows(
             input.jd,

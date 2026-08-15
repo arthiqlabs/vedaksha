@@ -31,6 +31,21 @@ const SCAN_STEP_DAYS: f64 = 5.0 / 1440.0;
 /// cannot spin on a pathological closure.
 const BISECT_ITERS: u32 = 40;
 
+/// Number of [`SCAN_STEP_DAYS`] steps [`previous_rise`] and [`next_rise`] walk
+/// outward from their anchor instant before giving up: four days at five
+/// minutes a step.
+///
+/// Consecutive rises of a body are one rotation apart — one solar day for the
+/// real Sun, one *sidereal* day (`360 / 360.98564736629` = 0.9972695663 d) for
+/// a body held at fixed right ascension — so a single day of search always
+/// suffices away from the polar circles. Four days keeps margin for the
+/// latitudes just inside those circles, where a body can fail to clear the
+/// horizon on one rotation and clear it on the next, and matches the four-day
+/// bound of the calendar-day walk these functions replaced in
+/// `vedaksha_vedic::muhurta`. Written as integer arithmetic so the step count
+/// needs no float `as` cast: `4 · 24 · 60 / 5` = 1152.
+const RISE_SEARCH_STEPS: u32 = 4 * 24 * 60 / 5;
+
 /// Rise, set and upper-meridian transit of a body, as Julian Days (UT).
 ///
 /// Any field is `None` when that event does not occur within the scanned day —
@@ -135,6 +150,16 @@ fn bisect(mut lo: f64, mut hi: f64, f: &dyn Fn(f64) -> Option<f64>) -> Option<f6
 /// longitude where the window opens during local daytime, the set precedes
 /// the rise. A caller pairing them into a "daytime" must order them itself —
 /// scanning forward from the rise instant is the reliable way.
+///
+/// ⚠️ A second consequence of "first event in the window": when the body's
+/// rotation period is SHORTER than the 24 h scanned, two rises fall inside one
+/// window and only the earlier is reported. That is always the case for a body
+/// at fixed right ascension (one sidereal day, 0.99727 d) and true for the real
+/// Sun over roughly half the year. **Do not enumerate successive rises by
+/// stepping this window along the calendar** — the second rise of a window is
+/// invisible to that idiom, so the walk settles on a stale event. Use
+/// [`previous_rise`] / [`next_rise`], which anchor on the instant instead of on
+/// a calendar boundary and cannot skip a crossing.
 ///
 /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
 #[must_use]
@@ -254,6 +279,138 @@ pub fn sun_rise_set(
 ) -> RiseSet {
     let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation_m);
     rise_set(jd_ut_day_start, lat_deg, lon_deg_east, h0, equatorial)
+}
+
+/// The nearest upward crossing of `h0_deg` on one side of `anchor` — the
+/// INSTANT-anchored primitive [`previous_rise`] and [`next_rise`] share.
+///
+/// Unlike [`rise_set`], whose scan window is a fixed 24 h fixed by the caller
+/// and which therefore reports only the FIRST rise inside it, this walks
+/// outward from `anchor` itself in [`SCAN_STEP_DAYS`] steps and stops at the
+/// first crossing it meets. A rotation shorter than 24 h therefore cannot hide
+/// a second rise behind the first: there is no window for two rises to share.
+///
+/// `forward = true` searches the future and accepts a crossing strictly after
+/// `anchor`; `forward = false` searches the past and accepts one at or before
+/// it. The acceptance test is applied to the bisected root itself, not to the
+/// bracket, so the returned instant satisfies its inequality against `anchor`
+/// by construction rather than by an argument about window arithmetic. A
+/// candidate that fails it — which needs `anchor` to sit within float noise of
+/// a crossing, since the bracket containing `anchor` is the only one whose root
+/// can land on the wrong side — is rejected and the walk continues outward.
+///
+/// Returns `None` when no accepted crossing is found within
+/// [`RISE_SEARCH_STEPS`] steps (polar day and polar night), or as soon as
+/// `equatorial` fails to supply a position.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
+fn search_rise(
+    anchor: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    h0_deg: f64,
+    forward: bool,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Option<f64> {
+    // Altitude relative to the target — zero exactly at a horizon crossing.
+    // Same definition `rise_set` uses; deliberately not routed through
+    // `rise_set` itself, whose first-event-per-window contract is the thing
+    // this function exists to avoid.
+    let rel_alt = |jd: f64| -> Option<f64> {
+        let (ra, dec) = equatorial(jd)?;
+        Some(geometric_altitude_deg(ra, dec, jd, lat_deg, lon_deg_east) - h0_deg)
+    };
+
+    let step = if forward {
+        SCAN_STEP_DAYS
+    } else {
+        -SCAN_STEP_DAYS
+    };
+    let mut near = anchor;
+    let mut near_alt = rel_alt(near)?;
+
+    for _ in 0..RISE_SEARCH_STEPS {
+        let far = near + step;
+        let far_alt = rel_alt(far)?;
+        // Re-order the pair into (earlier, later) so the rising test and the
+        // bisection bracket read the same in both directions.
+        let (lo, hi, lo_alt, hi_alt) = if forward {
+            (near, far, near_alt, far_alt)
+        } else {
+            (far, near, far_alt, near_alt)
+        };
+        if lo_alt < 0.0 && hi_alt >= 0.0 {
+            if let Some(root) = bisect(lo, hi, &rel_alt) {
+                let accepted = if forward {
+                    root > anchor
+                } else {
+                    root <= anchor
+                };
+                if accepted {
+                    return Some(root);
+                }
+            }
+        }
+        near = far;
+        near_alt = far_alt;
+    }
+
+    None
+}
+
+/// The most recent rise of a body **at or before** `jd_ut`, as a Julian Day
+/// (UT), for an observer at `lat_deg` / `lon_deg_east` and `elevation_m` above
+/// sea level.
+///
+/// Specialised to the Sun's horizon: [`SUN_STANDARD_ALTITUDE_DEG`] plus
+/// [`horizon_dip_deg`], the same target [`sun_rise_set`] applies.
+///
+/// This is the correct primitive for reckoning a day that begins at sunrise —
+/// the Vedic vara. Walking [`sun_rise_set`]'s 24 h window back along the
+/// calendar is NOT: two sunrises fall in one such window whenever the
+/// inter-sunrise gap is under a day, the second is never reported, and the walk
+/// settles on a sunrise a whole day too early. See the ⚠️ note on [`rise_set`].
+///
+/// Returns `None` when the body does not rise within the search bound
+/// ([`RISE_SEARCH_STEPS`] steps ≈ 4 days) — polar night, polar day, or an
+/// `equatorial` closure that cannot supply a position.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
+#[must_use]
+pub fn previous_rise(
+    jd_ut: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    elevation_m: f64,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Option<f64> {
+    let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation_m);
+    search_rise(jd_ut, lat_deg, lon_deg_east, h0, false, equatorial)
+}
+
+/// The first rise of a body **strictly after** `jd_ut`, as a Julian Day (UT),
+/// for an observer at `lat_deg` / `lon_deg_east` and `elevation_m` above sea
+/// level.
+///
+/// The forward counterpart of [`previous_rise`], sharing its horizon target and
+/// its search bound. Pairing the two around one instant yields the half-open
+/// interval `[previous_rise, next_rise)` that contains it — containment holding
+/// by construction, since each side is accepted only if it satisfies its own
+/// inequality against `jd_ut`.
+///
+/// Returns `None` when the body does not rise within the search bound.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
+#[must_use]
+pub fn next_rise(
+    jd_ut: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    elevation_m: f64,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Option<f64> {
+    let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation_m);
+    search_rise(jd_ut, lat_deg, lon_deg_east, h0, true, equatorial)
 }
 
 #[cfg(test)]
@@ -523,6 +680,172 @@ mod tests {
         assert!(
             s1 > s0,
             "elevated set ({s1}) must be later than sea-level set ({s0})"
+        );
+    }
+
+    /// A Sun held at fixed right ascension, as `vedaksha_vedic::muhurta`'s own
+    /// tests use it. Its rises recur once per SIDEREAL rotation, which is what
+    /// makes the two-rises-in-one-window case below reproducible at will.
+    fn flat_sun(_jd: f64) -> Option<(f64, f64)> {
+        Some((0.0, 0.0))
+    }
+
+    /// One sidereal rotation in days: `360 / 360.98564736629`, the GMST rate
+    /// of Meeus eq. 12.4 as implemented by
+    /// `vedaksha_ephem_core::sidereal_time::gmst`. With `flat_sun`'s RA and
+    /// declination both fixed, the altitude depends on the local hour angle
+    /// `H = LST − RA` alone, so one full cycle of `H` — and hence one
+    /// rise-to-rise interval — takes exactly this long: 0.9972695663290739 d,
+    /// about 3 min 56 s SHORT of the 1.0 d window `rise_set` scans. That
+    /// shortfall is precisely why two rises fit in one window.
+    const SIDEREAL_ROTATION_DAYS: f64 = 0.997_269_566_329_073_9;
+
+    /// THE BUG CLASS, stated directly against this module rather than through
+    /// a caller: because one sidereal rotation is shorter than the 24 h
+    /// [`rise_set`] scans, TWO rises fall inside a single window and
+    /// [`sun_rise_set`] — first event per window, by contract — reports only
+    /// the earlier one. Any walk that enumerates sunrises by stepping that
+    /// window along the calendar therefore skips the later one silently.
+    ///
+    /// Measured directly with this fixture (probe run, since removed) at lat
+    /// −9°, lon 159.4°, window `[JD 2451553.5, 2451554.5]`: rises land at JD
+    /// 2451553.5025420883 and JD 2451554.4998116544 — both inside the window,
+    /// 0.99727 d apart. `sun_rise_set` returns the first; `next_rise` anchored
+    /// on it finds the second; `previous_rise` anchored at the window's close
+    /// returns the second, which is the one a sunrise-reckoned day needs.
+    #[test]
+    fn two_rises_share_one_scan_window_and_only_the_instant_anchored_search_sees_both() {
+        let (lat, lon) = (-9.0, 159.4);
+        let window_start = 2_451_553.5;
+        let window_end = window_start + 1.0;
+
+        let first = sun_rise_set(window_start, lat, lon, 0.0, &flat_sun)
+            .rise
+            .expect("the fixture rises every sidereal day at this latitude");
+        let second = next_rise(first, lat, lon, 0.0, &flat_sun).expect("a second rise follows");
+
+        assert!(
+            second < window_end,
+            "precondition: the second rise ({second}) must fall inside the SAME \
+             window [{window_start}, {window_end}] that `sun_rise_set` reported \
+             only {first} from — otherwise this test does not exercise the bug"
+        );
+        assert!(
+            libm::fabs((second - first) - SIDEREAL_ROTATION_DAYS) < 1e-6,
+            "consecutive rises must be one sidereal rotation apart: got {} d, \
+             expected {SIDEREAL_ROTATION_DAYS} d",
+            second - first
+        );
+
+        let latest = previous_rise(window_end, lat, lon, 0.0, &flat_sun)
+            .expect("a rise precedes the window's close");
+        assert!(
+            libm::fabs(latest - second) < 1e-9,
+            "previous_rise must return the LATER of the two rises in the window \
+             ({second}), not the one `sun_rise_set` reports ({first}) — got {latest}"
+        );
+    }
+
+    /// `[previous_rise(t), next_rise(t))` must contain `t` for every `t`, and
+    /// its width must be one rise-to-rise spacing — never two. Swept across a
+    /// full 360° of longitude at 1° steps and three latitudes; the muhurta
+    /// crate carries the same sweep at 0.01° resolution against the caller.
+    #[test]
+    fn previous_and_next_rise_bracket_the_instant_across_a_longitude_sweep() {
+        let jd = 2_451_554.75;
+        let mut checked = 0_u32;
+        for lat in [-45.0_f64, -9.0, 0.0, 33.0] {
+            let mut lon_i = -180_i32;
+            while lon_i <= 180 {
+                let lon = f64::from(lon_i);
+                let prev = previous_rise(jd, lat, lon, 0.0, &flat_sun)
+                    .unwrap_or_else(|| panic!("lat={lat} lon={lon}: a rise must precede {jd}"));
+                let next = next_rise(jd, lat, lon, 0.0, &flat_sun)
+                    .unwrap_or_else(|| panic!("lat={lat} lon={lon}: a rise must follow {jd}"));
+                assert!(
+                    prev <= jd && jd < next,
+                    "lat={lat} lon={lon}: [{prev}, {next}) does not contain {jd}"
+                );
+                assert!(
+                    libm::fabs((next - prev) - SIDEREAL_ROTATION_DAYS) < 1e-6,
+                    "lat={lat} lon={lon}: bracket width {} d is not one sidereal \
+                     rotation ({SIDEREAL_ROTATION_DAYS} d)",
+                    next - prev
+                );
+                checked += 1;
+                lon_i += 1;
+            }
+        }
+        assert_eq!(checked, 4 * 361, "sanity: 4 latitudes × 361 longitudes");
+    }
+
+    /// The inequalities are strict in the one direction each and inclusive in
+    /// the other, so anchoring exactly ON a rise must not return that same
+    /// instant from `next_rise`. `previous_rise` may — "at or before".
+    #[test]
+    fn anchoring_exactly_on_a_rise_respects_the_strictness_of_each_side() {
+        let (lat, lon) = (0.0, 0.0);
+        let rise = sun_rise_set(2_451_544.5, lat, lon, 0.0, &flat_sun)
+            .rise
+            .expect("the fixture rises at the equator");
+
+        let next = next_rise(rise, lat, lon, 0.0, &flat_sun).expect("a rise follows");
+        assert!(
+            next > rise,
+            "next_rise must be STRICTLY after its anchor: anchor {rise}, got {next}"
+        );
+        assert!(
+            libm::fabs((next - rise) - SIDEREAL_ROTATION_DAYS) < 1e-6,
+            "the rise after a rise is one rotation later, got {} d",
+            next - rise
+        );
+
+        let prev = previous_rise(rise, lat, lon, 0.0, &flat_sun).expect("a rise is at or before");
+        assert!(
+            prev <= rise,
+            "previous_rise must be at or before its anchor: anchor {rise}, got {prev}"
+        );
+    }
+
+    /// Polar night: the search must run out its bound and report `None` rather
+    /// than inventing a crossing. Same observer and body as
+    /// `polar_night_yields_no_rise_and_no_set`.
+    #[test]
+    fn polar_night_yields_no_previous_or_next_rise() {
+        let sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
+        assert_eq!(previous_rise(2_451_545.0, 78.22, 15.65, 0.0, &sun), None);
+        assert_eq!(next_rise(2_451_545.0, 78.22, 15.65, 0.0, &sun), None);
+    }
+
+    /// A closure that cannot supply a position must degrade to `None` here
+    /// too, not panic and not report an arbitrary instant.
+    #[test]
+    fn unavailable_ephemeris_yields_no_previous_or_next_rise() {
+        let sun = |_jd: f64| None;
+        assert_eq!(previous_rise(2_451_545.0, 0.0, 0.0, 0.0, &sun), None);
+        assert_eq!(next_rise(2_451_545.0, 0.0, 0.0, 0.0, &sun), None);
+    }
+
+    /// `elevation_m` must reach the horizon target here as it does in
+    /// [`sun_rise_set`]: a lower horizon moves the rise earlier, so the most
+    /// recent rise seen from altitude is later than (or equal to) the
+    /// sea-level one only when they belong to different rotations — what is
+    /// unambiguous is that for a fixed instant the elevated rise precedes the
+    /// sea-level one within the same rotation.
+    #[test]
+    fn previous_rise_honours_elevation() {
+        let (lat, lon) = (0.0, 0.0);
+        let jd = 2_451_545.0;
+        let sea = previous_rise(jd, lat, lon, 0.0, &flat_sun).expect("sea-level rise");
+        let high = previous_rise(jd, lat, lon, 2_000.0, &flat_sun).expect("elevated rise");
+        assert!(
+            high < sea,
+            "a 2000 m horizon dip must move the rise EARLIER: sea={sea}, elevated={high}"
+        );
+        assert!(
+            sea - high < 0.01,
+            "the two must belong to the same rotation, not differ by a day: \
+             sea={sea}, elevated={high}"
         );
     }
 

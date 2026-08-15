@@ -134,8 +134,8 @@ pub struct KalamWindow {
 /// Returns `(vara, Some((rahu, gulika)))` normally, or `(vara, None)` where
 /// the Sun does not both rise and set (polar day and polar night), which is
 /// when the definition has no daytime to divide. The vara itself is returned
-/// in BOTH cases: inside the polar day/night this function's own walk-back
-/// finds no sunrise either, so `vara` here falls back to the local civil
+/// in BOTH cases: inside the polar day/night this function's own sunrise
+/// search finds no sunrise either, so `vara` here falls back to the local civil
 /// weekday — the same documented convention [`vara_at`] uses — rather than
 /// being withheld just because the windows are undefined.
 ///
@@ -151,62 +151,58 @@ pub fn kalam_windows(
 ) -> (Weekday, Option<(KalamWindow, KalamWindow)>) {
     let local_weekday =
         |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
-    // ⚠️ `sun_rise_set` returns the FIRST rise and FIRST set inside its
-    // 24-hour scan window, and they need not be in that order. Naively
-    // pairing them can give a negative daytime and eight backwards windows.
+    // (a) The sunrise that OPENS the vara containing `jd_ut`, from the
+    // INSTANT-anchored search rather than by walking `sun_rise_set`'s 24-hour
+    // window back along the civil-UT calendar. That walk was wrong for the
+    // same reason it was wrong in `vara_with_validity`: `sun_rise_set` reports
+    // only the FIRST rise in its window, and two sunrises share one window
+    // whenever the inter-sunrise gap is under a civil day, so the walk could
+    // settle on a sunrise a whole vara too early and anchor the eighths there.
+    // See the "Why this is anchored on the instant" note on
+    // [`vara_with_validity`].
     //
-    // Concretely, with the `flat_sun` test fixture (RA/dec fixed at 0°),
-    // scanning from day_start = JD 2459015.5 (2020-06-15 00:00 UT) at lon
-    // 100°E finds the set at JD 2459015.741267 (≈05:47 UT) BEFORE the rise at
-    // JD 2459016.235285 (≈17:39 UT) — measured directly via
-    // `sun_rise_set(2459015.5, 0.0, 100.0, 0.0, flat_sun)`, not restated from
-    // memory. (Honolulu does NOT reproduce this pattern for this fixture —
-    // there the single-window pair comes out forward-ordered but anchored to
-    // the *wrong* calendar day instead; see the derivation in
-    // `kalam_windows_run_forwards_in_the_far_west` below.)
-    //
-    // So: find the sunrise that opens the vara's own day (the same backward
-    // walk `vara_at` does), then take the sunset that FOLLOWS it by scanning
-    // forward from the sunrise instant itself.
-    let mut day_start = libm::floor(jd_ut - 0.5) + 0.5;
-    let mut opening_sunrise = None;
-    for _ in 0..4 {
-        if let Some(r) = vedaksha_astro::riseset::sun_rise_set(
-            day_start,
-            lat_deg,
-            lon_deg_east,
-            elevation_m,
-            equatorial,
-        )
-        .rise
-        {
-            if r <= jd_ut {
-                opening_sunrise = Some(r);
-                break;
-            }
-        }
-        day_start -= 1.0;
-    }
-    let Some(sunrise) = opening_sunrise else {
-        // Polar day/night: this walk-back's own scan found no sunrise at
-        // or before `jd_ut` in any of the 4 days tried, so there is no
-        // daytime to divide into eighths. The vara still falls back to the
-        // local civil weekday — same documented convention as `vara_at` —
-        // rather than being withheld.
+    // `elevation_m` (not 0.0) is passed here deliberately: the slot SELECTION
+    // and the window ANCHOR must come from the same horizon. `vara_at` uses
+    // the sea-level convention, so calling it instead would, at a non-zero
+    // elevation, pick a different sunrise than the one these windows are
+    // anchored to.
+    let Some(sunrise) = vedaksha_astro::riseset::previous_rise(
+        jd_ut,
+        lat_deg,
+        lon_deg_east,
+        elevation_m,
+        equatorial,
+    ) else {
+        // Polar day/night, or `equatorial` unavailable: no sunrise bounds the
+        // vara, so there is no daytime to divide into eighths. The vara still
+        // falls back to the local civil weekday — same documented convention
+        // as `vara_at` — rather than being withheld.
         return (local_weekday(jd_ut), None);
     };
 
-    // Derived directly from `sunrise` (the walk-back result above) rather than
-    // by calling `vara_at` again: `vara_at` re-runs the same backward walk
-    // with `elevation_m` hardcoded to 0.0, which for a non-zero `elevation_m`
-    // would pick a *different* sunrise than the one this window is anchored
-    // to — the slot SELECTION and the window ANCHOR would then come from two
-    // different horizons. `weekday_from_day_index` is the same private
-    // helper `vara_at` applies to its own found rise, so this is the same
-    // rule applied to a consistent sunrise, not a new one — and it avoids
-    // repeating the walk-back a second time.
+    // `weekday_from_day_index` is the same private helper `vara_at` applies to
+    // its own found rise, so this is the same rule applied to a consistent
+    // sunrise, not a new one — and it avoids repeating the search.
     let vara = local_weekday(sunrise);
 
+    // (b) The sunset that FOLLOWS that sunrise — the ordering requirement is
+    // real: `sun_rise_set` reports the first rise and first set in its window
+    // and does NOT order them, so pairing them from one calendar-anchored
+    // window can give a negative daytime and eight backwards eighths.
+    // Concretely, with the `flat_sun` test fixture (RA/dec fixed at 0°),
+    // scanning from day_start = JD 2459015.5 (2020-06-15 00:00 UT) at lon
+    // 100°E finds the set at JD 2459015.741267 (≈05:47 UT) BEFORE the rise at
+    // JD 2459016.235285 (≈17:39 UT) — measured directly, not restated from
+    // memory.
+    //
+    // Anchoring the scan on the `sunrise` INSTANT fixes that, and — unlike the
+    // rise search above — is immune to the two-events-in-one-window defect:
+    // the body is above the horizon at `sunrise` and stays there until it
+    // sets, so the window `[sunrise, sunrise + 1]` contains at most one set
+    // before the body rises again, and the first set in it IS the first set
+    // after the sunrise. Keeping the one-day window here also preserves the
+    // polar contract: where the daytime exceeds 24 h there is no eighth to
+    // report and this correctly yields `None`.
     let Some(sunset) = vedaksha_astro::riseset::sun_rise_set(
         sunrise,
         lat_deg,
@@ -330,20 +326,9 @@ fn weekday_from_day_index(jd: f64) -> Weekday {
 /// sunrise to local sunrise.
 ///
 /// The Vedic day begins at sunrise, so an instant between local midnight and
-/// sunrise belongs to the *previous* vara. This starts from the sunrise that
-/// opens the civil-UT day containing `jd_ut` and walks back, one civil UT day
-/// at a time (up to four days), until a sunrise at or before `jd_ut` is
-/// found, then takes the local civil weekday of that sunrise.
-///
-/// ⚠️ This is **not** guaranteed to return the most recent qualifying
-/// sunrise. Each step scans a fixed one-day window starting at that day's
-/// civil-UT midnight (`day_start`); if that window's rise falls within one
-/// inter-rise gap *after* `day_start` and `jd_ut` itself lands just past
-/// `day_start + 1`, the scan can settle on that rise while a later sunrise —
-/// one that is still at or before `jd_ut`, in the following window — goes
-/// unseen. For the real Sun this edge case spans roughly 22 seconds around
-/// each day boundary; with the fixed-position `flat_sun` test fixture it
-/// widens to roughly 4 minutes, from the sidereal/solar-day drift.
+/// sunrise belongs to the *previous* vara. This takes the local civil weekday
+/// of [`vedaksha_astro::riseset::previous_rise`] — the most recent sunrise at
+/// or before `jd_ut`, located by scanning outward from the instant itself.
 ///
 /// # Arguments
 /// * `jd_ut` — the instant, Julian Day (UT)
@@ -356,7 +341,7 @@ fn weekday_from_day_index(jd: f64) -> Weekday {
 /// Inside the polar day and polar night no sunrise exists and the
 /// sunrise-to-sunrise vara is undefined; there this falls back to the local
 /// civil weekday. The same fallback also fires if `equatorial` returns
-/// `None` for every `day_start` tried — ephemeris unavailable, a different
+/// `None` anywhere in the backward search — ephemeris unavailable, a different
 /// situation from the polar one — and the two are indistinguishable in the
 /// return value: a caller that needs to tell them apart must probe
 /// `equatorial` itself. That fallback is a documented convention, not a
@@ -388,10 +373,31 @@ pub fn vara_at(
 /// Returns `None` for the interval — "not derivable, do not cache" — in
 /// exactly two cases: the polar fallback (no sunrise bounds the vara at all,
 /// so there is no interval to report), and a forward search for the closing
-/// sunrise that fails within its own four-day bound (which includes the
-/// `equatorial` closure returning `None` throughout that search). The
-/// `Weekday` itself is still correct in both cases; only the cached interval
-/// is withheld.
+/// sunrise that fails within its own bound (which includes the `equatorial`
+/// closure returning `None` throughout that search). The `Weekday` itself is
+/// still correct in both cases; only the cached interval is withheld.
+///
+/// # Why this is anchored on the instant, not on the calendar
+///
+/// Both ends come from the INSTANT-anchored searches
+/// [`vedaksha_astro::riseset::previous_rise`] and
+/// [`vedaksha_astro::riseset::next_rise`], so `start <= jd_ut < end` holds by
+/// construction — it is the acceptance test each search applies to its own
+/// bisected root, not a property argued from window arithmetic.
+///
+/// The earlier implementation walked
+/// [`vedaksha_astro::riseset::sun_rise_set`]'s 24-hour window back along the
+/// civil-UT calendar. That window reports only the FIRST rise inside it, and
+/// the inter-sunrise gap is shorter than a civil day — always for a Sun held at
+/// fixed right ascension (one sidereal rotation, 0.9972695663 d) and for the
+/// real Sun over roughly half the year — so TWO sunrises could share one
+/// window and the second was invisible. The walk then settled on the earlier
+/// one, putting `start` a whole vara too early and leaving `jd_ut` as much as
+/// one rotation PAST `end`: the vara itself came back wrong, not merely a
+/// stale cache. Measured with the fixed-RA fixture at lat −9°, tz +660, JD
+/// 2451554.75, sweeping longitude at 0.01°: 98 of 36,001 samples (0.27%) failed
+/// containment, the worst leaving `jd_ut` 0.2527 d beyond `end`. See
+/// `vara_with_validity_pins_the_two_sunrises_in_one_window_regression`.
 ///
 /// Source: Muhurta Chintamani; Kalaprakashika (the sunrise reckoning).
 #[must_use]
@@ -405,94 +411,35 @@ pub fn vara_with_validity(
     let local_weekday =
         |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
 
-    // Step 1 (identical to the old `vara_at` body): 0h UT of the civil UT
-    // day containing `jd_ut`, then walk back until a sunrise at or before
-    // the instant is found. Four days is ample: only the polar cases fail,
-    // and they fail for every day.
-    let mut day_start = libm::floor(jd_ut - 0.5) + 0.5;
-    let mut opening: Option<f64> = None; // the sunrise found
-    for _ in 0..4 {
-        // NOTE: written as a nested `if let`, not a let-chain. The workspace
-        // `rust-version` is 1.85 and let-chains did not stabilise until 1.88,
-        // so a chain here would silently raise the MSRV. No other file in the
-        // workspace uses one.
-        if let Some(rise) =
-            vedaksha_astro::riseset::sun_rise_set(day_start, lat_deg, lon_deg_east, 0.0, equatorial)
-                .rise
-        {
-            if rise <= jd_ut {
-                opening = Some(rise);
-                break;
-            }
-        }
-        day_start -= 1.0;
-    }
-
-    let Some(sunrise) = opening else {
-        // Polar day/night, or `equatorial` returned `None` at every
-        // `day_start` tried: fall back to the local civil weekday, same
-        // documented convention as the old `vara_at`. No sunrise was found
-        // at all, so there is no interval to report.
+    // The sunrise that OPENED the vara containing `jd_ut`: the most recent one
+    // at or before the instant. Elevation 0.0 — `vara_at`'s documented
+    // sea-level convention; `kalam_windows` passes the observer's own
+    // elevation to the same primitive.
+    let Some(start) =
+        vedaksha_astro::riseset::previous_rise(jd_ut, lat_deg, lon_deg_east, 0.0, equatorial)
+    else {
+        // Polar day/night, or `equatorial` returned `None`: fall back to the
+        // local civil weekday, the same documented convention as before. No
+        // sunrise was found at all, so there is no interval to report.
         return (local_weekday(jd_ut), None);
     };
-    let weekday = local_weekday(sunrise);
+    let weekday = local_weekday(start);
 
-    // Step 2: find the sunrise that CLOSES this vara, by walking FORWARD
-    // from `sunrise + 0.5`. Mirrors step 1's walk-back (same 4-day bound,
-    // same "polar cases fail for every day" reasoning) — the
-    // sunrise-to-sunrise interval is close to one day (one solar day for a
-    // real Sun; one *sidereal* day, ≈0.99727 d, for the fixed-RA `flat_sun`
-    // test fixture — derived as 360 / 360.98564736629 deg/day, the GMST rate
-    // `vedaksha_ephem_core::sidereal_time::gmst` uses), so `sunrise + 0.5` is
-    // unambiguously AFTER the opening sunrise (half a day past it — no risk
-    // of re-detecting the same horizon crossing, unlike scanning forward from
-    // `sunrise` itself, which sits within numerical noise of its own bisected
-    // zero) and unambiguously BEFORE the next one (which is 0.5-1.5 days
-    // away, comfortably inside this window), so the very first scan window
-    // `[sunrise + 0.5, sunrise + 1.5]` brackets exactly one sunrise — the
-    // right one.
-    //
-    // This replaces the previous `opening_day_start + 1.0` start (0h UT of
-    // the day AFTER the one `sunrise` fell in). That was ALSO unambiguously
-    // after the opening sunrise, but not unambiguously close to it: when the
-    // opening sunrise landed only a few minutes after `opening_day_start`,
-    // `opening_day_start + 1.0` could be almost a full day short of the true
-    // next sunrise, so the scan's first window `[opening_day_start + 1.0,
-    // opening_day_start + 2.0]` sometimes ended just BEFORE that sunrise and
-    // caught the one AFTER it instead — returning an interval spanning two
-    // varas. Measured: with the realistic Sun, 16/216,060 samples at lat 0°
-    // had `end - start > 1.5` d (rising to 326/216,060, ~0.15%, at lat 60°);
-    // with the `flat_sun` fixture, 1379/288,000 (~0.48%), worst case `lon =
-    // 158.4, jd = 2451554.75` giving `end - start = 1.9945` d. See
-    // `vara_with_validity_never_spans_more_than_one_vara` and
-    // `vara_with_validity_pins_the_reported_two_vara_regression` below.
-    let mut next_day_start = sunrise + 0.5;
-    for _ in 0..4 {
-        if let Some(next_rise) = vedaksha_astro::riseset::sun_rise_set(
-            next_day_start,
-            lat_deg,
-            lon_deg_east,
-            0.0,
-            equatorial,
-        )
-        .rise
-        {
-            // Always true by construction (`next_day_start > sunrise`, and a
-            // rise found scanning forward from it is `>= next_day_start`),
-            // documented rather than trusted silently — the same defensive
-            // style as `if rise <= jd_ut` in step 1.
-            if next_rise > sunrise {
-                return (weekday, Some((sunrise, next_rise)));
-            }
-        }
-        next_day_start += 1.0;
-    }
+    // The sunrise that CLOSES it: the first one strictly after the instant.
+    // Anchoring this on `jd_ut` rather than on `start` is what makes `jd_ut <
+    // end` true by construction; anchoring on `start` would reintroduce an
+    // argument about whether the search can overshoot.
+    let Some(end) =
+        vedaksha_astro::riseset::next_rise(jd_ut, lat_deg, lon_deg_east, 0.0, equatorial)
+    else {
+        // The opening sunrise exists but the closing one is beyond the search
+        // bound (polar onset, or `equatorial` failing through the forward
+        // search): the weekday is still correct, the interval is not
+        // derivable, so the caller must not cache it.
+        return (weekday, None);
+    };
 
-    // The opening sunrise exists but the closing one could not be found
-    // within the bound (polar onset, or `equatorial` failing throughout the
-    // forward search): the weekday is still correct, but the interval isn't
-    // derivable, so the caller must not cache it.
-    (weekday, None)
+    (weekday, Some((start, end)))
 }
 
 /// Assess muhurta quality for a given moment.
@@ -697,12 +644,13 @@ pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) 
 ///
 /// # Performance
 ///
-/// One [`vara_with_validity`] call costs roughly 2 × (288 coarse scan steps +
-/// bisection) `equatorial` evaluations, because each `sun_rise_set` scans a
-/// day at 5-minute resolution and the walk-back/walk-forward each consume a
-/// couple of iterations. Deriving the vara fresh at every 0.5-day step would
-/// put a one-year search near 420,000 evaluations — a latency regression
-/// measured in minutes on a tool that is otherwise fast. The vara is constant
+/// One [`vara_with_validity`] call costs roughly 2 × (up to 288 coarse scan
+/// steps + bisection) `equatorial` evaluations: the backward and forward
+/// searches each step outward from `jd_ut` at 5-minute resolution and stop at
+/// the first horizon crossing, which is at most one rotation — 288 steps —
+/// away. Deriving the vara fresh at every 0.5-day step would put a one-year
+/// search near 420,000 evaluations — a latency regression measured in minutes
+/// on a tool that is otherwise fast. The vara is constant
 /// over `[start, end)` — sunrise to the next sunrise — so this memoises on
 /// that exact interval (as returned by [`vara_with_validity`]) and recomputes
 /// only when `jd` falls outside it. That is not an approximation: unlike
@@ -900,19 +848,24 @@ mod tests {
         // Not because 20:00 "is still evening, before local midnight" — vara_at
         // does not reckon from midnight, and that framing would just be
         // re-describing the UT-day defect this test exists to catch. Derived
-        // directly from `sun_rise_set`, the same call `vara_at` makes
-        // internally: the first window it tries (day_start = JD 2459015.5 =
-        // 2020-06-15 00:00Z) puts the fake sunrise at JD 2459015.952163512,
-        // which is *after* `jd` and so is rejected; walking back one civil UT
-        // day (day_start = JD 2459014.5 = 2020-06-14 00:00Z) puts it at JD
+        // independently here via `previous_rise`, the same primitive `vara_at`
+        // uses: the most recent fake sunrise at or before `jd` is JD
         // 2459014.954893945 = 2020-06-14 10:55:03 UT = 2020-06-14 00:55:03
         // local — a few minutes after local midnight, still on the same
-        // Sunday. That sunrise is at or before `jd`, so its local civil
-        // weekday (Sunday) is the vara returned.
+        // Sunday. (The NEXT sunrise, JD 2459015.952163512, is after `jd`, so
+        // it does not open this vara.) The opening sunrise's local civil
+        // weekday — Sunday — is the vara.
+        let opening =
+            vedaksha_astro::riseset::previous_rise(jd, 21.3069, -157.8583, 0.0, &flat_sun)
+                .expect("the fixture rises daily at this latitude");
+        assert!(
+            libm::fabs(opening - 2_459_014.954_893_945) < 1e-6,
+            "precondition: the opening sunrise must be JD 2459014.954893945, got {opening}"
+        );
         assert_eq!(
             vara,
             Weekday::Sunday,
-            "the walked-back sunrise (2020-06-14 ~00:55 local) is at or before the query instant, so this is still Ravivara"
+            "the opening sunrise (2020-06-14 ~00:55 local) is at or before the query instant, so this is still Ravivara"
         );
     }
 
@@ -1298,6 +1251,194 @@ mod tests {
         );
     }
 
+    /// TWO-SUNRISES-IN-ONE-WINDOW regression, `flat_sun` reproducer.
+    ///
+    /// The retired implementation walked `sun_rise_set`'s 24-hour window back
+    /// along the civil-UT calendar. `sun_rise_set` reports only the FIRST rise
+    /// in its window, and this fixture's rises recur once per SIDEREAL
+    /// rotation — `360 / 360.98564736629` = 0.9972695663290739 d, the GMST
+    /// rate of Meeus eq. 12.4 as implemented by
+    /// `vedaksha_ephem_core::sidereal_time::gmst` — which is SHORTER than the
+    /// window. So two sunrises could share one window, and the second was
+    /// invisible.
+    ///
+    /// Measured against the old code (probe run, since removed) at lat −9.0,
+    /// lon 159.4, tz +660, jd 2451554.75: `day_start` = JD 2451554.5, whose
+    /// window's first rise (JD 2451555.4970812206) is after `jd_ut` and is
+    /// rejected; the walk steps back to `day_start` = JD 2451553.5, whose
+    /// window holds TWO rises — JD 2451553.5025420883 and JD
+    /// 2451554.4998116544 — and reports only the first. The old return was
+    /// vara **Monday**, `[2451553.502542088, 2451554.499811655)`, which does
+    /// not even contain `jd_ut` = 2451554.75: the instant lands 0.2502 d PAST
+    /// `end`. The truth, from a 1-second brute-force scan of the altitude
+    /// crossings over `[jd − 2, jd + 2]` (independent of every window
+    /// primitive in this workspace): rises at JD 2451553.5025420883,
+    /// 2451554.4998116544, 2451555.4970812206, 2451556.4943507873, so the
+    /// vara containing `jd_ut` opens at JD 2451554.4998116544 — a **Tuesday**
+    /// at tz +660.
+    ///
+    /// ⚠️ `tz_offset_minutes` MUST be non-zero here. At tz 0 the two candidate
+    /// sunrises usually floor to the same weekday, which is exactly why every
+    /// pre-existing test — all of which used tz 0 for the sweep cases — missed
+    /// this.
+    #[test]
+    fn vara_with_validity_pins_the_two_sunrises_in_one_window_regression() {
+        let (lat, lon, tz, jd) = (-9.0, 159.4, 660, 2_451_554.75);
+        let (vara, validity) = vara_with_validity(jd, lat, lon, tz, &flat_sun);
+        let (start, end) = validity.expect("the fixture rises daily at lat -9");
+
+        assert_eq!(
+            vara,
+            Weekday::Tuesday,
+            "the vara opens at the LATER of the two sunrises in the old walk's \
+             window (JD 2451554.4998116544); the old code returned Monday from \
+             the earlier one. got [{start}, {end})"
+        );
+        assert!(
+            start <= jd && jd < end,
+            "containment: [{start}, {end}) must contain {jd} — the old code \
+             returned an interval ending 0.2502 d BEFORE it"
+        );
+        assert!(
+            libm::fabs(start - 2_451_554.499_811_654_4) < 1e-6,
+            "start {start} must be the brute-force-derived sunrise \
+             JD 2451554.4998116544"
+        );
+        assert!(
+            libm::fabs(end - 2_451_555.497_081_220_6) < 1e-6,
+            "end {end} must be the brute-force-derived next sunrise \
+             JD 2451555.4970812206"
+        );
+    }
+
+    /// TWO-SUNRISES-IN-ONE-WINDOW regression, REAL-SUN reproducer.
+    ///
+    /// The defect is not an artefact of the fixed-RA fixture: the real Sun's
+    /// inter-sunrise gap is also shorter than a civil day over roughly half the
+    /// year (the equation of time plus the observer's own latitude/declination
+    /// geometry), so the same two-rises-in-one-window collapse happens with
+    /// `AnalyticalProvider`.
+    ///
+    /// Measured at lat −9.0, lon 87.668, tz +660, jd 2459113.4. The old code
+    /// returned vara **Saturday**, `[2459111.500415422, 2459112.49999942)` —
+    /// `jd_ut` sits 0.9001 d past `end`, a full vara out. Truth, from the same
+    /// independent 1-second brute-force altitude scan: rises at JD
+    /// 2459111.500415422, 2459112.49999942, 2459113.499583689,
+    /// 2459114.4991684277, so the vara containing `jd_ut` opens at JD
+    /// 2459112.49999942 and closes at JD 2459113.499583689 — a **Sunday** at
+    /// tz +660.
+    #[test]
+    fn vara_with_validity_pins_the_real_sun_two_sunrises_regression() {
+        use vedaksha_astro::riseset::sun_equatorial_deg;
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+
+        let provider = AnalyticalProvider;
+        let real_sun = |j: f64| sun_equatorial_deg(&provider, j);
+
+        let (lat, lon, tz, jd) = (-9.0, 87.668, 660, 2_459_113.4);
+        let (vara, validity) = vara_with_validity(jd, lat, lon, tz, &real_sun);
+        let (start, end) = validity.expect("the sun rises daily at lat -9");
+
+        assert_eq!(
+            vara,
+            Weekday::Sunday,
+            "the real Sun reproduces the defect too: the old code returned \
+             Saturday from a sunrise a whole vara early. got [{start}, {end})"
+        );
+        assert!(
+            start <= jd && jd < end,
+            "containment: [{start}, {end}) must contain {jd} — the old code \
+             returned an interval ending 0.9001 d BEFORE it"
+        );
+        assert!(
+            libm::fabs(start - 2_459_112.499_999_42) < 1e-6,
+            "start {start} must be the brute-force-derived sunrise \
+             JD 2459112.49999942"
+        );
+        assert!(
+            libm::fabs(end - 2_459_113.499_583_688_6) < 1e-6,
+            "end {end} must be the brute-force-derived next sunrise \
+             JD 2459113.499583689"
+        );
+    }
+
+    /// Containment as a SWEEP, not a point — the pinned reproducers above are
+    /// two samples and a pair of point tests can pass by luck.
+    ///
+    /// SAMPLING, stated explicitly:
+    /// - Sweep A: the full −180°..180° longitude range at **0.01°** (36,001
+    ///   samples) at lat −9.0, tz +660, jd 2451554.75. That is exactly the
+    ///   configuration in which the failing band was measured against the old
+    ///   code: **98 of 36,001 samples (0.272%)** violated containment, the
+    ///   worst leaving `jd_ut` 0.2527 d beyond `end` (at lon 160.31). 0.01° is
+    ///   the resolution that band was found at, so this sweep is fine enough
+    ///   to hit it by construction; a coarser step risks stepping over it.
+    /// - Sweep B: the same longitude range at 0.5° (721 samples) across five
+    ///   latitudes spanning both hemispheres, at a different non-zero tz
+    ///   (+330) and a different instant, so the property is not pinned to one
+    ///   observer. Coarse on purpose — Sweep A already carries the resolution;
+    ///   this carries the latitude and tz spread without a 5× runtime.
+    ///
+    /// ⚠️ Both sweeps use a NON-ZERO `tz_offset_minutes`. At tz 0 the two
+    /// candidate sunrises usually floor to the same weekday, which masks the
+    /// defect entirely — the reason the pre-existing tz-0 sweeps stayed green
+    /// through it.
+    ///
+    /// Interval length is asserted alongside containment: containment alone
+    /// would still pass for an interval spanning two varas (the historical
+    /// FINDING-1 defect), and length alone would still pass for an interval of
+    /// the right width sitting in the wrong place. The expected length is the
+    /// fixture's own rise-to-rise spacing — one SIDEREAL rotation,
+    /// `360 / 360.98564736629` = 0.9972695663290739 d, NOT 1.0 — derived in
+    /// `vara_with_validity_never_spans_more_than_one_vara` above.
+    #[test]
+    fn vara_with_validity_contains_the_instant_across_a_fine_longitude_sweep() {
+        const SIDEREAL_SPACING_DAYS: f64 = 0.997_269_566_329_073_9;
+        const TOLERANCE_DAYS: f64 = 1e-6;
+
+        let check = |lat: f64, lon: f64, tz: i32, jd: f64| {
+            let (_vara, validity) = vara_with_validity(jd, lat, lon, tz, &flat_sun);
+            let (start, end) = validity.unwrap_or_else(|| {
+                panic!("lat={lat} lon={lon}: the fixture rises at every non-polar latitude")
+            });
+            assert!(
+                start <= jd && jd < end,
+                "lat={lat} lon={lon} tz={tz}: [{start}, {end}) does not contain {jd}"
+            );
+            let length = end - start;
+            assert!(
+                libm::fabs(length - SIDEREAL_SPACING_DAYS) < TOLERANCE_DAYS,
+                "lat={lat} lon={lon} tz={tz}: interval length {length} d is not \
+                 one sidereal rotation ({SIDEREAL_SPACING_DAYS} d) — \
+                 [{start}, {end})"
+            );
+        };
+
+        // Sweep A — hundredths of a degree, integer loop counter so no float
+        // accumulation and no `as` cast.
+        let mut lon_hundredths = -18_000_i32;
+        let mut checked_a = 0_u32;
+        while lon_hundredths <= 18_000 {
+            check(-9.0, f64::from(lon_hundredths) / 100.0, 660, 2_451_554.75);
+            checked_a += 1;
+            lon_hundredths += 1;
+        }
+        assert_eq!(checked_a, 36_001, "sanity: full 360° sweep at 0.01° steps");
+
+        // Sweep B — half-degree steps, five latitudes, a different non-zero tz
+        // and a different instant.
+        let mut checked_b = 0_u32;
+        for lat in [-51.5_f64, -33.9, -9.0, 21.3, 45.0] {
+            let mut lon_halves = -360_i32;
+            while lon_halves <= 360 {
+                check(lat, f64::from(lon_halves) / 2.0, 330, 2_459_113.4);
+                checked_b += 1;
+                lon_halves += 1;
+            }
+        }
+        assert_eq!(checked_b, 5 * 721, "sanity: 5 latitudes × 721 longitudes");
+    }
+
     /// FINDING 1 fix. The old memo keyed on `libm::floor(jd - 0.5) + 0.5`
     /// (civil-UT midnight) instead of the vara's real sunrise-to-sunrise
     /// extent, so a sample landing between local midnight and local sunrise
@@ -1583,18 +1724,19 @@ mod tests {
     /// paper over noise.
     ///
     /// The tz comparison above constrains slot SELECTION only — it says
-    /// nothing about whether step (b) (scanning forward from the
-    /// walked-back sunrise for the sunset) actually ran. Added below: both
-    /// windows must run forwards, and their width must equal one eighth of
-    /// the REAL (positively-ordered) daytime. Derived independently via the
-    /// same `sun_rise_set` primitive `kalam_windows` uses internally (not by
-    /// calling `kalam_windows` again): the walk-back at lon 165°E settles on
-    /// day_start = JD 2459014.5 (measured: `sun_rise_set(2459015.5, 0.0,
-    /// 165.0, 0.0, flat_sun).rise` = JD 2459016.0552225793, which is AFTER
-    /// `jd`, so it is rejected and the walk steps back one civil UT day),
-    /// giving sunrise = JD 2459015.057953013 and — scanning forward from
-    /// THAT sunrise — sunset = JD 2459015.5612047845: a positive 12.078 h
-    /// daytime, one eighth of which is 0.0629064714 d (90.59 min).
+    /// nothing about whether step (b) (scanning forward from the opening
+    /// sunrise for the sunset) actually ran. Added below: both windows must
+    /// run forwards, and their width must equal one eighth of the REAL
+    /// (positively-ordered) daytime. Derived independently, not by calling
+    /// `kalam_windows` again: at lon 165°E the opening sunrise is JD
+    /// 2459015.057953013 — the most recent one at or before `jd`, and here
+    /// also the only rise inside the window `[JD 2459014.5, 2459015.5]`, so
+    /// `sun_rise_set(2459014.5, …).rise` names the same instant that
+    /// `previous_rise(jd, …)` does and is used below as the independent
+    /// derivation. (The NEXT rise, JD 2459016.0552225793, is after `jd`.)
+    /// Scanning forward from THAT sunrise gives sunset = JD
+    /// 2459015.5612047845: a positive 12.078 h daytime, one eighth of which
+    /// is 0.0629064714 d (90.59 min).
     #[test]
     fn kalam_windows_uses_the_observers_own_weekday_not_the_ut_one() {
         let jd = 2_459_015.75;
@@ -1641,21 +1783,28 @@ mod tests {
     /// MUTATION PIN for step (b) specifically. This is a different mutation
     /// from the one `kalam_windows_run_forwards_in_the_far_west` guards
     /// against: that test catches reverting the WHOLE two-step algorithm
-    /// (walk-back + forward-scan) to one naive single `sun_rise_set` call.
-    /// This one catches keeping the walk-back but taking the sunset from
-    /// that same walked-back `day_start` window instead of from the sunrise
-    /// instant — the review found this survives all 41 existing tests and
-    /// drives the daytime to about −11.85 h at lon 165°/100°/45°/−175°. 165°
-    /// is already used above and −157.8583° is used by the far-west test
+    /// (opening-sunrise search + forward scan) to one naive single
+    /// `sun_rise_set` call. This one catches keeping the sunrise search but
+    /// taking the sunset from a CALENDAR-anchored window instead of from the
+    /// sunrise instant — the review found this survives all 41 existing tests
+    /// and drives the daytime to about −11.85 h at lon 165°/100°/45°/−175°.
+    /// 165° is already used above and −157.8583° is used by the far-west test
     /// below, so this uses 45°E to keep the longitudes distinct.
+    ///
+    /// The `day_start` in this test's name and derivations is the civil-UT
+    /// midnight the retired walk-back anchored on; it survives here as the
+    /// name of the mutation being pinned, not as anything the current
+    /// implementation computes.
     ///
     /// The `expected` closure below reimplements the *correct* step (b) —
     /// scanning forward from the independently re-derived sunrise via the
     /// `sun_rise_set` primitive directly, not via `kalam_windows` — so it
     /// only agrees with `kalam_windows`'s actual output when `kalam_windows`
     /// also does the correct scan. Measured directly: at jd 2459015.75, lon
-    /// 45°E, the walk-back settles on day_start = JD 2459014.5 and sunrise =
-    /// JD 2459015.390376202; scanning forward from that sunrise gives sunset
+    /// 45°E, the opening sunrise is JD 2459015.390376202 — here the only rise
+    /// inside `[JD 2459014.5, 2459015.5]`, so `sun_rise_set(2459014.5, …)`
+    /// names the same instant `previous_rise(jd, …)` does and serves as the
+    /// independent derivation; scanning forward from that sunrise gives sunset
     /// = JD 2459015.8936279733 (12.078 h daytime). Taking `.set` from
     /// `sun_rise_set(2459014.5, ...)` instead (the mutation) gives JD
     /// 2459014.896358407, which is BEFORE sunrise — a −11.856 h "daytime",
@@ -1665,7 +1814,7 @@ mod tests {
     ///
     /// PROVEN by actually applying this mutation to `kalam_windows` (taking
     /// `.set` from the `day_start`-anchored call while keeping the
-    /// walk-back) and re-running: this test FAILED (`rahu ran backwards:
+    /// sunrise search) and re-running: this test FAILED (`rahu ran backwards:
     /// 2459015.328623978 .. 2459015.266871754`); reverting made it pass
     /// again. See the fix-pass report for the full failure output.
     #[test]
@@ -1795,25 +1944,17 @@ mod tests {
         // The two assertions above pass even for a naive single-call
         // implementation here (see the doc comment), because that naive call
         // happens to pick the *following* day's sunrise/sunset for this
-        // longitude — `vara_at`'s walk-back rejects that same rise (it is
-        // after `jd`) for exactly this reason; see
-        // `vara_does_not_follow_the_ut_day_boundary_in_the_far_west`, which
-        // derives it as JD 2459015.952163512. Independently re-derived here,
-        // via the same `sun_rise_set` primitive `kalam_windows` uses
-        // internally (not by calling `kalam_windows` again, so this is not
-        // checking the function against itself): the vara's own daytime must
-        // end strictly before that following sunrise. Rahu is slot 8 for
-        // Sunday (the vara here), so `rahu.end_jd` is exactly this daytime's
-        // sunset.
-        let next_days_rise = vedaksha_astro::riseset::sun_rise_set(
-            libm::floor(jd - 0.5) + 0.5,
-            21.3069,
-            -157.8583,
-            0.0,
-            &flat_sun,
-        )
-        .rise
-        .expect("the following sunrise must exist here too");
+        // longitude — that rise is AFTER `jd`, so it does not open this vara;
+        // see `vara_does_not_follow_the_ut_day_boundary_in_the_far_west`,
+        // which derives it as JD 2459015.952163512. Independently re-derived
+        // here via `next_rise` (not by calling `kalam_windows` again, so this
+        // is not checking the function against itself): the vara's own
+        // daytime must end strictly before that following sunrise. Rahu is
+        // slot 8 for Sunday (the vara here), so `rahu.end_jd` is exactly this
+        // daytime's sunset.
+        let next_days_rise =
+            vedaksha_astro::riseset::next_rise(jd, 21.3069, -157.8583, 0.0, &flat_sun)
+                .expect("the following sunrise must exist here too");
         assert!(
             rahu.end_jd < next_days_rise,
             "rahu kalam (ending {}) must fall before the FOLLOWING sunrise ({next_days_rise}); a naive single-window sun_rise_set call wrongly selects that later cycle's day here",
@@ -1853,14 +1994,13 @@ mod tests {
     ///
     /// The two derivations disagree only when the query instant falls
     /// strictly BETWEEN the elevation-adjusted sunrise and the sea-level
-    /// sunrise of the *same* civil-UT day. Walking through why, from
-    /// `kalam_windows`'s own walk-back loop: inside that window the
-    /// elevation-aware walk-back has already found a sunrise ≤ `jd_ut` on
-    /// that day (the vara has turned), while the sea-level walk-back
-    /// (`vara_at`) finds that same day's sea-level rise is still AFTER
-    /// `jd_ut`, rejects it (its `if r <= jd_ut` guard fails), steps
-    /// `day_start` back one civil day, and returns the PREVIOUS day's vara
-    /// instead.
+    /// sunrise of the *same* rotation. Walking through why, from
+    /// `kalam_windows`'s own sunrise search: inside that gap the
+    /// elevation-aware `previous_rise` has already found a sunrise ≤ `jd_ut`
+    /// (the vara has turned), while the sea-level `previous_rise` that
+    /// `vara_at` runs finds that rise is still AFTER `jd_ut` at sea level and
+    /// so returns the PREVIOUS rotation's sunrise — and hence the previous
+    /// day's vara — instead.
     ///
     /// All figures below derived directly via `sun_rise_set`/`vara_at`
     /// while writing this test, not restated from a plan: at lat 0°, lon 0°,
@@ -1919,7 +2059,7 @@ mod tests {
         // The elevation-aware vara: what `kalam_windows` must use.
         // `weekday_from_day_index` is the same private helper both `vara_at`
         // and `kalam_windows` apply to whichever sunrise they land on — this
-        // does not reimplement `kalam_windows`'s walk-back, it just names
+        // does not reimplement `kalam_windows`'s sunrise search, it just names
         // the weekday of the sunrise instant already derived above.
         let elevation_vara = weekday_from_day_index(elevated_rise);
         // The sea-level vara: `vara_at` called DIRECTLY, the actual "wrong"
