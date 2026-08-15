@@ -143,10 +143,18 @@ pub fn kalam_windows(
     equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
 ) -> Option<(KalamWindow, KalamWindow)> {
     // ⚠️ `sun_rise_set` returns the FIRST rise and FIRST set inside its
-    // 24-hour scan window, and they need not be in that order. At Honolulu,
-    // scanning from 0h UT finds the set (~04:30 UT) BEFORE the rise
-    // (~16:30 UT), because 0h UT is already local afternoon there. Naively
-    // pairing them gives a negative daytime and eight backwards windows.
+    // 24-hour scan window, and they need not be in that order. Naively
+    // pairing them can give a negative daytime and eight backwards windows.
+    //
+    // Concretely, with the `flat_sun` test fixture (RA/dec fixed at 0°),
+    // scanning from day_start = JD 2459015.5 (2020-06-15 00:00 UT) at lon
+    // 100°E finds the set at JD 2459015.741267 (≈05:47 UT) BEFORE the rise at
+    // JD 2459016.235285 (≈17:39 UT) — measured directly via
+    // `sun_rise_set(2459015.5, 0.0, 100.0, 0.0, flat_sun)`, not restated from
+    // memory. (Honolulu does NOT reproduce this pattern for this fixture —
+    // there the single-window pair comes out forward-ordered but anchored to
+    // the *wrong* calendar day instead; see the derivation in
+    // `kalam_windows_run_forwards_in_the_far_west` below.)
     //
     // So: find the sunrise that opens the vara's own day (the same backward
     // walk `vara_at` does), then take the sunset that FOLLOWS it by scanning
@@ -182,8 +190,25 @@ pub fn kalam_windows(
 
     let eighth = (sunset - sunrise) / 8.0;
 
-    let vara = vara_at(jd_ut, lat_deg, lon_deg_east, tz_offset_minutes, equatorial);
+    // Derived directly from `sunrise` (the walk-back result above) rather than
+    // by calling `vara_at` again: `vara_at` re-runs the same backward walk
+    // with `elevation_m` hardcoded to 0.0, which for a non-zero `elevation_m`
+    // would pick a *different* sunrise than the one this window is anchored
+    // to — the slot SELECTION and the window ANCHOR would then come from two
+    // different horizons. `weekday_from_day_index` is the same private
+    // helper `vara_at` applies to its own found rise, so this is the same
+    // rule applied to a consistent sunrise, not a new one — and it avoids
+    // repeating the walk-back a second time.
+    let vara = weekday_from_day_index(sunrise + f64::from(tz_offset_minutes) / 1440.0);
     let window = |slot: u8| {
+        // INVARIANT: `slot - 1` cannot underflow. Only `rahu_kalam_slot` and
+        // `gulika_kalam_slot` ever feed this closure, and both are exhaustive
+        // `match`es over all seven `Weekday` variants returning literals in
+        // 1..=8 — there is no code path that can pass 0 here. Documented
+        // rather than restructured into a checked/saturating form because a
+        // panic on violation would be the correct signal that one of those
+        // two match arms has been edited to return 0, not a case to paper
+        // over silently.
         let start = sunrise + f64::from(slot - 1) * eighth;
         KalamWindow {
             start_jd: start,
@@ -1109,10 +1134,24 @@ mod tests {
     /// 2459015.498298313| ≈ 0.377 d` (9.06 h) — the 0.25 d threshold sits
     /// comfortably below that measurement, not at a round number chosen to
     /// paper over noise.
+    ///
+    /// The tz comparison above constrains slot SELECTION only — it says
+    /// nothing about whether step (b) (scanning forward from the
+    /// walked-back sunrise for the sunset) actually ran. Added below: both
+    /// windows must run forwards, and their width must equal one eighth of
+    /// the REAL (positively-ordered) daytime. Derived independently via the
+    /// same `sun_rise_set` primitive `kalam_windows` uses internally (not by
+    /// calling `kalam_windows` again): the walk-back at lon 165°E settles on
+    /// day_start = JD 2459014.5 (measured: `sun_rise_set(2459015.5, 0.0,
+    /// 165.0, 0.0, flat_sun).rise` = JD 2459016.0552225793, which is AFTER
+    /// `jd`, so it is rejected and the walk steps back one civil UT day),
+    /// giving sunrise = JD 2459015.057953013 and — scanning forward from
+    /// THAT sunrise — sunset = JD 2459015.5612047845: a positive 12.078 h
+    /// daytime, one eighth of which is 0.0629064714 d (90.59 min).
     #[test]
     fn kalam_windows_uses_the_observers_own_weekday_not_the_ut_one() {
         let jd = 2_459_015.75;
-        let (rahu_correct, _) =
+        let (rahu_correct, gulika_correct) =
             kalam_windows(jd, 0.0, 165.0, 0.0, 660, &flat_sun).expect("sun rises here");
         let (rahu_wrong, _) =
             kalam_windows(jd, 0.0, 165.0, 0.0, 0, &flat_sun).expect("sun rises here");
@@ -1121,6 +1160,128 @@ mod tests {
             "dropping tz_offset_minutes must select a materially different slot: honoured {} vs dropped {}",
             rahu_correct.start_jd,
             rahu_wrong.start_jd
+        );
+
+        let sunrise =
+            vedaksha_astro::riseset::sun_rise_set(2_459_014.5, 0.0, 165.0, 0.0, &flat_sun)
+                .rise
+                .expect("walked-back sunrise exists");
+        let sunset = vedaksha_astro::riseset::sun_rise_set(sunrise, 0.0, 165.0, 0.0, &flat_sun)
+            .set
+            .expect("forward-scanned sunset exists");
+        let eighth = (sunset - sunrise) / 8.0;
+        assert!(
+            eighth > 0.0,
+            "sanity: independently-derived daytime must be positive, got {} h",
+            (sunset - sunrise) * 24.0
+        );
+
+        for w in [rahu_correct, gulika_correct] {
+            assert!(
+                w.end_jd > w.start_jd,
+                "window ran backwards: {} .. {}",
+                w.start_jd,
+                w.end_jd
+            );
+            assert!(
+                ((w.end_jd - w.start_jd) - eighth).abs() < 1e-9,
+                "window width {} != one eighth of the daytime {eighth}",
+                w.end_jd - w.start_jd
+            );
+        }
+    }
+
+    /// MUTATION PIN for step (b) specifically. This is a different mutation
+    /// from the one `kalam_windows_run_forwards_in_the_far_west` guards
+    /// against: that test catches reverting the WHOLE two-step algorithm
+    /// (walk-back + forward-scan) to one naive single `sun_rise_set` call.
+    /// This one catches keeping the walk-back but taking the sunset from
+    /// that same walked-back `day_start` window instead of from the sunrise
+    /// instant — the review found this survives all 41 existing tests and
+    /// drives the daytime to about −11.85 h at lon 165°/100°/45°/−175°. 165°
+    /// is already used above and −157.8583° is used by the far-west test
+    /// below, so this uses 45°E to keep the longitudes distinct.
+    ///
+    /// The `expected` closure below reimplements the *correct* step (b) —
+    /// scanning forward from the independently re-derived sunrise via the
+    /// `sun_rise_set` primitive directly, not via `kalam_windows` — so it
+    /// only agrees with `kalam_windows`'s actual output when `kalam_windows`
+    /// also does the correct scan. Measured directly: at jd 2459015.75, lon
+    /// 45°E, the walk-back settles on day_start = JD 2459014.5 and sunrise =
+    /// JD 2459015.390376202; scanning forward from that sunrise gives sunset
+    /// = JD 2459015.8936279733 (12.078 h daytime). Taking `.set` from
+    /// `sun_rise_set(2459014.5, ...)` instead (the mutation) gives JD
+    /// 2459014.896358407, which is BEFORE sunrise — a −11.856 h "daytime",
+    /// so under the mutation `eighth` goes negative and every window's
+    /// `end_jd` falls before its `start_jd`, failing the ordering assertion
+    /// outright.
+    ///
+    /// PROVEN by actually applying this mutation to `kalam_windows` (taking
+    /// `.set` from the `day_start`-anchored call while keeping the
+    /// walk-back) and re-running: this test FAILED (`rahu ran backwards:
+    /// 2459015.328623978 .. 2459015.266871754`); reverting made it pass
+    /// again. See the fix-pass report for the full failure output.
+    #[test]
+    fn kalam_windows_step_b_scans_forward_from_sunrise_not_day_start() {
+        let jd = 2_459_015.75;
+        let lon = 45.0;
+        let tz = 180; // lon / 15 * 60 — nearest-hour civil offset for this longitude.
+
+        let sunrise = vedaksha_astro::riseset::sun_rise_set(2_459_014.5, 0.0, lon, 0.0, &flat_sun)
+            .rise
+            .expect("walked-back sunrise exists");
+        let sunset = vedaksha_astro::riseset::sun_rise_set(sunrise, 0.0, lon, 0.0, &flat_sun)
+            .set
+            .expect("forward-scanned sunset exists");
+        let eighth = (sunset - sunrise) / 8.0;
+        assert!(
+            eighth > 0.0,
+            "sanity: independently-derived daytime must be positive, got {} h",
+            (sunset - sunrise) * 24.0
+        );
+
+        let vara = weekday_from_day_index(sunrise + f64::from(tz) / 1440.0);
+        let expected = |slot: u8| {
+            let start = sunrise + f64::from(slot - 1) * eighth;
+            (start, start + eighth)
+        };
+        let (rahu_start, rahu_end) = expected(vara.rahu_kalam_slot());
+        let (gulika_start, gulika_end) = expected(vara.gulika_kalam_slot());
+
+        let (rahu, gulika) =
+            kalam_windows(jd, 0.0, lon, 0.0, tz, &flat_sun).expect("sun rises here");
+
+        assert!(
+            rahu.end_jd > rahu.start_jd,
+            "rahu ran backwards: {} .. {}",
+            rahu.start_jd,
+            rahu.end_jd
+        );
+        assert!(
+            gulika.end_jd > gulika.start_jd,
+            "gulika ran backwards: {} .. {}",
+            gulika.start_jd,
+            gulika.end_jd
+        );
+        assert!(
+            (rahu.start_jd - rahu_start).abs() < 1e-9,
+            "rahu.start_jd {} != independently-derived {rahu_start}",
+            rahu.start_jd
+        );
+        assert!(
+            (rahu.end_jd - rahu_end).abs() < 1e-9,
+            "rahu.end_jd {} != independently-derived {rahu_end}",
+            rahu.end_jd
+        );
+        assert!(
+            (gulika.start_jd - gulika_start).abs() < 1e-9,
+            "gulika.start_jd {} != independently-derived {gulika_start}",
+            gulika.start_jd
+        );
+        assert!(
+            (gulika.end_jd - gulika_end).abs() < 1e-9,
+            "gulika.end_jd {} != independently-derived {gulika_end}",
+            gulika.end_jd
         );
     }
 
@@ -1164,8 +1325,16 @@ mod tests {
             gulika.start_jd,
             gulika.end_jd
         );
-        // A day is a day, wherever you stand: between 6 and 18 hours at this
-        // latitude and season, so eight of these are 45-135 minutes each.
+        // "at this latitude and season" was a false premise: `flat_sun` fixes
+        // the Sun's RA/dec at (0°, 0°), so this fixture has no seasons at
+        // all, and daytime length is NOT latitude-independent either — it is
+        // set by the fixed −50′ standard-altitude threshold interacting with
+        // latitude (measured: 12.078 h at lat 0°, 12.086 h at lat 21.3069°,
+        // 12.145 h at lat 51.5°, 12.101 h at lat −33.9°, all via
+        // `sun_rise_set(2459015.5, lat, 0.0, 0.0, flat_sun)`). For this exact
+        // call (jd 2459015.75, lat 21.3069°, lon −157.8583°) the measured
+        // daytime is 12.086 h, so one eighth is ≈90.65 min; 45-135 min below
+        // is kept as a generous sanity bound, not a tight prediction.
         let width_minutes = (rahu.end_jd - rahu.start_jd) * 1440.0;
         assert!(
             (45.0..135.0).contains(&width_minutes),
@@ -1206,6 +1375,57 @@ mod tests {
     fn no_kalam_windows_where_the_sun_does_not_rise() {
         let southern_sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
         assert!(kalam_windows(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun).is_none());
+    }
+
+    /// Exercises `elevation_m` end-to-end — nothing above this line ever
+    /// passes a non-zero value. `elevation_m` widens the horizon dip
+    /// (`horizon_dip_deg`), which pulls the rise earlier. Measured directly:
+    /// at lat 0°, lon 0°, day_start JD 2451544.5, `sun_rise_set(.., 0.0,
+    /// flat_sun).rise` = JD 2451544.9687135713 (sea level) vs
+    /// `sun_rise_set(.., 2000.0, flat_sun).rise` = JD 2451544.9650836876 at
+    /// 2000 m elevation — 5.227 minutes earlier, easily clear of float
+    /// noise.
+    ///
+    /// This is the anchor-vs-selection consistency the fix restores: before
+    /// it, the window anchor used the caller's `elevation_m` but slot
+    /// SELECTION went through `vara_at`, which hardcoded elevation to 0.0 —
+    /// two different sunrises for one window. Now both come from the single
+    /// walk-back this function performs itself, with `elevation_m` honoured
+    /// throughout. Saturday's gulika slot is 1, so gulika must start exactly
+    /// at the elevation-adjusted sunrise, not the sea-level one.
+    #[test]
+    fn kalam_windows_honours_a_non_zero_elevation_consistently() {
+        let day_start = 2_451_544.5; // 2000-01-01 12:00 UT is a Saturday at longitude 0.
+        let jd = day_start + 0.5;
+        let elevation_m = 2000.0;
+
+        let sea_level_rise =
+            vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, 0.0, &flat_sun)
+                .rise
+                .expect("sun rises at sea level too");
+        let elevated_rise =
+            vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, elevation_m, &flat_sun)
+                .rise
+                .expect("sun rises with elevation too");
+        assert!(
+            (elevated_rise - sea_level_rise).abs() > 1e-4,
+            "sanity: a 2000 m elevation must measurably move the rise instant, \
+             got sea={sea_level_rise} elevated={elevated_rise}"
+        );
+
+        let (_, gulika) =
+            kalam_windows(jd, 0.0, 0.0, elevation_m, 0, &flat_sun).expect("sun rises here");
+        assert!(
+            (gulika.start_jd - elevated_rise).abs() < 1e-9,
+            "Saturday gulika (slot 1) must start at the ELEVATION-ADJUSTED sunrise \
+             ({elevated_rise}), not the sea-level one ({sea_level_rise}): got {}",
+            gulika.start_jd
+        );
+        assert!(
+            (gulika.start_jd - sea_level_rise).abs() > 1e-4,
+            "this would also pass by coincidence if elevation_m were ignored \
+             entirely for the anchor — it must differ from the sea-level rise"
+        );
     }
 
     #[test]
