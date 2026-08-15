@@ -30,7 +30,11 @@ def test_natal_chart_has_expected_shape(vk: Vedaksha) -> None:
 
 
 def test_call_tool_generic(vk: Vedaksha) -> None:
-    result = vk.call_tool("compute_panchanga", jd=2451545.0, sun=280.0, moon=120.4)
+    result = vk.call_tool(
+        "compute_panchanga",
+        jd=2451545.0, sun=280.0, moon=120.4,
+        latitude=28.6139, longitude=77.2090,
+    )
     assert isinstance(result, dict) and result
 
 

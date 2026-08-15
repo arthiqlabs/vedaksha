@@ -29,7 +29,8 @@ MCP_CASES = [
     ("panchanga", {
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
         "params": {"name": "compute_panchanga", "arguments": {
-            "jd": 2451545.0, "sun": 280.0, "moon": 120.4}}}),
+            "jd": 2451545.0, "sun": 280.0, "moon": 120.4,
+            "latitude": 28.6139, "longitude": 77.2090}}}),
     ("tools_list", {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
 ]
 
