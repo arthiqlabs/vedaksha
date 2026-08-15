@@ -372,14 +372,21 @@ pub fn vara_at(
 /// Assess muhurta quality for a given moment.
 ///
 /// # Arguments
-/// * `jd` — Julian Day
+/// * `jd` — Julian Day (UT)
 /// * `moon_sidereal_lon` — Moon's sidereal longitude in degrees
 /// * `sun_sidereal_lon` — Sun's sidereal longitude in degrees
+/// * `weekday` — the **vara**, which the caller must derive with [`vara_at`].
+///   Taken rather than computed because a vara needs an observer and this
+///   function has none.
 #[must_use]
-pub fn assess_muhurta(jd: f64, moon_sidereal_lon: f64, sun_sidereal_lon: f64) -> MuhurtaAssessment {
+pub fn assess_muhurta(
+    jd: f64,
+    moon_sidereal_lon: f64,
+    sun_sidereal_lon: f64,
+    weekday: Weekday,
+) -> MuhurtaAssessment {
     let nakshatra = Nakshatra::from_longitude(moon_sidereal_lon);
     let tithi = compute_tithi(moon_sidereal_lon, sun_sidereal_lon);
-    let weekday = ut_weekday_from_jd(jd);
 
     let mut score = 0.5_f64; // neutral baseline
     let mut factors = Vec::new();
@@ -554,24 +561,71 @@ pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) 
 /// # Arguments
 /// * `start_jd` — start of search range
 /// * `end_jd` — end of search range
+/// * `lat_deg` / `lon_deg_east` / `tz_offset_minutes` — the observer, needed
+///   to derive the vara (see [`vara_at`]) for each candidate instant.
 /// * `get_moon_lon` — callback returning Moon sidereal longitude at JD
 /// * `get_sun_lon` — callback returning Sun sidereal longitude at JD
+/// * `equatorial` — the Sun's apparent `(right_ascension_deg, declination_deg)`
+///   at a JD (UT), passed through to [`vara_at`]'s sunrise search.
 /// * `min_quality` — minimum quality score (0.0-1.0) to include
+///
+/// # Performance
+///
+/// One [`vara_at`] call costs roughly 2 × (288 coarse scan steps + bisection)
+/// `equatorial` evaluations, because each `sun_rise_set` scans a day at
+/// 5-minute resolution and the walk-back always consumes two iterations.
+/// Deriving the vara fresh at every 0.5-day step would put a one-year search
+/// near 420,000 evaluations — a latency regression measured in minutes on a
+/// tool that is otherwise fast. The vara changes at most once per civil day,
+/// so this memoises on `libm::floor(jd - 0.5) + 0.5` (the same civil-day-start
+/// `vara_at` computes internally) and recomputes only when it changes: one
+/// `vara_at` call per civil day in the range, not one per step.
+// The ninth argument is the observer's tz offset, needed alongside lat/lon to
+// derive the vara per candidate instant (see the performance note above) —
+// splitting it into a struct would obscure the callback wiring more than it
+// helps. Same precedent as `vedaksha_astro::transits` and
+// `vedaksha_ephem_core`.
+#[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn search_muhurta(
     start_jd: f64,
     end_jd: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    tz_offset_minutes: i32,
     get_moon_lon: &dyn Fn(f64) -> Option<f64>,
     get_sun_lon: &dyn Fn(f64) -> Option<f64>,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
     min_quality: f64,
 ) -> Vec<MuhurtaAssessment> {
     let mut results = Vec::new();
     let mut jd = start_jd;
     let step = 0.5; // check every half day
 
+    // (civil_day_start, vara) of the most recently computed vara. Recomputed
+    // only when the civil day changes — see the performance note above.
+    let mut memo: Option<(f64, Weekday)> = None;
+
     while jd <= end_jd {
         if let (Some(moon), Some(sun)) = (get_moon_lon(jd), get_sun_lon(jd)) {
-            let assessment = assess_muhurta(jd, moon, sun);
+            let day_start = libm::floor(jd - 0.5) + 0.5;
+            // Exact equality is intentional, not a tolerance bug: both sides
+            // come from the identical `libm::floor(jd - 0.5) + 0.5` formula
+            // (this line and `vara_at`'s internal day-start walk), so they
+            // are bit-identical whenever `jd` falls in the same civil day —
+            // there is no accumulated float error to compare within.
+            #[allow(clippy::float_cmp)]
+            let same_day =
+                matches!(memo, Some((cached_day_start, _)) if cached_day_start == day_start);
+            let vara = match memo {
+                Some((_, cached_vara)) if same_day => cached_vara,
+                _ => {
+                    let v = vara_at(jd, lat_deg, lon_deg_east, tz_offset_minutes, equatorial);
+                    memo = Some((day_start, v));
+                    v
+                }
+            };
+            let assessment = assess_muhurta(jd, moon, sun, vara);
             if assessment.quality_score >= min_quality {
                 results.push(assessment);
             }
@@ -836,7 +890,11 @@ mod tests {
     fn auspicious_nakshatra_boosts_score() {
         // Rohini: lon ≈ 3*13.333 = 40°
         // Use Pushya: index 7 → lon ≈ 7*13.333 = 93.333°
-        let assessment = assess_muhurta(2_451_545.0, 94.0, 0.0);
+        // JD 2451545.0 = J2000.0 = Saturday, per `weekday_j2000_is_saturday`
+        // above — `assess_muhurta` no longer derives the vara itself, so it
+        // is passed explicitly to keep this test's inputs identical to what
+        // the old internal `ut_weekday_from_jd(jd)` call would have produced.
+        let assessment = assess_muhurta(2_451_545.0, 94.0, 0.0, Weekday::Saturday);
         assert!(
             assessment.quality_score > 0.5,
             "Auspicious nakshatra should boost score above baseline"
@@ -854,7 +912,8 @@ mod tests {
     fn amavasya_reduces_score() {
         // Amavasya: tithi 30, need diff ~348° → Moon lon = Sun lon + 348°
         // Sun at 0°, Moon at 348°
-        let assessment = assess_muhurta(2_451_545.0, 348.0, 0.0);
+        // JD 2451545.0 = J2000.0 = Saturday (see comment above).
+        let assessment = assess_muhurta(2_451_545.0, 348.0, 0.0, Weekday::Saturday);
         assert_eq!(assessment.tithi.number, 30, "Should be Amavasya");
         assert!(
             assessment.factors.iter().any(|f| f.contains("Amavasya")),
@@ -865,7 +924,8 @@ mod tests {
     #[test]
     fn inauspicious_nakshatra_reduces_score() {
         // Ardra: index 5 → lon ≈ 5*13.333 = 66.666°
-        let assessment = assess_muhurta(2_451_545.0, 67.0, 0.0);
+        // JD 2451545.0 = J2000.0 = Saturday (see comment above).
+        let assessment = assess_muhurta(2_451_545.0, 67.0, 0.0, Weekday::Saturday);
         assert!(
             assessment
                 .factors
@@ -882,7 +942,8 @@ mod tests {
         // Need: Ardra + Amavasya. Find a Saturday JD.
         // J2000.0 = Saturday. Moon = 348° (Amavasya region), need Ardra lon ~66-79°
         // These conflict — just test score is in [0, 1]
-        let assessment = assess_muhurta(2_451_545.0, 67.0, 0.0);
+        // JD 2451545.0 = J2000.0 = Saturday (see comment above).
+        let assessment = assess_muhurta(2_451_545.0, 67.0, 0.0, Weekday::Saturday);
         assert!(
             assessment.quality_score >= 0.0 && assessment.quality_score <= 1.0,
             "Score must be in [0, 1], got {}",
@@ -901,8 +962,12 @@ mod tests {
         let results = search_muhurta(
             2_451_545.0,
             2_451_546.0,
+            0.0,
+            0.0,
+            0,
             &|_| Some(moon_lon),
             &|_| Some(sun_lon),
+            &flat_sun,
             0.5,
         );
         assert!(
@@ -918,15 +983,23 @@ mod tests {
         let low_threshold = search_muhurta(
             2_451_545.0,
             2_451_555.0,
+            0.0,
+            0.0,
+            0,
             &|_| Some(moon_lon),
             &|_| Some(sun_lon),
+            &flat_sun,
             0.0,
         );
         let high_threshold = search_muhurta(
             2_451_545.0,
             2_451_555.0,
+            0.0,
+            0.0,
+            0,
             &|_| Some(moon_lon),
             &|_| Some(sun_lon),
+            &flat_sun,
             0.99,
         );
         assert!(
@@ -937,7 +1010,17 @@ mod tests {
 
     #[test]
     fn search_returns_empty_when_callback_returns_none() {
-        let results = search_muhurta(2_451_545.0, 2_451_550.0, &|_| None, &|_| None, 0.0);
+        let results = search_muhurta(
+            2_451_545.0,
+            2_451_550.0,
+            0.0,
+            0.0,
+            0,
+            &|_| None,
+            &|_| None,
+            &flat_sun,
+            0.0,
+        );
         assert!(
             results.is_empty(),
             "No assessments when callbacks return None"
@@ -951,8 +1034,12 @@ mod tests {
         let _ = search_muhurta(
             2_451_545.0,
             2_451_546.0,
+            0.0,
+            0.0,
+            0,
             &|_| Some(94.0),
             &|_jd| Some(64.0),
+            &flat_sun,
             0.0,
         )
         .len();
@@ -960,8 +1047,12 @@ mod tests {
         let results = search_muhurta(
             2_451_545.0,
             2_451_546.0,
+            0.0,
+            0.0,
+            0,
             &|_| Some(94.0),
             &|_| Some(64.0),
+            &flat_sun,
             0.0,
         );
         assert_eq!(
@@ -972,6 +1063,91 @@ mod tests {
         let _ = count;
         count = results.len();
         assert_eq!(count, 3);
+    }
+
+    /// Pins the memoisation actually firing: without it, `search_muhurta`
+    /// would call `vara_at` (and so `equatorial`) once per 0.5-day STEP;
+    /// with it, once per distinct CIVIL DAY. This counts `equatorial`
+    /// invocations with a `Cell<u32>` rather than asserting a hand-derived
+    /// number, because the exact per-`vara_at`-call cost (walk-back count ×
+    /// scan resolution × bisection iterations) is an implementation detail
+    /// of `vara_at`/`sun_rise_set` this test should not have to know. The
+    /// reference count is instead measured directly: call `vara_at` once
+    /// per expected trigger point (unmemoised) and sum, then assert the
+    /// memoised `search_muhurta` run costs exactly that much — not more (no
+    /// regression to per-step) and not less (memoisation isn't skipping a
+    /// day it should have priced).
+    #[test]
+    fn search_muhurta_memoises_vara_per_civil_day_not_per_step() {
+        use std::cell::Cell;
+
+        let (lat, lon, tz) = (0.0, 0.0, 0);
+
+        // `start` is chosen to already equal a civil-day-start
+        // (`libm::floor(jd - 0.5) + 0.5 == jd`, since 2_451_545.5 - 0.5 =
+        // 2_451_545.0 is an integer) so every one of the 5 civil-day
+        // boundaries below is crossed at the SAME 0.0 offset into its day —
+        // otherwise the first (partial) day would cost a different number of
+        // `equatorial` calls than the other four and the two independently
+        // measured totals below would not need to agree even under correct
+        // memoisation.
+        let start = 2_451_545.5;
+        let end = start + 4.0; // 4 civil days later
+        // With a 0.5-day step, start..=end is 9 samples (8 steps of 0.5 sum
+        // exactly to 4.0 in f64, since 0.5 is a power-of-two fraction) but
+        // only 5 distinct civil-day-starts: start, start+1.0, ..., start+4.0
+        // — verified by the `results.len() == 9` assertion below and by
+        // `libm::floor(jd - 0.5) + 0.5` being identical for `start + k` and
+        // `start + k + 0.5` for each integer k in 0..4.
+        let trigger_jds = [start, start + 1.0, start + 2.0, start + 3.0, start + 4.0];
+
+        // Reference: sum of `equatorial` calls from 5 direct, unmemoised
+        // `vara_at` calls — one at each expected memoisation trigger point.
+        // This is exactly what a correctly memoising `search_muhurta` should
+        // cost in total, however many `equatorial` evaluations one `vara_at`
+        // call happens to take.
+        let expected_calls = Cell::new(0u32);
+        for &jd in &trigger_jds {
+            let counted = |t: f64| {
+                expected_calls.set(expected_calls.get() + 1);
+                flat_sun(t)
+            };
+            let _ = vara_at(jd, lat, lon, tz, &counted);
+        }
+        let expected = expected_calls.get();
+        assert!(
+            expected > 0,
+            "sanity: vara_at must call `equatorial` at least once"
+        );
+
+        let actual_calls = Cell::new(0u32);
+        let counted = |t: f64| {
+            actual_calls.set(actual_calls.get() + 1);
+            flat_sun(t)
+        };
+        let results = search_muhurta(
+            start,
+            end,
+            lat,
+            lon,
+            tz,
+            &|_| Some(94.0),
+            &|_| Some(64.0),
+            &counted,
+            0.0,
+        );
+        assert_eq!(
+            results.len(),
+            9,
+            "9 samples at a 0.5-day step over a 4-day span"
+        );
+        assert_eq!(
+            actual_calls.get(),
+            expected,
+            "memoisation must cost exactly 5 direct `vara_at` calls' worth of \
+             `equatorial` invocations ({expected}) — one per distinct civil \
+             day — not one per of the 9 steps"
+        );
     }
 
     // --- paksha, lord, remaining_degrees ---

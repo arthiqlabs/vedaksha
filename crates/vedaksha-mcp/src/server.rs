@@ -543,7 +543,9 @@ impl McpServer {
     }
 
     fn call_compute_panchanga(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, ut_weekday_from_jd};
+        use vedaksha_astro::riseset::sun_equatorial_deg;
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, vara_at};
         use vedaksha_vedic::nakshatra::Nakshatra;
         use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
 
@@ -553,7 +555,26 @@ impl McpServer {
         crate::tools::compute_panchanga::validate(&input)?;
 
         let tithi = compute_tithi(input.moon, input.sun);
-        let weekday = ut_weekday_from_jd(input.jd);
+        // `AnalyticalProvider` as a plain local — the pattern used at
+        // server.rs:292, :868, :971 and :1092. There is no `Self::provider()`
+        // accessor in this file; do not invent one.
+        let provider = AnalyticalProvider;
+        let sun_eq = |jd: f64| sun_equatorial_deg(&provider, jd);
+        let weekday = vara_at(
+            input.jd,
+            input.latitude,
+            input.longitude,
+            input.tz_offset_minutes,
+            &sun_eq,
+        );
+        let kalams = vedaksha_vedic::muhurta::kalam_windows(
+            input.jd,
+            input.latitude,
+            input.longitude,
+            input.elevation_m,
+            input.tz_offset_minutes,
+            &sun_eq,
+        );
         let nakshatra = Nakshatra::from_longitude(input.moon);
         let pada = Nakshatra::pada_from_longitude(input.moon);
         let yoga = compute_panchanga_yoga(input.sun, input.moon);
@@ -584,6 +605,13 @@ impl McpServer {
                 "weekday": weekday_name,
                 "lord": weekday.lord(),
                 "rahu_kalam_slot": weekday.rahu_kalam_slot(),
+                "gulika_kalam_slot": weekday.gulika_kalam_slot(),
+                "rahu_kalam": kalams.map(|(r, _)| serde_json::json!({
+                    "start_jd": r.start_jd, "end_jd": r.end_jd
+                })),
+                "gulika_kalam": kalams.map(|(_, g)| serde_json::json!({
+                    "start_jd": g.start_jd, "end_jd": g.end_jd
+                })),
             },
             "nakshatra": {
                 "index": nakshatra.index(),
@@ -1080,6 +1108,7 @@ impl McpServer {
     }
 
     fn call_search_muhurta(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_astro::riseset::sun_equatorial_deg;
         use vedaksha_ephem_core::analytical::AnalyticalProvider;
         use vedaksha_ephem_core::bodies::Body;
         use vedaksha_ephem_core::coordinates;
@@ -1115,11 +1144,19 @@ impl McpServer {
             ))
         };
 
+        // The tool has no timezone parameter, so the vara's weekday name is
+        // reckoned on UT (offset 0) — only the sunrise instant depends on
+        // latitude/longitude, and that is unaffected by this offset.
+        let sun_eq = |jd: f64| sun_equatorial_deg(&provider, jd);
         let mut assessments = vedaksha_vedic::muhurta::search_muhurta(
             input.start_jd,
             input.end_jd,
+            input.latitude,
+            input.longitude,
+            0,
             &get_moon_sidereal,
             &get_sun_sidereal,
+            &sun_eq,
             min_quality,
         );
 
@@ -1700,5 +1737,68 @@ mod tests {
             val["error"]["data"]["error_code"].as_str().unwrap(),
             "INVALID_LATITUDE"
         );
+    }
+
+    // ── compute_panchanga vara/kalam ──────────────────────────────────────────
+
+    /// The panchanga's vara must follow the observer, not UT. Same instant,
+    /// two observers either side of the UT day boundary.
+    #[test]
+    fn compute_panchanga_vara_follows_the_observer() {
+        // 2020-06-14 20:00 Honolulu == 2020-06-15 06:00Z.
+        let honolulu = serde_json::json!({
+            "jd": 2_459_015.75, "sun": 84.0, "moon": 200.0,
+            "latitude": 21.3069, "longitude": -157.8583, "tz_offset_minutes": -600
+        });
+        let v = McpServer::call_compute_panchanga(&honolulu).expect("valid input");
+        assert_eq!(
+            v["vara"]["weekday"], "Sunday",
+            "20:00 Sunday evening in Honolulu is Ravivara, not Monday"
+        );
+        assert!(
+            v["vara"]["rahu_kalam"]["start_jd"].is_number(),
+            "rahu kalam must be a real window, not a slot index"
+        );
+        assert!(v["vara"]["gulika_kalam"]["end_jd"].is_number());
+    }
+
+    /// The MCP wiring must actually pass `tz_offset_minutes` through to
+    /// `vara_at`, not silently drop it (e.g. always call with 0). Same
+    /// instant and observer position as `far_east_and_far_west_cannot_share_a_vara_at_one_instant`
+    /// in `vedaksha_vedic::muhurta` (jd 2459015.75, lon 165°E — the far-east
+    /// case from the KundaliMCP report), at UTC+11. Confirmed empirically
+    /// (not hand-derived): calling `compute_panchanga` at tz_offset_minutes
+    /// = +660 returns "Monday"; at the same jd/lat/lon with tz_offset_minutes
+    /// forced to 0 it returns "Sunday" — the two must disagree, or the tz
+    /// offset supplied by the caller is not reaching `vara_at`.
+    #[test]
+    fn compute_panchanga_vara_uses_the_supplied_tz_offset() {
+        let with_tz = serde_json::json!({
+            "jd": 2_459_015.75, "sun": 84.0, "moon": 200.0,
+            "latitude": 0.0, "longitude": 165.0, "tz_offset_minutes": 660
+        });
+        let without_tz = serde_json::json!({
+            "jd": 2_459_015.75, "sun": 84.0, "moon": 200.0,
+            "latitude": 0.0, "longitude": 165.0, "tz_offset_minutes": 0
+        });
+        let v1 = McpServer::call_compute_panchanga(&with_tz).expect("valid input");
+        let v2 = McpServer::call_compute_panchanga(&without_tz).expect("valid input");
+        assert_eq!(v1["vara"]["weekday"], "Monday");
+        assert_eq!(v2["vara"]["weekday"], "Sunday");
+        assert_ne!(
+            v1["vara"]["weekday"], v2["vara"]["weekday"],
+            "tz_offset_minutes must reach vara_at — dropping it must change this result"
+        );
+    }
+
+    /// Observer coordinates are required for a vara and must be rejected, not
+    /// silently defaulted, when out of range.
+    #[test]
+    fn compute_panchanga_rejects_an_impossible_latitude() {
+        let bad = serde_json::json!({
+            "jd": 2_451_545.0, "sun": 84.0, "moon": 200.0,
+            "latitude": 91.0, "longitude": 0.0
+        });
+        assert!(McpServer::call_compute_panchanga(&bad).is_err());
     }
 }

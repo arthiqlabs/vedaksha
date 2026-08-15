@@ -17,6 +17,16 @@ pub struct ComputePanchangaInput {
     pub sun: f64,
     /// Sidereal longitude of the Moon, degrees [0, 360).
     pub moon: f64,
+    /// Observer latitude in degrees [−90, +90]. Required for the vara.
+    pub latitude: f64,
+    /// Observer longitude in degrees [−180, +180], east positive.
+    pub longitude: f64,
+    /// Observer elevation above sea level in metres. Defaults to 0.
+    #[serde(default)]
+    pub elevation_m: f64,
+    /// Offset of the observer's civil clock from UT, in minutes. Defaults to 0.
+    #[serde(default)]
+    pub tz_offset_minutes: i32,
 }
 
 #[must_use]
@@ -24,18 +34,38 @@ pub fn definition() -> super::ToolDefinition {
     super::ToolDefinition {
         name: "compute_panchanga",
         description: "Compute the panchanga — the five limbs of the Vedic almanac — for an \
-            instant: tithi (lunar day, with paksha and lord), vara (weekday, with lord and Rahu \
-            Kalam slot), nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees \
-            remaining), and karana (half-tithi). Takes sidereal longitudes; the caller is \
-            responsible for timezone conversion, as all times are UT.",
+            instant: tithi (lunar day, with paksha and lord), vara (weekday reckoned from local \
+            sunrise, with its lord and the Rahu and Gulika Kalam windows as Julian Days), \
+            nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), \
+            and karana (half-tithi). Takes sidereal longitudes; all returned instants are \
+            Julian Days (UT).",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
                 "jd":   { "type": "number", "description": "Julian Day (UT), used for the vara" },
                 "sun":  { "type": "number", "description": "Sidereal longitude of Sun [0, 360)" },
-                "moon": { "type": "number", "description": "Sidereal longitude of Moon [0, 360)" }
+                "moon": { "type": "number", "description": "Sidereal longitude of Moon [0, 360)" },
+                "latitude": {
+                    "type": "number", "minimum": -90, "maximum": 90,
+                    "description": "Observer latitude in degrees. Required — the vara is \
+                                    reckoned from local sunrise, so it depends on the observer."
+                },
+                "longitude": {
+                    "type": "number", "minimum": -180, "maximum": 180,
+                    "description": "Observer longitude in degrees, east positive. Required."
+                },
+                "elevation_m": {
+                    "type": "number", "default": 0,
+                    "description": "Observer elevation in metres above sea level; shifts sunrise \
+                                    slightly via the horizon dip."
+                },
+                "tz_offset_minutes": {
+                    "type": "integer", "default": 0,
+                    "description": "Offset of the observer's civil clock from UT, in minutes. \
+                                    Used only to name the vara's weekday."
+                }
             },
-            "required": ["jd", "sun", "moon"]
+            "required": ["jd", "sun", "moon", "latitude", "longitude"]
         }),
     }
 }
@@ -59,7 +89,26 @@ pub fn validate(input: &ComputePanchangaInput) -> Result<(), McpError> {
         return Err(McpError::invalid_parameter("jd", "must be a finite number"));
     }
     validate_lon("sun", input.sun)?;
-    validate_lon("moon", input.moon)
+    validate_lon("moon", input.moon)?;
+    if !input.latitude.is_finite() || !(-90.0..=90.0).contains(&input.latitude) {
+        return Err(McpError::invalid_parameter(
+            "latitude",
+            "must be a finite number in [-90, 90]",
+        ));
+    }
+    if !input.longitude.is_finite() || !(-180.0..=180.0).contains(&input.longitude) {
+        return Err(McpError::invalid_parameter(
+            "longitude",
+            "must be a finite number in [-180, 180]",
+        ));
+    }
+    if !input.elevation_m.is_finite() {
+        return Err(McpError::invalid_parameter(
+            "elevation_m",
+            "must be a finite number",
+        ));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -71,6 +120,10 @@ mod tests {
             jd: 2_451_545.0,
             sun: 280.0,
             moon: 220.0,
+            latitude: 13.08,
+            longitude: 80.27,
+            elevation_m: 0.0,
+            tz_offset_minutes: 0,
         }
     }
 
@@ -108,5 +161,37 @@ mod tests {
         assert!(names.contains(&"jd"));
         assert!(names.contains(&"sun"));
         assert!(names.contains(&"moon"));
+        assert!(names.contains(&"latitude"));
+        assert!(names.contains(&"longitude"));
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_latitude() {
+        let mut input = valid_input();
+        input.latitude = 91.0;
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
+    }
+
+    #[test]
+    fn validate_rejects_out_of_range_longitude() {
+        let mut input = valid_input();
+        input.longitude = 200.0;
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
+    }
+
+    #[test]
+    fn validate_rejects_non_finite_elevation() {
+        let mut input = valid_input();
+        input.elevation_m = f64::NAN;
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
     }
 }

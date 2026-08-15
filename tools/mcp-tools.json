@@ -633,11 +633,28 @@
       "name": "compute_gochara"
     },
     {
-      "description": "Compute the panchanga — the five limbs of the Vedic almanac — for an instant: tithi (lunar day, with paksha and lord), vara (weekday, with lord and Rahu Kalam slot), nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), and karana (half-tithi). Takes sidereal longitudes; the caller is responsible for timezone conversion, as all times are UT.",
+      "description": "Compute the panchanga — the five limbs of the Vedic almanac — for an instant: tithi (lunar day, with paksha and lord), vara (weekday reckoned from local sunrise, with its lord and the Rahu and Gulika Kalam windows as Julian Days), nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), and karana (half-tithi). Takes sidereal longitudes; all returned instants are Julian Days (UT).",
       "inputSchema": {
         "properties": {
+          "elevation_m": {
+            "default": 0,
+            "description": "Observer elevation in metres above sea level; shifts sunrise slightly via the horizon dip.",
+            "type": "number"
+          },
           "jd": {
             "description": "Julian Day (UT), used for the vara",
+            "type": "number"
+          },
+          "latitude": {
+            "description": "Observer latitude in degrees. Required — the vara is reckoned from local sunrise, so it depends on the observer.",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Observer longitude in degrees, east positive. Required.",
+            "maximum": 180,
+            "minimum": -180,
             "type": "number"
           },
           "moon": {
@@ -647,12 +664,19 @@
           "sun": {
             "description": "Sidereal longitude of Sun [0, 360)",
             "type": "number"
+          },
+          "tz_offset_minutes": {
+            "default": 0,
+            "description": "Offset of the observer's civil clock from UT, in minutes. Used only to name the vara's weekday.",
+            "type": "integer"
           }
         },
         "required": [
           "jd",
           "sun",
-          "moon"
+          "moon",
+          "latitude",
+          "longitude"
         ],
         "type": "object"
       },
