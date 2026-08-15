@@ -612,6 +612,9 @@ impl McpServer {
         crate::tools::compute_drishti::validate(&input)?;
 
         // Drishti is cast sign-to-sign, so the longitude only matters via its sign.
+        // `validate` above pins every longitude to [0, 360), so the quotient is in
+        // [0, 12) — the cast can neither truncate meaningfully nor lose a sign.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let sign = |lon: f64| (lon / 30.0).floor() as u8 % 12;
 
         let placements = [
@@ -690,6 +693,9 @@ impl McpServer {
             .planets
             .iter()
             .map(|(name, lon)| {
+                // `validate` pins every supplied longitude to [0, 360), so the
+                // quotient is in [0, 12) and the cast is exact.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let planet_sign = (lon / 30.0).floor() as u8 % 12;
                 serde_json::json!({
                     "planet": name,
