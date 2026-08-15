@@ -389,3 +389,94 @@ fn whole_sign_cusps_are_deterministic_from_asc() {
     eprintln!("Total: {total}, Pass: {pass}");
     assert_eq!(pass, total);
 }
+
+// ─── RAMC TIME SCALE (UT1, not TT) ───
+
+/// The served chart's RAMC must be built from a **UT1** Julian Day.
+///
+/// This is the test that pins the actual call site. The cross-check in
+/// `vedaksha_astro::riseset` pins `sidereal_time::local_sidereal_time`'s own
+/// convention, but it cannot see what `server.rs` passes in; between
+/// v1 and the UT-vs-TT fix the chart path converted to TT first
+/// (`delta_t::ut1_to_tt`) and then used that as the rotational argument,
+/// adding ΔT worth of Earth rotation instead of removing it. Nothing caught
+/// it, because every chart assertion in the suite was a range check.
+///
+/// The RAMC is not emitted, but the tropical MC is, and the engine's own
+/// documented closed form (`vedaksha_astro::houses::compute_asc_mc`) is
+/// invertible:
+/// ```text
+/// MC   = atan2(sin RAMC, cos RAMC · cos ε)
+/// RAMC = atan2(sin MC · cos ε, cos MC)
+/// ```
+/// (`tan MC = tan RAMC / cos ε` ⇔ `tan RAMC = tan MC · cos ε`, and atan2
+/// keeps the quadrant on both sides.) `ε` here must be the SAME obliquity the
+/// server hands to `compute_houses` — the mean obliquity at TT — or the
+/// inversion is not the inverse.
+///
+/// The expected value is derived independently of this codebase:
+/// GMST at JD 2,451,544.5 (2000-01-01 00:00 UT1) = **99.967795°**, from the
+/// IAU 1982 series `GMST_s = 24110.54841 + 8640184.812866·Tu + 0.093104·Tu²
+/// − 6.2e-6·Tu³` with `Tu = (JD − 2451545.0)/36525 = −1.369472e-5`, which
+/// agrees with Meeus eq. 12.4 to 7 decimals. Same constant, same derivation
+/// as `riseset::local_sidereal_degrees_matches_published_gmst_at_j2000`.
+/// Local mean sidereal time at 77.2090° E is then 99.967795 + 77.2090 =
+/// 177.176795°.
+///
+/// The served RAMC is *apparent*, so it differs from that mean value by the
+/// equation of the equinoxes and nothing else. Δψ is bounded by the 18.6-year
+/// nutation term at ±17.2″, so the tolerance is that physical bound,
+/// 17.2/3600 = 0.0047778° — NOT a figure sized to make the test pass.
+///
+/// Measured, with the fix in place: recovered RAMC = 177.17324412561521°
+/// (from the served MC = 176.91947671879240°), i.e. 3.550874e-3° = 12.78″
+/// below the mean value. That is Δψ·cos(ε_true) at this instant, measured
+/// independently as −3.550561239877e-3° in the `riseset` cross-check; the
+/// remaining 3.13e-7° is the rounding of the 99.967795° literal to six
+/// decimals, the same 3.131449e-7° already recorded there. Nothing else is
+/// unaccounted for.
+///
+/// Mutation, measured: restoring `jd_tt` as the rotational argument in
+/// `server.rs` moves the served MC to 177.20992574088470° and the recovered
+/// RAMC to 177.43983661960689° — off by 0.263041619606895° (15.78′), 55× the
+/// tolerance. The test fails; reverting makes it pass again.
+#[test]
+fn served_ramc_is_built_from_ut1_not_tt() {
+    let jd_ut1 = 2_451_544.5_f64;
+    let lon_east = 77.2090_f64;
+
+    let server = vedaksha_mcp::server::McpServer::new();
+    let request = serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_natal_chart", "arguments": {
+            "julian_day": jd_ut1, "latitude": 28.6139, "longitude": lon_east}}
+    });
+    let response: serde_json::Value =
+        serde_json::from_str(&server.handle_request(&serde_json::to_string(&request).unwrap()))
+            .unwrap();
+    let text = response["result"]["content"][0]["text"]
+        .as_str()
+        .expect("compute_natal_chart returned no content");
+    let chart: serde_json::Value = serde_json::from_str(text).unwrap();
+    let mc_deg = chart["houses"]["mc"].as_f64().expect("houses.mc missing");
+
+    // Same obliquity the server feeds compute_houses: MEAN obliquity at TT.
+    let jd_tt = vedaksha_ephem_core::delta_t::ut1_to_tt(jd_ut1);
+    let eps = obliquity::mean_obliquity(jd_tt); // radians
+
+    let mc = mc_deg.to_radians();
+    let ramc_deg = normalize_degrees((mc.sin() * eps.cos()).atan2(mc.cos()).to_degrees());
+
+    // 99.967795° (IAU 1982, derived above) + 77.2090° E.
+    let expected_mean_ramc = 99.967_795 + lon_east;
+    // Physical bound on |Δψ·cos ε|: 17.2″.
+    let eq_equinoxes_max_deg = 17.2 / 3600.0;
+
+    let diff = (ramc_deg - expected_mean_ramc).abs();
+    assert!(
+        diff < eq_equinoxes_max_deg,
+        "served RAMC = {ramc_deg}°, expected {expected_mean_ramc}° ± {eq_equinoxes_max_deg}° \
+         (published GMST + longitude); off by {diff}°. A miss near 0.263° means the chart \
+         path passed TT where UT1 belongs."
+    );
+}

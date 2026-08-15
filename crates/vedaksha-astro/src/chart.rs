@@ -17,6 +17,7 @@ use crate::aspects::{Aspect, AspectType, BodyPosition, find_aspects};
 use crate::dignity::{DignityPlanet, RulershipScheme, dignity_of, sign_of};
 use crate::houses::{HouseCusps, HouseSystem, compute_houses};
 use serde::{Deserialize, Serialize};
+use vedaksha_math::angle::normalize_degrees;
 
 /// Configuration for chart computation.
 #[derive(Debug, Clone)]
@@ -86,11 +87,41 @@ pub struct ComputedChart {
 
 /// Compute a full chart from planet positions.
 ///
+/// # Frame
+///
+/// **Everything this function returns is in ONE frame**, selected by
+/// `config.ayanamsha`: tropical when it is `None`, sidereal on that ayanamsha
+/// when it is `Some`. That covers planet longitudes *and* the house cusps,
+/// `asc` and `mc` alike.
+///
+/// The cusps come out of [`compute_houses`] tropically — they must, since the
+/// RAMC/obliquity transform that produces them is defined against the equinox
+/// of date — so on a sidereal chart they are rotated by the same ayanamsha the
+/// planets get, before any house assignment or reporting. Cusps, `asc` and `mc`
+/// are ecliptic longitudes, so subtracting the ayanamsha is the right operation
+/// on them; the ayanamsha must **not** be subtracted from `ramc`, which is an
+/// equatorial quantity feeding an obliquity transform.
+///
+/// Rotating planets without rotating the cusps is a frame mix, and it was the
+/// live behaviour before this was fixed: with Lahiri at ~24.2° the planets were
+/// displaced by 24.2/30 = 0.807 of a house relative to the cusps, so nearly
+/// every graha on a sidereal chart landed in the wrong house, and the reported
+/// `asc` was in a different frame from the chart's own planets. House
+/// assignment is invariant under a uniform rotation of the whole zodiac — see
+/// `house_assignment_is_invariant_under_ayanamsha_rotation`, which is the test
+/// that pins this.
+///
+/// Whole-Sign is the one exception: its cusps are anchored to sign boundaries,
+/// which are themselves frame dependent, so it is re-anchored on the rotated
+/// ascendant rather than rotated rigidly. See the comment on step 2 and
+/// `whole_sign_bhavas_follow_the_sidereal_sign_of_the_ascendant`.
+///
 /// # Arguments
 ///
 /// * `planet_data` — Vec of `(name, longitude, latitude, distance, speed)`.
 ///   Longitudes are tropical ecliptic degrees.
-/// * `ramc`        — Right Ascension of MC in degrees.
+/// * `ramc`        — Right Ascension of MC in degrees (equatorial, tropical
+///   frame — never ayanamsha-corrected).
 /// * `geo_latitude` — Geographic latitude in degrees.
 /// * `obliquity`   — Obliquity of the ecliptic in degrees.
 /// * `jd`          — Julian Day (for ayanamsha computation).
@@ -109,8 +140,40 @@ pub fn compute_chart(
         .ayanamsha
         .map_or(0.0, |a| crate::sidereal::ayanamsha_value(a, jd));
 
-    // 2. Compute houses
-    let houses = compute_houses(ramc, geo_latitude, obliquity, config.house_system);
+    // 2. Compute houses — tropically, as the RAMC/obliquity transform
+    //    requires — then rotate the cusps into the chart's frame so they share
+    //    it with the planet longitudes computed in step 3. Skipping this
+    //    rotation is a frame mix: see the `# Frame` note above.
+    let mut houses = compute_houses(ramc, geo_latitude, obliquity, config.house_system);
+    if ayanamsha_offset != 0.0 {
+        for cusp in &mut houses.cusps {
+            *cusp = normalize_degrees(*cusp - ayanamsha_offset);
+        }
+        houses.asc = normalize_degrees(houses.asc - ayanamsha_offset);
+        houses.mc = normalize_degrees(houses.mc - ayanamsha_offset);
+
+        // Whole-Sign is the one system that is NOT covariant under a rigid
+        // rotation of the zodiac: its cusps are anchored to sign boundaries,
+        // and sign boundaries move when the frame does. Every other system
+        // here derives its cusps from the ascendant and the RAMC alone, so
+        // rotating them is exact — but rotating Whole-Sign leaves cusp 1 at
+        // `sign_start_tropical − ayanamsha`, which is not a sign boundary in
+        // the sidereal frame, and the chart would then report an `asc` in one
+        // sign and a 1st house starting in another. Re-anchor on the rotated
+        // ascendant, applying the module's own rule (`whole_sign::compute`:
+        // cusp 1 = floor(asc/30)·30, twelve 30° houses) in the chart's frame.
+        // This keeps bhāva = rāśi, which is what the Vedic surface means by
+        // whole-sign and what `vedaksha_mcp::tools::compute_bhavas` documents.
+        if houses.system == HouseSystem::WholeSign {
+            let sign_start = libm::floor(houses.asc / 30.0) * 30.0;
+            for (i, cusp) in houses.cusps.iter_mut().enumerate() {
+                // `i` is 0..12, exactly representable in f64; no precision loss.
+                let steps = f64::from(u8::try_from(i).unwrap_or(0));
+                *cusp = normalize_degrees(sign_start + steps * 30.0);
+            }
+        }
+    }
+    let houses = houses;
 
     // 3. Build planet positions with sign, house, dignity
     let mut planets = Vec::new();
@@ -284,6 +347,229 @@ mod tests {
             chart.planets[0].longitude,
             expected
         );
+    }
+
+    /// House assignment must be **invariant under a uniform rotation of the
+    /// zodiac**.
+    ///
+    /// Switching from tropical to sidereal rotates the whole frame by one
+    /// constant, the ayanamsha. A rotation cannot change which house a planet
+    /// occupies — it moves the planet and the cusp that bounds it by the same
+    /// amount. So for the same instant, place and house system,
+    /// `ayanamsha: None` and `ayanamsha: Some(Lahiri)` must return identical
+    /// house numbers for every planet, while every reported longitude — planet,
+    /// cusp, `asc`, `mc` alike — differs by exactly the ayanamsha.
+    ///
+    /// The pre-fix code rotated the planets and left the cusps tropical, so
+    /// planets slid 24.2/30 = 0.807 of a house against a fixed grid and the
+    /// invariance broke for most of them. This property is exact, needs no
+    /// external oracle, and the bug cannot satisfy it.
+    ///
+    /// Whole-Sign is deliberately excluded here and tested separately: its
+    /// cusps are anchored to sign boundaries, which are themselves frame
+    /// dependent, so it is the one system that is genuinely NOT covariant
+    /// under this rotation. See
+    /// `whole_sign_bhavas_follow_the_sidereal_sign_of_the_ascendant`.
+    #[test]
+    fn house_assignment_is_invariant_under_ayanamsha_rotation() {
+        use crate::sidereal::{Ayanamsha, ayanamsha_value};
+
+        // Every house system whose cusps are a function of the ascendant and
+        // the RAMC alone — i.e. every one except Whole-Sign.
+        let systems = [
+            HouseSystem::Placidus,
+            HouseSystem::Koch,
+            HouseSystem::Equal,
+            HouseSystem::Campanus,
+            HouseSystem::Regiomontanus,
+            HouseSystem::Porphyry,
+            HouseSystem::Morinus,
+            HouseSystem::Alcabitius,
+            HouseSystem::Sripathi,
+        ];
+        // (ramc, latitude, jd) — different epochs so the ayanamsha differs,
+        // and latitudes from the equator to just inside the polar circle.
+        let charts = [
+            (30.0, 0.0, 2_433_282.5),       // 1950-01-01 UT, equator
+            (177.17, 28.6139, JD),          // 2000-01-01 UT, Delhi
+            (264.78, 40.7128, 2_461_100.0), // 2026-02-28 UT, New York
+            (95.0, 60.0, 2_461_100.0),      // high but sub-polar
+        ];
+        // 24 planets at 15° spacing, so every house is populated and the
+        // 0°/360° wrap is crossed.
+        let data: Vec<_> = (0..24)
+            .map(|i| planet("Sun", f64::from(i) * 15.0, 1.0))
+            .collect();
+
+        for system in systems {
+            for (ramc, lat, jd) in charts {
+                let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
+                let mut trop_cfg = ChartConfig {
+                    house_system: system,
+                    ..ChartConfig::default()
+                };
+                trop_cfg.ayanamsha = None;
+                let mut sid_cfg = trop_cfg.clone();
+                sid_cfg.ayanamsha = Some(Ayanamsha::Lahiri);
+
+                let trop = compute_chart(&data, ramc, lat, OBL, jd, &trop_cfg);
+                let sid = compute_chart(&data, ramc, lat, OBL, jd, &sid_cfg);
+
+                // Longitudes rotate by exactly the ayanamsha.
+                for (t, s) in trop.planets.iter().zip(sid.planets.iter()) {
+                    let expected = normalize_degrees(t.longitude - ayan);
+                    assert!(
+                        libm::fabs(s.longitude - expected) < 1e-9,
+                        "{system:?} @ramc {ramc} lat {lat} jd {jd}: planet longitude \
+                         {} should rotate to {expected}, got {}",
+                        t.longitude,
+                        s.longitude
+                    );
+                }
+                for i in 0..12 {
+                    let expected = normalize_degrees(trop.houses.cusps[i] - ayan);
+                    assert!(
+                        libm::fabs(sid.houses.cusps[i] - expected) < 1e-9,
+                        "{system:?} @ramc {ramc} lat {lat} jd {jd}: cusp {} should \
+                         rotate to {expected}, got {}. A cusp that did NOT move is \
+                         the frame mix this test exists to catch.",
+                        i + 1,
+                        sid.houses.cusps[i]
+                    );
+                }
+                for (label, t, s) in [
+                    ("asc", trop.houses.asc, sid.houses.asc),
+                    ("mc", trop.houses.mc, sid.houses.mc),
+                ] {
+                    let expected = normalize_degrees(t - ayan);
+                    assert!(
+                        libm::fabs(s - expected) < 1e-9,
+                        "{system:?} @ramc {ramc} lat {lat} jd {jd}: {label} should \
+                         rotate to {expected}, got {s}"
+                    );
+                }
+
+                // The property itself: identical house numbers.
+                for (t, s) in trop.planets.iter().zip(sid.planets.iter()) {
+                    assert_eq!(
+                        t.house, s.house,
+                        "{system:?} @ramc {ramc} lat {lat} jd {jd}: planet at \
+                         tropical {}° is in house {} tropically but house {} \
+                         sidereally — a uniform rotation of the zodiac cannot \
+                         move a planet between houses",
+                        t.longitude, t.house, s.house
+                    );
+                }
+            }
+        }
+    }
+
+    /// Whole-Sign on a sidereal chart must anchor on the **sidereal** sign of
+    /// the ascendant — bhāva = rāśi, the meaning
+    /// `vedaksha_mcp::tools::compute_bhavas` documents ("the entire sign
+    /// containing the ascendant is the 1st bhava").
+    ///
+    /// This is the one house system that is not covariant under the rotation
+    /// checked in `house_assignment_is_invariant_under_ayanamsha_rotation`,
+    /// because its cusps are sign boundaries and sign boundaries are frame
+    /// dependent. Rotating the tropical cusps rigidly would leave cusp 1 at
+    /// `floor(asc_tropical/30)·30 − ayanamsha`, which is not a sign boundary in
+    /// the sidereal frame — the chart would report `asc` in one sign and start
+    /// the 1st house in another. Leaving the cusps tropical (the pre-fix
+    /// behaviour) is worse still. Both are caught here.
+    ///
+    /// Exact, no oracle needed: the reported `asc` is the tropical `asc`
+    /// rotated by the ayanamsha, cusp 1 is a multiple of 30°, cusps are 30°
+    /// apart, and a planet's house is fixed by sign arithmetic alone —
+    /// `house = 1 + (sign(planet) − sign(asc)) mod 12`.
+    ///
+    /// The frame assertion is load-bearing and was added after measuring that
+    /// without it this test stays GREEN on the pre-fix code: whole-sign cusps
+    /// sit on tropical sign boundaries, so sign arithmetic against a tropical
+    /// cusp 1 reproduces `determine_house` even when the planets are sidereal.
+    /// Only comparing `asc` against the tropical chart exposes the mix.
+    #[test]
+    fn whole_sign_bhavas_follow_the_sidereal_sign_of_the_ascendant() {
+        use crate::sidereal::{Ayanamsha, ayanamsha_value};
+
+        let charts = [
+            (30.0, 0.0, 2_433_282.5),
+            (177.17, 28.6139, JD),
+            (264.78, 40.7128, 2_461_100.0),
+            (95.0, 60.0, 2_461_100.0),
+        ];
+        let data: Vec<_> = (0..24)
+            .map(|i| planet("Sun", f64::from(i) * 15.0, 1.0))
+            .collect();
+
+        let cfg = ChartConfig {
+            house_system: HouseSystem::WholeSign,
+            ayanamsha: Some(Ayanamsha::Lahiri),
+            ..ChartConfig::default()
+        };
+
+        let mut trop_cfg = cfg.clone();
+        trop_cfg.ayanamsha = None;
+
+        for (ramc, lat, jd) in charts {
+            let chart = compute_chart(&data, ramc, lat, OBL, jd, &cfg);
+            let asc = chart.houses.asc;
+
+            // The reported asc must be in the SAME frame as the planets: the
+            // tropical asc rotated by the ayanamsha. Without this, a chart that
+            // left asc/cusps tropical while rotating the planets would satisfy
+            // every other assertion below.
+            let trop = compute_chart(&data, ramc, lat, OBL, jd, &trop_cfg);
+            let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
+            let expected_asc = normalize_degrees(trop.houses.asc - ayan);
+            assert!(
+                libm::fabs(asc - expected_asc) < 1e-9,
+                "@ramc {ramc} lat {lat} jd {jd}: sidereal asc should be the \
+                 tropical asc {} rotated by the ayanamsha {ayan} = {expected_asc}, \
+                 got {asc}. An asc that did not move is a frame mix against the \
+                 chart's own sidereal planets.",
+                trop.houses.asc
+            );
+
+            // Cusp 1 is the start of the sidereal sign holding the sidereal asc.
+            let expected_cusp1 = libm::floor(asc / 30.0) * 30.0;
+            assert!(
+                libm::fabs(chart.houses.cusps[0] - expected_cusp1) < 1e-9,
+                "@ramc {ramc} lat {lat} jd {jd}: sidereal asc {asc}° sits in the \
+                 sign starting at {expected_cusp1}°, but cusp 1 is {}°",
+                chart.houses.cusps[0]
+            );
+
+            // Twelve 30° houses.
+            for i in 0..12 {
+                let gap =
+                    normalize_degrees(chart.houses.cusps[(i + 1) % 12] - chart.houses.cusps[i]);
+                assert!(
+                    libm::fabs(gap - 30.0) < 1e-9,
+                    "@ramc {ramc} lat {lat} jd {jd}: cusp {} → {} gap is {gap}°, not 30°",
+                    i + 1,
+                    (i + 1) % 12 + 1
+                );
+            }
+
+            // House number is pure sign arithmetic against the asc's sign.
+            let asc_sign = chart.houses.cusps[0] / 30.0;
+            for p in &chart.planets {
+                let planet_sign = libm::floor(p.longitude / 30.0);
+                // Both operands are in 0..12 and integral in f64; the modulo
+                // keeps the result in 0..12, so the u8 conversion is exact and
+                // cannot truncate.
+                let offset = (planet_sign - asc_sign + 12.0) % 12.0;
+                let expected_house = (offset as u8) + 1;
+                assert_eq!(
+                    p.house, expected_house,
+                    "@ramc {ramc} lat {lat} jd {jd}: planet at sidereal {}° \
+                     (sign {planet_sign}) with asc sign {asc_sign} belongs in \
+                     bhava {expected_house}, got {}",
+                    p.longitude, p.house
+                );
+            }
+        }
     }
 
     #[test]

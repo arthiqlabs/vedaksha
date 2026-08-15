@@ -508,6 +508,102 @@ mod tests {
         );
     }
 
+    /// The engine reaches local sidereal time by two paths, and they must not
+    /// disagree by a time scale.
+    ///
+    /// * This module's [`local_sidereal_degrees`], which passes **UT1** and is
+    ///   pinned above against the independently derived IAU 1982 / Meeus 12.4
+    ///   value (99.967795° at JD 2,451,544.5). Mean sidereal time.
+    /// * `vedaksha_ephem_core::sidereal_time::local_sidereal_time`, which the
+    ///   MCP and WASM chart surfaces call to build the RAMC that drives the
+    ///   ascendant, the MC and all twelve house cusps. Apparent sidereal time.
+    ///
+    /// Mean and apparent differ by exactly one thing: the equation of the
+    /// equinoxes, `Δψ · cos(ε_true)`. Δψ is bounded by the 18.6-year nutation
+    /// term at about ±17.2″, so the equation of the equinoxes cannot exceed
+    /// roughly 17.2″ · cos(23.4°) ≈ 15.8″ ≈ 0.0044°. It can NEVER be ΔT.
+    ///
+    /// Until the UT-vs-TT fix the two paths disagreed by ΔT — the chart
+    /// surfaces converted to TT before calling `local_sidereal_time`, adding
+    /// ΔT worth of Earth rotation instead of removing it (~0.27° at J2000,
+    /// ~0.29° today). Feeding `jd_tt` to `local_sidereal_time` below
+    /// reproduces that failure; see the mutation note on the tolerance.
+    ///
+    /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 12.
+    #[test]
+    fn ephem_core_lst_agrees_with_ut_gmst_to_the_equation_of_the_equinoxes() {
+        // Real UT1 Julian Days spanning the eras the engine serves, at
+        // longitudes on both sides of Greenwich.
+        let cases = [
+            (2_433_282.5, 0.0),      // 1950-01-01 00:00 UT, Greenwich
+            (2_451_544.5, 77.209),   // 2000-01-01 00:00 UT, Delhi
+            (2_461_100.0, -74.006),  // 2026-02-28 12:00 UT, New York
+            (2_488_069.5, 151.2093), // 2100-01-01 00:00 UT, Sydney
+        ];
+
+        // Tolerance = the physical bound on |Δψ·cos(ε)|, 17.2″ / 3600 =
+        // 0.0047778°, NOT a round figure chosen to make the test pass.
+        //
+        // Measured residuals for the four cases above (apparent − mean, from
+        // this test instrumented to print them):
+        //   JD 2433282.5  lon    0.0000°  −8.416072689101e-4°  =  −3.029786″
+        //   JD 2451544.5  lon   77.2090°  −3.550561239877e-3°  = −12.782020″
+        //   JD 2461100.0  lon  −74.0060°   1.860283755832e-3°  =   6.697022″
+        //   JD 2488069.5  lon  151.2093°   8.382244558618e-4°  =   3.017608″
+        // Largest measured: 12.782020″ (0.00355°), under the bound.
+        //
+        // Mutation-measured for contrast — the same four cases with `jd_tt`
+        // passed as the rotational argument (the pre-fix behaviour), with the
+        // engine's own ΔT alongside:
+        //   JD 2433282.5  ΔT  29.117 s  →  0.1208100534°  (7.25′)
+        //   JD 2451544.5  ΔT  63.807 s  →  0.2630419328°  (15.78′)
+        //   JD 2461100.0  ΔT  70.100 s  →  0.2947433232°  (17.68′)
+        //   JD 2488069.5  ΔT 141.463 s  →  0.5918825517°  (35.51′)
+        // Every one of those exceeds this bound by 25× to 124×, so the wrong
+        // convention cannot satisfy this test at any epoch the engine serves.
+        // Assertion 2 below pins each residual to Δψ·cos(ε) exactly, so the
+        // slack in this bound cannot hide anything either.
+        const EQ_EQUINOXES_MAX_DEG: f64 = 17.2 / 3600.0;
+
+        for (jd_ut1, lon_deg_east) in cases {
+            let mean = local_sidereal_degrees(jd_ut1, lon_deg_east);
+
+            // The chart surfaces' exact call shape: dynamical quantities at
+            // TT, the rotational argument at UT1.
+            let jd_tt = vedaksha_ephem_core::delta_t::ut1_to_tt(jd_ut1);
+            let (dpsi, deps) = vedaksha_ephem_core::nutation::nutation(jd_tt);
+            let eps_true = vedaksha_ephem_core::obliquity::true_obliquity(jd_tt, deps);
+            let apparent = normalize_degrees(rad_to_deg(sidereal_time::local_sidereal_time(
+                jd_ut1,
+                deg_to_rad(lon_deg_east),
+                dpsi,
+                eps_true,
+            )));
+
+            // Signed shortest angular separation, in degrees.
+            let raw = normalize_degrees(apparent - mean);
+            let diff = if raw > 180.0 { raw - 360.0 } else { raw };
+
+            // 1. The gap must be the equation of the equinoxes, not ΔT.
+            assert!(
+                libm::fabs(diff) < EQ_EQUINOXES_MAX_DEG,
+                "LST paths disagree by {diff}° at JD {jd_ut1} (lon {lon_deg_east}°); \
+                 the equation of the equinoxes cannot exceed {EQ_EQUINOXES_MAX_DEG}°. \
+                 A gap near 0.27–0.29° means a TT Julian Day reached a rotational \
+                 argument."
+            );
+
+            // 2. Stronger: the gap must equal Δψ·cos(ε_true) to float
+            // precision, so no other term can hide inside the bound above.
+            let eq_equinoxes_deg = rad_to_deg(dpsi * libm::cos(eps_true));
+            assert!(
+                libm::fabs(diff - eq_equinoxes_deg) < 1e-12,
+                "at JD {jd_ut1}: apparent − mean = {diff}°, but Δψ·cos(ε) = \
+                 {eq_equinoxes_deg}°"
+            );
+        }
+    }
+
     /// The Sun's altitude at its own transit must equal (90° − |lat − dec|)
     /// for an observer on the same meridian. The previous version of this
     /// test *located* transit by scanning with `local_sidereal_degrees` and

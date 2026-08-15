@@ -7,6 +7,29 @@
 //!
 //! Implements GMST (eq. 12.4), GAST, and Local Apparent Sidereal Time.
 //!
+//! # Time scale — read before calling
+//!
+//! Sidereal time measures the **Earth's rotation**, and Earth rotation is
+//! measured in **UT1** by definition. Every function in this module therefore
+//! takes `jd_ut1`, a **UT1** Julian Day, as its rotational argument. Passing
+//! TT (or TDB) adds ΔT worth of extra rotation instead of removing it:
+//! at ΔT ≈ 69 s, `360.98564736629 °/day × 69.2 s / 86400 s` = **0.289°**
+//! (≈ 17.3′) of error — which lands directly on the RAMC, and hence on the
+//! ascendant, the MC and all twelve house cusps.
+//!
+//! The `dpsi` / `true_obliquity` arguments of [`gast`] and
+//! [`local_sidereal_time`] are the **opposite** case: nutation and obliquity
+//! are dynamical quantities and must be evaluated at **TT**. The split is
+//! deliberate — do not "unify" the two time scales in a caller. The correct
+//! call shape is:
+//!
+//! ```text
+//! let jd_tt = delta_t::ut1_to_tt(jd_ut1);
+//! let (dpsi, deps) = nutation::nutation(jd_tt);        // dynamical → TT
+//! let eps_true = obliquity::true_obliquity(jd_tt, deps); // dynamical → TT
+//! let last = local_sidereal_time(jd_ut1, lon, dpsi, eps_true); // rotational → UT1
+//! ```
+//!
 //! Source: Meeus, *Astronomical Algorithms*, 2nd ed., Chapter 12.
 
 use crate::julian;
@@ -19,13 +42,17 @@ use vedaksha_math::angle::{normalize_degrees, normalize_radians};
 /// fractional Julian day from J2000.
 ///
 /// # Arguments
-/// * `jd` — Julian Day (TT or TDB)
+/// * `jd_ut1` — Julian Day in **UT1**. Not TT, not TDB. The dominant term
+///   `360.98564736629 · (JD − 2451545.0)` *is* the Earth's physical rotation,
+///   which is what UT1 measures; feeding TT introduces ~0.29° of error at the
+///   present ΔT (≈69 s). See the module-level note.
 #[must_use]
-pub fn gmst(jd: f64) -> f64 {
-    let t = julian::centuries_from_j2000(jd);
+pub fn gmst(jd_ut1: f64) -> f64 {
+    let t = julian::centuries_from_j2000(jd_ut1);
     // Meeus eq. 12.4 — result in degrees
-    let theta0 = 280.460_618_37 + 360.985_647_366_29 * (jd - julian::J2000) + 0.000_387_933 * t * t
-        - t * t * t / 38_710_000.0;
+    let theta0 =
+        280.460_618_37 + 360.985_647_366_29 * (jd_ut1 - julian::J2000) + 0.000_387_933 * t * t
+            - t * t * t / 38_710_000.0;
 
     let theta0_normalized = normalize_degrees(theta0);
     theta0_normalized * core::f64::consts::PI / 180.0
@@ -39,12 +66,16 @@ pub fn gmst(jd: f64) -> f64 {
 /// ```
 ///
 /// # Arguments
-/// * `jd`              — Julian Day (TT or TDB)
-/// * `dpsi`            — nutation in longitude (radians)
-/// * `true_obliquity`  — true obliquity of the ecliptic (radians)
+/// * `jd_ut1`          — Julian Day in **UT1** (rotational; see the module
+///   note — passing TT costs ~0.29°)
+/// * `dpsi`            — nutation in longitude (radians), evaluated at **TT**
+/// * `true_obliquity`  — true obliquity of the ecliptic (radians), at **TT**
+///
+/// The mixed time scales are intentional: GMST is rotation (UT1), while
+/// nutation and obliquity are dynamical (TT).
 #[must_use]
-pub fn gast(jd: f64, dpsi: f64, true_obliquity: f64) -> f64 {
-    let theta = gmst(jd) + dpsi * libm::cos(true_obliquity);
+pub fn gast(jd_ut1: f64, dpsi: f64, true_obliquity: f64) -> f64 {
+    let theta = gmst(jd_ut1) + dpsi * libm::cos(true_obliquity);
     normalize_radians(theta)
 }
 
@@ -53,13 +84,18 @@ pub fn gast(jd: f64, dpsi: f64, true_obliquity: f64) -> f64 {
 /// LST = GAST + observer longitude (east positive).
 ///
 /// # Arguments
-/// * `jd`              — Julian Day (TT or TDB)
+/// * `jd_ut1`          — Julian Day in **UT1** (rotational; see the module
+///   note — passing TT costs ~0.29°, which lands on the ascendant, the MC and
+///   every house cusp)
 /// * `longitude_rad`   — observer's geographic longitude in radians (east positive)
-/// * `dpsi`            — nutation in longitude (radians)
-/// * `true_obliquity`  — true obliquity of the ecliptic (radians)
+/// * `dpsi`            — nutation in longitude (radians), evaluated at **TT**
+/// * `true_obliquity`  — true obliquity of the ecliptic (radians), at **TT**
+///
+/// The mixed time scales are intentional: the Julian Day is rotation (UT1),
+/// while nutation and obliquity are dynamical (TT).
 #[must_use]
-pub fn local_sidereal_time(jd: f64, longitude_rad: f64, dpsi: f64, true_obliquity: f64) -> f64 {
-    let theta = gast(jd, dpsi, true_obliquity) + longitude_rad;
+pub fn local_sidereal_time(jd_ut1: f64, longitude_rad: f64, dpsi: f64, true_obliquity: f64) -> f64 {
+    let theta = gast(jd_ut1, dpsi, true_obliquity) + longitude_rad;
     normalize_radians(theta)
 }
 

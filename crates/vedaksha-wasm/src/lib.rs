@@ -325,12 +325,20 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
         ));
     }
 
-    // Sidereal time -> RAMC
+    // Sidereal time -> RAMC.
+    //
+    // Two time scales, deliberately: nutation and obliquity are dynamical and
+    // take TT, while sidereal time is the Earth's *rotation* and takes UT1
+    // (`jd`). Passing `jd_tt` as the rotational argument — which this did
+    // until the UT-vs-TT fix — adds ΔT worth of rotation instead of removing
+    // it: 0.289° (17.3′) at today's ΔT ≈ 69 s, straight onto the ascendant,
+    // the MC and all twelve cusps. Must stay identical to the MCP path
+    // (`vedaksha-mcp/src/server.rs`); `mcp_surface_parity` enforces it.
     let jd_tt = vedaksha_ephem_core::delta_t::ut1_to_tt(jd);
     let (dpsi, deps) = nutation::nutation(jd_tt);
     let eps_true = obliquity::true_obliquity(jd_tt, deps);
     let geo_lon_rad = input.longitude * core::f64::consts::PI / 180.0;
-    let last = sidereal_time::local_sidereal_time(jd_tt, geo_lon_rad, dpsi, eps_true);
+    let last = sidereal_time::local_sidereal_time(jd, geo_lon_rad, dpsi, eps_true);
     let ramc_deg = last * 180.0 / core::f64::consts::PI;
 
     // Obliquity in degrees
