@@ -196,9 +196,20 @@ fn weekday_from_day_index(jd: f64) -> Weekday {
 /// sunrise to local sunrise.
 ///
 /// The Vedic day begins at sunrise, so an instant between local midnight and
-/// sunrise belongs to the *previous* vara. This walks back up to four civil
-/// days to find the most recent sunrise at or before `jd_ut`, then takes the
-/// local civil weekday of that sunrise.
+/// sunrise belongs to the *previous* vara. This starts from the sunrise that
+/// opens the civil-UT day containing `jd_ut` and walks back, one civil UT day
+/// at a time (up to four days), until a sunrise at or before `jd_ut` is
+/// found, then takes the local civil weekday of that sunrise.
+///
+/// ⚠️ This is **not** guaranteed to return the most recent qualifying
+/// sunrise. Each step scans a fixed one-day window starting at that day's
+/// civil-UT midnight (`day_start`); if that window's rise falls within one
+/// inter-rise gap *after* `day_start` and `jd_ut` itself lands just past
+/// `day_start + 1`, the scan can settle on that rise while a later sunrise —
+/// one that is still at or before `jd_ut`, in the following window — goes
+/// unseen. For the real Sun this edge case spans roughly 22 seconds around
+/// each day boundary; with the fixed-position `flat_sun` test fixture it
+/// widens to roughly 4 minutes, from the sidereal/solar-day drift.
 ///
 /// # Arguments
 /// * `jd_ut` — the instant, Julian Day (UT)
@@ -210,8 +221,12 @@ fn weekday_from_day_index(jd: f64) -> Weekday {
 ///
 /// Inside the polar day and polar night no sunrise exists and the
 /// sunrise-to-sunrise vara is undefined; there this falls back to the local
-/// civil weekday. That fallback is a documented convention, not a classical
-/// rule.
+/// civil weekday. The same fallback also fires if `equatorial` returns
+/// `None` for every `day_start` tried — ephemeris unavailable, a different
+/// situation from the polar one — and the two are indistinguishable in the
+/// return value: a caller that needs to tell them apart must probe
+/// `equatorial` itself. That fallback is a documented convention, not a
+/// classical rule.
 ///
 /// Source: Muhurta Chintamani; Kalaprakashika (the sunrise reckoning).
 #[must_use]
@@ -590,10 +605,22 @@ mod tests {
             "precondition: the UT weekday really is Monday here"
         );
         let vara = vara_at(jd, 21.3069, -157.8583, -600, &flat_sun);
+        // Not because 20:00 "is still evening, before local midnight" — vara_at
+        // does not reckon from midnight, and that framing would just be
+        // re-describing the UT-day defect this test exists to catch. Derived
+        // directly from `sun_rise_set`, the same call `vara_at` makes
+        // internally: the first window it tries (day_start = JD 2459015.5 =
+        // 2020-06-15 00:00Z) puts the fake sunrise at JD 2459015.952163512,
+        // which is *after* `jd` and so is rejected; walking back one civil UT
+        // day (day_start = JD 2459014.5 = 2020-06-14 00:00Z) puts it at JD
+        // 2459014.954893945 = 2020-06-14 10:55:03 UT = 2020-06-14 00:55:03
+        // local — a few minutes after local midnight, still on the same
+        // Sunday. That sunrise is at or before `jd`, so its local civil
+        // weekday (Sunday) is the vara returned.
         assert_eq!(
             vara,
             Weekday::Sunday,
-            "20:00 on a Sunday evening in Honolulu is still Ravivara"
+            "the walked-back sunrise (2020-06-14 ~00:55 local) is at or before the query instant, so this is still Ravivara"
         );
     }
 
