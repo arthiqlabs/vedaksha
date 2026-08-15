@@ -410,7 +410,7 @@ pub fn vara_with_validity(
     // the instant is found. Four days is ample: only the polar cases fail,
     // and they fail for every day.
     let mut day_start = libm::floor(jd_ut - 0.5) + 0.5;
-    let mut opening: Option<(f64, f64)> = None; // (sunrise, the day_start it was found at)
+    let mut opening: Option<f64> = None; // the sunrise found
     for _ in 0..4 {
         // NOTE: written as a nested `if let`, not a let-chain. The workspace
         // `rust-version` is 1.85 and let-chains did not stabilise until 1.88,
@@ -421,14 +421,14 @@ pub fn vara_with_validity(
                 .rise
         {
             if rise <= jd_ut {
-                opening = Some((rise, day_start));
+                opening = Some(rise);
                 break;
             }
         }
         day_start -= 1.0;
     }
 
-    let Some((sunrise, opening_day_start)) = opening else {
+    let Some(sunrise) = opening else {
         // Polar day/night, or `equatorial` returned `None` at every
         // `day_start` tried: fall back to the local civil weekday, same
         // documented convention as the old `vara_at`. No sunrise was found
@@ -438,20 +438,35 @@ pub fn vara_with_validity(
     let weekday = local_weekday(sunrise);
 
     // Step 2: find the sunrise that CLOSES this vara, by walking FORWARD
-    // from the civil-UT day after the one `sunrise` was found on. Mirrors
-    // step 1's walk-back exactly (same 4-day bound, same "polar cases fail
-    // for every day" reasoning) — the average sunrise-to-sunrise interval is
-    // one solar day, so the very next civil-UT day's scan window almost
-    // always contains it; the bound only matters near the poles or across a
-    // large sidereal/solar drift (as with the `flat_sun` test fixture).
+    // from `sunrise + 0.5`. Mirrors step 1's walk-back (same 4-day bound,
+    // same "polar cases fail for every day" reasoning) — the
+    // sunrise-to-sunrise interval is close to one day (one solar day for a
+    // real Sun; one *sidereal* day, ≈0.99727 d, for the fixed-RA `flat_sun`
+    // test fixture — derived as 360 / 360.98564736629 deg/day, the GMST rate
+    // `vedaksha_ephem_core::sidereal_time::gmst` uses), so `sunrise + 0.5` is
+    // unambiguously AFTER the opening sunrise (half a day past it — no risk
+    // of re-detecting the same horizon crossing, unlike scanning forward from
+    // `sunrise` itself, which sits within numerical noise of its own bisected
+    // zero) and unambiguously BEFORE the next one (which is 0.5-1.5 days
+    // away, comfortably inside this window), so the very first scan window
+    // `[sunrise + 0.5, sunrise + 1.5]` brackets exactly one sunrise — the
+    // right one.
     //
-    // Starting from `opening_day_start + 1.0` rather than from `sunrise`
-    // itself is deliberate: `sunrise` sits within numerical noise of its own
-    // horizon crossing (it IS the bisected zero), so scanning forward from
-    // that exact instant risks re-detecting the same crossing as a spurious
-    // "next" rise. `opening_day_start + 1.0` is a full day-window past the
-    // start of the day `sunrise` fell in, so it is unambiguously later.
-    let mut next_day_start = opening_day_start + 1.0;
+    // This replaces the previous `opening_day_start + 1.0` start (0h UT of
+    // the day AFTER the one `sunrise` fell in). That was ALSO unambiguously
+    // after the opening sunrise, but not unambiguously close to it: when the
+    // opening sunrise landed only a few minutes after `opening_day_start`,
+    // `opening_day_start + 1.0` could be almost a full day short of the true
+    // next sunrise, so the scan's first window `[opening_day_start + 1.0,
+    // opening_day_start + 2.0]` sometimes ended just BEFORE that sunrise and
+    // caught the one AFTER it instead — returning an interval spanning two
+    // varas. Measured: with the realistic Sun, 16/216,060 samples at lat 0°
+    // had `end - start > 1.5` d (rising to 326/216,060, ~0.15%, at lat 60°);
+    // with the `flat_sun` fixture, 1379/288,000 (~0.48%), worst case `lon =
+    // 158.4, jd = 2451554.75` giving `end - start = 1.9945` d. See
+    // `vara_with_validity_never_spans_more_than_one_vara` and
+    // `vara_with_validity_pins_the_reported_two_vara_regression` below.
+    let mut next_day_start = sunrise + 0.5;
     for _ in 0..4 {
         if let Some(next_rise) = vedaksha_astro::riseset::sun_rise_set(
             next_day_start,
@@ -1179,6 +1194,108 @@ mod tests {
         let _ = count;
         count = results.len();
         assert_eq!(count, 3);
+    }
+
+    /// FINDING 1 fix (the interval itself). Step 2 of `vara_with_validity`
+    /// used to start its forward scan for the closing sunrise at
+    /// `opening_day_start + 1.0` (0h UT of the day after the opening
+    /// sunrise). When the opening sunrise landed only minutes after
+    /// `opening_day_start`, the true next sunrise fell just BEFORE
+    /// `opening_day_start + 1.0` — outside that scan's window — so the scan
+    /// missed it and caught the sunrise AFTER that instead, returning an
+    /// interval spanning TWO varas. The containment check never failed (the
+    /// returned `end` was always a real sunrise at or after the true one,
+    /// just the wrong — too late — one), which is why no prior test caught
+    /// this: every existing assertion checks containment, never length.
+    ///
+    /// This sweeps a full 360° of longitude at 0.1° resolution (a fixed
+    /// lat/instant pair, chosen to include the exact worst case pinned in
+    /// `vara_with_validity_pins_the_reported_two_vara_regression` below) and
+    /// asserts every returned interval is close to ONE day, not two.
+    ///
+    /// `flat_sun` fixes the Sun's RA at 0°, so consecutive sunrises (same
+    /// altitude threshold, same upward crossing) recur once per SIDEREAL
+    /// rotation, not once per solar day: the altitude depends on the local
+    /// hour angle `H = LST − RA` alone (since `RA` and `dec` are both
+    /// constant here), and `LST`'s dominant term advances at
+    /// `360.98564736629`°/day (`vedaksha_ephem_core::sidereal_time::gmst`,
+    /// Meeus eq. 12.4), so one full cycle of `H` — and hence one
+    /// sunrise-to-sunrise interval — takes `360 / 360.98564736629` days =
+    /// `0.9972695663290739` d, about 3 min 56 s short of a solar day. This
+    /// was verified independently against this exact code (temporary probe,
+    /// since removed): at the pinned worst case below the fixed function
+    /// returns a `0.9972695661708713`-day interval, matching the closed form
+    /// to 9 significant figures — the tiny residual is the GMST polynomial's
+    /// `T²` term (negligible over one day) plus bisection resolution, not a
+    /// modeling gap.
+    #[test]
+    fn vara_with_validity_never_spans_more_than_one_vara() {
+        // 360 / 360.98564736629 (deg/day, the GMST rate) — see derivation
+        // above. `flat_sun`'s fixed RA makes this the fixture's true
+        // sunrise-to-sunrise spacing, not the caller-facing solar day.
+        const SIDEREAL_SPACING_DAYS: f64 = 0.997_269_566_329_073_9;
+        // Measured bound on how far any single sample's interval length
+        // strayed from that constant across this exact sweep (max observed
+        // 7.7e-10 d, from the GMST polynomial's tiny T² term plus bisection
+        // resolution) — 1e-6 leaves three orders of margin without being
+        // loose enough to let a real one-day slip through undetected.
+        const TOLERANCE_DAYS: f64 = 1e-6;
+
+        let lat = 0.0;
+        let jd = 2_451_554.75; // the reviewer's pinned worst-case instant
+        let mut checked = 0u32;
+        // Tenths of a degree, so the loop stays in exact integers: -180.0°
+        // to 180.0° at a 0.1° step (3601 samples), including 158.4° exactly.
+        let mut lon_tenths = -1800_i32;
+        while lon_tenths <= 1800 {
+            let lon = f64::from(lon_tenths) / 10.0;
+            let (_weekday, validity) = vara_with_validity(jd, lat, lon, 0, &flat_sun);
+            let (start, end) = validity.unwrap_or_else(|| {
+                panic!("lon={lon}: the equatorial sun rises and sets at every non-polar latitude")
+            });
+            let length = end - start;
+            assert!(
+                (length - SIDEREAL_SPACING_DAYS).abs() < TOLERANCE_DAYS,
+                "lon={lon}: interval length {length} d is not close to the \
+                 fixture's sidereal-day spacing {SIDEREAL_SPACING_DAYS} d — \
+                 start={start}, end={end} spans more than one vara"
+            );
+            checked += 1;
+            lon_tenths += 1;
+        }
+        assert_eq!(checked, 3601, "sanity: full 360° sweep at 0.1° steps");
+    }
+
+    /// FINDING 1 fix — named regression for the reviewer's exact reported
+    /// worst case (measured directly against the OLD, buggy code, temporary
+    /// probe since removed): `lat = 0.0`, `lon = 158.4`, `jd = 2451554.75`
+    /// used to return `start = 2451554.5026106257`, `end =
+    /// 2451556.497149758` — a `1.9945`-day span, covering two sunrises. This
+    /// pins that exact input to a single-vara-length interval so a future
+    /// regression on this precise case is caught even if the general sweep
+    /// above is ever narrowed or resampled differently.
+    #[test]
+    fn vara_with_validity_pins_the_reported_two_vara_regression() {
+        let (lat, lon, jd) = (0.0, 158.4, 2_451_554.75);
+        let (_weekday, validity) = vara_with_validity(jd, lat, lon, 0, &flat_sun);
+        let (start, end) = validity.expect("equatorial sun rises and sets at lat 0");
+        let length = end - start;
+
+        assert!(
+            length < 1.5,
+            "the pinned worst case must not span two varas: start={start}, \
+             end={end}, length={length} d"
+        );
+
+        // Independently measured value for this exact input (see the
+        // derivation in `vara_with_validity_never_spans_more_than_one_vara`
+        // above): 360 / 360.98564736629 = 0.9972695663290739 d.
+        const EXPECTED_LENGTH_DAYS: f64 = 0.997_269_566_329_073_9;
+        assert!(
+            (length - EXPECTED_LENGTH_DAYS).abs() < 1e-6,
+            "length {length} d does not match the independently derived \
+             sidereal spacing {EXPECTED_LENGTH_DAYS} d"
+        );
     }
 
     /// FINDING 1 fix. The old memo keyed on `libm::floor(jd - 0.5) + 0.5`

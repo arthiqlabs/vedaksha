@@ -1738,6 +1738,70 @@ mod tests {
         );
     }
 
+    /// FINDING 2 fix. `call_search_muhurta` reads `tz_offset_minutes` from
+    /// the request and is supposed to pass it through to
+    /// `vedaksha_vedic::muhurta::search_muhurta` — but nothing exercised
+    /// that wiring: a reviewer mutated the handler to pass a hardcoded `0`
+    /// instead of `input.tz_offset_minutes.unwrap_or(0)` and all 162
+    /// existing `vedaksha-mcp` tests stayed green.
+    ///
+    /// Same instant/observer as `compute_panchanga_vara_uses_the_supplied_tz_offset`
+    /// above and `far_east_and_far_west_cannot_share_a_vara_at_one_instant`
+    /// in `vedaksha_vedic::muhurta` (jd 2459015.75, lat 0°, lon 165°E — the
+    /// far-east case from the KundaliMCP report): both handlers derive the
+    /// vara through the same `sun_equatorial_deg(&AnalyticalProvider, jd)`
+    /// closure (see `call_compute_panchanga` and `call_search_muhurta`
+    /// above), so the same jd/lat/lon must flip the same way here. The
+    /// search window is collapsed to the single instant (`start_jd ==
+    /// end_jd == 2459015.75`) so exactly one candidate is evaluated, and
+    /// `min_quality: 0.0` keeps it regardless of score.
+    ///
+    /// Confirmed empirically (not hand-derived): `search_muhurta` at
+    /// tz_offset_minutes = +660 reports "Monday" for that one candidate; the
+    /// same jd/lat/lon at tz_offset_minutes = 0 reports "Sunday" — the two
+    /// must disagree, or the tz offset supplied by the caller is not
+    /// reaching `vara_at` inside `search_muhurta`.
+    #[test]
+    fn search_muhurta_vara_uses_the_supplied_tz_offset() {
+        let with_tz = serde_json::json!({
+            "start_jd": 2_459_015.75, "end_jd": 2_459_015.75,
+            "latitude": 0.0, "longitude": 165.0, "tz_offset_minutes": 660,
+            "min_quality": 0.0
+        });
+        let without_tz = serde_json::json!({
+            "start_jd": 2_459_015.75, "end_jd": 2_459_015.75,
+            "latitude": 0.0, "longitude": 165.0, "tz_offset_minutes": 0,
+            "min_quality": 0.0
+        });
+        let v1 = McpServer::call_search_muhurta(&with_tz).expect("valid input");
+        let v2 = McpServer::call_search_muhurta(&without_tz).expect("valid input");
+
+        assert_eq!(
+            v1["result_count"].as_u64(),
+            Some(1),
+            "expected exactly one candidate at tz+660"
+        );
+        assert_eq!(
+            v2["result_count"].as_u64(),
+            Some(1),
+            "expected exactly one candidate at tz 0"
+        );
+
+        let w1 = v1["results"][0]["weekday"]
+            .as_str()
+            .expect("weekday string");
+        let w2 = v2["results"][0]["weekday"]
+            .as_str()
+            .expect("weekday string");
+        assert_eq!(w1, "Monday");
+        assert_eq!(w2, "Sunday");
+        assert_ne!(
+            w1, w2,
+            "tz_offset_minutes must reach vara_at inside search_muhurta — \
+             dropping it (e.g. hardcoding 0) must change this result"
+        );
+    }
+
     // ── compute_panchanga vara/kalam ──────────────────────────────────────────
 
     /// The panchanga's vara must follow the observer, not UT. Same instant,
