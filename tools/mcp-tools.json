@@ -683,7 +683,9 @@
           },
           "tz_offset_minutes": {
             "default": 0,
-            "description": "Offset of the observer's civil clock from UT, in minutes. Used only to name the vara's weekday.",
+            "description": "Offset of the observer's civil clock from UT, in minutes, in [-720, 840] (UTC-12:00 to UTC+14:00). Used only to name the vara's weekday.",
+            "maximum": 840,
+            "minimum": -720,
             "type": "integer"
           }
         },

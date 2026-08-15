@@ -24,7 +24,9 @@ pub struct ComputePanchangaInput {
     /// Observer elevation above sea level in metres. Defaults to 0.
     #[serde(default)]
     pub elevation_m: f64,
-    /// Offset of the observer's civil clock from UT, in minutes. Defaults to 0.
+    /// Offset of the observer's civil clock from UT, in minutes. Defaults to
+    /// 0. Validated against [`crate::validation::validate_tz_offset_minutes`]
+    /// (−720..=840) — the same bound `search_muhurta` enforces.
     #[serde(default)]
     pub tz_offset_minutes: i32,
 }
@@ -70,8 +72,10 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "tz_offset_minutes": {
                     "type": "integer", "default": 0,
-                    "description": "Offset of the observer's civil clock from UT, in minutes. \
-                                    Used only to name the vara's weekday."
+                    "minimum": -720, "maximum": 840,
+                    "description": "Offset of the observer's civil clock from UT, in minutes, \
+                                    in [-720, 840] (UTC-12:00 to UTC+14:00). Used only to name \
+                                    the vara's weekday."
                 }
             },
             "required": ["jd", "sun", "moon", "latitude", "longitude"]
@@ -112,6 +116,7 @@ pub fn validate(input: &ComputePanchangaInput) -> Result<(), McpError> {
         ));
     }
     crate::validation::validate_elevation_m(input.elevation_m)?;
+    crate::validation::validate_tz_offset_minutes(input.tz_offset_minutes)?;
     Ok(())
 }
 
@@ -197,5 +202,51 @@ mod tests {
             validate(&input).unwrap_err().error_code,
             "INVALID_PARAMETER"
         );
+    }
+
+    /// FIX: `tz_offset_minutes` was previously unvalidated here — the schema
+    /// declared no bounds and `validate` never called
+    /// `validate_tz_offset_minutes`, so `999_999_999` (or `841`/`-721`)
+    /// passed straight through to weekday naming. Mirrors
+    /// `search_muhurta`'s equivalent boundary test.
+    #[test]
+    fn validate_rejects_tz_offset_minutes_out_of_range() {
+        let mut input = valid_input();
+        input.tz_offset_minutes = 841;
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
+
+        let mut input = valid_input();
+        input.tz_offset_minutes = -721;
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
+
+        let mut input = valid_input();
+        input.tz_offset_minutes = 999_999_999;
+        assert_eq!(
+            validate(&input).unwrap_err().error_code,
+            "INVALID_PARAMETER"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_tz_offset_minutes_at_the_boundaries() {
+        let mut input = valid_input();
+        input.tz_offset_minutes = -720;
+        assert!(validate(&input).is_ok());
+        input.tz_offset_minutes = 840;
+        assert!(validate(&input).is_ok());
+    }
+
+    #[test]
+    fn definition_schema_declares_tz_offset_minutes_bounds() {
+        let def = definition();
+        let props = &def.input_schema["properties"];
+        assert_eq!(props["tz_offset_minutes"]["minimum"], -720);
+        assert_eq!(props["tz_offset_minutes"]["maximum"], 840);
     }
 }

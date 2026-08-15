@@ -1192,13 +1192,15 @@ fn compute_panchanga_inner(
                 .to_string(),
         );
     }
-    // `tz_offset_minutes` was previously unvalidated HERE while
-    // `vedaksha-mcp` rejected the same value outside −720..=840
-    // (`validation::validate_tz_offset_minutes`) — one engine, two contracts,
-    // with the wasm caller silently getting a wrong vara where the MCP caller
-    // got an error. Real UTC offsets run from −12:00 (Baker Island) to +14:00
-    // (Kiribati's Line Islands); anything outside that names no real
-    // observer's civil clock.
+    // `tz_offset_minutes` is validated here against the same bound
+    // `vedaksha-mcp`'s `compute_panchanga::validate` applies via
+    // `validation::validate_tz_offset_minutes` (−720..=840): one engine, one
+    // contract. (Until this fix, `vedaksha-mcp`'s `search_muhurta` called
+    // that validator but `compute_panchanga` did not — so the wasm caller
+    // and the MCP `compute_panchanga` caller disagreed; `search_muhurta`
+    // was never the mismatched one.) Real UTC offsets run from −12:00
+    // (Baker Island) to +14:00 (Kiribati's Line Islands); anything outside
+    // that names no real observer's civil clock.
     if !(-720..=840).contains(&tz_offset_minutes) {
         return Err(
             "tz_offset_minutes must be between -720 and 840 (UTC-12:00 to UTC+14:00)".to_string(),
@@ -1756,12 +1758,15 @@ mod panchanga_drishti_bhava_tests {
         assert!(vara["rahu_kalam"].is_null());
     }
 
-    /// FIX 3. `tz_offset_minutes` was validated by `vedaksha-mcp`
-    /// (`validation::validate_tz_offset_minutes`, −720..=840) and not
-    /// validated at all here: one engine, two contracts, with the wasm caller
-    /// silently getting a wrong vara where the MCP caller got an error. The
-    /// boundaries are the real extremes of civil time — UTC−12:00 (Baker
-    /// Island) and UTC+14:00 (Kiribati's Line Islands).
+    /// FIX 3. `tz_offset_minutes` is validated by `vedaksha-mcp`'s
+    /// `compute_panchanga::validate` (`validation::validate_tz_offset_minutes`,
+    /// −720..=840) and, until this fix, was not validated at all here: one
+    /// engine, two contracts, with the wasm caller silently getting a wrong
+    /// vara where the MCP `compute_panchanga` caller got an error. (MCP's
+    /// `search_muhurta` called the same validator throughout; the gap was
+    /// specific to `compute_panchanga`, on both surfaces at once until this
+    /// fix.) The boundaries are the real extremes of civil time — UTC−12:00
+    /// (Baker Island) and UTC+14:00 (Kiribati's Line Islands).
     #[test]
     fn compute_panchanga_inner_validates_tz_offset_minutes_like_the_mcp_surface() {
         let call =

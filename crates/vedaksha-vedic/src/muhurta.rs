@@ -1069,15 +1069,19 @@ mod tests {
     /// Same fixture and reasoning as
     /// `kalam_windows_selects_the_elevation_aware_vara_not_the_sea_level_one`
     /// below: at lat 0°/lon 0° with the fixed-RA `flat_sun`, an elevation of
-    /// 15,000 m moves the rise 14.3 min earlier than sea level, and the
-    /// midpoint of that gap is in the LATER vara for the elevated observer
-    /// and still in the earlier one at sea level. The gap and the ordering
-    /// are asserted rather than assumed, so this cannot silently degenerate
-    /// into comparing a value with itself.
+    /// 3650 m (Lhasa — the elevation figure used elsewhere in this codebase's
+    /// docstrings, and reachable through both shipped APIs now that they
+    /// bound `elevation_m` to [−500, 9000], unlike the 15,000 m this test
+    /// used before) moves the rise 7.06 min earlier than sea level (measured:
+    /// `sea_rise=2451544.9687135713`, `high_rise=2451544.9638098693` at this
+    /// fixture's `day_start`), and the midpoint of that gap is in the LATER
+    /// vara for the elevated observer and still in the earlier one at sea
+    /// level. The gap and the ordering are asserted rather than assumed, so
+    /// this cannot silently degenerate into comparing a value with itself.
     #[test]
     fn vara_at_honours_the_observers_elevation() {
         let day_start = 2_451_544.5; // 2000-01-01 00:00 UT
-        let elevation_m = 15_000.0;
+        let elevation_m = 3650.0; // Lhasa; reachable through both shipped APIs' [-500, 9000] bound
 
         let sea_rise = vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, 0.0, &flat_sun)
             .rise
