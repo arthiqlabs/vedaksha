@@ -1377,27 +1377,56 @@ mod tests {
         assert!(kalam_windows(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun).is_none());
     }
 
-    /// Exercises `elevation_m` end-to-end — nothing above this line ever
-    /// passes a non-zero value. `elevation_m` widens the horizon dip
-    /// (`horizon_dip_deg`), which pulls the rise earlier. Measured directly:
-    /// at lat 0°, lon 0°, day_start JD 2451544.5, `sun_rise_set(.., 0.0,
-    /// flat_sun).rise` = JD 2451544.9687135713 (sea level) vs
-    /// `sun_rise_set(.., 2000.0, flat_sun).rise` = JD 2451544.9650836876 at
-    /// 2000 m elevation — 5.227 minutes earlier, easily clear of float
-    /// noise.
+    /// Exercises `elevation_m` end-to-end, and is built to actually
+    /// DISCRIMINATE between `kalam_windows` deriving its vara from its own
+    /// elevation-aware sunrise vs. delegating to `vara_at` (which hardcodes
+    /// elevation 0.0). An earlier version of this test called
+    /// `kalam_windows` at `day_start + 0.5` — well after BOTH the
+    /// elevation-adjusted and the sea-level sunrise on that day — so both
+    /// derivations landed on the same day's sunrise and hence the same
+    /// weekday; verified by actually reverting the `vara` line in
+    /// `kalam_windows` to `vara_at(jd_ut, lat_deg, lon_deg_east,
+    /// tz_offset_minutes, equatorial)` and re-running the old test, which
+    /// still passed. See the fix-pass report for that failure-to-fail
+    /// evidence.
     ///
-    /// This is the anchor-vs-selection consistency the fix restores: before
-    /// it, the window anchor used the caller's `elevation_m` but slot
-    /// SELECTION went through `vara_at`, which hardcoded elevation to 0.0 —
-    /// two different sunrises for one window. Now both come from the single
-    /// walk-back this function performs itself, with `elevation_m` honoured
-    /// throughout. Saturday's gulika slot is 1, so gulika must start exactly
-    /// at the elevation-adjusted sunrise, not the sea-level one.
+    /// The two derivations disagree only when the query instant falls
+    /// strictly BETWEEN the elevation-adjusted sunrise and the sea-level
+    /// sunrise of the *same* civil-UT day. Walking through why, from
+    /// `kalam_windows`'s own walk-back loop: inside that window the
+    /// elevation-aware walk-back has already found a sunrise ≤ `jd_ut` on
+    /// that day (the vara has turned), while the sea-level walk-back
+    /// (`vara_at`) finds that same day's sea-level rise is still AFTER
+    /// `jd_ut`, rejects it (its `if r <= jd_ut` guard fails), steps
+    /// `day_start` back one civil day, and returns the PREVIOUS day's vara
+    /// instead.
+    ///
+    /// All figures below derived directly via `sun_rise_set`/`vara_at`
+    /// while writing this test, not restated from a plan: at lat 0°, lon 0°,
+    /// `day_start` = JD 2_451_544.5 (2000-01-01 00:00 UT, a Saturday —
+    /// J2000.0 = JD 2451545.0 = Saturday per `weekday_j2000_is_saturday`
+    /// above).
+    /// - `sun_rise_set(day_start, 0.0, 0.0, 0.0, flat_sun).rise` (sea level)
+    ///   = JD 2451544.9687135713
+    /// - `sun_rise_set(day_start, 0.0, 0.0, 15_000.0, flat_sun).rise`
+    ///   (elevated) = JD 2451544.9587727264 — 14.3148 min EARLIER. 15 km is
+    ///   deliberately far past any inhabited elevation: at the 2000 m used
+    ///   elsewhere in this file the gap is only ~5.2 min, too tight to leave
+    ///   comfortable margin at the query instant below; going higher widens
+    ///   it, per the task's own suggestion.
+    /// - the query instant is the gap's midpoint, JD 2451544.9637431488 —
+    ///   ~7.16 min inside each edge.
+    /// - `weekday_from_day_index(elevated_rise)` = Saturday (gulika slot 1,
+    ///   starts exactly at sunrise).
+    /// - `vara_at(mid, 0.0, 0.0, 0, flat_sun)` = Friday (gulika slot 2,
+    ///   starts one eighth-daytime AFTER sunrise) — confirmed by direct
+    ///   call, not hand-derived: `vara_at` rejects the same-day sea-level
+    ///   rise (after `mid`) and falls back to the previous day's sea-level
+    ///   rise, JD 2451543.9714440051 (Dec 31, 1999, a Friday).
     #[test]
-    fn kalam_windows_honours_a_non_zero_elevation_consistently() {
-        let day_start = 2_451_544.5; // 2000-01-01 12:00 UT is a Saturday at longitude 0.
-        let jd = day_start + 0.5;
-        let elevation_m = 2000.0;
+    fn kalam_windows_selects_the_elevation_aware_vara_not_the_sea_level_one() {
+        let day_start = 2_451_544.5; // 2000-01-01 00:00 UT, a Saturday.
+        let elevation_m = 15_000.0;
 
         let sea_level_rise =
             vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, 0.0, &flat_sun)
@@ -1408,17 +1437,63 @@ mod tests {
                 .rise
                 .expect("sun rises with elevation too");
         assert!(
-            (elevated_rise - sea_level_rise).abs() > 1e-4,
-            "sanity: a 2000 m elevation must measurably move the rise instant, \
-             got sea={sea_level_rise} elevated={elevated_rise}"
+            elevated_rise < sea_level_rise,
+            "elevation must move the rise EARLIER: sea={sea_level_rise} elevated={elevated_rise}"
+        );
+        let gap_minutes = (sea_level_rise - elevated_rise) * 1440.0;
+        assert!(
+            gap_minutes > 10.0,
+            "gap must be comfortably wide (>10 min) so the query instant below \
+             sits clear of both edges, got {gap_minutes} min"
+        );
+
+        // Strictly inside the gap, equidistant from both edges.
+        let jd_ut = (sea_level_rise + elevated_rise) / 2.0;
+        assert!(
+            elevated_rise < jd_ut && jd_ut < sea_level_rise,
+            "query instant {jd_ut} must sit strictly inside the gap \
+             ({elevated_rise}..{sea_level_rise})"
+        );
+
+        // The elevation-aware vara: what `kalam_windows` must use.
+        // `weekday_from_day_index` is the same private helper both `vara_at`
+        // and `kalam_windows` apply to whichever sunrise they land on — this
+        // does not reimplement `kalam_windows`'s walk-back, it just names
+        // the weekday of the sunrise instant already derived above.
+        let elevation_vara = weekday_from_day_index(elevated_rise);
+        // The sea-level vara: `vara_at` called DIRECTLY, the actual "wrong"
+        // derivation a reverted `vara` line would substitute in.
+        let sea_vara = vara_at(jd_ut, 0.0, 0.0, 0, &flat_sun);
+        assert_ne!(
+            elevation_vara, sea_vara,
+            "the two derivations must disagree at this instant, or the \
+             assertion below cannot discriminate between them: \
+             elevation-aware sunrise {elevated_rise} -> {elevation_vara:?}; \
+             vara_at({jd_ut}) (sea level) -> {sea_vara:?}"
+        );
+        // Not just different names — different gulika slots, so the two
+        // derivations place the window at physically different instants.
+        assert_ne!(
+            elevation_vara.gulika_kalam_slot(),
+            sea_vara.gulika_kalam_slot(),
+            "sanity: {elevation_vara:?} and {sea_vara:?} must not share a \
+             gulika slot, or this test cannot distinguish them positionally"
         );
 
         let (_, gulika) =
-            kalam_windows(jd, 0.0, 0.0, elevation_m, 0, &flat_sun).expect("sun rises here");
+            kalam_windows(jd_ut, 0.0, 0.0, elevation_m, 0, &flat_sun).expect("sun rises here");
+
+        // This is the fix's actual contract: THE SLOT `kalam_windows`
+        // SELECTS must be the elevation-aware vara's slot, anchored at the
+        // elevation-aware sunrise — not the sea-level vara's slot.
         assert!(
             (gulika.start_jd - elevated_rise).abs() < 1e-9,
-            "Saturday gulika (slot 1) must start at the ELEVATION-ADJUSTED sunrise \
-             ({elevated_rise}), not the sea-level one ({sea_level_rise}): got {}",
+            "kalam_windows must select the ELEVATION-AWARE vara's slot: \
+             elevation-aware sunrise {elevated_rise} -> {elevation_vara:?} \
+             (gulika slot {}), sea-level vara_at({jd_ut}) -> {sea_vara:?} \
+             (gulika slot {}) — got gulika.start_jd = {}",
+            elevation_vara.gulika_kalam_slot(),
+            sea_vara.gulika_kalam_slot(),
             gulika.start_jd
         );
         assert!(
