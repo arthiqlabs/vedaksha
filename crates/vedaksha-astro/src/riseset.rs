@@ -209,17 +209,27 @@ pub fn rise_set(
 /// `sin δ = sin β·cos ε + cos β·sin ε·sin λ`,
 /// `α = atan2(sin λ·cos ε − tan β·sin ε, cos λ)`.
 ///
+/// Ephemeris position and obliquity are dynamical quantities, defined on
+/// TT, not UT — unlike [`local_sidereal_degrees`]'s GMST, which tracks
+/// Earth's physical rotation and is defined on UT. `ecliptic_position`
+/// already does its own `jd_ut` → TT conversion internally (it takes UT,
+/// like this function does), but `obliquity::mean_obliquity` does not, so
+/// this converts once via `delta_t::ut1_to_tt` before calling it — passing
+/// `jd_ut` there would evaluate the obliquity polynomial ~69 s of time
+/// (present-day ΔT) into the past.
+///
 /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 13.
 #[must_use]
 pub fn sun_equatorial_deg(
     provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
     jd_ut: f64,
 ) -> Option<(f64, f64)> {
-    use vedaksha_ephem_core::{bodies::Body, coordinates, obliquity};
+    use vedaksha_ephem_core::{bodies::Body, coordinates, delta_t, obliquity};
 
     let pos = coordinates::ecliptic_position(provider, Body::Sun, jd_ut).ok()?;
     let (lambda, beta) = (pos.longitude, pos.latitude);
-    let eps = obliquity::mean_obliquity(jd_ut);
+    let jd_tt = delta_t::ut1_to_tt(jd_ut);
+    let eps = obliquity::mean_obliquity(jd_tt);
 
     let sin_dec =
         libm::sin(beta) * libm::cos(eps) + libm::cos(beta) * libm::sin(eps) * libm::sin(lambda);
@@ -253,19 +263,37 @@ mod tests {
     /// GMST is otherwise only ever checked against this module's own use of
     /// it, which cannot catch a time-scale bug (feeding TT instead of UT into
     /// `sidereal_time::gmst`) — both sides of the comparison would be wrong
-    /// the same way. Pin `local_sidereal_degrees` against a value published
-    /// independently of this codebase instead: Greenwich Mean Sidereal Time
-    /// at 2000-01-01 0h UT (JD 2,451,544.5) is 6h 39m 52.0708s = 99.96696°.
+    /// the same way. Pin `local_sidereal_degrees` against a value derived
+    /// independently of this codebase, not against a number merely recalled
+    /// from memory — a prior version of this constant (99.96696°) was
+    /// exactly that, and it was wrong by 3.00″.
+    ///
+    /// Two independent closed forms, evaluated by hand here rather than by
+    /// calling `sidereal_time::gmst` (which would just compare the function
+    /// to itself), agree to 7 decimal places at JD 2,451,544.5
+    /// (2000-01-01 00:00 UT1), where Tu = (JD − 2,451,545.0) / 36525 =
+    /// −1.369472e-5:
+    /// - IAU 1982: `GMST_seconds = 24110.54841 + 8640184.812866·Tu +
+    ///   0.093104·Tu² − 6.2e-6·Tu³`
+    /// - Meeus, *Astronomical Algorithms* 2nd ed., eq. 12.4 — the same
+    ///   formula `sidereal_time::gmst` implements
+    ///
+    /// Both give 23992.2707s of time = 6h 39m 52.271s = 99.967795°.
     /// Feeding TT (JD + ΔT) into `gmst` here — the bug this module used to
-    /// have — shifts the result by ~0.27°, well outside this test's 0.01°
+    /// have — shifts the result by ~0.27°, far outside this test's
     /// tolerance, so this is the test that makes the UT-vs-TT choice
     /// testable.
     #[test]
     fn local_sidereal_degrees_matches_published_gmst_at_j2000() {
         let lst = local_sidereal_degrees(2_451_544.5, 0.0);
+        // Measured residual: |99.9677946868551 - 99.967795| = 3.131449e-7
+        // degrees — purely from rounding the derived value to 6 decimal
+        // places for this literal, not a modeling gap. Tolerance is set
+        // just above that measured number (1e-6), not to a round figure
+        // sized to hide bad reference data.
         assert!(
-            libm::fabs(lst - 99.966_96) < 0.01,
-            "GMST at JD 2451544.5 = {lst}, expected 99.96696 (published)"
+            libm::fabs(lst - 99.967_795) < 1e-6,
+            "GMST at JD 2451544.5 = {lst}, expected 99.967795 (IAU 1982 / Meeus eq. 12.4)"
         );
     }
 
@@ -274,15 +302,16 @@ mod tests {
     /// test *located* transit by scanning with `local_sidereal_degrees` and
     /// then evaluated altitude with the same function, so a constant LST
     /// error would shift both sides together and stay green. Anchor
-    /// independently instead: the published GMST from
-    /// `local_sidereal_degrees_matches_published_gmst_at_j2000` (99.96696° at
-    /// JD 2,451,544.5) is used directly as this fake body's RA, which puts it
-    /// on the Greenwich meridian (hour angle 0) at that exact instant by
-    /// construction — no LST search involved.
+    /// independently instead: the GMST derived in
+    /// `local_sidereal_degrees_matches_published_gmst_at_j2000` (99.967795°
+    /// at JD 2,451,544.5, from IAU 1982 / Meeus eq. 12.4) is used directly as
+    /// this fake body's RA, which puts it on the Greenwich meridian (hour
+    /// angle 0) at that exact instant by construction — no LST search
+    /// involved.
     #[test]
     fn altitude_at_transit_matches_the_closed_form() {
         let lat = 51.4778;
-        let ra = 99.966_96; // published GMST at JD 2451544.5, degrees.
+        let ra = 99.967_795; // GMST at JD 2451544.5, degrees (IAU 1982 / Meeus 12.4).
         let dec = 0.0;
         let alt = geometric_altitude_deg(ra, dec, 2_451_544.5, lat, 0.0);
         // 90 - |lat - dec| = 90 - 51.4778 = 38.5222.
@@ -416,14 +445,17 @@ mod tests {
     /// the expectation and the test fails.
     #[test]
     fn sun_right_ascension_reflects_the_obliquity_rotation() {
-        use vedaksha_ephem_core::{bodies::Body, coordinates, obliquity};
+        use vedaksha_ephem_core::{bodies::Body, coordinates, delta_t, obliquity};
 
         let provider = vedaksha_ephem_core::analytical::AnalyticalProvider;
         let jd = 2_451_668.5; // 2000-05-04
 
         let pos = coordinates::ecliptic_position(&provider, Body::Sun, jd)
             .expect("mid-quadrant position");
-        let eps = obliquity::mean_obliquity(jd);
+        // Mirrors `sun_equatorial_deg`: obliquity is a dynamical quantity
+        // and wants TT, unlike `ecliptic_position`'s UT parameter (which
+        // converts internally).
+        let eps = obliquity::mean_obliquity(delta_t::ut1_to_tt(jd));
         // Sun's ecliptic latitude is negligible (~arcseconds), so this omits
         // the `tan(beta) * sin(eps)` term that `sun_equatorial_deg` carries.
         let expected_ra = normalize_degrees(rad_to_deg(libm::atan2(
