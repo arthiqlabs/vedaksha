@@ -694,6 +694,7 @@ dependencies = [
 name = "vedaksha-vedic"
 version = "4.0.0"
 dependencies = [
+ "libm",
  "serde",
  "vedaksha-astro",
  "vedaksha-ephem-core",

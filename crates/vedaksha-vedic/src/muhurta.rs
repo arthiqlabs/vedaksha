@@ -152,13 +152,35 @@ pub fn compute_tithi(moon_lon: f64, sun_lon: f64) -> Tithi {
     Tithi { number, name }
 }
 
-/// Get the weekday for a Julian Day.
+/// Get the **Universal Time** calendrical weekday for a Julian Day.
+///
+/// ⚠️ This is **not a vara.** A vara is the observer's day, reckoned from
+/// local sunrise; the UT day boundary falls at a different local clock time at
+/// every longitude, so this returns the wrong weekday for any instant between
+/// that boundary and local midnight. Use [`vara_at`] for a vara.
+///
+/// Kept public because the UT weekday is a legitimate calendrical quantity —
+/// it is only its use as a vara that is a defect.
 ///
 /// Source: Meeus, "Astronomical Algorithms" 2nd ed., Ch. 7.
 #[must_use]
-pub fn weekday_from_jd(jd: f64) -> Weekday {
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let day_index = ((jd + 1.5) % 7.0).floor() as u8;
+pub fn ut_weekday_from_jd(jd: f64) -> Weekday {
+    weekday_from_day_index(jd)
+}
+
+/// Map a Julian Day to its weekday by the standard `(jd + 1.5) mod 7` index.
+///
+/// `rem_euclid` rather than `%` so a negative operand cannot produce a
+/// negative remainder — unreachable for real Julian Days, but it makes the
+/// fallback arm genuinely unreachable rather than incidentally so.
+fn weekday_from_day_index(jd: f64) -> Weekday {
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "libm::floor of a JD-scaled value is far inside i64, and \
+                  rem_euclid(7) is in 0..=6, so neither cast can lose data"
+    )]
+    let day_index = (libm::floor(jd + 1.5) as i64).rem_euclid(7) as u8;
     match day_index {
         1 => Weekday::Monday,
         2 => Weekday::Tuesday,
@@ -166,8 +188,63 @@ pub fn weekday_from_jd(jd: f64) -> Weekday {
         4 => Weekday::Thursday,
         5 => Weekday::Friday,
         6 => Weekday::Saturday,
-        _ => Weekday::Sunday, // 0, and unreachable values
+        _ => Weekday::Sunday, // 0
     }
+}
+
+/// The **vara** — the Vedic weekday — for an observer, reckoned from local
+/// sunrise to local sunrise.
+///
+/// The Vedic day begins at sunrise, so an instant between local midnight and
+/// sunrise belongs to the *previous* vara. This walks back up to four civil
+/// days to find the most recent sunrise at or before `jd_ut`, then takes the
+/// local civil weekday of that sunrise.
+///
+/// # Arguments
+/// * `jd_ut` — the instant, Julian Day (UT)
+/// * `lat_deg` — observer latitude, degrees
+/// * `lon_deg_east` — observer longitude, degrees, east positive
+/// * `tz_offset_minutes` — offset from UT of the observer's civil clock
+/// * `equatorial` — the Sun's apparent `(right_ascension_deg, declination_deg)`
+///   at a Julian Day (UT), or `None` where unavailable
+///
+/// Inside the polar day and polar night no sunrise exists and the
+/// sunrise-to-sunrise vara is undefined; there this falls back to the local
+/// civil weekday. That fallback is a documented convention, not a classical
+/// rule.
+///
+/// Source: Muhurta Chintamani; Kalaprakashika (the sunrise reckoning).
+#[must_use]
+pub fn vara_at(
+    jd_ut: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    tz_offset_minutes: i32,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Weekday {
+    let local_weekday =
+        |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
+
+    // 0h UT of the civil UT day containing `jd_ut`, then walk back until a
+    // sunrise at or before the instant is found. Four days is ample: only the
+    // polar cases fail, and they fail for every day.
+    let mut day_start = libm::floor(jd_ut - 0.5) + 0.5;
+    for _ in 0..4 {
+        // NOTE: written as a nested `if let`, not a let-chain. The workspace
+        // `rust-version` is 1.85 and let-chains did not stabilise until 1.88,
+        // so a chain here would silently raise the MSRV. No other file in the
+        // workspace uses one.
+        if let Some(rise) =
+            vedaksha_astro::riseset::sun_rise_set(day_start, lat_deg, lon_deg_east, 0.0, equatorial)
+                .rise
+        {
+            if rise <= jd_ut {
+                return local_weekday(rise);
+            }
+        }
+        day_start -= 1.0;
+    }
+    local_weekday(jd_ut)
 }
 
 /// Assess muhurta quality for a given moment.
@@ -180,7 +257,7 @@ pub fn weekday_from_jd(jd: f64) -> Weekday {
 pub fn assess_muhurta(jd: f64, moon_sidereal_lon: f64, sun_sidereal_lon: f64) -> MuhurtaAssessment {
     let nakshatra = Nakshatra::from_longitude(moon_sidereal_lon);
     let tithi = compute_tithi(moon_sidereal_lon, sun_sidereal_lon);
-    let weekday = weekday_from_jd(jd);
+    let weekday = ut_weekday_from_jd(jd);
 
     let mut score = 0.5_f64; // neutral baseline
     let mut factors = Vec::new();
@@ -475,22 +552,148 @@ mod tests {
         assert_eq!(tithi.number, 3, "Expected tithi 3 (Tritiya)");
     }
 
-    // --- weekday_from_jd ---
+    // --- ut_weekday_from_jd ---
 
     #[test]
     fn weekday_j2000_is_saturday() {
         // J2000.0 = JD 2451545.0 = Jan 1.5, 2000 = Saturday
-        let wd = weekday_from_jd(2_451_545.0);
+        let wd = ut_weekday_from_jd(2_451_545.0);
         assert_eq!(wd, Weekday::Saturday, "J2000.0 should be Saturday");
     }
 
     #[test]
     fn weekday_advances_correctly() {
         // J2000.0 = Saturday; J2000.0 + 1 = Sunday
-        let wd = weekday_from_jd(2_451_546.0);
+        let wd = ut_weekday_from_jd(2_451_546.0);
         assert_eq!(wd, Weekday::Sunday);
-        let wd2 = weekday_from_jd(2_451_547.0);
+        let wd2 = ut_weekday_from_jd(2_451_547.0);
         assert_eq!(wd2, Weekday::Monday);
+    }
+
+    /// A Sun fixed on the equator, good enough to place a sunrise near 06:00
+    /// local apparent time at any equatorial longitude.
+    fn flat_sun(_jd: f64) -> Option<(f64, f64)> {
+        Some((0.0, 0.0))
+    }
+
+    /// The defect KundaliMCP reported: `weekday_from_jd` returns the UT
+    /// weekday, which flips at a different local clock time at every
+    /// longitude. West of about −150° the UT day has already rolled over
+    /// while it is still the previous evening locally.
+    #[test]
+    fn vara_does_not_follow_the_ut_day_boundary_in_the_far_west() {
+        // 2020-06-14 20:00 Honolulu (UTC−10) == 2020-06-15 06:00Z, JD 2459015.75.
+        let jd = 2_459_015.75;
+        assert_eq!(
+            ut_weekday_from_jd(jd),
+            Weekday::Monday,
+            "precondition: the UT weekday really is Monday here"
+        );
+        let vara = vara_at(jd, 21.3069, -157.8583, -600, &flat_sun);
+        assert_eq!(
+            vara,
+            Weekday::Sunday,
+            "20:00 on a Sunday evening in Honolulu is still Ravivara"
+        );
+    }
+
+    /// The report asked specifically for a case east of +150° as well as one
+    /// west of −150°: inside ±90° the UT and local days usually agree, which is
+    /// exactly why this class of bug survives a green suite. In KundaliMCP's
+    /// own harness 19 of 20 fixtures sat inside that band and the identical bug
+    /// produced zero diffs across 928 snapshots.
+    ///
+    /// At one fixed UT instant the far east and the far west are ~22 hours
+    /// apart on the civil clock, so they cannot share a vara. Asserted as a
+    /// relation rather than two hard-coded weekdays: a hard-coded weekday here
+    /// would be asserting the plan author's arithmetic, not the code's.
+    #[test]
+    fn far_east_and_far_west_cannot_share_a_vara_at_one_instant() {
+        let jd = 2_459_015.75; // 2020-06-15 06:00Z
+        let east = vara_at(jd, 0.0, 165.0, 660, &flat_sun); // UTC+11
+        let west = vara_at(jd, 0.0, -165.0, -660, &flat_sun); // UTC−11
+        assert_ne!(
+            east, west,
+            "observers 22 civil hours apart must not share a vara at one instant"
+        );
+    }
+
+    /// A pair of point tests can pass by luck. Sweep the whole globe at one
+    /// fixed UT instant: some longitudes must agree with the UT weekday and
+    /// some must disagree. All-agree means the fix did nothing; all-disagree
+    /// means it is not tracking the calendar at all.
+    #[test]
+    fn a_full_longitude_sweep_shows_the_vara_is_observer_dependent() {
+        let jd = 2_459_015.75;
+        let ut = ut_weekday_from_jd(jd);
+        let (mut agreeing, mut differing) = (0_u32, 0_u32);
+        let mut lon_i = -180_i32;
+        while lon_i <= 180 {
+            // Civil clock approximated by the nearest whole hour of solar time.
+            // Integer arithmetic throughout — no float casts to placate clippy.
+            let tz_minutes = (lon_i / 15) * 60;
+            if vara_at(jd, 0.0, f64::from(lon_i), tz_minutes, &flat_sun) == ut {
+                agreeing += 1;
+            } else {
+                differing += 1;
+            }
+            lon_i += 5;
+        }
+        assert!(
+            differing > 0,
+            "no longitude disagreed with the UT weekday — this sweep proves nothing"
+        );
+        assert!(
+            agreeing > 0,
+            "every longitude disagreed — the vara is not tracking the calendar"
+        );
+    }
+
+    /// The vara turns at sunrise, not at local midnight: an instant between
+    /// midnight and sunrise still belongs to the previous Vedic day.
+    ///
+    /// `flat_sun` fixes RA at 0°, not the Sun's real varying RA, so its
+    /// "sunrise" does not land near 06:00 UT the way a real Sun's would: GMST
+    /// at JD 2451544.5 (2000-01-01 00:00 UT) is already ~99.97° (~6.66h)
+    /// ahead of RA=0, so the window's first altitude crossing is well past
+    /// 06:00 UT. Rather than assert an unverified clock time, this derives
+    /// the actual rise instant from `sun_rise_set` directly — the same call
+    /// `vara_at` makes internally for this `day_start` — and brackets it by
+    /// ±1h. Measured: rise ≈ day_start + 0.468 d ≈ 11:14 UT on 2000-01-01, a
+    /// Saturday, so 10:14 UT is still Friday's vara and 12:14 UT is Saturday's.
+    #[test]
+    fn vara_turns_at_sunrise_not_at_local_midnight() {
+        let day_start = 2_451_544.5; // 2000-01-01 00:00 UT, a Saturday.
+        let rise = vedaksha_astro::riseset::sun_rise_set(day_start, 0.0, 0.0, 0.0, &flat_sun)
+            .rise
+            .expect("equatorial sun must rise");
+
+        let one_hour = 1.0 / 24.0;
+        assert_eq!(
+            vara_at(rise - one_hour, 0.0, 0.0, 0, &flat_sun),
+            Weekday::Friday,
+            "before sunrise the vara is still the previous day's"
+        );
+        assert_eq!(
+            vara_at(rise + one_hour, 0.0, 0.0, 0, &flat_sun),
+            Weekday::Saturday,
+            "after sunrise the vara has turned"
+        );
+    }
+
+    /// Polar night has no sunrise to bound the instant, so the documented
+    /// fallback (local civil weekday) must apply rather than a panic or a
+    /// silent wrong answer.
+    #[test]
+    fn vara_falls_back_where_the_sun_does_not_rise() {
+        let southern_sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
+        // Longyearbyen in midwinter.
+        let v = vara_at(2_451_544.5, 78.22, 15.65, 60, &southern_sun);
+        assert_eq!(
+            v,
+            Weekday::Saturday,
+            "must fall back to the local civil weekday"
+        );
     }
 
     // --- assess_muhurta ---

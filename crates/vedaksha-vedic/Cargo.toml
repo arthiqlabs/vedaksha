@@ -15,6 +15,7 @@ vedaksha-math = { version = "4.0.0", path = "../vedaksha-math" }
 vedaksha-ephem-core = { version = "4.0.0", path = "../vedaksha-ephem-core" }
 vedaksha-astro = { version = "4.0.0", path = "../vedaksha-astro" }
 serde = { workspace = true }
+libm = "0.2"
 
 [dev-dependencies]
 

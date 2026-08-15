@@ -543,7 +543,7 @@ impl McpServer {
     }
 
     fn call_compute_panchanga(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, weekday_from_jd};
+        use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, ut_weekday_from_jd};
         use vedaksha_vedic::nakshatra::Nakshatra;
         use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
 
@@ -553,7 +553,7 @@ impl McpServer {
         crate::tools::compute_panchanga::validate(&input)?;
 
         let tithi = compute_tithi(input.moon, input.sun);
-        let weekday = weekday_from_jd(input.jd);
+        let weekday = ut_weekday_from_jd(input.jd);
         let nakshatra = Nakshatra::from_longitude(input.moon);
         let pada = Nakshatra::pada_from_longitude(input.moon);
         let yoga = compute_panchanga_yoga(input.sun, input.moon);

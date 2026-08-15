@@ -1102,7 +1102,7 @@ pub fn compute_panchanga(jd: f64, sun: f64, moon: f64) -> Result<String, JsError
 }
 
 fn compute_panchanga_inner(jd: f64, sun: f64, moon: f64) -> Result<String, String> {
-    use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, weekday_from_jd};
+    use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, ut_weekday_from_jd};
     use vedaksha_vedic::nakshatra::Nakshatra;
     use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
 
@@ -1116,7 +1116,7 @@ fn compute_panchanga_inner(jd: f64, sun: f64, moon: f64) -> Result<String, Strin
     }
 
     let tithi = compute_tithi(moon, sun);
-    let weekday = weekday_from_jd(jd);
+    let weekday = ut_weekday_from_jd(jd);
     let nakshatra = Nakshatra::from_longitude(moon);
     let pada = Nakshatra::pada_from_longitude(moon);
     let yoga = compute_panchanga_yoga(sun, moon);
