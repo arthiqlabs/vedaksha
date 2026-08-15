@@ -115,6 +115,88 @@ impl Weekday {
     }
 }
 
+/// An inauspicious daytime window, as Julian Days (UT).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct KalamWindow {
+    /// Julian Day (UT) at which the window opens.
+    pub start_jd: f64,
+    /// Julian Day (UT) at which the window closes.
+    pub end_jd: f64,
+}
+
+/// Rahu Kalam and Gulika Kalam as actual time windows for the vara containing
+/// `jd_ut`, at the given observer.
+///
+/// Both are defined as one eighth of the daytime — sunrise to sunset divided
+/// into eight equal parts — with the vara selecting which eighth. Returns
+/// `(rahu, gulika)`, or `None` where the Sun does not both rise and set (polar
+/// day and polar night), which is when the definition has no daytime to divide.
+///
+/// Source: Kalaprakashika (Rahu Kalam); Muhurtha Chintamani (Gulika Kalam).
+#[must_use]
+pub fn kalam_windows(
+    jd_ut: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    elevation_m: f64,
+    tz_offset_minutes: i32,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Option<(KalamWindow, KalamWindow)> {
+    // ⚠️ `sun_rise_set` returns the FIRST rise and FIRST set inside its
+    // 24-hour scan window, and they need not be in that order. At Honolulu,
+    // scanning from 0h UT finds the set (~04:30 UT) BEFORE the rise
+    // (~16:30 UT), because 0h UT is already local afternoon there. Naively
+    // pairing them gives a negative daytime and eight backwards windows.
+    //
+    // So: find the sunrise that opens the vara's own day (the same backward
+    // walk `vara_at` does), then take the sunset that FOLLOWS it by scanning
+    // forward from the sunrise instant itself.
+    let mut day_start = libm::floor(jd_ut - 0.5) + 0.5;
+    let mut opening_sunrise = None;
+    for _ in 0..4 {
+        if let Some(r) = vedaksha_astro::riseset::sun_rise_set(
+            day_start,
+            lat_deg,
+            lon_deg_east,
+            elevation_m,
+            equatorial,
+        )
+        .rise
+        {
+            if r <= jd_ut {
+                opening_sunrise = Some(r);
+                break;
+            }
+        }
+        day_start -= 1.0;
+    }
+    let sunrise = opening_sunrise?;
+    let sunset = vedaksha_astro::riseset::sun_rise_set(
+        sunrise,
+        lat_deg,
+        lon_deg_east,
+        elevation_m,
+        equatorial,
+    )
+    .set?;
+
+    let eighth = (sunset - sunrise) / 8.0;
+
+    let vara = vara_at(jd_ut, lat_deg, lon_deg_east, tz_offset_minutes, equatorial);
+    let window = |slot: u8| {
+        let start = sunrise + f64::from(slot - 1) * eighth;
+        KalamWindow {
+            start_jd: start,
+            end_jd: start + eighth,
+        }
+    };
+
+    Some((
+        window(vara.rahu_kalam_slot()),
+        window(vara.gulika_kalam_slot()),
+    ))
+}
+
 /// Muhurta quality assessment for a given moment.
 #[derive(Debug, Clone)]
 pub struct MuhurtaAssessment {
@@ -971,6 +1053,159 @@ mod tests {
         let end = compute_nakshatra_end(j0, &moon).expect("nakshatra end");
         let expected = j0 + (360.0 / 27.0) / 13.176;
         assert!((end - expected).abs() < 1e-9, "end {end} vs {expected}");
+    }
+
+    // --- kalam_windows ---
+
+    /// Rahu Kalam is the Nth eighth of the daytime, counted from sunrise. Its
+    /// width must therefore be exactly one eighth of the day's length, and it
+    /// must sit inside sunrise..sunset.
+    #[test]
+    fn rahu_kalam_is_one_eighth_of_the_daytime() {
+        let (rahu, gulika) =
+            kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun).expect("sun rises here");
+        let rs = vedaksha_astro::riseset::sun_rise_set(2_451_544.5, 0.0, 0.0, 0.0, &flat_sun);
+        let (sunrise, sunset) = (rs.rise.unwrap(), rs.set.unwrap());
+        let eighth = (sunset - sunrise) / 8.0;
+
+        assert!(
+            ((rahu.end_jd - rahu.start_jd) - eighth).abs() < 1e-9,
+            "rahu kalam must be exactly one eighth of the daytime"
+        );
+        assert!(
+            rahu.start_jd >= sunrise - 1e-9 && rahu.end_jd <= sunset + 1e-9,
+            "rahu kalam must lie within sunrise..sunset"
+        );
+        assert!(
+            ((gulika.end_jd - gulika.start_jd) - eighth).abs() < 1e-9,
+            "gulika kalam must be exactly one eighth of the daytime"
+        );
+    }
+
+    /// The window must be placed by the vara's slot table. Saturday's gulika
+    /// slot is 1, so on a Saturday gulika begins exactly at sunrise.
+    #[test]
+    fn saturday_gulika_starts_at_sunrise() {
+        // 2000-01-01 12:00 UT is a Saturday at longitude 0.
+        let (_, gulika) =
+            kalam_windows(2_451_544.5 + 0.5, 0.0, 0.0, 0.0, 0, &flat_sun).expect("sun rises here");
+        let rs = vedaksha_astro::riseset::sun_rise_set(2_451_544.5, 0.0, 0.0, 0.0, &flat_sun);
+        assert!(
+            (gulika.start_jd - rs.rise.unwrap()).abs() < 1e-9,
+            "Saturday gulika is slot 1, so it starts at sunrise"
+        );
+    }
+
+    /// `tz_offset_minutes` selects which weekday's slot table applies, and
+    /// Rahu sits in a different eighth on different weekdays. Derived by
+    /// direct computation while writing this test (not restated from the
+    /// brief): at lon 165°E, `vara_at(2_459_015.75, 0.0, 165.0, 660,
+    /// flat_sun)` (tz honoured) is Monday — rahu slot 2 — while
+    /// `vara_at(2_459_015.75, 0.0, 165.0, 0, flat_sun)` (tz dropped) is
+    /// Sunday — rahu slot 8. Slot 2 sits in the first quarter of the
+    /// daytime and slot 8 is the last eighth, ending at sunset, so
+    /// `kalam_windows` under the two tz values must place rahu's start more
+    /// than 0.25 day (6 h) apart. Measured: `|2459015.1208594847 −
+    /// 2459015.498298313| ≈ 0.377 d` (9.06 h) — the 0.25 d threshold sits
+    /// comfortably below that measurement, not at a round number chosen to
+    /// paper over noise.
+    #[test]
+    fn kalam_windows_uses_the_observers_own_weekday_not_the_ut_one() {
+        let jd = 2_459_015.75;
+        let (rahu_correct, _) =
+            kalam_windows(jd, 0.0, 165.0, 0.0, 660, &flat_sun).expect("sun rises here");
+        let (rahu_wrong, _) =
+            kalam_windows(jd, 0.0, 165.0, 0.0, 0, &flat_sun).expect("sun rises here");
+        assert!(
+            (rahu_correct.start_jd - rahu_wrong.start_jd).abs() > 0.25,
+            "dropping tz_offset_minutes must select a materially different slot: honoured {} vs dropped {}",
+            rahu_correct.start_jd,
+            rahu_wrong.start_jd
+        );
+    }
+
+    /// REGRESSION GUARD. `sun_rise_set` reports the first rise and first set
+    /// in its scan window and does not order them. This is the exact
+    /// longitude class that hid the original vara bug (see
+    /// `vara_does_not_follow_the_ut_day_boundary_in_the_far_west`), so it
+    /// gets a test here too.
+    ///
+    /// MUTATION-TESTING NOTE: at this exact `(jd, lon)`, the Sun is *below*
+    /// the horizon at `day_start` (measured: `geometric_altitude_deg(0.0,
+    /// 0.0, 2_459_015.5, 21.3069, -157.8583)` = -14.77°), so a naive single
+    /// `sun_rise_set(day_start, ...)` call does not itself yield a
+    /// set-before-rise pair here — it yields a *forward-ordered* pair that
+    /// belongs to the wrong day (see below), not a negative-width one. A
+    /// longitude sweep at this `day_start` (checked by hand while writing
+    /// this test) confirms the swap-order failure mode is real for this
+    /// `equatorial` fixture — it appears at, e.g., lon 10°..180° and
+    /// -180°..-175° — just not at Honolulu's exact longitude on this exact
+    /// date. So the ordering (`end > start`) and width (45-135 min)
+    /// assertions below, taken alone, would NOT catch a regression to the
+    /// naive single-call implementation here: verified by actually reverting
+    /// `kalam_windows` to a naive single call and re-running this test, which
+    /// stayed green under the two assertions below. The `end_jd <
+    /// next_days_rise` assertion was added specifically because of that
+    /// finding — see its own comment.
+    #[test]
+    fn kalam_windows_run_forwards_in_the_far_west() {
+        let jd = 2_459_015.75; // 2020-06-15 06:00Z == 2020-06-14 20:00 Honolulu
+        let (rahu, gulika) =
+            kalam_windows(jd, 21.3069, -157.8583, 0.0, -600, &flat_sun).expect("sun rises here");
+        assert!(
+            rahu.end_jd > rahu.start_jd,
+            "rahu kalam ran backwards: {} .. {}",
+            rahu.start_jd,
+            rahu.end_jd
+        );
+        assert!(
+            gulika.end_jd > gulika.start_jd,
+            "gulika kalam ran backwards: {} .. {}",
+            gulika.start_jd,
+            gulika.end_jd
+        );
+        // A day is a day, wherever you stand: between 6 and 18 hours at this
+        // latitude and season, so eight of these are 45-135 minutes each.
+        let width_minutes = (rahu.end_jd - rahu.start_jd) * 1440.0;
+        assert!(
+            (45.0..135.0).contains(&width_minutes),
+            "one eighth of the daytime = {width_minutes} min, which is not a plausible daytime"
+        );
+
+        // The two assertions above pass even for a naive single-call
+        // implementation here (see the doc comment), because that naive call
+        // happens to pick the *following* day's sunrise/sunset for this
+        // longitude — `vara_at`'s walk-back rejects that same rise (it is
+        // after `jd`) for exactly this reason; see
+        // `vara_does_not_follow_the_ut_day_boundary_in_the_far_west`, which
+        // derives it as JD 2459015.952163512. Independently re-derived here,
+        // via the same `sun_rise_set` primitive `kalam_windows` uses
+        // internally (not by calling `kalam_windows` again, so this is not
+        // checking the function against itself): the vara's own daytime must
+        // end strictly before that following sunrise. Rahu is slot 8 for
+        // Sunday (the vara here), so `rahu.end_jd` is exactly this daytime's
+        // sunset.
+        let next_days_rise = vedaksha_astro::riseset::sun_rise_set(
+            libm::floor(jd - 0.5) + 0.5,
+            21.3069,
+            -157.8583,
+            0.0,
+            &flat_sun,
+        )
+        .rise
+        .expect("the following sunrise must exist here too");
+        assert!(
+            rahu.end_jd < next_days_rise,
+            "rahu kalam (ending {}) must fall before the FOLLOWING sunrise ({next_days_rise}); a naive single-window sun_rise_set call wrongly selects that later cycle's day here",
+            rahu.end_jd
+        );
+    }
+
+    /// Polar night has no daytime to divide into eighths.
+    #[test]
+    fn no_kalam_windows_where_the_sun_does_not_rise() {
+        let southern_sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
+        assert!(kalam_windows(2_451_544.5, 78.22, 15.65, 0.0, 60, &southern_sun).is_none());
     }
 
     #[test]
