@@ -1087,22 +1087,62 @@ mod karaka_tests {
 /// Compute the panchanga — the five limbs of the Vedic almanac — for an instant.
 ///
 /// # Arguments
-/// * `jd` — Julian Day (UT); determines the vara
+/// * `jd` — Julian Day (UT) of the instant
 /// * `sun` — Sun's sidereal longitude in degrees [0, 360)
 /// * `moon` — Moon's sidereal longitude in degrees [0, 360)
+/// * `latitude` — Observer latitude in degrees [-90, 90]. Required — the vara
+///   is reckoned from local sunrise, so it depends on the observer, not `jd`
+///   alone.
+/// * `longitude` — Observer longitude in degrees [-180, 180], east positive
+/// * `elevation_m` — Observer elevation above sea level in metres; shifts
+///   sunrise slightly via the horizon dip
+/// * `tz_offset_minutes` — Offset of the observer's civil clock from UT, in
+///   minutes; used only to name the vara's weekday
 ///
 /// # Returns
-/// JSON string with tithi, vara, nakshatra, yoga and karana.
+/// JSON string with tithi, vara (weekday reckoned from local sunrise, with
+/// its lord and the Rahu and Gulika Kalam windows as Julian Days),
+/// nakshatra, yoga and karana.
 ///
 /// # Errors
-/// Returns [`JsError`] when a longitude is outside [0, 360) or `jd` is not finite.
+/// Returns [`JsError`] when a longitude is outside [0, 360), `jd` is not
+/// finite, or an observer coordinate is out of range or non-finite.
 #[wasm_bindgen]
-pub fn compute_panchanga(jd: f64, sun: f64, moon: f64) -> Result<String, JsError> {
-    compute_panchanga_inner(jd, sun, moon).map_err(|e| JsError::new(&e))
+#[allow(clippy::too_many_arguments)]
+pub fn compute_panchanga(
+    jd: f64,
+    sun: f64,
+    moon: f64,
+    latitude: f64,
+    longitude: f64,
+    elevation_m: f64,
+    tz_offset_minutes: i32,
+) -> Result<String, JsError> {
+    compute_panchanga_inner(
+        jd,
+        sun,
+        moon,
+        latitude,
+        longitude,
+        elevation_m,
+        tz_offset_minutes,
+    )
+    .map_err(|e| JsError::new(&e))
 }
 
-fn compute_panchanga_inner(jd: f64, sun: f64, moon: f64) -> Result<String, String> {
-    use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi, ut_weekday_from_jd};
+#[allow(clippy::too_many_arguments)]
+fn compute_panchanga_inner(
+    jd: f64,
+    sun: f64,
+    moon: f64,
+    latitude: f64,
+    longitude: f64,
+    elevation_m: f64,
+    tz_offset_minutes: i32,
+) -> Result<String, String> {
+    use vedaksha_astro::riseset::sun_equatorial_deg;
+    use vedaksha_ephem_core::analytical::AnalyticalProvider;
+    use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi};
     use vedaksha_vedic::nakshatra::Nakshatra;
     use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
 
@@ -1114,9 +1154,33 @@ fn compute_panchanga_inner(jd: f64, sun: f64, moon: f64) -> Result<String, Strin
             return Err(format!("{name} must be a finite number in [0, 360)"));
         }
     }
+    if !latitude.is_finite() || !(-90.0..=90.0).contains(&latitude) {
+        return Err("latitude must be a finite number in [-90, 90]".to_string());
+    }
+    if !longitude.is_finite() || !(-180.0..=180.0).contains(&longitude) {
+        return Err("longitude must be a finite number in [-180, 180]".to_string());
+    }
+    if !elevation_m.is_finite() {
+        return Err("elevation_m must be a finite number".to_string());
+    }
 
     let tithi = compute_tithi(moon, sun);
-    let weekday = ut_weekday_from_jd(jd);
+    // `AnalyticalProvider` as a plain local, matching the pattern used in
+    // `vedaksha-mcp/src/server.rs::call_compute_panchanga`.
+    let provider = AnalyticalProvider;
+    let sun_eq = |j: f64| sun_equatorial_deg(&provider, j);
+    // ONE sunrise scan for both the vara and the kalam windows — mirrors the
+    // MCP handler exactly: `kalam_windows` returns the vara it derived
+    // internally, so there is no second, separate `vara_at` call here
+    // re-running the same day scan a second time.
+    let (weekday, kalams) = vedaksha_vedic::muhurta::kalam_windows(
+        jd,
+        latitude,
+        longitude,
+        elevation_m,
+        tz_offset_minutes,
+        &sun_eq,
+    );
     let nakshatra = Nakshatra::from_longitude(moon);
     let pada = Nakshatra::pada_from_longitude(moon);
     let yoga = compute_panchanga_yoga(sun, moon);
@@ -1147,6 +1211,13 @@ fn compute_panchanga_inner(jd: f64, sun: f64, moon: f64) -> Result<String, Strin
             "weekday": weekday_name,
             "lord": weekday.lord(),
             "rahu_kalam_slot": weekday.rahu_kalam_slot(),
+            "gulika_kalam_slot": weekday.gulika_kalam_slot(),
+            "rahu_kalam": kalams.map(|(r, _)| serde_json::json!({
+                "start_jd": r.start_jd, "end_jd": r.end_jd
+            })),
+            "gulika_kalam": kalams.map(|(_, g)| serde_json::json!({
+                "start_jd": g.start_jd, "end_jd": g.end_jd
+            })),
         },
         "nakshatra": {
             "index": nakshatra.index(),
@@ -1435,20 +1506,164 @@ mod gochara_tests {
 mod panchanga_drishti_bhava_tests {
     use super::*;
 
+    // Chennai coordinates (13.08N, 80.27E) matching the MCP `compute_panchanga`
+    // test fixture at
+    // `crates/vedaksha-mcp/src/tools/compute_panchanga.rs::valid_input`.
+    // The `sun`/`moon` sidereal longitudes below (280.0, 223.3238) match
+    // `compute_panchanga_inner_j2000_is_saturday`'s existing fixture.
+
     #[test]
     fn compute_panchanga_inner_j2000_is_saturday() {
-        let out = compute_panchanga_inner(2_451_545.0, 280.0, 223.3238).unwrap();
+        let out =
+            compute_panchanga_inner(2_451_545.0, 280.0, 223.3238, 13.08, 80.27, 0.0, 330).unwrap();
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
         assert_eq!(v["vara"]["weekday"], "Saturday");
         assert_eq!(v["vara"]["lord"], "Saturn");
         assert_eq!(v["nakshatra"]["name"], "Anuradha");
         assert_eq!(v["tithi"]["paksha"], "Krishna");
+        // Rahu/Gulika Kalam must be present as real time windows, not just
+        // the slot number.
+        assert!(v["vara"]["rahu_kalam"]["start_jd"].is_number());
+        assert!(v["vara"]["rahu_kalam"]["end_jd"].is_number());
+        assert!(v["vara"]["gulika_kalam"]["start_jd"].is_number());
+        assert!(v["vara"]["gulika_kalam"]["end_jd"].is_number());
+    }
+
+    /// Pins the vara to a real sunrise-based derivation, not the naive
+    /// UT-civil-day weekday — this is the MUTATION-CHECK for "revert vara to
+    /// `ut_weekday_from_jd(jd)`".
+    ///
+    /// All figures below were confirmed by direct call to
+    /// `compute_panchanga_inner` (release build; see the task-5 derivation
+    /// run), not hand-derived — the same methodology
+    /// `vedaksha-vedic::muhurta`'s own tests use (e.g.
+    /// `kalam_windows_selects_the_elevation_aware_vara_not_the_sea_level_one`).
+    ///
+    /// At `jd = 2_451_545.5` (2000-01-02 00:00 UT), Chennai (13.08N, 80.27E),
+    /// elevation 0, `tz_offset_minutes = 330` (IST):
+    /// - `ut_weekday_from_jd(jd)` = Sunday (the naive UT-civil-day answer —
+    ///   `jd`'s fractional part is exactly 0.5, i.e. UT midnight, so the
+    ///   civil day has just turned over).
+    /// - The real, sunrise-based vara is Saturday: local sunrise in Chennai
+    ///   on 2000-01-01 (JD ≈ 2451544.542 UT, Rahu/Gulika Kalam anchored
+    ///   there) has not yet been followed by the next sunrise at `jd`, so
+    ///   the previous day's vara (Saturday) is still current — a real
+    ///   sunrise-to-sunrise vara diverges from the naive civil-day one by
+    ///   design.
+    #[test]
+    fn compute_panchanga_inner_vara_is_sunrise_based_not_ut_civil_day() {
+        use vedaksha_vedic::muhurta::ut_weekday_from_jd;
+
+        let jd = 2_451_545.5;
+        let out = compute_panchanga_inner(jd, 280.0, 223.3238, 13.08, 80.27, 0.0, 330).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+        assert_eq!(v["vara"]["weekday"], "Saturday");
+        assert_eq!(v["vara"]["lord"], "Saturn");
+        assert_eq!(v["vara"]["rahu_kalam_slot"], 3);
+        assert_eq!(v["vara"]["gulika_kalam_slot"], 1);
+
+        // The naive UT-civil-day answer at this instant is a DIFFERENT
+        // weekday. A reverted `ut_weekday_from_jd(jd)` implementation would
+        // report "Sunday" here, not "Saturday" — this assertion is the
+        // mutation-check.
+        assert_ne!(
+            v["vara"]["weekday"].as_str().unwrap(),
+            format!("{:?}", ut_weekday_from_jd(jd)),
+            "the sunrise-based vara must differ from the naive UT-civil-day \
+             weekday at this instant, or this test cannot distinguish a \
+             correct implementation from one reverted to ut_weekday_from_jd"
+        );
+
+        // Window instants (epsilon 1e-6 days ≈ 0.09 s — wide enough to
+        // absorb the ~1-2 ULP cross-compilation float noise observed
+        // between this crate's and vedaksha-mcp's independently compiled
+        // binaries for the same inputs (see task-5 report), tight enough
+        // that a wrong eighth-slot (which differs by whole eighths of a
+        // ~12h daytime, i.e. tens of minutes) still fails loudly.
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+        assert!(close(
+            v["vara"]["gulika_kalam"]["start_jd"].as_f64().unwrap(),
+            2_451_544.542_324_732
+        ));
+        assert!(close(
+            v["vara"]["gulika_kalam"]["end_jd"].as_f64().unwrap(),
+            2_451_544.601_552_453_4
+        ));
+        assert!(close(
+            v["vara"]["rahu_kalam"]["start_jd"].as_f64().unwrap(),
+            2_451_544.660_780_174_7
+        ));
+        assert!(close(
+            v["vara"]["rahu_kalam"]["end_jd"].as_f64().unwrap(),
+            2_451_544.720_007_896
+        ));
+    }
+
+    /// MUTATION-CHECK for "drop `tz_offset_minutes`" (e.g. hardcoding 0
+    /// internally instead of threading the caller's value through to
+    /// `kalam_windows`).
+    ///
+    /// At the same `jd`/observer as the test above, confirmed by direct
+    /// call: `tz_offset_minutes = 330` (IST) names the vara "Saturday", but
+    /// `tz_offset_minutes = -330` (a symmetric offset the OTHER way) names
+    /// it "Friday" — a different weekday, different lord, and different
+    /// Rahu/Gulika slots. A `0`-hardcoded implementation would report
+    /// "Saturday" for BOTH calls (confirmed separately: `tz_offset_minutes
+    /// = 0` also yields "Saturday" here), so this test would pass through
+    /// that mutation only if it failed to check the `-330` case — which is
+    /// exactly why both calls are asserted.
+    #[test]
+    fn compute_panchanga_inner_vara_depends_on_tz_offset_minutes() {
+        let jd = 2_451_545.5;
+        let plus = compute_panchanga_inner(jd, 280.0, 223.3238, 13.08, 80.27, 0.0, 330).unwrap();
+        let minus = compute_panchanga_inner(jd, 280.0, 223.3238, 13.08, 80.27, 0.0, -330).unwrap();
+        let vp: serde_json::Value = serde_json::from_str(&plus).unwrap();
+        let vm: serde_json::Value = serde_json::from_str(&minus).unwrap();
+
+        assert_eq!(vp["vara"]["weekday"], "Saturday");
+        assert_eq!(vm["vara"]["weekday"], "Friday");
+        assert_ne!(vp["vara"]["weekday"], vm["vara"]["weekday"]);
+        assert_ne!(
+            vp["vara"]["gulika_kalam_slot"],
+            vm["vara"]["gulika_kalam_slot"]
+        );
+    }
+
+    /// Polar case: at 85N in northern-hemisphere winter (JD 2_451_545.0 =
+    /// 2000-01-01 12:00 UT), the sun does not rise, so `kalam_windows`
+    /// returns `None` for the kalam pair. Confirmed by direct call: the
+    /// vara still falls back to the local civil weekday ("Saturday", same
+    /// as `ut_weekday_from_jd(2_451_545.0)` since `tz_offset_minutes = 0`
+    /// here).
+    ///
+    /// This pins the MCP contract's null-vs-absent choice: `rahu_kalam` and
+    /// `gulika_kalam` must be present keys holding JSON `null`, not omitted
+    /// — `serde_json::Value` indexing (`v["vara"]["rahu_kalam"]`) cannot
+    /// tell "null" from "missing" apart (both come back as `Value::Null`),
+    /// so this test uses `.get()` on the `vara` object explicitly.
+    #[test]
+    fn compute_panchanga_inner_polar_case_kalam_is_present_null() {
+        let out = compute_panchanga_inner(2_451_545.0, 280.0, 223.3238, 85.0, 0.0, 0.0, 0).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert_eq!(v["vara"]["weekday"], "Saturday");
+
+        let vara = v["vara"].as_object().unwrap();
+        assert!(vara.contains_key("rahu_kalam"), "key must be present");
+        assert!(vara.contains_key("gulika_kalam"), "key must be present");
+        assert!(vara["rahu_kalam"].is_null());
+        assert!(vara["gulika_kalam"].is_null());
     }
 
     #[test]
     fn compute_panchanga_inner_rejects_out_of_range() {
-        assert!(compute_panchanga_inner(2_451_545.0, 360.0, 10.0).is_err());
-        assert!(compute_panchanga_inner(f64::NAN, 10.0, 10.0).is_err());
+        assert!(compute_panchanga_inner(2_451_545.0, 360.0, 10.0, 13.08, 80.27, 0.0, 330).is_err());
+        assert!(compute_panchanga_inner(f64::NAN, 10.0, 10.0, 13.08, 80.27, 0.0, 330).is_err());
+        assert!(compute_panchanga_inner(2_451_545.0, 10.0, 10.0, 91.0, 80.27, 0.0, 330).is_err());
+        assert!(compute_panchanga_inner(2_451_545.0, 10.0, 10.0, 13.08, 200.0, 0.0, 330).is_err());
+        assert!(
+            compute_panchanga_inner(2_451_545.0, 10.0, 10.0, 13.08, 80.27, f64::NAN, 330).is_err()
+        );
     }
 
     #[test]
