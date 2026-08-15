@@ -13,7 +13,7 @@
 //! Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 12 (sidereal time),
 //! Ch. 13 (altitude), Ch. 15 (rising, transit, setting).
 
-use vedaksha_ephem_core::{delta_t, sidereal_time};
+use vedaksha_ephem_core::sidereal_time;
 use vedaksha_math::angle::{deg_to_rad, normalize_degrees, rad_to_deg};
 
 /// Standard geometric altitude of the Sun's centre at rise/set: −0°50′,
@@ -63,22 +63,30 @@ pub fn horizon_dip_deg(elevation_m: f64) -> f64 {
 /// Local mean sidereal time in degrees [0, 360) for a UT Julian Day at
 /// east-positive `lon_deg_east`.
 ///
-/// `sidereal_time::gmst` expects TT and returns radians, so the UT instant is
-/// converted with ΔT first. Ignoring that conversion would bias every rise/set
-/// by ΔT (about 69 s today, and far more for historical dates).
+/// GMST is a function of **UT**, not TT: `sidereal_time::gmst`'s dominant term
+/// (Meeus eq. 12.4), `360.98564736629 * (JD - 2451545.0)`, tracks the Earth's
+/// physical rotation, which is measured in UT by definition. Converting
+/// `jd_ut` to TT before calling it would *introduce* rotation error rather
+/// than remove one — about 0.29° (≈69 s of time) at the present ΔT.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 12.
 fn local_sidereal_degrees(jd_ut: f64, lon_deg_east: f64) -> f64 {
-    let jd_tt = delta_t::ut1_to_tt(jd_ut);
-    normalize_degrees(rad_to_deg(sidereal_time::gmst(jd_tt)) + lon_deg_east)
+    normalize_degrees(rad_to_deg(sidereal_time::gmst(jd_ut)) + lon_deg_east)
 }
 
-/// Apparent altitude in degrees of a body at apparent equatorial coordinates
+/// Geometric altitude in degrees of a body at apparent equatorial coordinates
 /// `(ra_deg, dec_deg)`, seen from `lat_deg` / `lon_deg_east` at `jd_ut`.
 ///
 /// `sin(alt) = sin(φ)·sin(δ) + cos(φ)·cos(δ)·cos(H)`, `H` the local hour angle.
 ///
+/// This is the **geometric** altitude — no atmospheric refraction is applied
+/// here. Refraction (plus, for the Sun, semidiameter and horizon dip) is
+/// folded into the `h0_deg` target that [`rise_set`] compares this value
+/// against, not into this function.
+///
 /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 13.
 #[must_use]
-pub fn apparent_altitude_deg(
+pub fn geometric_altitude_deg(
     ra_deg: f64,
     dec_deg: f64,
     jd_ut: f64,
@@ -122,6 +130,12 @@ fn bisect(mut lo: f64, mut hi: f64, f: &dyn Fn(f64) -> Option<f64>) -> Option<f6
 ///
 /// A missing field means the event did not occur in the scanned interval.
 ///
+/// ⚠️ `rise` and `set` are each the FIRST such event inside the scanned
+/// 24 hours and are **not** guaranteed to be in chronological order: at a
+/// longitude where the window opens during local daytime, the set precedes
+/// the rise. A caller pairing them into a "daytime" must order them itself —
+/// scanning forward from the rise instant is the reliable way.
+///
 /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
 #[must_use]
 pub fn rise_set(
@@ -134,7 +148,7 @@ pub fn rise_set(
     // Altitude relative to the target — zero exactly at a horizon crossing.
     let rel_alt = |jd: f64| -> Option<f64> {
         let (ra, dec) = equatorial(jd)?;
-        Some(apparent_altitude_deg(ra, dec, jd, lat_deg, lon_deg_east) - h0_deg)
+        Some(geometric_altitude_deg(ra, dec, jd, lat_deg, lon_deg_east) - h0_deg)
     };
     // Hour angle folded to (−180, 180] — zero exactly at upper transit.
     let hour_angle = |jd: f64| -> Option<f64> {
@@ -166,9 +180,14 @@ pub fn rise_set(
             out.set = bisect(prev_jd, jd, &rel_alt);
         }
 
-        // Upper transit: hour angle crosses zero upward. The magnitude guard
-        // rejects the wrap from +180 to −180, which is lower transit.
-        if out.transit.is_none() && prev_ha < 0.0 && ha >= 0.0 && (ha - prev_ha) < 180.0 {
+        // Upper transit: hour angle crosses zero upward. `prev_ha < 0.0 && ha
+        // >= 0.0` alone already excludes the lower-transit wrap (+180 to
+        // −180): `hour_angle` is folded to (−180, 180], so that wrap makes
+        // `prev_ha` positive (near +180), which fails `prev_ha < 0.0`. A
+        // magnitude guard on `(ha - prev_ha)` would only matter if a body's
+        // hour angle could jump close to 360° within one `SCAN_STEP_DAYS`
+        // (5 min), which no real or injected rate does here.
+        if out.transit.is_none() && prev_ha < 0.0 && ha >= 0.0 {
             out.transit = bisect(prev_jd, jd, &hour_angle);
         }
 
@@ -231,31 +250,46 @@ pub fn sun_rise_set(
 mod tests {
     use super::*;
 
+    /// GMST is otherwise only ever checked against this module's own use of
+    /// it, which cannot catch a time-scale bug (feeding TT instead of UT into
+    /// `sidereal_time::gmst`) — both sides of the comparison would be wrong
+    /// the same way. Pin `local_sidereal_degrees` against a value published
+    /// independently of this codebase instead: Greenwich Mean Sidereal Time
+    /// at 2000-01-01 0h UT (JD 2,451,544.5) is 6h 39m 52.0708s = 99.96696°.
+    /// Feeding TT (JD + ΔT) into `gmst` here — the bug this module used to
+    /// have — shifts the result by ~0.27°, well outside this test's 0.01°
+    /// tolerance, so this is the test that makes the UT-vs-TT choice
+    /// testable.
+    #[test]
+    fn local_sidereal_degrees_matches_published_gmst_at_j2000() {
+        let lst = local_sidereal_degrees(2_451_544.5, 0.0);
+        assert!(
+            libm::fabs(lst - 99.966_96) < 0.01,
+            "GMST at JD 2451544.5 = {lst}, expected 99.96696 (published)"
+        );
+    }
+
     /// The Sun's altitude at its own transit must equal (90° − |lat − dec|)
-    /// for an observer on the same meridian. Checked at Greenwich with a
-    /// stationary fake Sun so the geometry is isolated from any ephemeris.
+    /// for an observer on the same meridian. The previous version of this
+    /// test *located* transit by scanning with `local_sidereal_degrees` and
+    /// then evaluated altitude with the same function, so a constant LST
+    /// error would shift both sides together and stay green. Anchor
+    /// independently instead: the published GMST from
+    /// `local_sidereal_degrees_matches_published_gmst_at_j2000` (99.96696° at
+    /// JD 2,451,544.5) is used directly as this fake body's RA, which puts it
+    /// on the Greenwich meridian (hour angle 0) at that exact instant by
+    /// construction — no LST search involved.
     #[test]
     fn altitude_at_transit_matches_the_closed_form() {
-        // A fixed Sun at RA 0°, dec 0°. It transits Greenwich when LST = 0.
         let lat = 51.4778;
-        // Find the instant LST(jd) == 0 near J2000 by scanning; the altitude
-        // there must be 90 - |lat - dec| = 90 - 51.4778 = 38.5222.
-        let mut best_jd = 2_451_545.0;
-        let mut best_lst = f64::MAX;
-        let mut t = 2_451_545.0;
-        while t < 2_451_546.0 {
-            let lst = local_sidereal_degrees(t, 0.0);
-            let d = libm::fabs(((lst + 180.0) % 360.0) - 180.0);
-            if d < best_lst {
-                best_lst = d;
-                best_jd = t;
-            }
-            t += 1.0 / 86_400.0;
-        }
-        let alt = apparent_altitude_deg(0.0, 0.0, best_jd, lat, 0.0);
+        let ra = 99.966_96; // published GMST at JD 2451544.5, degrees.
+        let dec = 0.0;
+        let alt = geometric_altitude_deg(ra, dec, 2_451_544.5, lat, 0.0);
+        // 90 - |lat - dec| = 90 - 51.4778 = 38.5222.
+        let expected = 90.0 - libm::fabs(lat - dec);
         assert!(
-            libm::fabs(alt - 38.5222) < 0.01,
-            "altitude at transit = {alt}, expected ~38.5222"
+            libm::fabs(alt - expected) < 0.01,
+            "altitude at transit = {alt}, expected ~{expected}"
         );
     }
 
@@ -265,21 +299,18 @@ mod tests {
     ///
     /// The window must start before the body's rise, or the first rise the
     /// scan can see belongs to the *next* cycle and lands after this
-    /// transit/set — order is only guaranteed within one continuous arc. At
-    /// JD 2,451,545.0 exactly (lon 0), GMST already has this fixed RA-0/dec-0
-    /// body about 43 minutes past its rise (local sidereal time there is
-    /// 280.7°, not 0°), so the window opens an hour earlier, comfortably
-    /// before that rise (altitude ≈ −4.3° at that instant).
+    /// transit/set — order is only guaranteed within one continuous arc. This
+    /// starts the scan at JD 2,451,544.5, UT midnight on 2000-01-01 — the
+    /// natural start of a UT day — rather than at a magic offset tuned to
+    /// land the rise a fixed distance into the window. It works with margin
+    /// to spare: rise is ~11.23 h into the window, transit ~17.27 h, set
+    /// ~23.31 h, giving a day length of ~12.078 h — comfortably inside the
+    /// window and inside the assertion below, with none of the three events
+    /// close to either boundary.
     #[test]
     fn equatorial_sun_rises_before_it_transits_before_it_sets() {
         let sun = |_jd: f64| Some((0.0_f64, 0.0_f64));
-        let rs = rise_set(
-            2_451_545.0 - 1.0 / 24.0,
-            0.0,
-            0.0,
-            SUN_STANDARD_ALTITUDE_DEG,
-            &sun,
-        );
+        let rs = rise_set(2_451_544.5, 0.0, 0.0, SUN_STANDARD_ALTITUDE_DEG, &sun);
         let (r, t, s) = (
             rs.rise.expect("equatorial sun must rise"),
             rs.transit.expect("equatorial sun must transit"),
@@ -299,13 +330,18 @@ mod tests {
 
     /// Polar night: a deeply southern declination never clears the horizon at
     /// high northern latitude, so rise and set must be absent rather than
-    /// wrong or panicking.
+    /// wrong or panicking. The body still crosses the meridian once a day
+    /// even though it never rises, so `transit` must still be `Some`.
     #[test]
     fn polar_night_yields_no_rise_and_no_set() {
         let sun = |_jd: f64| Some((0.0_f64, -23.0_f64));
         let rs = rise_set(2_451_545.0, 78.22, 15.65, SUN_STANDARD_ALTITUDE_DEG, &sun);
         assert!(rs.rise.is_none(), "polar night must not report a sunrise");
         assert!(rs.set.is_none(), "polar night must not report a sunset");
+        assert!(
+            rs.transit.is_some(),
+            "a body that never rises still transits once a day"
+        );
     }
 
     /// The provider adapter must produce real equatorial coordinates, checked
@@ -320,12 +356,141 @@ mod tests {
         let (_, dec_jun) = sun_equatorial_deg(&provider, 2_451_716.5).expect("june position");
         let (_, dec_dec) = sun_equatorial_deg(&provider, 2_451_899.5).expect("december position");
         assert!(
-            (dec_jun - 23.4).abs() < 0.5,
+            libm::fabs(dec_jun - 23.4) < 0.5,
             "June solstice declination = {dec_jun}, expected ~+23.4"
         );
         assert!(
-            (dec_dec + 23.4).abs() < 0.5,
+            libm::fabs(dec_dec + 23.4) < 0.5,
             "December solstice declination = {dec_dec}, expected ~-23.4"
+        );
+    }
+
+    /// The Sun's right ascension must track the seasons: it is ~0°/360° at
+    /// the March equinox, ~90° at the June solstice, ~180° at the September
+    /// equinox and ~270° at the December solstice. The declination test above
+    /// discards RA with `_`, and every `rise_set` test above injects a fixed
+    /// RA via a fake closure, so this catches gross RA bugs (swapped
+    /// axes, a stuck or unrotated value, a wrong sign) that those tests
+    /// cannot.
+    ///
+    /// It does **not** catch dropping the obliquity rotation specifically:
+    /// `RA = atan2(sin λ·cos ε − tan β·sin ε, cos λ)` happens to equal λ
+    /// exactly at λ = 0°/90°/180°/270°, which is why the equinoxes and
+    /// solstices are exactly where that term's effect vanishes. See
+    /// `sun_right_ascension_reflects_the_obliquity_rotation` below for the
+    /// test that targets the rotation itself, at a date away from those
+    /// points.
+    #[test]
+    fn sun_right_ascension_tracks_the_seasons() {
+        let provider = vedaksha_ephem_core::analytical::AnalyticalProvider;
+        let cases = [
+            (2_451_623.5, 0.0, "March equinox (2000-03-20)"),
+            (2_451_716.5, 90.0, "June solstice (2000-06-21)"),
+            (2_451_809.5, 180.0, "September equinox (2000-09-22)"),
+            (2_451_899.5, 270.0, "December solstice (2000-12-21)"),
+        ];
+        for (jd, expected_ra, label) in cases {
+            let (ra, _) =
+                sun_equatorial_deg(&provider, jd).unwrap_or_else(|| panic!("{label} position"));
+            // Fold the angular difference to (0, 180] so the March case
+            // (expected 0°, actual RA near either 0° or 360°) is checked by
+            // the wrap explicitly rather than passing by accident of range.
+            let diff = normalize_degrees(ra - expected_ra);
+            let diff = if diff > 180.0 { 360.0 - diff } else { diff };
+            assert!(
+                diff < 2.0,
+                "{label}: RA = {ra}, expected ~{expected_ra} (diff {diff})"
+            );
+        }
+    }
+
+    /// Targets the obliquity rotation itself, which
+    /// `sun_right_ascension_tracks_the_seasons` cannot: away from the
+    /// cardinal points — here, 2000-05-04, roughly midway through the
+    /// March→June quadrant — the "reduction to the equator" `RA − λ` is near
+    /// its maximum (on the order of ε, ~2–3°), not near zero. The expected
+    /// RA is computed independently from the same ecliptic longitude λ and
+    /// obliquity ε the production code reads, but via a fresh `atan2` call in
+    /// this test rather than by invoking `sun_equatorial_deg` — so a dropped
+    /// `cos ε` / `sin ε` term in the production formula is not mirrored in
+    /// the expectation and the test fails.
+    #[test]
+    fn sun_right_ascension_reflects_the_obliquity_rotation() {
+        use vedaksha_ephem_core::{bodies::Body, coordinates, obliquity};
+
+        let provider = vedaksha_ephem_core::analytical::AnalyticalProvider;
+        let jd = 2_451_668.5; // 2000-05-04
+
+        let pos = coordinates::ecliptic_position(&provider, Body::Sun, jd)
+            .expect("mid-quadrant position");
+        let eps = obliquity::mean_obliquity(jd);
+        // Sun's ecliptic latitude is negligible (~arcseconds), so this omits
+        // the `tan(beta) * sin(eps)` term that `sun_equatorial_deg` carries.
+        let expected_ra = normalize_degrees(rad_to_deg(libm::atan2(
+            libm::sin(pos.longitude) * libm::cos(eps),
+            libm::cos(pos.longitude),
+        )));
+
+        let (ra, _) = sun_equatorial_deg(&provider, jd).expect("mid-quadrant position");
+        let diff = normalize_degrees(ra - expected_ra);
+        let diff = if diff > 180.0 { 360.0 - diff } else { diff };
+        assert!(
+            diff < 0.05,
+            "RA = {ra}, expected ~{expected_ra} from the obliquity-rotated formula (diff {diff})"
+        );
+    }
+
+    /// `horizon_dip_deg` must be 0 at and below sea level (never an imaginary
+    /// dip from a negative `sqrt`) and strictly more negative as elevation
+    /// grows.
+    #[test]
+    fn horizon_dip_deg_is_zero_at_sea_level_and_grows_with_elevation() {
+        assert_eq!(
+            horizon_dip_deg(0.0),
+            0.0,
+            "dip must be 0 exactly at sea level"
+        );
+        assert_eq!(
+            horizon_dip_deg(-100.0),
+            0.0,
+            "dip must be 0 below sea level, not imaginary"
+        );
+        let dip_100 = horizon_dip_deg(100.0);
+        let dip_400 = horizon_dip_deg(400.0);
+        assert!(
+            dip_100 < 0.0,
+            "dip at 100 m must be negative, got {dip_100}"
+        );
+        assert!(
+            dip_400 < dip_100,
+            "dip must grow more negative with elevation: dip(400)={dip_400} dip(100)={dip_100}"
+        );
+    }
+
+    /// `sun_rise_set` at a nonzero elevation lowers the effective horizon
+    /// (via `horizon_dip_deg`), so the Sun must appear to rise earlier and
+    /// set later than at sea level, for the same fake equatorial Sun and
+    /// window used above.
+    #[test]
+    fn sun_rise_set_at_elevation_extends_the_day() {
+        let sun = |_jd: f64| Some((0.0_f64, 0.0_f64));
+        let sea_level = sun_rise_set(2_451_544.5, 0.0, 0.0, 0.0, &sun);
+        let elevated = sun_rise_set(2_451_544.5, 0.0, 0.0, 2000.0, &sun);
+        let (r0, s0) = (
+            sea_level.rise.expect("sea-level sun must rise"),
+            sea_level.set.expect("sea-level sun must set"),
+        );
+        let (r1, s1) = (
+            elevated.rise.expect("elevated sun must rise"),
+            elevated.set.expect("elevated sun must set"),
+        );
+        assert!(
+            r1 < r0,
+            "elevated rise ({r1}) must be earlier than sea-level rise ({r0})"
+        );
+        assert!(
+            s1 > s0,
+            "elevated set ({s1}) must be later than sea-level set ({s0})"
         );
     }
 
