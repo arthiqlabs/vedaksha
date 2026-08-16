@@ -16,6 +16,11 @@ To be precise about what this is and is not: v5 **corrects answers that were wro
 does **not** make the ephemeris more accurate. Residuals against the JPL Horizons oracle are
 unchanged — mean 0.880″ overall, 0.106″ in the measured-ΔT era.
 
+It is also markedly faster, with no numerical result change to buy it: **`compute_panchanga`
+26.2×** (203.5 ms → 7.75 ms), a **365-day muhurta scan 8.19×**, **8 concurrent requests
+5.80×**, and roughly **2–3× on charts and transits**. Full table and provenance under
+[Performance](#performance).
+
 One small caveat, disclosed rather than glossed. The `wide` SIMD dependency moved from 0.7.33
 to 1.6.1 (its 0.7 line is end-of-life), and that is **not** bit-identical in the lunar theory:
 **6 of 21,915 analytical-oracle rows differ, all of them the Moon** — at most 1 ULP in
