@@ -11,7 +11,14 @@ use crate::validation::McpError;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ComputePanchangaInput {
-    /// Julian Day (UT). Determines the vara (weekday).
+    /// Julian Day number in **UT1** (Universal Time) — not TT, not TDB.
+    ///
+    /// The engine converts to TT internally for the dynamical terms and uses
+    /// UT1 directly for sunrise, which is what the vara is reckoned from.
+    /// Every returned instant — the Rahu and Gulika Kalam window bounds
+    /// included — is on this same UT1 scale. Supplying a TT/TDB Julian Day
+    /// shifts sunrise by ΔT (≈ 69 s today), which can move the vara across a
+    /// day boundary for an instant near sunrise.
     pub jd: f64,
     /// Sidereal longitude of the Sun, degrees [0, 360).
     pub sun: f64,
@@ -50,7 +57,17 @@ pub fn definition() -> super::ToolDefinition {
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
-                "jd":   { "type": "number", "description": "Julian Day (UT), used for the vara" },
+                "jd": {
+                    "type": "number",
+                    "description": "Julian Day number in UT1 (Universal Time) — not TT, \
+                                    not TDB. The engine converts to TT internally for the \
+                                    dynamical terms and uses UT1 directly for sunrise, \
+                                    which the vara is reckoned from; every returned \
+                                    instant, the Rahu and Gulika Kalam bounds included, is \
+                                    on this same UT1 scale. Supplying a TT/TDB Julian Day \
+                                    shifts sunrise by ΔT (≈ 69 s today), enough to move \
+                                    the vara for an instant near sunrise."
+                },
                 "sun":  { "type": "number", "description": "Sidereal longitude of Sun [0, 360)" },
                 "moon": { "type": "number", "description": "Sidereal longitude of Moon [0, 360)" },
                 "latitude": {
@@ -65,10 +82,12 @@ pub fn definition() -> super::ToolDefinition {
                 "elevation_m": {
                     "type": "number", "default": 0,
                     "minimum": -500, "maximum": 9000,
-                    "description": "Observer elevation in metres above sea level [-500, 9000]; \
-                                    lowers the horizon by the dip and so moves sunrise — at \
-                                    3650 m (Lhasa) 9.2 minutes earlier, enough to change \
-                                    the vara in that window."
+                    "description": "Observer elevation in metres above sea level [-500, 9000] \
+                                    (default 0). Lowers the horizon by the dip and so moves \
+                                    sunrise — at 3650 m (Lhasa) 9.2 minutes earlier, enough \
+                                    to change the vara in that window. Pass the same value \
+                                    as search_muhurta for the same observer, or the two \
+                                    tools can report different weekdays for one instant."
                 },
                 "tz_offset_minutes": {
                     "type": "integer", "default": 0,

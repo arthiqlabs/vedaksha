@@ -70,7 +70,31 @@ pub fn compute_varga(longitude: f64, varga: &str) -> Result<u8, JsError> {
     Ok(vedaksha_vedic::varga::varga_sign(longitude, varga_type))
 }
 
-/// Compute house cusps.
+/// Compute house cusps — **in the TROPICAL frame**.
+///
+/// # Frame — read this before pairing the result with anything sidereal
+///
+/// Every longitude this function returns (`cusps`, `asc`, `mc`) is a
+/// **tropical** ecliptic longitude, measured from the equinox of date. No
+/// ayanamsha is applied anywhere in the house computation, which takes only
+/// `ramc`, `latitude` and `obliquity` and never sees a date or an ayanamsha
+/// system.
+///
+/// That matters because the neighbouring exports are sidereal:
+/// [`compute_varga`] and [`get_nakshatra`] both document their input as a
+/// sidereal longitude, and [`compute_chart`] returns a sidereal chart by
+/// default. Dropping these cusps into that chart mixes two frames, and the
+/// error is large and quiet: with Lahiri at ~24.2° the planets sit 24.2/30 =
+/// **0.807 of a house** away from a grid that was never rotated. That is not a
+/// hypothetical — it is the defect `4b1bb58` fixed inside `compute_chart`,
+/// where it put 77.4% of placements (669 of 864 measured across 9 house
+/// systems × 4 charts × 24 positions) in the wrong house.
+///
+/// To use these cusps sidereally, rotate them yourself: subtract the ayanamsha
+/// from each returned longitude, via [`get_ayanamsha`] or
+/// [`tropical_to_sidereal`], using the SAME ayanamsha system as the planets.
+/// If you want a sidereal chart with its cusps already in frame, call
+/// [`compute_chart`] instead of assembling one from this primitive.
 ///
 /// # Arguments
 /// * `ramc` — Right Ascension of MC in degrees
@@ -79,7 +103,7 @@ pub fn compute_varga(longitude: f64, varga: &str) -> Result<u8, JsError> {
 /// * `system` — House system: "Placidus", "Equal", "WholeSign", etc.
 ///
 /// # Returns
-/// JSON string with 12 cusp longitudes, ASC, MC.
+/// JSON string with 12 tropical cusp longitudes, ASC, MC.
 #[wasm_bindgen]
 pub fn compute_houses(
     ramc: f64,
