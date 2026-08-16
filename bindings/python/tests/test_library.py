@@ -13,7 +13,7 @@ def vk() -> Vedaksha:
 
 
 def test_version() -> None:
-    assert __version__ == "4.0.0"
+    assert __version__ == "5.0.0"
 
 
 def test_lists_the_engine_tool_catalog(vk: Vedaksha) -> None:

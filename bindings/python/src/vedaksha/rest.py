@@ -25,6 +25,7 @@ except ImportError as exc:  # pragma: no cover
         "the REST server needs the `rest` extra: pip install 'vedaksha[rest]'"
     ) from exc
 
+from . import __version__
 from .client import Vedaksha
 from .errors import ToolError
 
@@ -33,7 +34,12 @@ def create_app(*, token: Optional[str] = None) -> "FastAPI":
     """Build the FastAPI app. If ``token`` is set, all tool routes require it."""
     app = FastAPI(
         title="Vedākṣha",
-        version="4.0.0",
+        # Derived, never a literal. This was a hardcoded "4.0.0" — a third
+        # copy of the version inside one package, and the only one that
+        # release.yml's version-check does not assert. The Python wheel
+        # already sat at 3.0.1 across two releases once; do not leave a
+        # second place for that to happen.
+        version=__version__,
         description="REST projection of the Vedākṣha engine's tool surface.",
     )
     vk = Vedaksha()
