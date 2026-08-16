@@ -28,11 +28,18 @@
 //!   VEDAKSHA_MCP_TOKEN=… vedaksha-mcp --http --port 8080
 //!   vedaksha-mcp --http --insecure-no-auth            # no auth (trusted net only)
 //!   vedaksha-mcp --http --host 127.0.0.1              # override bind host
+//!   vedaksha-mcp --http --workers 8                   # size the worker pool
+//!
+//! ### HTTP concurrency
+//! Requests are served by a bounded pool of worker threads (default: the
+//! machine's available parallelism), not one at a time. `McpServer` is
+//! stateless, so workers share a single instance and need no locking.
 //!
 //! Environment:
 //!   VEDAKSHA_MCP_TOKEN        bearer token required of every POST
 //!   VEDAKSHA_MCP_HOST         bind host (default 0.0.0.0; --host overrides)
 //!   VEDAKSHA_MCP_CORS_ORIGIN  Access-Control-Allow-Origin value (default *)
+//!   VEDAKSHA_MCP_WORKERS      HTTP worker threads (default: available cores)
 
 use std::io::{self, BufRead, Write};
 
@@ -145,9 +152,38 @@ fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     diff == 0
 }
 
+/// Number of HTTP worker threads: `--workers N`, else `VEDAKSHA_MCP_WORKERS`,
+/// else the machine's available parallelism.
+///
+/// Clamped to `1..=64`. The pool is deliberately *bounded* rather than
+/// thread-per-connection: a single MCP call can run a multi-body ephemeris
+/// solve, so unbounded spawning would let a burst of requests multiply that
+/// cost without limit. A fixed pool caps concurrent compute at the number of
+/// cores that can actually retire it, and queues the rest.
+#[cfg(feature = "http")]
+fn worker_count(args: &[String]) -> usize {
+    let explicit = args
+        .iter()
+        .position(|a| a == "--workers")
+        .and_then(|i| args.get(i + 1))
+        .and_then(|v| v.parse::<usize>().ok())
+        .or_else(|| {
+            std::env::var("VEDAKSHA_MCP_WORKERS")
+                .ok()
+                .and_then(|v| v.parse::<usize>().ok())
+        });
+
+    let n = explicit.unwrap_or_else(|| {
+        std::thread::available_parallelism().map_or(4, std::num::NonZeroUsize::get)
+    });
+
+    n.clamp(1, 64)
+}
+
 #[cfg(feature = "http")]
 fn run_http(port: u16, args: &[String]) {
-    use tiny_http::{Method, Response, Server};
+    use std::sync::Arc;
+    use tiny_http::Server;
 
     let auth = AuthConfig::resolve(args);
     let host = parse_host(args);
@@ -165,96 +201,133 @@ fn run_http(port: u16, args: &[String]) {
     } else {
         "AUTH DISABLED"
     };
-    eprintln!("Vedākṣha MCP server listening on http://{addr}/mcp  ({auth_state})");
+    let workers = worker_count(args);
+    eprintln!(
+        "Vedākṣha MCP server listening on http://{addr}/mcp  \
+         ({auth_state}, {workers} worker threads)"
+    );
 
-    let mcp = vedaksha_mcp::server::McpServer::new();
+    // `McpServer` is stateless and every handler is a pure function of the
+    // request, so the pool shares one instance with no synchronisation. The
+    // accept loop was previously serial: one slow request — a transit search
+    // over a long window, say — blocked every other client until it finished.
+    // `tiny_http::Server` is `Sync` and hands each `recv()` to exactly one
+    // caller, so N threads can pull from the same listener safely.
+    let server = Arc::new(server);
+    let auth = Arc::new(auth);
+    let mcp = Arc::new(vedaksha_mcp::server::McpServer::new());
 
-    for mut request in server.incoming_requests() {
-        let path = request.url().to_string();
-
-        // Health check — always open (liveness only, no computation).
-        if path == "/health" {
-            let _ = request.respond(
-                Response::from_string(r#"{"status":"ok"}"#).with_header(content_type_json()),
-            );
-            continue;
-        }
-
-        // Only accept /mcp (or root /)
-        if path != "/mcp" && path != "/" {
-            let _ = request.respond(Response::from_string("Not Found").with_status_code(404));
-            continue;
-        }
-
-        // CORS preflight: browsers preflight because we require the
-        // Authorization header. Answer with the allowed origin + headers.
-        if *request.method() == Method::Options {
-            let _ = request.respond(
-                Response::from_string("")
-                    .with_status_code(204)
-                    .with_header(cors_origin_header())
-                    .with_header(cors_preflight_headers()),
-            );
-            continue;
-        }
-
-        if *request.method() != Method::Post {
-            // GET on the MCP endpoint: informational only, always open.
-            if *request.method() == Method::Get {
-                let info = serde_json::json!({
-                    "name": "vedaksha-mcp",
-                    "version": env!("CARGO_PKG_VERSION"),
-                    "transport": "streamable-http",
-                    "endpoint": "/mcp",
-                    "auth": if auth.token.is_some() { "bearer" } else { "none" },
-                });
-                let _ = request.respond(
-                    Response::from_string(info.to_string())
-                        .with_header(content_type_json())
-                        .with_header(cors_origin_header()),
-                );
-                continue;
+    let mut handles = Vec::with_capacity(workers);
+    for _ in 0..workers {
+        let server = Arc::clone(&server);
+        let auth = Arc::clone(&auth);
+        let mcp = Arc::clone(&mcp);
+        handles.push(std::thread::spawn(move || {
+            for request in server.incoming_requests() {
+                serve_one(request, &auth, &mcp);
             }
-            let _ =
-                request.respond(Response::from_string("Method Not Allowed").with_status_code(405));
-            continue;
-        }
+        }));
+    }
 
-        // Authenticate the POST (the only path that computes).
-        let authz = request
-            .headers()
-            .iter()
-            .find(|h| h.field.equiv("Authorization"))
-            .map(|h| h.value.as_str().to_string());
-        if !auth.authorized(authz.as_deref()) {
+    for handle in handles {
+        let _ = handle.join();
+    }
+}
+
+/// Serve one HTTP request. Identical routing, auth and body handling to the
+/// former inline loop body — factored out so a pool of workers can each run it.
+#[cfg(feature = "http")]
+fn serve_one(
+    mut request: tiny_http::Request,
+    auth: &AuthConfig,
+    mcp: &vedaksha_mcp::server::McpServer,
+) {
+    use tiny_http::{Method, Response};
+
+    let path = request.url().to_string();
+
+    // Health check — always open (liveness only, no computation).
+    if path == "/health" {
+        let _ = request
+            .respond(Response::from_string(r#"{"status":"ok"}"#).with_header(content_type_json()));
+        return;
+    }
+
+    // Only accept /mcp (or root /)
+    if path != "/mcp" && path != "/" {
+        let _ = request.respond(Response::from_string("Not Found").with_status_code(404));
+        return;
+    }
+
+    // CORS preflight: browsers preflight because we require the
+    // Authorization header. Answer with the allowed origin + headers.
+    if *request.method() == Method::Options {
+        let _ = request.respond(
+            Response::from_string("")
+                .with_status_code(204)
+                .with_header(cors_origin_header())
+                .with_header(cors_preflight_headers()),
+        );
+        return;
+    }
+
+    if *request.method() != Method::Post {
+        // GET on the MCP endpoint: informational only, always open.
+        if *request.method() == Method::Get {
+            let info = serde_json::json!({
+                "name": "vedaksha-mcp",
+                "version": env!("CARGO_PKG_VERSION"),
+                "transport": "streamable-http",
+                "endpoint": "/mcp",
+                "auth": if auth.token.is_some() { "bearer" } else { "none" },
+            });
             let _ = request.respond(
-                Response::from_string(r#"{"error":"unauthorized"}"#)
-                    .with_status_code(401)
+                Response::from_string(info.to_string())
                     .with_header(content_type_json())
                     .with_header(cors_origin_header()),
             );
-            continue;
+            return;
         }
+        let _ = request.respond(Response::from_string("Method Not Allowed").with_status_code(405));
+        return;
+    }
 
-        // Read the POST body
-        let mut body = String::new();
-        if request.as_reader().read_to_string(&mut body).is_err() {
-            let _ = request.respond(
-                Response::from_string(r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}"#)
-                    .with_status_code(400)
-                    .with_header(content_type_json()),
-            );
-            continue;
-        }
-
-        let response_json = mcp.handle_request(&body);
-
+    // Authenticate the POST (the only path that computes).
+    let authz = request
+        .headers()
+        .iter()
+        .find(|h| h.field.equiv("Authorization"))
+        .map(|h| h.value.as_str().to_string());
+    if !auth.authorized(authz.as_deref()) {
         let _ = request.respond(
-            Response::from_string(response_json)
+            Response::from_string(r#"{"error":"unauthorized"}"#)
+                .with_status_code(401)
                 .with_header(content_type_json())
                 .with_header(cors_origin_header()),
         );
+        return;
     }
+
+    // Read the POST body
+    let mut body = String::new();
+    if request.as_reader().read_to_string(&mut body).is_err() {
+        let _ = request.respond(
+            Response::from_string(
+                r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}}"#,
+            )
+            .with_status_code(400)
+            .with_header(content_type_json()),
+        );
+        return;
+    }
+
+    let response_json = mcp.handle_request(&body);
+
+    let _ = request.respond(
+        Response::from_string(response_json)
+            .with_header(content_type_json())
+            .with_header(cors_origin_header()),
+    );
 }
 
 #[cfg(feature = "http")]
