@@ -193,6 +193,66 @@ after merging here.
 
 ---
 
+## 10. Derived Constants — Already Established, Do Not Re-derive
+
+Some constants in this engine were fixed by expensive parameter searches. **Those searches
+have been run. Their conclusions are recorded here and beside the constants themselves.**
+Re-running them costs hours and tells you nothing new — do it only when the stated
+invalidating condition is met.
+
+### `AGREEMENT_TOL_DAYS` — `vedaksha-astro::riseset`
+
+The tolerance at which the analytic sunrise path is held to agree with the brute-force scan.
+
+- **Value:** `1e-9` days
+- **Established by:** 441,000 fixed-RA plus 36,120 real-Sun comparisons across latitude to
+  both poles, the full longitude range, three eras and two elevations
+- **Maximum disagreement measured:** exactly one ULP (4.656612873077393e-10 d), with zero
+  presence disagreements. `1e-9` is the next clean figure above that measured maximum.
+- **Re-derive with:** `cargo test --release -p vedaksha-astro --features derivation-sweeps -- --ignored --nocapture`
+  (release only — the real-Sun path is ~45× slower in a debug build)
+- **Invalidated by:** a change to the sunrise search algorithm itself. Nothing else.
+
+### `ANALYTIC_LATITUDE_LIMIT_DEG` — `vedaksha-astro::riseset`
+
+Above this latitude the analytic path defers to the brute-force scan, because near the pole a
+sunrise can otherwise be attributed to the wrong rotation.
+
+- **Value:** `89.0` degrees
+- **Established by:** 9,408 comparisons over latitude 88.0–90.0 at 0.1° resolution. Clean
+  through 89.8; the first wrong attribution appears at 89.9 (0.4967 d — nearly a whole vara).
+  89.0 sits below the lowest latitude any measurement implicates.
+- **After routing:** the polar band's 16,800 comparisons drop from 8 presence disagreements
+  and a 0.4967 d worst gap to 2 and one ULP.
+- **Invalidated by:** a change to the sunrise search algorithm itself.
+
+### The two oracles are DISJOINT — check you are using the right one
+
+This has caused a real defect: a dependency upgrade was validated four times against an oracle
+structurally incapable of seeing the code it changed.
+
+| Oracle | Drives | Rows | Covers |
+|---|---|---|---|
+| `oracle_comparison.rs` | `SpkReader` (DE440s kernel) | 24,350 | the SPK path **only** |
+| `analytical_oracle.rs` | `AnalyticalProvider` (VSOP87A + ELP/MPP02) | 21,915 | the analytical path **only** |
+
+The analytical count is 21,915 and not 24,350 because `AnalyticalProvider` returns
+`BodyNotAvailable` for Pluto — that is a real provider property, not an incomplete row filter.
+
+**Before citing either as evidence, confirm it executes the code you changed.** A change
+rewriting 90.67% of the lunar theory's output bits once left the SPK digest byte-identical.
+
+### Known bit-level drift: `wide` 0.7.33 → 1.6.1
+
+- 6 of 21,915 analytical-oracle rows differ, **all of them the Moon** (ELP/MPP02 is the only
+  place `wide` is used): ≤1 ULP longitude, ≤4 ULP latitude, ≤28 ULP speed.
+- Digest before: `e35c5e3ab95dcb35a816d77313a35fa8e773bd7637568bd450e98e3eaef7bb81`
+- Digest after: `f943337e6dbfe1d7881a001749009e7aa322cbbff2c4aa4e89c4e1db4c266b80`
+- Digest method: per-row lines → `tr -s ' '` → `LC_ALL=C sort` → `sha256`
+- Accepted deliberately: the 0.7 line is end-of-life, and the difference is far below any
+  meaningful precision. The SPK path remains byte-identical.
+
+
 ## Quick Reference: Annual Maintenance Checklist
 
 ```
