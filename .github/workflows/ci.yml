@@ -11,8 +11,11 @@ name: CI
 #     runs the #[ignore]d tiers via --include-ignored (JPL Horizons
 #     live-fetch, the legacy lunar oracle, the multi-hour riseset scan
 #     sweeps, the MCP 365-day transit search) plus the unskipped
-#     analytical_oracle_regression; runs clippy; and re-fetches the IMCCE
-#     primary distributions to verify the coefficient blobs have not drifted.
+#     analytical_oracle_regression; and re-fetches the IMCCE primary
+#     distributions to verify the coefficient blobs have not drifted.
+#     Clippy is NOT in that list any more — it runs here too, on every push,
+#     because running it weekly is what let a lint break sit red for a
+#     fortnight. Full Validation still runs it as a backstop.
 #   - .github/workflows/release.yml         — every tag
 # This workflow targets ~3 minutes total.
 
@@ -33,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Unit + integration tests + doctests
         # Debug mode — one build artifact set.
@@ -70,6 +73,36 @@ jobs:
         # Swatinem/rust-cache leaves behind). The vedaksha-astro lib tests
         # dominate at ~88 s; the added test targets and doctests are ~6 s.
         run: cargo test --workspace --locked -- --skip analytical_oracle_regression
+      - name: Clippy
+        # Clippy used to run ONLY in the weekly Full Validation job, and that is
+        # the direct cause of the two-week red this branch was opened to clear:
+        # the toolchain moved, a new clippy release started firing on code
+        # nobody had touched, and no push could tell anyone. A lint gate that
+        # runs weekly reports a fortnight late and blames the wrong commit.
+        #
+        # Cheap enough that there was never a cost argument for leaving it out.
+        # `cargo clippy` is a check-only pass, and because it uses the same
+        # `dev` profile as the step above, every dependency artifact is already
+        # on disk — only the 9 workspace crates are actually clippy-driven.
+        # Measured marginal cost in exactly this position (workspace crates
+        # cleaned, dependency cache warm — what Swatinem/rust-cache leaves
+        # behind, then the test step above, then this):
+        #
+        #   local, aarch64 --debug          4.0 s   (warm re-run: 0.17 s)
+        #   ubuntu-latest, same command     9-11 s  (measured on the identical
+        #                                            step in full-validation.yml
+        #                                            across 4 green runs)
+        #
+        # So ~10 s on a workflow that targets ~3 minutes end to end — well
+        # inside the run-to-run noise of the step above, for the gate that
+        # would have caught the outage on the push that caused it.
+        #
+        # RUSTFLAGS is deliberately NOT set here, unlike full-validation.yml.
+        # Setting it changes the fingerprint of every crate including
+        # dependencies, which would invalidate the cache the step above just
+        # populated and force a full rebuild. `-- -D warnings` gets the same
+        # deny behaviour for the crates being linted without that cost.
+        run: cargo clippy --workspace -- -D warnings
       - name: Format check
         run: cargo fmt --all -- --check
 

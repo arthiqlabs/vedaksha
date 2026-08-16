@@ -23,6 +23,46 @@ jobs:
   full-test:
     name: Full Test (Linux)
     runs-on: ubuntu-latest
+    # Without this, a job that hangs runs until GitHub Actions' 6-hour per-job
+    # cap and is then killed with no useful signal — on a weekly workflow that
+    # means up to a week of silence followed by an uninformative red. That is
+    # not hypothetical here: `--include-ignored` once pulled in the riseset
+    # derivation sweeps and took this job from ~25 minutes to hours (see the
+    # `derivation-sweeps` feature comment in crates/vedaksha-astro/Cargo.toml).
+    #
+    # Derived, not picked. Measured durations of THIS job on ubuntu-latest:
+    #
+    #   2026-05-17  22.4 min  (green; the long sweeps still ran)  <- worst green
+    #   2026-05-24   3.1 min  (green)
+    #   2026-05-31   3.3 min  (green)
+    #   2026-07-19   4.4 min  (green)
+    #   2026-08-16   4.5 min  (build 40 s + test 209 s; clippy then failed)
+    #
+    # Those last four do NOT predict this branch. They were recorded on main,
+    # before riseset.rs gained its four `_sampled` scan-oracle sweeps, which run
+    # in the plain #[ignore]d tier and so are pulled in by --include-ignored.
+    # Measured locally (aarch64, --release, under CPU contention) at this
+    # branch: release build 13.0 s + test suite 427.4 s = 7.3 min wall, 1004
+    # passed / 0 failed / 0 ignored.
+    #
+    # CI-to-local ratio taken from the one directly comparable pair available —
+    # the release build step, 24/26/27/40 s on ubuntu-latest against 13.0 s
+    # local — i.e. 1.8x to 3.1x. At the top of that range 7.3 min becomes
+    # ~23 min, plus ~1.5 min of checkout, toolchain, cache restore, kernel
+    # download, clippy and fmt: call a green run ~25 min. That independently
+    # lands on the 22.4 min worst green already observed, which is reassuring.
+    #
+    # A cold Swatinem cache is the case that matters for the ceiling: it forces
+    # the release build from scratch, and this workspace builds release with
+    # `lto = "fat"` and `codegen-units = 1`, so that step stops being 40 s and
+    # becomes several minutes. Budget ~30-35 min for a legitimately green run in
+    # the worst realistic case.
+    #
+    # 60 min is ~2x that, so normal runner variance cannot turn a passing run
+    # red, while a genuine hang is cut from 360 min to 60 — 6x faster, and the
+    # failure names the timeout instead of arriving as an unexplained kill.
+    # Revisit if a green run ever exceeds ~35 min.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -59,6 +99,14 @@ jobs:
   coefficient-blob-drift:
     name: Coefficient-blob generator drift (--verify)
     runs-on: ubuntu-latest
+    # Same 6-hour exposure as the job above, and a better claim on it: both
+    # steps fetch the IMCCE primary distributions over the network, so this job
+    # can hang on a stalled remote rather than on anything in our code.
+    # Measured durations of this job: 0.43, 0.47, 0.67, 2.58, 2.72 min — the
+    # spread is the remote, not us. 20 min is ~7x the slowest observed run,
+    # which leaves room for a slow-but-working IMCCE while still cutting a dead
+    # fetch short by 5h40m.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
