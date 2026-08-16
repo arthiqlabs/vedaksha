@@ -17,7 +17,7 @@ RUN case "$TARGETARCH" in \
       amd64) export RUSTFLAGS="-C target-cpu=x86-64-v3" ;; \
       *)     export RUSTFLAGS="" ;; \
     esac; \
-    cargo build --release -p vedaksha-mcp
+    cargo build --release --locked -p vedaksha-mcp
 
 FROM debian:bookworm-slim
 

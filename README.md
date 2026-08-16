@@ -13,11 +13,67 @@
 ## Quick start
 
 ```rust
+use vedaksha::ephem::{delta_t, nutation, obliquity, sidereal_time};
 use vedaksha::prelude::*;
 
-let jd = calendar_to_jd(2024, 3, 20, 12.0);
-let chart = compute_chart(jd, 28.6139, 77.2090, &ChartConfig::vedic());
+// New Delhi, 2024-03-20 12:00 UT1. `calendar_to_jd` takes the day as a
+// fraction — noon on the 20th is 20.5 — and it wants UT1, not TT/TDB.
+let jd = calendar_to_jd(2024, 3, 20.5);
+let (latitude, longitude): (f64, f64) = (28.6139, 77.2090);
+
+// 1. Apparent positions. `compute_chart` takes them as
+//    (name, longitude°, latitude°, distance AU, speed °/day).
+let provider = AnalyticalProvider;
+let mut planets = Vec::new();
+for (name, body) in [
+    ("Sun", Body::Sun),
+    ("Moon", Body::Moon),
+    ("Mars", Body::Mars),
+    ("Jupiter", Body::Jupiter),
+] {
+    let p = apparent_position(&provider, body, jd).expect("analytical provider");
+    planets.push((
+        name.to_string(),
+        p.ecliptic.longitude.to_degrees(),
+        p.ecliptic.latitude.to_degrees(),
+        p.ecliptic.distance,
+        p.longitude_speed,
+    ));
+}
+
+// 2. Earth orientation, which fixes the houses. Nutation and obliquity are
+//    dynamical terms and take TT; sidereal time is the Earth's rotation and
+//    takes UT1. Mixing the two costs ΔT worth of rotation on every cusp.
+let jd_tt = delta_t::ut1_to_tt(jd);
+let (dpsi, deps) = nutation::nutation(jd_tt);
+let eps_true = obliquity::true_obliquity(jd_tt, deps);
+let ramc = sidereal_time::local_sidereal_time(jd, longitude.to_radians(), dpsi, eps_true)
+    .to_degrees();
+
+// 3. The chart — sidereal (Lahiri) with whole-sign bhavas, i.e. a kundali.
+let config = ChartConfig {
+    house_system: HouseSystem::WholeSign,
+    ayanamsha: Some(Ayanamsha::Lahiri),
+    ..ChartConfig::default()
+};
+let chart = compute_chart(
+    &planets,
+    ramc,
+    latitude,
+    obliquity::mean_obliquity(jd_tt).to_degrees(),
+    jd,
+    &config,
+);
+
+println!("Lagna {:.3}°", chart.houses.asc);
+for planet in &chart.planets {
+    println!("{:<8} {:>8.3}°", planet.name, planet.longitude);
+}
 ```
+
+This exact block is a doctest on the `vedaksha` crate
+([`crates/vedaksha/src/lib.rs`](crates/vedaksha/src/lib.rs)), so it is compiled
+and run rather than only read.
 
 Every Julian Day on the public surfaces — the Rust API, the MCP tools, the
 Python client, the WASM bindings — is **UT1** (Universal Time), not TT and not
