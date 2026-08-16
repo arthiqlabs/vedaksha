@@ -19,12 +19,17 @@ pub const MAX_TRANSIT_SEARCH_DAYS: f64 = 36_525.0;
 
 /// Maximum `search_muhurta` search span in days.
 ///
-/// # This is a RATIFIED PRODUCT LIMIT, not a derived one
+/// # This is a PRODUCT LIMIT, not a derived one
 ///
-/// 30 days is the horizon this tool supports, decided as product scope and
-/// ratified by the owner. It must **not** be raised, and in particular it must
-/// not be recomputed from whatever the engine's current per-day cost happens
-/// to be.
+/// 30 days is the horizon this tool supports. It is a deliberate scope
+/// decision, **not** a figure computed from the engine's performance, and it
+/// must not be raised by recomputing it from whatever the current per-day cost
+/// happens to be. Changing it is a product call, not a numerical one.
+///
+/// The doc comment here previously said the limit had been "ratified by the
+/// owner". Nothing in this repository evidences such an approval, and a claim
+/// the code cannot support does not belong in it — so the wording states the
+/// limit and its character instead. The value itself is unchanged.
 ///
 /// That warning is here because this constant used to justify itself from a
 /// measurement: the sunrise search behind every vara was a 5-minute horizon
@@ -50,7 +55,7 @@ pub const MAX_TRANSIT_SEARCH_DAYS: f64 = 36_525.0;
 ///   than a slow one: the error names the limit and suggests the fix.
 ///
 /// If the limit should change, that is a product decision to take with the
-/// owner, not a number to recompute here.
+/// project owner, not a number to recompute here.
 pub const MAX_MUHURTA_SEARCH_DAYS: f64 = 30.0;
 
 /// Structured MCP error response with a machine-readable code and
