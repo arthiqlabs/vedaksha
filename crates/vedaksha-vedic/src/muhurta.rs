@@ -176,7 +176,7 @@ pub fn kalam_windows(
     lon_deg_east: f64,
     elevation_m: f64,
     tz_offset_minutes: i32,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> KalamReckoning {
     let local_weekday =
         |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
@@ -416,7 +416,7 @@ pub fn vara_at(
     lon_deg_east: f64,
     elevation_m: f64,
     tz_offset_minutes: i32,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Weekday {
     vara_with_validity(
         jd_ut,
@@ -481,7 +481,7 @@ pub fn vara_with_validity(
     lon_deg_east: f64,
     elevation_m: f64,
     tz_offset_minutes: i32,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> (Weekday, Option<(f64, f64)>) {
     let local_weekday =
         |jd: f64| weekday_from_day_index(jd + f64::from(tz_offset_minutes) / 1440.0);
@@ -636,7 +636,7 @@ pub fn assess_muhurta(
 fn refine_crossing(
     target_deg: f64,
     jd_init: f64,
-    angle_at: &dyn Fn(f64) -> Option<(f64, f64)>,
+    angle_at: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     let mut jd = jd_init;
     for _ in 0..8 {
@@ -672,8 +672,8 @@ fn refine_crossing(
 #[must_use]
 pub fn compute_tithi_end(
     jd: f64,
-    moon: &dyn Fn(f64) -> Option<(f64, f64)>,
-    sun: &dyn Fn(f64) -> Option<(f64, f64)>,
+    moon: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
+    sun: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     let (m0, _) = moon(jd)?;
     let (s0, _) = sun(jd)?;
@@ -696,7 +696,10 @@ pub fn compute_tithi_end(
 /// # Errors / `None`
 /// Returns `None` if the callback yields `None` or the lunar rate vanishes.
 #[must_use]
-pub fn compute_nakshatra_end(jd: f64, moon: &dyn Fn(f64) -> Option<(f64, f64)>) -> Option<f64> {
+pub fn compute_nakshatra_end(
+    jd: f64,
+    moon: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
+) -> Option<f64> {
     const SPAN: f64 = 360.0 / 27.0;
     let (m0, _) = moon(jd)?;
     let m = m0.rem_euclid(360.0);
@@ -762,9 +765,9 @@ pub fn search_muhurta(
     lon_deg_east: f64,
     elevation_m: f64,
     tz_offset_minutes: i32,
-    get_moon_lon: &dyn Fn(f64) -> Option<f64>,
-    get_sun_lon: &dyn Fn(f64) -> Option<f64>,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    get_moon_lon: &(dyn Fn(f64) -> Option<f64> + Sync),
+    get_sun_lon: &(dyn Fn(f64) -> Option<f64> + Sync),
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     min_quality: f64,
 ) -> Vec<MuhurtaAssessment> {
     let mut results = Vec::new();
@@ -1754,27 +1757,32 @@ mod tests {
     /// entirely).
     #[test]
     fn search_muhurta_memoisation_still_saves_equatorial_calls() {
-        use std::cell::Cell;
+        // `AtomicU32`, not `Cell`: the `equatorial` callback is now
+        // `&(dyn Fn(..) + Sync)`, so the counter it closes over has to be
+        // shareable too. `Relaxed` is the right ordering — the assertions read
+        // the total only after `search_muhurta` has returned, i.e. after every
+        // worker has been joined, so there is nothing to order against.
+        use std::sync::atomic::{AtomicU32, Ordering};
 
         let (lat, lon, tz) = (13.08, 80.27, 330);
         let start = 2_451_545.5;
         let end = start + 4.0; // 9 steps
 
-        let per_step_calls = Cell::new(0u32);
+        let per_step_calls = AtomicU32::new(0);
         let mut jd = start;
         while jd <= end {
             let counted = |t: f64| {
-                per_step_calls.set(per_step_calls.get() + 1);
+                per_step_calls.fetch_add(1, Ordering::Relaxed);
                 flat_sun(t)
             };
             let _ = vara_at(jd, lat, lon, 0.0, tz, &counted);
             jd += 0.5;
         }
-        let unmemoised_total = per_step_calls.get();
+        let unmemoised_total = per_step_calls.load(Ordering::Relaxed);
 
-        let actual_calls = Cell::new(0u32);
+        let actual_calls = AtomicU32::new(0);
         let counted = |t: f64| {
-            actual_calls.set(actual_calls.get() + 1);
+            actual_calls.fetch_add(1, Ordering::Relaxed);
             flat_sun(t)
         };
         let results = search_muhurta(
@@ -1791,15 +1799,15 @@ mod tests {
         );
         assert_eq!(results.len(), 9);
         assert!(
-            actual_calls.get() > 0,
+            actual_calls.load(Ordering::Relaxed) > 0,
             "sanity: some `equatorial` evaluation must happen"
         );
         assert!(
-            actual_calls.get() < unmemoised_total,
+            actual_calls.load(Ordering::Relaxed) < unmemoised_total,
             "memoisation should cost fewer `equatorial` calls than \
              recomputing per step: {} memoised vs {unmemoised_total} \
              unmemoised",
-            actual_calls.get()
+            actual_calls.load(Ordering::Relaxed)
         );
     }
 

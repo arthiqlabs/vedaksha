@@ -1240,7 +1240,7 @@ impl McpServer {
     }
 
     fn call_search_muhurta(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use std::cell::Cell;
+        use std::sync::Mutex;
         use vedaksha_astro::riseset::sun_equatorial_deg;
         use vedaksha_ephem_core::analytical::AnalyticalProvider;
         use vedaksha_ephem_core::bodies::Body;
@@ -1331,18 +1331,25 @@ impl McpServer {
         // not approximated.
         //
         // Slot layout: `(jd.to_bits(), tropical_longitude_deg, longitude_speed)`.
-        let moon_memo = Cell::new(None);
-        let sun_memo = Cell::new(None);
+        //
+        // The slot is a `Mutex`, not a `Cell`, because the callback types these
+        // are passed as now carry `+ Sync` — a `&Cell` is not shareable across
+        // threads and so cannot appear inside one. The lock is never contended
+        // (this loop is serial) and is taken a few thousand times per served
+        // request against a request measured in seconds, so it does not show up
+        // in the timings below.
+        let moon_memo = Mutex::new(None);
+        let sun_memo = Mutex::new(None);
         let apparent_memoised =
-            |memo: &Cell<Option<(u64, f64, f64)>>, body: Body, jd: f64| -> Option<(f64, f64)> {
-                if let Some((jd_bits, lon_deg, speed)) = memo.get()
+            |memo: &Mutex<Option<(u64, f64, f64)>>, body: Body, jd: f64| -> Option<(f64, f64)> {
+                if let Some((jd_bits, lon_deg, speed)) = *memo.lock().expect("memo slot")
                     && jd_bits == jd.to_bits()
                 {
                     return Some((lon_deg, speed));
                 }
                 let p = coordinates::apparent_position(&provider, body, jd).ok()?;
                 let lon_deg = p.ecliptic.longitude.to_degrees();
-                memo.set(Some((jd.to_bits(), lon_deg, p.longitude_speed)));
+                *memo.lock().expect("memo slot") = Some((jd.to_bits(), lon_deg, p.longitude_speed));
                 Some((lon_deg, p.longitude_speed))
             };
 

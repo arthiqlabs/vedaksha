@@ -635,7 +635,7 @@ fn hour_angle_gap_deg(
     lon_deg_east: f64,
     h0_deg: f64,
     event: Event,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<HourAngleGap> {
     let (ra, dec) = equatorial(jd_ut)?;
     let Some(target) = target_hour_angle_deg(event, lat_deg, dec, h0_deg) else {
@@ -701,7 +701,7 @@ fn refine_event(
     lon_deg_east: f64,
     h0_deg: f64,
     event: Event,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     let mut t = t0;
     // The iterate before `t`, and the size of the correction that produced
@@ -921,7 +921,7 @@ pub fn rise_set(
     lat_deg: f64,
     lon_deg_east: f64,
     h0_deg: f64,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> RiseSet {
     if libm::fabs(lat_deg) > ANALYTIC_LATITUDE_LIMIT_DEG {
         tally_latitude_routed();
@@ -951,7 +951,7 @@ fn rise_set_analytic(
     lat_deg: f64,
     lon_deg_east: f64,
     h0_deg: f64,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> RiseSet {
     let window_end = jd_ut_day_start + 1.0 + WINDOW_EDGE_SLACK_DAYS;
 
@@ -1102,7 +1102,7 @@ pub fn sun_rise_set(
     lat_deg: f64,
     lon_deg_east: f64,
     elevation_m: f64,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> RiseSet {
     let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation_m);
     rise_set(jd_ut_day_start, lat_deg, lon_deg_east, h0, equatorial)
@@ -1154,7 +1154,7 @@ fn event_on_transits_rotation(
     lon_deg_east: f64,
     h0_deg: f64,
     event: Event,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     let from_seeds = refine_event(transit, lat_deg, lon_deg_east, h0_deg, event, equatorial)
         .or_else(|| {
@@ -1275,7 +1275,7 @@ fn boundary_is_reachable(
     transit: f64,
     lat_deg: f64,
     h0_deg: f64,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<bool> {
     let (_, dec_upper) = equatorial(transit)?;
     let (_, dec_lower) = equatorial(transit - HALF_ROTATION_DAYS)?;
@@ -1378,7 +1378,7 @@ fn search_rise(
     lon_deg_east: f64,
     h0_deg: f64,
     forward: bool,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     if libm::fabs(lat_deg) > ANALYTIC_LATITUDE_LIMIT_DEG {
         tally_latitude_routed();
@@ -1416,7 +1416,7 @@ fn search_rise_analytic(
     lon_deg_east: f64,
     h0_deg: f64,
     forward: bool,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     let stride = if forward {
         ROTATION_DAYS
@@ -1529,7 +1529,7 @@ pub fn previous_rise(
     lat_deg: f64,
     lon_deg_east: f64,
     elevation_m: f64,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation_m);
     search_rise(jd_ut, lat_deg, lon_deg_east, h0, false, equatorial)
@@ -1556,7 +1556,7 @@ pub fn next_rise(
     lat_deg: f64,
     lon_deg_east: f64,
     elevation_m: f64,
-    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
     let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation_m);
     search_rise(jd_ut, lat_deg, lon_deg_east, h0, true, equatorial)
@@ -1671,7 +1671,7 @@ pub(crate) mod scan_reference {
     pub(super) const ROTATION_SCAN_HALF_SPAN_DAYS: f64 = super::ROTATION_DAYS;
 
     /// Refine a bracketed root of `f` in `[lo, hi]` by bisection.
-    fn bisect(mut lo: f64, mut hi: f64, f: &dyn Fn(f64) -> Option<f64>) -> Option<f64> {
+    fn bisect(mut lo: f64, mut hi: f64, f: &(dyn Fn(f64) -> Option<f64> + Sync)) -> Option<f64> {
         let f_lo = f(lo)?;
         for _ in 0..BISECT_ITERS {
             let mid = 0.5 * (lo + hi);
@@ -1723,7 +1723,7 @@ pub(crate) mod scan_reference {
         lon_deg_east: f64,
         h0_deg: f64,
         event: Event,
-        equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+        equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     ) -> Option<f64> {
         super::tally_refine_fallback();
         let residual = |jd: f64| -> Option<f64> {
@@ -1795,7 +1795,7 @@ pub(crate) mod scan_reference {
         lat_deg: f64,
         lon_deg_east: f64,
         h0_deg: f64,
-        equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+        equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     ) -> RiseSet {
         let rel_alt = |jd: f64| -> Option<f64> {
             let (ra, dec) = equatorial(jd)?;
@@ -1864,7 +1864,7 @@ pub(crate) mod scan_reference {
         lon_deg_east: f64,
         h0_deg: f64,
         forward: bool,
-        equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+        equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     ) -> Option<f64> {
         let rel_alt = |jd: f64| -> Option<f64> {
             let (ra, dec) = equatorial(jd)?;
@@ -1918,7 +1918,7 @@ pub(crate) mod scan_reference {
         lat_deg: f64,
         lon_deg_east: f64,
         elevation_m: f64,
-        equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+        equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     ) -> Option<f64> {
         let h0 = super::SUN_STANDARD_ALTITUDE_DEG + super::horizon_dip_deg(elevation_m);
         search_rise_by_scan(jd_ut, lat_deg, lon_deg_east, h0, false, equatorial)
@@ -1931,7 +1931,7 @@ pub(crate) mod scan_reference {
         lat_deg: f64,
         lon_deg_east: f64,
         elevation_m: f64,
-        equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+        equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     ) -> Option<f64> {
         let h0 = super::SUN_STANDARD_ALTITUDE_DEG + super::horizon_dip_deg(elevation_m);
         search_rise_by_scan(jd_ut, lat_deg, lon_deg_east, h0, true, equatorial)
@@ -2664,7 +2664,7 @@ mod tests {
         lons: &[f64],
         jds: &[f64],
         elevations: &[f64],
-        equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+        equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     ) -> SweepResult {
         let mut out = SweepResult::default();
         for &lat in lats {
