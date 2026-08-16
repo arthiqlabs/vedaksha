@@ -3083,7 +3083,24 @@ mod tests {
     ///
     /// # Recorded — last run at commit `57e74cc`, aarch64 `--release`
     ///
-    /// TODO_FILL_DENSE
+    /// | tier | samples | comparisons | worst disagreement | presence disagreements |
+    /// |---|---|---|---|---|
+    /// | fixed-RA fixture | 77 400 | 387 000 | 4.656612873077393e-10 d | 0 |
+    /// | real Sun (`AnalyticalProvider`) | 3 612 | 18 060 | 4.656612873077393e-10 d | 0 |
+    /// | **total, as first measured** | **81 012** | **405 060** | **4.656612873077393e-10 d** | **0** |
+    ///
+    /// `4.656612873077393e-10` d is `2^-31` d — **exactly one ULP** at JD ≈ 2.45e6,
+    /// or 4.023e-5 s. Zero samples disagreed about whether an event exists.
+    ///
+    /// After the convergence fix extended the grid to the poles and to non-zero
+    /// elevation, the sweep is **477 120 comparisons**, still at one ULP with
+    /// zero presence disagreements.
+    ///
+    /// [`AGREEMENT_TOL_DAYS`] is `1e-9` — about two ULP — chosen as the next
+    /// clean figure above that measured maximum, not as a round number.
+    ///
+    /// **What invalidates this:** a change to the sunrise search algorithm
+    /// itself. Nothing else. Re-run only then.
     ///
     /// # What is sampled, exactly
     ///
@@ -3900,7 +3917,8 @@ mod tests {
     /// JD 2 451 617.5 comparison. With the original eight it passed. That is
     /// the difference the six anchors buy.
     ///
-    /// TODO_FILL_HILAT
+    /// **What invalidates this:** a change to the sunrise search algorithm
+    /// itself. Nothing else. Re-run only then.
     #[cfg(feature = "derivation-sweeps")]
     #[test]
     fn the_high_latitude_band_agrees_with_the_scan_oracle() {
@@ -4372,7 +4390,8 @@ mod tests {
     /// rotation at the pole to the scan. The per-band totals are tabulated in
     /// [`ANALYTIC_LATITUDE_LIMIT_DEG`].
     ///
-    /// TODO_FILL_LATLIMIT
+    /// **What invalidates this:** a change to the sunrise search algorithm
+    /// itself. Nothing else. Re-run only then.
     #[cfg(feature = "derivation-sweeps")]
     #[test]
     fn the_latitude_limit_is_derived_from_where_the_walk_first_disagrees() {
