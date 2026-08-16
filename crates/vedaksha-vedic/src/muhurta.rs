@@ -923,8 +923,8 @@ mod tests {
         Some((0.0, 0.0))
     }
 
-    /// The defect KundaliMCP reported: `weekday_from_jd` returns the UT
-    /// weekday, which flips at a different local clock time at every
+    /// The defect a downstream consumer reported: `weekday_from_jd` returns
+    /// the UT weekday, which flips at a different local clock time at every
     /// longitude. West of about −150° the UT day has already rolled over
     /// while it is still the previous evening locally.
     #[test]
@@ -963,7 +963,7 @@ mod tests {
 
     /// The report asked specifically for a case east of +150° as well as one
     /// west of −150°: inside ±90° the UT and local days usually agree, which is
-    /// exactly why this class of bug survives a green suite. In KundaliMCP's
+    /// exactly why this class of bug survives a green suite. In that consumer's
     /// own harness 19 of 20 fixtures sat inside that band and the identical bug
     /// produced zero diffs across 928 snapshots.
     ///

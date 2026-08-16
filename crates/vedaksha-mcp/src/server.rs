@@ -1932,13 +1932,14 @@ mod tests {
     /// Same instant/observer as `compute_panchanga_vara_uses_the_supplied_tz_offset`
     /// above and `far_east_and_far_west_cannot_share_a_vara_at_one_instant`
     /// in `vedaksha_vedic::muhurta` (jd 2459015.75, lat 0°, lon 165°E — the
-    /// far-east case from the KundaliMCP report): both handlers derive the
-    /// vara through the same `sun_equatorial_deg(&AnalyticalProvider, jd)`
-    /// closure (see `call_compute_panchanga` and `call_search_muhurta`
-    /// above), so the same jd/lat/lon must flip the same way here. The
-    /// search window is collapsed to the single instant (`start_jd ==
-    /// end_jd == 2459015.75`) so exactly one candidate is evaluated, and
-    /// `min_quality: 0.0` keeps it regardless of score.
+    /// far-east case from a downstream consumer's report): both handlers
+    /// derive the vara through the same
+    /// `sun_equatorial_deg(&AnalyticalProvider, jd)` closure (see
+    /// `call_compute_panchanga` and `call_search_muhurta` above), so the same
+    /// jd/lat/lon must flip the same way here. The search window is collapsed
+    /// to the single instant (`start_jd == end_jd == 2459015.75`) so exactly
+    /// one candidate is evaluated, and `min_quality: 0.0` keeps it regardless
+    /// of score.
     ///
     /// Confirmed empirically (not hand-derived): `search_muhurta` at
     /// tz_offset_minutes = +660 reports "Monday" for that one candidate; the
@@ -2258,11 +2259,12 @@ mod tests {
     /// `vara_at`, not silently drop it (e.g. always call with 0). Same
     /// instant and observer position as `far_east_and_far_west_cannot_share_a_vara_at_one_instant`
     /// in `vedaksha_vedic::muhurta` (jd 2459015.75, lon 165°E — the far-east
-    /// case from the KundaliMCP report), at UTC+11. Confirmed empirically
-    /// (not hand-derived): calling `compute_panchanga` at tz_offset_minutes
-    /// = +660 returns "Monday"; at the same jd/lat/lon with tz_offset_minutes
-    /// forced to 0 it returns "Sunday" — the two must disagree, or the tz
-    /// offset supplied by the caller is not reaching `vara_at`.
+    /// case from a downstream consumer's report), at UTC+11. Confirmed
+    /// empirically (not hand-derived): calling `compute_panchanga` at
+    /// tz_offset_minutes = +660 returns "Monday"; at the same jd/lat/lon with
+    /// tz_offset_minutes forced to 0 it returns "Sunday" — the two must
+    /// disagree, or the tz offset supplied by the caller is not reaching
+    /// `vara_at`.
     #[test]
     fn compute_panchanga_vara_uses_the_supplied_tz_offset() {
         let with_tz = serde_json::json!({
