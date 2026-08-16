@@ -124,6 +124,14 @@ tested but reachable from **no shipped surface at all**, while the README advert
 local-civil-weekday fallback used inside the polar day and night, where the sunrise-to-sunrise
 reckoning is undefined. Previously that substitution was silent.
 
+**`compute_natal_chart` (MCP) now reports `ayanamsha_value`** — the offset actually applied
+to every longitude, the ascendant, the MC and all twelve cusps in the response. The tool
+accepted an ayanamsha as input and never told you what it resolved to, so a sidereal caller
+could not check the rotation or convert back to tropical; the WASM surface had emitted it all
+along. Tropical reports an explicit `0.0` rather than omitting the key. This matters
+particularly in v5, which corrects the sidereal frame: without the offset, an MCP caller had
+no way to audit the correction it had just received. Found by the cross-surface parity suite.
+
 **Two new MCP tools:** `compute_synastry` and `compute_composite`. Both pair grahas by name
 rather than by array position, which for `compute_composite` also removes a panic that
 mismatched input lengths would otherwise have triggered.
