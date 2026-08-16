@@ -257,7 +257,7 @@ fn hora(lon: f64) -> u8 {
     let first_half = pos < 15.0;
 
     // sign is 0-based: even index (0,2,4,…) = odd sign (Aries=1, Gemini=3, …)
-    let odd_sign = sign % 2 == 0;
+    let odd_sign = sign.is_multiple_of(2);
 
     // Leo when both match (odd+first or even+second); Cancer otherwise.
     if odd_sign == first_half { 4 } else { 3 }
@@ -299,7 +299,7 @@ fn chaturthamsha(lon: f64) -> u8 {
 /// - Even signs: count from the 7th sign.
 fn saptamsha(lon: f64) -> u8 {
     let sign = sign_of(lon);
-    let odd_sign = sign % 2 == 0; // 0-based even index = odd sign
+    let odd_sign = sign.is_multiple_of(2); // 0-based even index = odd sign
     let start = if odd_sign { sign } else { (sign + 6) % 12 };
     general_varga(lon, 7, start)
 }
@@ -327,7 +327,7 @@ fn navamsha(lon: f64) -> u8 {
 /// - Even signs: count from 9th sign.
 fn dashamsha(lon: f64) -> u8 {
     let sign = sign_of(lon);
-    let odd_sign = sign % 2 == 0;
+    let odd_sign = sign.is_multiple_of(2);
     let start = if odd_sign { sign } else { (sign + 8) % 12 };
     general_varga(lon, 10, start)
 }
@@ -379,7 +379,7 @@ fn vimshamsha(lon: f64) -> u8 {
 /// - Even signs: count from Cancer (3).
 fn chaturvimshamsha(lon: f64) -> u8 {
     let sign = sign_of(lon);
-    let odd_sign = sign % 2 == 0;
+    let odd_sign = sign.is_multiple_of(2);
     let start = if odd_sign { 4 } else { 3 }; // Leo or Cancer
     general_varga(lon, 24, start)
 }
@@ -424,7 +424,7 @@ fn saptavimshamsha(lon: f64) -> u8 {
 fn trimshamsha(lon: f64) -> u8 {
     let sign = sign_of(lon);
     let pos = lon % 30.0;
-    let odd_sign = sign % 2 == 0;
+    let odd_sign = sign.is_multiple_of(2);
 
     if odd_sign {
         // Odd signs: 0-5 Mars, 5-10 Saturn, 10-18 Jupiter, 18-25 Mercury, 25-30 Venus
@@ -462,7 +462,7 @@ fn trimshamsha(lon: f64) -> u8 {
 /// - Even signs: count from Libra (6).
 fn khavedamsha(lon: f64) -> u8 {
     let sign = sign_of(lon);
-    let odd_sign = sign % 2 == 0;
+    let odd_sign = sign.is_multiple_of(2);
     let start = if odd_sign { 0 } else { 6 };
     general_varga(lon, 40, start)
 }

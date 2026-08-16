@@ -67,7 +67,7 @@ pub struct NarayanaDasha {
 /// Odd signs (1st, 3rd, 5th, 7th, 9th, 11th of the zodiac):
 /// Aries(0), Gemini(2), Leo(4), Libra(6), Sagittarius(8), Aquarius(10).
 fn is_odd_sign(sign: u8) -> bool {
-    sign % 2 == 0
+    sign.is_multiple_of(2)
 }
 
 /// Return the sign occupied by the traditional (Parashari) ruler of `sign`.
