@@ -751,6 +751,17 @@ pub fn compute_nakshatra_end(
 /// boundary — a step landing between local midnight and local sunrise gets
 /// the *previous* civil day's stale vara, not the one actually in force), the
 /// cached interval **is** the vara's real extent, so it cannot go stale.
+///
+/// What the memo cannot remove is the vara work itself, and about four fifths
+/// of a scan's cost sits under `vedaksha_astro::riseset` in those two sunrise
+/// searches. The candidate days are independent, so with the `std` feature the
+/// scan is split across [`std::thread::available_parallelism`] workers over
+/// contiguous ascending chunks — see `search_candidates_in_parallel`. Each
+/// worker carries its own memo. Results are unchanged: bit-identical and in
+/// the same order as a serial walk, which
+/// `threaded_and_serial_scans_agree_bit_for_bit` asserts field by field on the
+/// raw bit patterns. Ranges shorter than one chunk, and targets that report no
+/// parallelism, run serially.
 // The ninth argument is the observer's tz offset, needed alongside lat/lon to
 // derive the vara per candidate instant (see the performance note above) —
 // splitting it into a struct would obscure the callback wiring more than it
@@ -770,18 +781,167 @@ pub fn search_muhurta(
     equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
     min_quality: f64,
 ) -> Vec<MuhurtaAssessment> {
-    let mut results = Vec::new();
+    // Materialise the candidate instants FIRST, by the very same iterated
+    // `jd += step` the walk has always used. Everything below then consumes
+    // slices of this one sequence, so a chunked evaluation sees exactly the
+    // `f64` bit patterns a serial walk would have produced. That is
+    // bit-identity by construction — it does not rest on an argument about
+    // when `start_jd + k * step` is exactly representable, which stops being
+    // true once the accumulated value crosses a binade boundary.
+    let mut candidates = Vec::new();
     let mut jd = start_jd;
-    let step = 0.5; // check every half day
+    while jd <= end_jd {
+        candidates.push(jd);
+        jd += SEARCH_STEP_DAYS;
+    }
 
+    #[cfg(feature = "std")]
+    if let Some(results) = search_candidates_in_parallel(
+        &candidates,
+        lat_deg,
+        lon_deg_east,
+        elevation_m,
+        tz_offset_minutes,
+        get_moon_lon,
+        get_sun_lon,
+        equatorial,
+        min_quality,
+    ) {
+        return results;
+    }
+
+    evaluate_candidates(
+        &candidates,
+        lat_deg,
+        lon_deg_east,
+        elevation_m,
+        tz_offset_minutes,
+        get_moon_lon,
+        get_sun_lon,
+        equatorial,
+        min_quality,
+    )
+}
+
+/// Candidate spacing for [`search_muhurta`]: half a day, i.e. roughly dawn and
+/// dusk.
+const SEARCH_STEP_DAYS: f64 = 0.5;
+
+/// Fewest candidate instants [`search_muhurta`] will hand a worker.
+///
+/// A worker starts with a cold vara memo, so each chunk pays at most one
+/// `vara_with_validity` that the serial walk would have taken from the memo.
+/// A vara runs sunrise to sunrise — about one day, i.e. about two candidates —
+/// so a chunk of `C` candidates derives roughly `C / 2` varas and the cold
+/// start adds at most one of them, i.e. `2 / C` extra work. Net speedup across
+/// `W` workers is therefore about `W / (1 + 2/C)`.
+///
+/// At `C = 8` the redundancy is 25% and eight workers still net about 6.4×; at
+/// `C = 4` it is 50% and the curve turns over. Eight is where the re-derivation
+/// is still under a quarter, and it matters that the threshold sit here rather
+/// than higher: an MCP `search_muhurta` request is capped at a 30-day span
+/// (`crate::validation::MAX_MUHURTA_SEARCH_DAYS` in `vedaksha-mcp`), which is
+/// 61 candidates, so a threshold of 32 would have left the served path serial
+/// in every case it is actually asked to serve.
+///
+/// A search shorter than two chunks runs serially: below that there is nothing
+/// to split, and the spawn cost and the re-derivation are both pure loss.
+#[cfg(feature = "std")]
+const MIN_CANDIDATES_PER_WORKER: usize = 8;
+
+/// Evaluate `candidates` across worker threads, or `None` when the range is
+/// too short to be worth splitting or the platform reports no parallelism.
+///
+/// The days are independent: [`vara_with_validity`] is pure and
+/// [`assess_muhurta`] reads nothing but its own arguments, so there is no
+/// cross-candidate carry other than the memo — and the memo only ever *skips*
+/// recomputing a value it would otherwise have derived identically.
+///
+/// Results stay bit-identical and order-stable. Chunks are contiguous and
+/// ascending, are joined in the order they were spawned, and are concatenated
+/// in that order, so the output sequence is the serial one. Nothing is summed
+/// across candidates, so no floating-point accumulation order changes.
+#[cfg(feature = "std")]
+#[allow(clippy::too_many_arguments)]
+fn search_candidates_in_parallel(
+    candidates: &[f64],
+    lat_deg: f64,
+    lon_deg_east: f64,
+    elevation_m: f64,
+    tz_offset_minutes: i32,
+    get_moon_lon: &(dyn Fn(f64) -> Option<f64> + Sync),
+    get_sun_lon: &(dyn Fn(f64) -> Option<f64> + Sync),
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
+    min_quality: f64,
+) -> Option<Vec<MuhurtaAssessment>> {
+    // `available_parallelism` reports `Err` on the single-threaded targets this
+    // crate also builds for (wasm32 among them), which lands on the serial path
+    // below rather than on a `spawn` that would fail at run time.
+    let available = std::thread::available_parallelism().ok()?.get();
+    let workers = (candidates.len() / MIN_CANDIDATES_PER_WORKER).min(available);
+    if workers < 2 {
+        return None;
+    }
+
+    let per_worker = candidates.len().div_ceil(workers);
+    let mut chunked: Vec<Vec<MuhurtaAssessment>> = Vec::with_capacity(workers);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = candidates
+            .chunks(per_worker)
+            .map(|chunk| {
+                scope.spawn(move || {
+                    evaluate_candidates(
+                        chunk,
+                        lat_deg,
+                        lon_deg_east,
+                        elevation_m,
+                        tz_offset_minutes,
+                        get_moon_lon,
+                        get_sun_lon,
+                        equatorial,
+                        min_quality,
+                    )
+                })
+            })
+            .collect();
+        for handle in handles {
+            chunked.push(handle.join().expect("muhurta worker thread panicked"));
+        }
+    });
+
+    Some(chunked.into_iter().flatten().collect())
+}
+
+/// Assess one contiguous, ascending run of candidate instants.
+///
+/// This is the whole of [`search_muhurta`]'s per-day work, factored out so a
+/// worker thread can run it over a slice.
+#[allow(clippy::too_many_arguments)]
+fn evaluate_candidates(
+    candidates: &[f64],
+    lat_deg: f64,
+    lon_deg_east: f64,
+    elevation_m: f64,
+    tz_offset_minutes: i32,
+    get_moon_lon: &(dyn Fn(f64) -> Option<f64> + Sync),
+    get_sun_lon: &(dyn Fn(f64) -> Option<f64> + Sync),
+    equatorial: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
+    min_quality: f64,
+) -> Vec<MuhurtaAssessment> {
     // (vara, [start, end)) — the vara's own real extent, as returned by
     // `vara_with_validity`. Recomputed only when `jd` falls outside that
     // interval — see the performance note above. `None` (from a polar case,
     // or `equatorial` failing) means the last computation isn't cacheable at
     // all, so the next step recomputes unconditionally too.
+    //
+    // The memo is per-run, and so per-worker: it is `&mut` state, which shared
+    // across threads would be unsound, and it would be pointless besides —
+    // chunks cover disjoint contiguous JD ranges, so one worker's cached
+    // interval can only ever match another's at a single chunk boundary.
     let mut memo: Option<(Weekday, f64, f64)> = None;
+    let mut results = Vec::new();
 
-    while jd <= end_jd {
+    for &jd in candidates {
         if let (Some(moon), Some(sun)) = (get_moon_lon(jd), get_sun_lon(jd)) {
             let still_valid = matches!(memo, Some((_, start, end)) if jd >= start && jd < end);
             let vara = match memo {
@@ -804,7 +964,6 @@ pub fn search_muhurta(
                 results.push(assessment);
             }
         }
-        jd += step;
     }
 
     results
@@ -1755,6 +1914,96 @@ mod tests {
     /// `vara_at` call per step (some memoisation fired) and at least one
     /// (the memo is not accidentally skipping the vara computation
     /// entirely).
+    /// Splitting the day scan across workers must not change one bit of the
+    /// answer, nor the order the windows come back in.
+    ///
+    /// 400 days is 801 candidate instants — well over the two chunks
+    /// `search_muhurta` needs before it will split — so on any host reporting
+    /// 2-way parallelism this compares the threaded path against the serial
+    /// one. `search_candidates_in_parallel` is called directly as well, so the
+    /// threaded values are compared even if `search_muhurta`'s own dispatch
+    /// were to change.
+    ///
+    /// The floats are compared as raw bit patterns, not with a tolerance: the
+    /// claim is that chunking reproduces the identical sequence, and a
+    /// tolerance would not test that claim.
+    #[test]
+    fn threaded_and_serial_scans_agree_bit_for_bit() {
+        let (lat, lon, tz) = (13.08, 80.27, 330);
+        let start = 2_451_545.5;
+        let end = start + 400.0;
+
+        // Smooth synthetic longitudes at roughly the true mean rates, so the
+        // scan walks the whole nakshatra/tithi cycle rather than sitting on one
+        // value. Exact rates do not matter here — only that both paths see the
+        // same ones.
+        let moon = |jd: f64| Some((jd - start) * 13.176_396);
+        let sun = |jd: f64| Some((jd - start) * 0.985_647);
+
+        let mut candidates = Vec::new();
+        let mut jd = start;
+        while jd <= end {
+            candidates.push(jd);
+            jd += SEARCH_STEP_DAYS;
+        }
+        assert!(
+            candidates.len() >= 2 * MIN_CANDIDATES_PER_WORKER,
+            "the range must be long enough for the scan to split at all: {} candidates",
+            candidates.len()
+        );
+
+        let serial =
+            evaluate_candidates(&candidates, lat, lon, 0.0, tz, &moon, &sun, &flat_sun, 0.0);
+
+        // Every path that can produce this answer, checked against the serial
+        // walk. `search_candidates_in_parallel` is `None` only on a host that
+        // reports no parallelism, where there is no threaded path to check.
+        let mut under_test = vec![search_muhurta(
+            start, end, lat, lon, 0.0, tz, &moon, &sun, &flat_sun, 0.0,
+        )];
+        if let Some(parallel) = search_candidates_in_parallel(
+            &candidates,
+            lat,
+            lon,
+            0.0,
+            tz,
+            &moon,
+            &sun,
+            &flat_sun,
+            0.0,
+        ) {
+            under_test.push(parallel);
+        }
+
+        for got in &under_test {
+            assert_eq!(
+                got.len(),
+                serial.len(),
+                "the threaded scan must report the same number of windows"
+            );
+            for (i, (t, s)) in got.iter().zip(&serial).enumerate() {
+                assert_eq!(
+                    t.jd.to_bits(),
+                    s.jd.to_bits(),
+                    "window {i}: candidate instant differs bitwise"
+                );
+                assert_eq!(
+                    t.quality_score.to_bits(),
+                    s.quality_score.to_bits(),
+                    "window {i}: quality score differs bitwise"
+                );
+                assert_eq!(t.tithi, s.tithi, "window {i}: tithi differs");
+                assert_eq!(t.weekday, s.weekday, "window {i}: vara differs");
+                assert_eq!(t.factors, s.factors, "window {i}: factors differ");
+                assert_eq!(
+                    format!("{:?}", t.nakshatra),
+                    format!("{:?}", s.nakshatra),
+                    "window {i}: nakshatra differs"
+                );
+            }
+        }
+    }
+
     #[test]
     fn search_muhurta_memoisation_still_saves_equatorial_calls() {
         // `AtomicU32`, not `Cell`: the `equatorial` callback is now
