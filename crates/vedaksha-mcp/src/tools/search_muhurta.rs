@@ -129,13 +129,13 @@ pub fn validate(input: &SearchMuhurtaInput) -> Result<(), McpError> {
     validation::validate_latitude(input.latitude)?;
     validation::validate_longitude(input.longitude)?;
 
-    if let Some(q) = input.min_quality {
-        if !q.is_finite() || !(0.0..=1.0).contains(&q) {
-            return Err(McpError::invalid_parameter(
-                "min_quality",
-                "min_quality must be a finite number in [0.0, 1.0]",
-            ));
-        }
+    if let Some(q) = input.min_quality
+        && (!q.is_finite() || !(0.0..=1.0).contains(&q))
+    {
+        return Err(McpError::invalid_parameter(
+            "min_quality",
+            "min_quality must be a finite number in [0.0, 1.0]",
+        ));
     }
 
     if let Some(tz) = input.tz_offset_minutes {

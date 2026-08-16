@@ -175,13 +175,13 @@ pub fn validate(input: &ComputeDashaInput) -> Result<DashaSystem, McpError> {
         }
     }
 
-    if let Some(levels) = input.levels {
-        if levels == 0 || levels > MAX_LEVELS {
-            return Err(McpError::invalid_parameter(
-                "levels",
-                &format!("must be between 1 and {MAX_LEVELS}"),
-            ));
-        }
+    if let Some(levels) = input.levels
+        && (levels == 0 || levels > MAX_LEVELS)
+    {
+        return Err(McpError::invalid_parameter(
+            "levels",
+            &format!("must be between 1 and {MAX_LEVELS}"),
+        ));
     }
 
     Ok(system)

@@ -1755,15 +1755,13 @@ pub(crate) mod scan_reference {
             } else {
                 prev_residual >= 0.0 && cur_residual < 0.0
             };
-            if crossed {
-                if let Some(root) = bisect(prev_jd, jd, &residual) {
-                    let nearer = match best {
-                        Some(b) => libm::fabs(root - t0) < libm::fabs(b - t0),
-                        None => true,
-                    };
-                    if nearer {
-                        best = Some(root);
-                    }
+            if crossed && let Some(root) = bisect(prev_jd, jd, &residual) {
+                let nearer = match best {
+                    Some(b) => libm::fabs(root - t0) < libm::fabs(b - t0),
+                    None => true,
+                };
+                if nearer {
+                    best = Some(root);
                 }
             }
 
@@ -1884,16 +1882,17 @@ pub(crate) mod scan_reference {
             } else {
                 (far, near, far_alt, near_alt)
             };
-            if lo_alt < 0.0 && hi_alt >= 0.0 {
-                if let Some(root) = bisect(lo, hi, &rel_alt) {
-                    let accepted = if forward {
-                        root > anchor
-                    } else {
-                        root <= anchor
-                    };
-                    if accepted {
-                        return Some(root);
-                    }
+            if lo_alt < 0.0
+                && hi_alt >= 0.0
+                && let Some(root) = bisect(lo, hi, &rel_alt)
+            {
+                let accepted = if forward {
+                    root > anchor
+                } else {
+                    root <= anchor
+                };
+                if accepted {
+                    return Some(root);
                 }
             }
             near = far;

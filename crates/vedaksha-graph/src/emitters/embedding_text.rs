@@ -30,25 +30,24 @@ impl GraphEmitter for EmbeddingTextEmitter {
 
         // Chart header
         for node in &graph.nodes {
-            if node.node_type == NodeType::Chart {
-                if let NodeProperties::Chart {
+            if node.node_type == NodeType::Chart
+                && let NodeProperties::Chart {
                     julian_day,
                     latitude,
                     longitude,
                     ..
                 } = &node.properties
-                {
-                    lines.push(format!(
-                        "Chart computed at JD {julian_day:.4} (lat {latitude:.2}, lon {longitude:.2})."
-                    ));
-                }
+            {
+                lines.push(format!(
+                    "Chart computed at JD {julian_day:.4} (lat {latitude:.2}, lon {longitude:.2})."
+                ));
             }
         }
 
         // Planets
         for node in &graph.nodes {
-            if node.node_type == NodeType::Planet {
-                if let NodeProperties::Planet {
+            if node.node_type == NodeType::Planet
+                && let NodeProperties::Planet {
                     name,
                     longitude,
                     speed,
@@ -56,35 +55,32 @@ impl GraphEmitter for EmbeddingTextEmitter {
                     house,
                     ..
                 } = &node.properties
-                {
-                    let retro_str = if *retrograde { ", retrograde" } else { "" };
-                    let sign_name = planet_sign_name(graph, &node.id);
-                    let sign_part = sign_name
-                        .as_deref()
-                        .map_or(String::new(), |s| format!(" {s}"));
-                    lines.push(format!(
+            {
+                let retro_str = if *retrograde { ", retrograde" } else { "" };
+                let sign_name = planet_sign_name(graph, &node.id);
+                let sign_part = sign_name
+                    .as_deref()
+                    .map_or(String::new(), |s| format!(" {s}"));
+                lines.push(format!(
                         "{name} at {longitude:.1}°{sign_part} (House {house}){retro_str}, speed {speed:.2}°/day."
                     ));
 
-                    // Aspect edges from this planet
-                    for edge in graph.edges_from(&node.id) {
-                        if edge.edge_type == EdgeType::Aspects {
-                            if let EdgeProperties::Aspect {
-                                aspect_type,
-                                orb,
-                                applying,
-                                ..
-                            } = &edge.properties
-                            {
-                                let applying_str =
-                                    if *applying { "applying" } else { "separating" };
-                                let target_name = node_name_by_id(graph, &edge.to)
-                                    .unwrap_or_else(|| edge.to.to_string());
-                                lines.push(format!(
+                // Aspect edges from this planet
+                for edge in graph.edges_from(&node.id) {
+                    if edge.edge_type == EdgeType::Aspects
+                        && let EdgeProperties::Aspect {
+                            aspect_type,
+                            orb,
+                            applying,
+                            ..
+                        } = &edge.properties
+                    {
+                        let applying_str = if *applying { "applying" } else { "separating" };
+                        let target_name =
+                            node_name_by_id(graph, &edge.to).unwrap_or_else(|| edge.to.to_string());
+                        lines.push(format!(
                                     "{name} aspects {target_name} ({aspect_type}, orb {orb:.1}°, {applying_str})."
                                 ));
-                            }
-                        }
                     }
                 }
             }
@@ -92,128 +88,120 @@ impl GraphEmitter for EmbeddingTextEmitter {
 
         // Signs (brief)
         for node in &graph.nodes {
-            if node.node_type == NodeType::Sign {
-                if let NodeProperties::Sign {
+            if node.node_type == NodeType::Sign
+                && let NodeProperties::Sign {
                     name,
                     element,
                     modality,
                     ..
                 } = &node.properties
-                {
-                    lines.push(format!("{name} is a {modality} {element} sign."));
-                }
+            {
+                lines.push(format!("{name} is a {modality} {element} sign."));
             }
         }
 
         // Houses
         for node in &graph.nodes {
-            if node.node_type == NodeType::House {
-                if let NodeProperties::House {
+            if node.node_type == NodeType::House
+                && let NodeProperties::House {
                     number,
                     cusp_longitude,
                     system,
                 } = &node.properties
-                {
-                    lines.push(format!(
-                        "House {number} cusp at {cusp_longitude:.1}° ({system} system)."
-                    ));
-                }
+            {
+                lines.push(format!(
+                    "House {number} cusp at {cusp_longitude:.1}° ({system} system)."
+                ));
             }
         }
 
         // Nakshatras
         for node in &graph.nodes {
-            if node.node_type == NodeType::Nakshatra {
-                if let NodeProperties::Nakshatra {
+            if node.node_type == NodeType::Nakshatra
+                && let NodeProperties::Nakshatra {
                     name, lord, deity, ..
                 } = &node.properties
-                {
-                    lines.push(format!("{name} nakshatra: lord {lord}, deity {deity}."));
-                }
+            {
+                lines.push(format!("{name} nakshatra: lord {lord}, deity {deity}."));
             }
         }
 
         // Padas
         for node in &graph.nodes {
-            if node.node_type == NodeType::Pada {
-                if let NodeProperties::Pada {
+            if node.node_type == NodeType::Pada
+                && let NodeProperties::Pada {
                     nakshatra_index,
                     pada_number,
                     start_longitude,
                 } = &node.properties
-                {
-                    lines.push(format!(
+            {
+                lines.push(format!(
                         "Pada {pada_number} of nakshatra {nakshatra_index} starts at {start_longitude:.2}°."
                     ));
-                }
             }
         }
 
         // Dasha periods
         for node in &graph.nodes {
-            if node.node_type == NodeType::DashaPeriod {
-                if let NodeProperties::DashaPeriod {
+            if node.node_type == NodeType::DashaPeriod
+                && let NodeProperties::DashaPeriod {
                     lord,
                     level,
                     duration_days,
                     ..
                 } = &node.properties
-                {
-                    let level_name = match level {
-                        1 => "Mahadasha",
-                        2 => "Antardasha",
-                        3 => "Pratyantardasha",
-                        _ => "Dasha sub-period",
-                    };
-                    lines.push(format!(
-                        "{lord} {level_name} lasting {duration_days:.1} days."
-                    ));
-                }
+            {
+                let level_name = match level {
+                    1 => "Mahadasha",
+                    2 => "Antardasha",
+                    3 => "Pratyantardasha",
+                    _ => "Dasha sub-period",
+                };
+                lines.push(format!(
+                    "{lord} {level_name} lasting {duration_days:.1} days."
+                ));
             }
         }
 
         // Patterns
         for node in &graph.nodes {
-            if node.node_type == NodeType::Pattern {
-                if let NodeProperties::Pattern {
+            if node.node_type == NodeType::Pattern
+                && let NodeProperties::Pattern {
                     pattern_type,
                     description,
                 } = &node.properties
-                {
-                    lines.push(format!("{pattern_type}: {description}"));
-                }
+            {
+                lines.push(format!("{pattern_type}: {description}"));
             }
         }
 
         // Fixed stars
         for node in &graph.nodes {
-            if node.node_type == NodeType::FixedStar {
-                if let NodeProperties::FixedStar {
+            if node.node_type == NodeType::FixedStar
+                && let NodeProperties::FixedStar {
                     name,
                     longitude,
                     magnitude,
                     ..
                 } = &node.properties
-                {
-                    lines.push(format!(
-                        "Fixed star {name} at {longitude:.2}°, magnitude {magnitude:.1}."
-                    ));
-                }
+            {
+                lines.push(format!(
+                    "Fixed star {name} at {longitude:.2}°, magnitude {magnitude:.1}."
+                ));
             }
         }
 
         // Star conjunctions
         for edge in &graph.edges {
-            if edge.edge_type == EdgeType::ConjunctStar {
-                if let EdgeProperties::StarConjunction { orb } = &edge.properties {
-                    let planet =
-                        node_name_by_id(graph, &edge.from).unwrap_or_else(|| edge.from.to_string());
-                    let star =
-                        node_name_by_id(graph, &edge.to).unwrap_or_else(|| edge.to.to_string());
-                    lines.push(format!(
-                        "{planet} is conjunct fixed star {star} (orb {orb:.1}°)."
-                    ));
-                }
+            if edge.edge_type == EdgeType::ConjunctStar
+                && let EdgeProperties::StarConjunction { orb } = &edge.properties
+            {
+                let planet =
+                    node_name_by_id(graph, &edge.from).unwrap_or_else(|| edge.from.to_string());
+                let star = node_name_by_id(graph, &edge.to).unwrap_or_else(|| edge.to.to_string());
+                lines.push(format!(
+                    "{planet} is conjunct fixed star {star} (orb {orb:.1}°)."
+                ));
             }
         }
 
@@ -224,12 +212,11 @@ impl GraphEmitter for EmbeddingTextEmitter {
 /// Look up the sign name for a planet node by following `PlacedIn` edges.
 fn planet_sign_name(graph: &ChartGraph, planet_id: &crate::NodeId) -> Option<String> {
     for edge in graph.edges_from(planet_id) {
-        if edge.edge_type == EdgeType::PlacedIn {
-            if let Some(sign_node) = graph.find_node(&edge.to) {
-                if let NodeProperties::Sign { name, .. } = &sign_node.properties {
-                    return Some(name.clone());
-                }
-            }
+        if edge.edge_type == EdgeType::PlacedIn
+            && let Some(sign_node) = graph.find_node(&edge.to)
+            && let NodeProperties::Sign { name, .. } = &sign_node.properties
+        {
+            return Some(name.clone());
         }
     }
     None

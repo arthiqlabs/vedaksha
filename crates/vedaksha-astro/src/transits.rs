@@ -169,8 +169,9 @@ fn scan_for_crossings(
 
             // Sign change (or exact zero crossing) with proximity guard.
             let sign_change = (prev_f * curr_f < 0.0) || (prev_f != 0.0 && curr_f == 0.0);
-            if sign_change && prev_f.abs() < config.max_orb + 5.0 {
-                if let Some(exact_jd) = bisect_transit(
+            if sign_change
+                && prev_f.abs() < config.max_orb + 5.0
+                && let Some(exact_jd) = bisect_transit(
                     t,
                     next_t,
                     natal_lon,
@@ -178,21 +179,19 @@ fn scan_for_crossings(
                     body_idx,
                     get_longitude,
                     50,
-                ) {
-                    if let Some(exact_lon) = get_longitude(body_idx, exact_jd) {
-                        let orb =
-                            (angle::angular_separation(exact_lon, natal_lon) - aspect_angle).abs();
-                        if orb <= config.max_orb {
-                            events.push(TransitEvent {
-                                transiting_body: body_name.to_owned(),
-                                natal_body: natal_name.to_owned(),
-                                aspect_type: aspect_name.to_owned(),
-                                exact_jd,
-                                applying: curr_f.abs() < prev_f.abs(),
-                                exact_orb: orb,
-                            });
-                        }
-                    }
+                )
+                && let Some(exact_lon) = get_longitude(body_idx, exact_jd)
+            {
+                let orb = (angle::angular_separation(exact_lon, natal_lon) - aspect_angle).abs();
+                if orb <= config.max_orb {
+                    events.push(TransitEvent {
+                        transiting_body: body_name.to_owned(),
+                        natal_body: natal_name.to_owned(),
+                        aspect_type: aspect_name.to_owned(),
+                        exact_jd,
+                        applying: curr_f.abs() < prev_f.abs(),
+                        exact_orb: orb,
+                    });
                 }
             }
         }

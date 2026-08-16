@@ -23,11 +23,6 @@
 #![allow(clippy::similar_names)]
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::question_mark)]
-// Raising the MSRV to 1.89 put let-chains (stable in 1.88) inside the supported
-// range, so clippy now offers to fold every `if cond { if let … }` into
-// `if cond && let …`. That is a stylistic rewrite of working, tested code, not a
-// defect — so it is declined here rather than churned through riseset/transits.
-#![allow(clippy::collapsible_if)]
 
 pub mod aspects;
 pub mod chart;

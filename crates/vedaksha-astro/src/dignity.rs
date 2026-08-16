@@ -289,10 +289,10 @@ pub fn dignity_of(planet: DignityPlanet, sign: Sign, scheme: RulershipScheme) ->
     }
 
     // Fall — opposite sign of exaltation
-    if let Some(exalt_planet) = exaltation_ruler(opposite) {
-        if exalt_planet == planet {
-            return DignityState::Fall;
-        }
+    if let Some(exalt_planet) = exaltation_ruler(opposite)
+        && exalt_planet == planet
+    {
+        return DignityState::Fall;
     }
 
     DignityState::Peregrine

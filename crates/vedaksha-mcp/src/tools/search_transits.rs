@@ -138,13 +138,13 @@ pub fn validate(input: &SearchTransitsInput) -> Result<(), McpError> {
         }
     }
 
-    if let Some(orb) = input.max_orb {
-        if !orb.is_finite() || orb <= 0.0 || orb > 30.0 {
-            return Err(McpError::invalid_parameter(
-                "max_orb",
-                "max_orb must be a positive finite number not exceeding 30 degrees",
-            ));
-        }
+    if let Some(orb) = input.max_orb
+        && (!orb.is_finite() || orb <= 0.0 || orb > 30.0)
+    {
+        return Err(McpError::invalid_parameter(
+            "max_orb",
+            "max_orb must be a positive finite number not exceeding 30 degrees",
+        ));
     }
 
     Ok(())

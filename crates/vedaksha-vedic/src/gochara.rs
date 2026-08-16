@@ -226,22 +226,20 @@ pub fn compute_gochara(
         // Vedha is classically defined only against favourable transits.
         // For unfavourable transits we leave the candidate list empty.
         let mut vedha_candidates: Vec<Graha> = Vec::new();
-        if favourable {
-            if let Some(vedha_house) = lookup_vedha_house(graha, house, vedha_table) {
-                let target_sign_i =
-                    (i16::from(natal_reference_sign) + i16::from(vedha_house) - 1).rem_euclid(12);
-                // target_sign_i is in [0, 11] by construction.
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let target_sign = target_sign_i as u8;
-                for other in GOCHARA_GRAHAS {
-                    if other == graha {
-                        continue;
-                    }
-                    if let Some(other_sign) = transit_sign_of(other, *transits) {
-                        if other_sign == target_sign {
-                            vedha_candidates.push(other);
-                        }
-                    }
+        if favourable && let Some(vedha_house) = lookup_vedha_house(graha, house, vedha_table) {
+            let target_sign_i =
+                (i16::from(natal_reference_sign) + i16::from(vedha_house) - 1).rem_euclid(12);
+            // target_sign_i is in [0, 11] by construction.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let target_sign = target_sign_i as u8;
+            for other in GOCHARA_GRAHAS {
+                if other == graha {
+                    continue;
+                }
+                if let Some(other_sign) = transit_sign_of(other, *transits)
+                    && other_sign == target_sign
+                {
+                    vedha_candidates.push(other);
                 }
             }
         }
