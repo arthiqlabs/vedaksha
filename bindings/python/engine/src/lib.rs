@@ -18,7 +18,8 @@
 //! ## Two surfaces
 //!
 //! * **MCP** — [`vk_mcp_request`]/[`vk_mcp_take`] wrap `McpServer::handle_request`,
-//!   exposing all 15 tools as JSON-RPC 2.0. The Python library, CLI and REST
+//!   exposing the engine's whole tool surface as JSON-RPC 2.0. The Python
+//!   library, CLI and REST
 //!   layers are all projections of this one entry point (analytical ephemeris
 //!   tier, no external data).
 //! * **SPK** — [`vk_spk_load`]/[`vk_spk_state`] expose the sub-arcsecond

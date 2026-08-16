@@ -47,7 +47,8 @@ module's linear memory: `vk_alloc(n)` reserves bytes, the host writes into them,
 and passes the pointer to a function. Two surfaces:
 
 - **MCP** — `vk_mcp_request`/`vk_mcp_take` wrap the engine's JSON-RPC server, so
-  all 15 tools are reachable with no extra glue.
+  every engine tool is reachable with no extra glue — a tool added to the
+  Rust registry appears here, and in the CLI and REST projections, unchanged.
 - **SPK** — `vk_spk_load`/`vk_spk_state` expose the sub-arcsecond `SpkReader`
   for callers that supply a JPL DE440s kernel. `SpkReader::from_bytes` (added for
   this binding) lets the reader work without a filesystem.

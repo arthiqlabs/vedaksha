@@ -228,6 +228,8 @@ impl McpServer {
             "compute_panchanga" => Self::call_compute_panchanga(&arguments),
             "compute_drishti" => Self::call_compute_drishti(&arguments),
             "compute_bhavas" => Self::call_compute_bhavas(&arguments),
+            "compute_synastry" => Self::call_compute_synastry(&arguments),
+            "compute_composite" => Self::call_compute_composite(&arguments),
             _ => Err(McpError::invalid_parameter(
                 "name",
                 &format!("Unknown tool: {tool_name}"),
@@ -756,6 +758,90 @@ impl McpServer {
             "houses": houses,
             "planets": placements,
         }))
+    }
+
+    fn call_compute_synastry(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_astro::aspects::BodyPosition;
+        use vedaksha_astro::synastry::find_synastry_aspects;
+
+        let input: crate::tools::compute_synastry::ComputeSynastryInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        let (aspect_set, orb_factor) = crate::tools::compute_synastry::validate(&input)?;
+
+        // `find_synastry_aspects` reads only `longitude`; the speed field is
+        // never touched (no applying/separating determination is made for a
+        // cross-chart aspect), so 0.0 is the absence of a value here, not an
+        // assumed one. BTreeMap iteration is sorted, so the emitted order is
+        // deterministic for a given input.
+        let names_a: Vec<&str> = input.chart_a.keys().map(String::as_str).collect();
+        let names_b: Vec<&str> = input.chart_b.keys().map(String::as_str).collect();
+        let chart_a: Vec<BodyPosition> = input
+            .chart_a
+            .values()
+            .map(|&longitude| BodyPosition {
+                longitude,
+                speed: 0.0,
+            })
+            .collect();
+        let chart_b: Vec<BodyPosition> = input
+            .chart_b
+            .values()
+            .map(|&longitude| BodyPosition {
+                longitude,
+                speed: 0.0,
+            })
+            .collect();
+
+        let aspects: Vec<serde_json::Value> =
+            find_synastry_aspects(&chart_a, &chart_b, aspect_set.types(), orb_factor)
+                .into_iter()
+                .map(|a| {
+                    serde_json::json!({
+                        "chart_a_planet": names_a[a.chart_a_body],
+                        "chart_b_planet": names_b[a.chart_b_body],
+                        "aspect_type": format!("{:?}", a.aspect_type),
+                        "orb": a.orb,
+                        "strength": a.strength,
+                    })
+                })
+                .collect();
+
+        Ok(serde_json::json!(aspects))
+    }
+
+    fn call_compute_composite(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use vedaksha_astro::composite::compute_composite;
+
+        let input: crate::tools::compute_composite::ComputeCompositeInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_composite::validate(&input)?;
+
+        // `validate` has established that the two maps carry exactly the same
+        // keys, and BTreeMap iterates in sorted key order, so index i names the
+        // same graha on both sides and all four slices are the same length —
+        // which is what the engine's `assert_eq!` on the lengths demands.
+        let names: Vec<&str> = input.chart_a.keys().map(String::as_str).collect();
+        let lons_a: Vec<f64> = input.chart_a.values().map(|b| b.longitude).collect();
+        let lons_b: Vec<f64> = input.chart_b.values().map(|b| b.longitude).collect();
+        let speeds_a: Vec<f64> = input.chart_a.values().map(|b| b.speed).collect();
+        let speeds_b: Vec<f64> = input.chart_b.values().map(|b| b.speed).collect();
+
+        let positions: Vec<serde_json::Value> =
+            compute_composite(&lons_a, &lons_b, &speeds_a, &speeds_b)
+                .into_iter()
+                .zip(names)
+                .map(|(position, name)| {
+                    serde_json::json!({
+                        "planet": name,
+                        "longitude": position.longitude,
+                        "speed": position.speed,
+                    })
+                })
+                .collect();
+
+        Ok(serde_json::json!(positions))
     }
 
     fn call_compute_shadbala(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {

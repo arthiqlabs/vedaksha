@@ -27,7 +27,7 @@ from vedaksha import Vedaksha
 
 vk = Vedaksha()
 
-# All 15 engine tools are available.
+# Every engine tool is available; the catalog is the engine's own.
 for tool in vk.list_tools():
     print(tool["name"])
 

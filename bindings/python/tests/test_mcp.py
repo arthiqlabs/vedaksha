@@ -8,6 +8,7 @@ import urllib.request
 
 import pytest
 
+from vedaksha import Vedaksha
 from vedaksha.mcp.server import McpServer, serve_http
 
 
@@ -16,11 +17,17 @@ def server() -> McpServer:
     return McpServer()
 
 
-def test_handle_raw_tools_list(server: McpServer) -> None:
+def test_handle_raw_tools_list_matches_the_library_catalog(server: McpServer) -> None:
+    # The invariant, not a count: the raw JSON-RPC surface must offer exactly
+    # the set `Vedaksha.list_tools()` offers. A count cannot see a surface that
+    # silently drops one tool while gaining another; a set equality can, and it
+    # never needs editing when the engine gains a tool.
     resp = json.loads(server.handle_raw(
         '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
     ))
-    assert len(resp["result"]["tools"]) == 15
+    names = {t["name"] for t in resp["result"]["tools"]}
+    assert names, "the engine returned an empty tool catalog"
+    assert names == {t["name"] for t in Vedaksha().list_tools()}
 
 
 def test_handle_raw_bad_json_is_parse_error(server: McpServer) -> None:
@@ -63,11 +70,12 @@ def test_http_auth_enforced() -> None:
         urllib.request.urlopen(req, timeout=5)
     assert exc.value.code == 401
 
-    # Correct token -> 200 with 15 tools.
+    # Correct token -> 200 with the same tool set the library exposes.
     req = urllib.request.Request(
         f"http://127.0.0.1:{port}/", data=body, method="POST",
         headers={"Authorization": "Bearer sekret"},
     )
     with urllib.request.urlopen(req, timeout=5) as r:
         payload = json.loads(r.read())
-    assert len(payload["result"]["tools"]) == 15
+    names = {t["name"] for t in payload["result"]["tools"]}
+    assert names == {t["name"] for t in Vedaksha().list_tools()}

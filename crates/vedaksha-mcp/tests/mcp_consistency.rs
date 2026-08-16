@@ -367,13 +367,14 @@ fn mcp_tools_list_returns_every_registered_tool() {
     let tools = response["result"]["tools"]
         .as_array()
         .expect("tools should be array");
-    assert_eq!(
-        tools.len(),
-        15,
-        "Expected 15 MCP tools, got {}",
-        tools.len()
-    );
 
+    // No count assertion here. `tools::tests::snapshot_matches_current_tool_
+    // definitions` already compares the whole registry — names, descriptions
+    // and schemas — against the committed `tools/mcp-tools.json`, which is
+    // strictly stronger than a length and cannot be satisfied by a tool that
+    // was swapped for another. The `contains` assertions below earn their keep
+    // for a different reason: they name the tool that went missing, and they do
+    // not need editing when one is added.
     let names: Vec<&str> = tools
         .iter()
         .filter_map(|t| t.get("name").and_then(|n| n.as_str()))
@@ -394,9 +395,11 @@ fn mcp_tools_list_returns_every_registered_tool() {
     assert!(names.contains(&"compute_panchanga"));
     assert!(names.contains(&"compute_drishti"));
     assert!(names.contains(&"compute_bhavas"));
+    assert!(names.contains(&"compute_synastry"));
+    assert!(names.contains(&"compute_composite"));
 
     eprintln!("\n=== MCP TOOLS LIST ===");
-    eprintln!("All 15 tools present: {:?}", names);
+    eprintln!("All {} tools present: {:?}", names.len(), names);
 }
 
 #[test]

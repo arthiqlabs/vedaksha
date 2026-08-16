@@ -34,7 +34,7 @@ def create_app(*, token: Optional[str] = None) -> "FastAPI":
     app = FastAPI(
         title="Vedākṣha",
         version="4.0.0",
-        description="REST projection of the Vedākṣha engine's 15 tools.",
+        description="REST projection of the Vedākṣha engine's tool surface.",
     )
     vk = Vedaksha()
     tools = {t["name"]: t for t in vk.list_tools()}

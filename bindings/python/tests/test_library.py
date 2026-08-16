@@ -16,10 +16,15 @@ def test_version() -> None:
     assert __version__ == "4.0.0"
 
 
-def test_lists_fifteen_tools(vk: Vedaksha) -> None:
-    tools = vk.list_tools()
-    assert len(tools) == 15
-    assert "compute_natal_chart" in {t["name"] for t in tools}
+def test_lists_the_engine_tool_catalog(vk: Vedaksha) -> None:
+    # No hardcoded count. The engine's registry is the definition of the
+    # catalog, and its exactness is already pinned on the Rust side by
+    # `snapshot_matches_current_tool_definitions`, which compares names,
+    # descriptions AND schemas. What is worth asserting here is that this
+    # binding sees a non-empty catalog carrying the tools it documents.
+    names = {t["name"] for t in vk.list_tools()}
+    assert names, "the engine returned an empty tool catalog"
+    assert {"compute_natal_chart", "compute_panchanga"} <= names
 
 
 def test_natal_chart_has_expected_shape(vk: Vedaksha) -> None:

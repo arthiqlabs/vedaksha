@@ -46,7 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_call = sub.add_parser(
         "call",
-        help="call any of the 15 tools by name with JSON arguments "
+        help="call any engine tool by name with JSON arguments "
         "(use `vedaksha tools` to see each tool's inputs)",
     )
     p_call.add_argument("name")

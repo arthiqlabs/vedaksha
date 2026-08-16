@@ -778,6 +778,100 @@
         "type": "object"
       },
       "name": "compute_bhavas"
+    },
+    {
+      "description": "Compute synastry — the aspects each graha in one chart makes to each graha in another chart. Every graha in chart A is tested against every graha in chart B (the two charts do not need the same graha names), and each hit is returned with its aspect type, orb in degrees and strength (1.0 at exact, falling linearly to 0.0 at the orb boundary). Orbs are the traditional Lilly values — conjunction, trine and opposition 8°, square 7°, sextile 6°, minors 2° — scaled by orb_factor. Longitudes only: this tool needs no birth time, place or ephemeris.",
+      "inputSchema": {
+        "properties": {
+          "aspect_set": {
+            "default": "major",
+            "description": "'major' (default) tests the five Ptolemaic aspects; 'all' adds semi-sextile, semi-square, quintile, sesquiquadrate, bi-quintile and quincunx.",
+            "enum": [
+              "major",
+              "all"
+            ],
+            "type": "string"
+          },
+          "chart_a": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Map of graha name to sidereal longitude [0, 360) for the first chart, e.g. {\"Sun\": 10.0, \"Moon\": 130.0}.",
+            "type": "object"
+          },
+          "chart_b": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Map of graha name to sidereal longitude [0, 360) for the second chart. Need not use the same names as chart_a.",
+            "type": "object"
+          },
+          "orb_factor": {
+            "default": 1.0,
+            "description": "Multiplier on the default orbs. 1.0 (default) is standard, 0.5 is tight. Must be greater than 0 and at most 5.0, above which the major-aspect windows cover every separation.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "chart_a",
+          "chart_b"
+        ],
+        "type": "object"
+      },
+      "name": "compute_synastry"
+    },
+    {
+      "description": "Compute the midpoint composite chart of two charts: for each graha, the shorter-arc midpoint of its longitude in the two charts, and the arithmetic mean of its two speeds. The two charts must carry the SAME graha names — each graha is paired with its namesake, not with whatever happens to sit at the same position in a list — and a name present in one chart but not the other is an error naming that graha. Longitudes only: this tool needs no birth time, place or ephemeris.",
+      "inputSchema": {
+        "properties": {
+          "chart_a": {
+            "additionalProperties": {
+              "properties": {
+                "longitude": {
+                  "description": "Sidereal longitude [0, 360)",
+                  "type": "number"
+                },
+                "speed": {
+                  "description": "Daily motion in degrees/day; negative when retrograde",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "longitude"
+              ],
+              "type": "object"
+            },
+            "description": "Map of graha name to position for the first chart, e.g. {\"Sun\": {\"longitude\": 350.0, \"speed\": 1.0}}. `speed` is optional and defaults to 0.",
+            "type": "object"
+          },
+          "chart_b": {
+            "additionalProperties": {
+              "properties": {
+                "longitude": {
+                  "description": "Sidereal longitude [0, 360)",
+                  "type": "number"
+                },
+                "speed": {
+                  "description": "Daily motion in degrees/day; negative when retrograde",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "longitude"
+              ],
+              "type": "object"
+            },
+            "description": "Map of graha name to position for the second chart. Must have exactly the same graha names as chart_a.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "chart_a",
+          "chart_b"
+        ],
+        "type": "object"
+      },
+      "name": "compute_composite"
     }
   ]
 }

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub mod compute_ashtakavarga;
 pub mod compute_bhavas;
 pub mod compute_combustion;
+pub mod compute_composite;
 pub mod compute_dasha;
 pub mod compute_drishti;
 pub mod compute_gochara;
@@ -17,6 +18,7 @@ pub mod compute_karakas;
 pub mod compute_natal;
 pub mod compute_panchanga;
 pub mod compute_shadbala;
+pub mod compute_synastry;
 pub mod compute_transit;
 pub mod compute_vargas;
 pub mod emit_graph;
@@ -50,6 +52,8 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
         compute_panchanga::definition(),
         compute_drishti::definition(),
         compute_bhavas::definition(),
+        compute_synastry::definition(),
+        compute_composite::definition(),
     ]
 }
 
@@ -87,14 +91,13 @@ mod tests {
         }
     }
 
-    /// Guards against a tool being registered or dropped by accident. Update
-    /// the count deliberately when the surface genuinely changes — the
-    /// committed `tools/mcp-tools.json` snapshot must be regenerated in the
-    /// same commit.
-    #[test]
-    fn expected_number_of_tools_are_registered() {
-        assert_eq!(tool_definitions().len(), 15);
-    }
+    // There is deliberately no `assert_eq!(tool_definitions().len(), N)` here.
+    // A hardcoded count is strictly weaker than
+    // `snapshot_matches_current_tool_definitions` below, which compares names,
+    // descriptions AND schemas against the committed snapshot: the count
+    // cannot see a tool renamed, a schema edited, or one tool swapped for
+    // another, all of which that assertion catches. It only added a second
+    // number to keep in step by hand.
 
     #[test]
     fn tool_names_are_unique() {

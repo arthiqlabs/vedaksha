@@ -8,6 +8,7 @@ pytest.importorskip("httpx")  # required by fastapi.testclient
 
 from fastapi.testclient import TestClient
 
+from vedaksha import Vedaksha
 from vedaksha.rest import create_app
 
 
@@ -17,9 +18,14 @@ def client_noauth() -> TestClient:
 
 
 def test_lists_tools(client_noauth: TestClient) -> None:
+    # Set equality against the library catalog rather than a count: REST builds
+    # one route per entry of `Vedaksha.list_tools()`, so this is the assertion
+    # that the projection is complete, and it survives the engine gaining a tool.
     r = client_noauth.get("/v1/tools")
     assert r.status_code == 200
-    assert len(r.json()) == 15
+    names = {t["name"] for t in r.json()}
+    assert names, "the engine returned an empty tool catalog"
+    assert names == {t["name"] for t in Vedaksha().list_tools()}
 
 
 def test_natal_chart_route(client_noauth: TestClient) -> None:

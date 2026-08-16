@@ -1633,6 +1633,333 @@ fn compute_bhavas_inner(ascendant: f64, planets_json: &str) -> Result<String, St
     serde_json::to_string(&out).map_err(|e| format!("serialization failed: {e}"))
 }
 
+/// Widest orb multiplier [`compute_synastry`] accepts.
+///
+/// Mirrors `vedaksha_mcp::tools::compute_synastry::MAX_ORB_FACTOR`, and is
+/// derived the same way: at 5.0 the five major windows — half-widths 40°
+/// (conjunction/trine/opposition), 35° (square) and 30° (sextile) — already
+/// cover [0, 180] in full, so every pair aspects every pair and the answer
+/// carries no information.
+const MAX_SYNASTRY_ORB_FACTOR: f64 = 5.0;
+
+/// Parse a `{"name": longitude}` map, rejecting non-finite or out-of-range
+/// values. Returns the entries in sorted-name order, matching the MCP
+/// surface's `BTreeMap` iteration.
+fn parse_longitude_map(
+    param: &str,
+    json: &str,
+) -> Result<std::collections::BTreeMap<String, f64>, String> {
+    let map: std::collections::BTreeMap<String, f64> =
+        serde_json::from_str(json).map_err(|e| format!("invalid {param} JSON: {e}"))?;
+    if map.is_empty() {
+        return Err(format!(
+            "{param} must contain at least one graha name to longitude entry"
+        ));
+    }
+    for (name, lon) in &map {
+        if !lon.is_finite() || !(0.0..360.0).contains(lon) {
+            return Err(format!(
+                "longitude for '{name}' in {param} must be a finite number in [0, 360)"
+            ));
+        }
+    }
+    Ok(map)
+}
+
+/// Compute synastry — the aspects each graha in one chart makes to each graha
+/// in another chart.
+///
+/// # Arguments
+/// * `chart_a_json` — JSON object of graha name to sidereal longitude, e.g.
+///   `{"Sun":10.0,"Moon":130.0}`
+/// * `chart_b_json` — the same for the second chart; the names need not match
+/// * `aspect_set` — `"major"` (five Ptolemaic aspects) or `"all"` (adds the
+///   six minors)
+/// * `orb_factor` — multiplier on the default Lilly orbs; must be greater than
+///   0 and at most 5.0
+///
+/// # Returns
+/// JSON array of aspects, each naming the graha on each side, the aspect type,
+/// the orb in degrees and the strength (1.0 exact → 0.0 at the orb boundary).
+///
+/// # Errors
+/// Returns [`JsError`] when either JSON is malformed, a chart is empty, a
+/// longitude is out of range, `aspect_set` is unknown, or `orb_factor` is
+/// outside its bounds.
+#[wasm_bindgen]
+pub fn compute_synastry(
+    chart_a_json: &str,
+    chart_b_json: &str,
+    aspect_set: &str,
+    orb_factor: f64,
+) -> Result<String, JsError> {
+    compute_synastry_inner(chart_a_json, chart_b_json, aspect_set, orb_factor)
+        .map_err(|e| JsError::new(&e))
+}
+
+fn compute_synastry_inner(
+    chart_a_json: &str,
+    chart_b_json: &str,
+    aspect_set: &str,
+    orb_factor: f64,
+) -> Result<String, String> {
+    use vedaksha_astro::aspects::{AspectType, BodyPosition};
+    use vedaksha_astro::synastry::find_synastry_aspects;
+
+    let map_a = parse_longitude_map("chart_a", chart_a_json)?;
+    let map_b = parse_longitude_map("chart_b", chart_b_json)?;
+
+    let aspect_types: &'static [AspectType] = match aspect_set {
+        "major" => AspectType::MAJOR,
+        "all" => AspectType::ALL,
+        other => {
+            return Err(format!(
+                "unknown aspect set '{other}'; expected 'major' or 'all'"
+            ));
+        }
+    };
+
+    if !orb_factor.is_finite() || orb_factor <= 0.0 || orb_factor > MAX_SYNASTRY_ORB_FACTOR {
+        return Err(format!(
+            "orb_factor must be a finite number greater than 0 and at most \
+             {MAX_SYNASTRY_ORB_FACTOR}"
+        ));
+    }
+
+    // Speed is never read by `find_synastry_aspects` — no applying/separating
+    // determination is made for a cross-chart aspect — so 0.0 here is the
+    // absence of a value, not an assumed one. Same as the MCP surface.
+    let names_a: Vec<&str> = map_a.keys().map(String::as_str).collect();
+    let names_b: Vec<&str> = map_b.keys().map(String::as_str).collect();
+    let chart_a: Vec<BodyPosition> = map_a
+        .values()
+        .map(|&longitude| BodyPosition {
+            longitude,
+            speed: 0.0,
+        })
+        .collect();
+    let chart_b: Vec<BodyPosition> = map_b
+        .values()
+        .map(|&longitude| BodyPosition {
+            longitude,
+            speed: 0.0,
+        })
+        .collect();
+
+    let aspects: Vec<serde_json::Value> =
+        find_synastry_aspects(&chart_a, &chart_b, aspect_types, orb_factor)
+            .into_iter()
+            .map(|a| {
+                serde_json::json!({
+                    "chart_a_planet": names_a[a.chart_a_body],
+                    "chart_b_planet": names_b[a.chart_b_body],
+                    "aspect_type": format!("{:?}", a.aspect_type),
+                    "orb": a.orb,
+                    "strength": a.strength,
+                })
+            })
+            .collect();
+
+    serde_json::to_string(&aspects).map_err(|e| format!("serialization failed: {e}"))
+}
+
+/// One graha's position in a chart handed to [`compute_composite`].
+#[derive(serde::Deserialize)]
+struct CompositeBodyInput {
+    longitude: f64,
+    #[serde(default)]
+    speed: f64,
+}
+
+fn parse_position_map(
+    param: &str,
+    json: &str,
+) -> Result<std::collections::BTreeMap<String, CompositeBodyInput>, String> {
+    let map: std::collections::BTreeMap<String, CompositeBodyInput> =
+        serde_json::from_str(json).map_err(|e| format!("invalid {param} JSON: {e}"))?;
+    if map.is_empty() {
+        return Err(format!(
+            "{param} must contain at least one graha name to position entry"
+        ));
+    }
+    for (name, body) in &map {
+        if !body.longitude.is_finite() || !(0.0..360.0).contains(&body.longitude) {
+            return Err(format!(
+                "longitude for '{name}' in {param} must be a finite number in [0, 360)"
+            ));
+        }
+        if !body.speed.is_finite() {
+            return Err(format!(
+                "speed for '{name}' in {param} must be a finite number"
+            ));
+        }
+    }
+    Ok(map)
+}
+
+/// Compute the midpoint composite chart of two charts.
+///
+/// # Arguments
+/// * `chart_a_json` — JSON object of graha name to `{"longitude": …,
+///   "speed": …}`, e.g. `{"Sun":{"longitude":350.0,"speed":1.0}}`. `speed` is
+///   optional and defaults to 0.
+/// * `chart_b_json` — the same for the second chart; it must carry exactly the
+///   same graha names, since each graha is paired with its namesake
+///
+/// # Returns
+/// JSON array of composite positions, each with the graha name, the
+/// shorter-arc midpoint longitude and the mean of the two speeds.
+///
+/// # Errors
+/// Returns [`JsError`] when either JSON is malformed, a chart is empty, a
+/// longitude or speed is out of range, or the two charts do not carry the same
+/// graha names. The name check is what keeps the engine's equal-length
+/// assertion unreachable.
+#[wasm_bindgen]
+pub fn compute_composite(chart_a_json: &str, chart_b_json: &str) -> Result<String, JsError> {
+    compute_composite_inner(chart_a_json, chart_b_json).map_err(|e| JsError::new(&e))
+}
+
+fn compute_composite_inner(chart_a_json: &str, chart_b_json: &str) -> Result<String, String> {
+    use vedaksha_astro::composite::compute_composite;
+
+    let map_a = parse_position_map("chart_a", chart_a_json)?;
+    let map_b = parse_position_map("chart_b", chart_b_json)?;
+
+    let only_a: Vec<&str> = map_a
+        .keys()
+        .filter(|k| !map_b.contains_key(*k))
+        .map(String::as_str)
+        .collect();
+    let only_b: Vec<&str> = map_b
+        .keys()
+        .filter(|k| !map_a.contains_key(*k))
+        .map(String::as_str)
+        .collect();
+    if !only_a.is_empty() || !only_b.is_empty() {
+        return Err(format!(
+            "the two charts must carry the same graha names; \
+             only in chart_a: [{}]; only in chart_b: [{}]",
+            only_a.join(", "),
+            only_b.join(", ")
+        ));
+    }
+
+    // Same keys + sorted BTreeMap iteration ⇒ index i names the same graha on
+    // both sides and all four slices are equal-length, which is what the
+    // engine's `assert_eq!` on the lengths demands.
+    let names: Vec<&str> = map_a.keys().map(String::as_str).collect();
+    let lons_a: Vec<f64> = map_a.values().map(|b| b.longitude).collect();
+    let lons_b: Vec<f64> = map_b.values().map(|b| b.longitude).collect();
+    let speeds_a: Vec<f64> = map_a.values().map(|b| b.speed).collect();
+    let speeds_b: Vec<f64> = map_b.values().map(|b| b.speed).collect();
+
+    let positions: Vec<serde_json::Value> =
+        compute_composite(&lons_a, &lons_b, &speeds_a, &speeds_b)
+            .into_iter()
+            .zip(names)
+            .map(|(position, name)| {
+                serde_json::json!({
+                    "planet": name,
+                    "longitude": position.longitude,
+                    "speed": position.speed,
+                })
+            })
+            .collect();
+
+    serde_json::to_string(&positions).map_err(|e| format!("serialization failed: {e}"))
+}
+
+#[cfg(test)]
+mod synastry_composite_tests {
+    use super::{compute_composite_inner, compute_synastry_inner};
+
+    const EPS: f64 = 1e-9;
+
+    #[test]
+    fn synastry_finds_an_exact_trine_and_names_both_sides() {
+        // A.Sun 10°, B.Moon 130° → separation 120.0°, which is the trine angle
+        // exactly, so orb = 0 and strength = 1 - 0/8 = 1.0.
+        let out =
+            compute_synastry_inner(r#"{"Sun":10.0}"#, r#"{"Moon":130.0}"#, "major", 1.0).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let arr = v.as_array().unwrap();
+        assert_eq!(arr.len(), 1, "exactly one major aspect: {v}");
+        assert_eq!(arr[0]["chart_a_planet"], "Sun");
+        assert_eq!(arr[0]["chart_b_planet"], "Moon");
+        assert_eq!(arr[0]["aspect_type"], "Trine");
+        assert!(arr[0]["orb"].as_f64().unwrap().abs() < EPS);
+        assert!((arr[0]["strength"].as_f64().unwrap() - 1.0).abs() < EPS);
+    }
+
+    #[test]
+    fn synastry_rejects_bad_input() {
+        assert!(compute_synastry_inner("not json", "{}", "major", 1.0).is_err());
+        assert!(compute_synastry_inner(r#"{"Sun":10.0}"#, "{}", "major", 1.0).is_err());
+        assert!(
+            compute_synastry_inner(r#"{"Sun":360.0}"#, r#"{"Moon":1.0}"#, "major", 1.0).is_err()
+        );
+        assert!(
+            compute_synastry_inner(r#"{"Sun":10.0}"#, r#"{"Moon":1.0}"#, "ptolemaic", 1.0).is_err()
+        );
+        assert!(
+            compute_synastry_inner(r#"{"Sun":10.0}"#, r#"{"Moon":1.0}"#, "major", 0.0).is_err()
+        );
+        assert!(
+            compute_synastry_inner(r#"{"Sun":10.0}"#, r#"{"Moon":1.0}"#, "major", 5.001).is_err()
+        );
+    }
+
+    #[test]
+    fn composite_takes_the_shorter_arc_and_means_the_speeds() {
+        // 350° and 10°: diff = normalize(10 - 350) = 20 ≤ 180, so the midpoint
+        // is normalize(350 + 10) = 0.0. Speeds 1.0 and 2.0 → 1.5.
+        let out = compute_composite_inner(
+            r#"{"Sun":{"longitude":350.0,"speed":1.0}}"#,
+            r#"{"Sun":{"longitude":10.0,"speed":2.0}}"#,
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let arr = v.as_array().unwrap();
+        assert_eq!(arr.len(), 1);
+        assert_eq!(arr[0]["planet"], "Sun");
+        assert!(arr[0]["longitude"].as_f64().unwrap().abs() < EPS);
+        assert!((arr[0]["speed"].as_f64().unwrap() - 1.5).abs() < EPS);
+    }
+
+    #[test]
+    fn composite_rejects_mismatched_names_instead_of_panicking() {
+        // Different lengths — the case that trips the engine's assert_eq!.
+        let err = compute_composite_inner(
+            r#"{"Sun":{"longitude":10.0},"Moon":{"longitude":100.0}}"#,
+            r#"{"Sun":{"longitude":20.0}}"#,
+        )
+        .unwrap_err();
+        assert!(err.contains("Moon"), "error must name the graha: {err}");
+
+        // Equal lengths, different names — the engine's assert would have
+        // passed and it would silently have paired Moon with Mars.
+        let err = compute_composite_inner(
+            r#"{"Sun":{"longitude":10.0},"Moon":{"longitude":100.0}}"#,
+            r#"{"Sun":{"longitude":20.0},"Mars":{"longitude":200.0}}"#,
+        )
+        .unwrap_err();
+        assert!(err.contains("Moon") && err.contains("Mars"), "got: {err}");
+    }
+
+    #[test]
+    fn composite_speed_defaults_to_zero() {
+        let out = compute_composite_inner(
+            r#"{"Sun":{"longitude":10.0}}"#,
+            r#"{"Sun":{"longitude":30.0}}"#,
+        )
+        .unwrap();
+        let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert!((v[0]["longitude"].as_f64().unwrap() - 20.0).abs() < EPS);
+        assert!(v[0]["speed"].as_f64().unwrap().abs() < EPS);
+    }
+}
+
 #[cfg(test)]
 mod combustion_tests {
     use super::*;
