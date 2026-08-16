@@ -11,7 +11,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! vedaksha = "4"
+//! vedaksha = "5"
 //! ```
 //!
 //! # Quick start
