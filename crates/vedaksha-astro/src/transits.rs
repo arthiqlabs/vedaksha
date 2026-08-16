@@ -72,7 +72,7 @@ pub struct TransitSearchConfig {
 /// Transit events found, sorted by Julian Day.
 pub fn search_transits(
     config: &TransitSearchConfig,
-    get_longitude: &dyn Fn(usize, f64) -> Option<f64>,
+    get_longitude: &(dyn Fn(usize, f64) -> Option<f64> + Sync),
 ) -> Vec<TransitEvent> {
     let mut events = Vec::new();
 
@@ -129,7 +129,7 @@ pub fn search_transits(
 fn coarse_scan(
     config: &TransitSearchConfig,
     body_idx: usize,
-    get_longitude: &dyn Fn(usize, f64) -> Option<f64>,
+    get_longitude: &(dyn Fn(usize, f64) -> Option<f64> + Sync),
 ) -> Vec<(f64, Option<f64>)> {
     let step = config.step_size;
     let mut grid = Vec::new();
@@ -156,7 +156,7 @@ fn scan_for_crossings(
     aspect_name: &str,
     aspect_angle: f64,
     search_angle: f64,
-    get_longitude: &dyn Fn(usize, f64) -> Option<f64>,
+    get_longitude: &(dyn Fn(usize, f64) -> Option<f64> + Sync),
     events: &mut Vec<TransitEvent>,
 ) {
     for window in coarse.windows(2) {
@@ -213,7 +213,7 @@ fn scan_for_crossings(
 pub fn solar_return(
     natal_sun_longitude: f64,
     search_start_jd: f64,
-    get_sun_longitude: &dyn Fn(f64) -> Option<f64>,
+    get_sun_longitude: &(dyn Fn(f64) -> Option<f64> + Sync),
 ) -> Option<f64> {
     // Sun moves ~1 deg/day — search a 2-day window.
     find_return(
@@ -236,7 +236,7 @@ pub fn solar_return(
 pub fn lunar_return(
     natal_moon_longitude: f64,
     search_start_jd: f64,
-    get_moon_longitude: &dyn Fn(f64) -> Option<f64>,
+    get_moon_longitude: &(dyn Fn(f64) -> Option<f64> + Sync),
 ) -> Option<f64> {
     // Moon moves ~13 deg/day, full cycle ~27.3 days.
     let mut t = search_start_jd;
@@ -272,7 +272,7 @@ fn bisect_transit(
     natal_lon: f64,
     target_angle: f64,
     body_idx: usize,
-    get_longitude: &dyn Fn(usize, f64) -> Option<f64>,
+    get_longitude: &(dyn Fn(usize, f64) -> Option<f64> + Sync),
     max_iter: u32,
 ) -> Option<f64> {
     let threshold = 1e-8; // ~0.86 microseconds
@@ -325,7 +325,7 @@ fn find_return(
     target_lon: f64,
     t_start: f64,
     t_end: f64,
-    get_longitude: &dyn Fn(f64) -> Option<f64>,
+    get_longitude: &(dyn Fn(f64) -> Option<f64> + Sync),
     max_iter: u32,
 ) -> Option<f64> {
     let mut low = t_start;
@@ -632,11 +632,17 @@ mod tests {
 
     #[test]
     fn coarse_scan_cached_across_natal_and_aspect() {
-        use core::cell::Cell;
+        // `AtomicUsize` rather than `Cell`: `search_transits` now takes its
+        // callback as `+ Sync`, and a `&Cell` is not shareable across threads,
+        // so a counting closure that captures one is not a legal argument. The
+        // total is read only after the call returns, so `Relaxed` is the
+        // correct ordering — same conversion, and same reasoning, as the
+        // `search_muhurta` memoisation test in `vedaksha-vedic`.
+        use core::sync::atomic::{AtomicUsize, Ordering};
 
-        let calls = Cell::new(0_usize);
+        let calls = AtomicUsize::new(0);
         let get_lon = |_idx: usize, jd: f64| -> Option<f64> {
-            calls.set(calls.get() + 1);
+            calls.fetch_add(1, Ordering::Relaxed);
             Some((jd - BASE_JD).rem_euclid(360.0)) // 1°/day linear sweep
         };
 
@@ -668,7 +674,7 @@ mod tests {
         // per (natal × aspect × directed-angle). Uncached that would be
         // ~366 × 5 × 4 × 1.5 ≈ 11k longitude calls; cached it is the grid plus
         // bisection refinement on the detected crossings.
-        let total = calls.get();
+        let total = calls.load(Ordering::Relaxed);
         assert!(
             total < 3000,
             "search_transits made {total} longitude calls; coarse scan should be \
