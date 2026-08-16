@@ -17,6 +17,37 @@ libm = "0.2"
 vedaksha-math = { version = "5.0.0", path = "../vedaksha-math" }
 # SIMD lanes (safe wrapper over core::arch; no_std). Used to vectorize the
 # ELP/MPP02 lunar-series trig evaluation.
+#
+# OPEN FINDING — the 0.7.33 -> 1.6.1 bump is NOT bit-identical. Recorded here so
+# nobody redoes the measurement; the verdict is not mine to record.
+#
+# The bump was originally validated against `oracle_comparison.rs`'s digest
+# (6dea5ddbd3c61b08...), which is a blind instrument for this dependency: that
+# test drives a SpkReader over the DE440s kernel and never enters
+# `analytical/`. The oracle that does is `analytical_oracle.rs`. Fingerprinting
+# its 21,915 rows (9 bodies x 2,435; Pluto has no analytical theory) with
+# `tests/analytical_bit_digest.rs` on aarch64 --release, 2026-08-16:
+#
+#   ee85cdf^ (wide 0.7.33, safe_arch 0.7.4)
+#     all bodies e35c5e3ab95dcb35a816d77313a35fa8e773bd7637568bd450e98e3eaef7bb81
+#     Moon only  0e88983d6b533ed73553613d8a75d41705139ac15bd9c4289662ce28a43c8f99
+#   ee85cdf and HEAD (wide 1.6.1, safe_arch 1.2.0) — identical to each other
+#     all bodies f943337e6dbfe1d7881a001749009e7aa322cbbff2c4aa4e89c4e1db4c266b80
+#     Moon only  95c7ae2a8ad7396a31de9245111109d77e144b5fcb2d43b978b065554a69142b
+#
+# Delta: 6 of 21,915 rows (0.03%), every one of them the Moon — i.e. confined to
+# ELP/MPP02, the only consumer of `wide`. All eight other bodies are byte-exact.
+# Magnitude is 1 ULP of ecliptic longitude (1.11e-16 rad ~ 2.3e-5 microarcsec),
+# <=4 ULP of latitude, <=28 ULP of longitude_speed (a differenced quantity, so it
+# amplifies). That is ~10 orders of magnitude below ELP/MPP02's own ~0.169"
+# disagreement with DE441, so no accuracy claim in the repo moves.
+#
+# Attribution is exact, not inferred: no commit in ee85cdf^..HEAD touches
+# crates/vedaksha-ephem-core/src or crates/vedaksha-math/src, ee85cdf's own
+# Cargo.lock delta is wide + safe_arch and nothing else, and the ee85cdf digest
+# already equals HEAD's. Digests reproduce byte-for-byte on re-run.
+#
+# Re-run: see the module comment of tests/analytical_bit_digest.rs.
 wide = { version = "1.6.1", default-features = false }
 
 [dev-dependencies]
