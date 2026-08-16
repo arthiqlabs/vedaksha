@@ -14,8 +14,16 @@ If you store computed charts, they will not match a recomputation under v5. Read
 
 To be precise about what this is and is not: v5 **corrects answers that were wrong**. It
 does **not** make the ephemeris more accurate. Residuals against the JPL Horizons oracle are
-unchanged — mean 0.880″ overall, 0.106″ in the measured-ΔT era — and the committed oracle
-digest is byte-identical to v4.0.0's.
+unchanged — mean 0.880″ overall, 0.106″ in the measured-ΔT era.
+
+One small caveat, disclosed rather than glossed. The `wide` SIMD dependency moved from 0.7.33
+to 1.6.1 (its 0.7 line is end-of-life), and that is **not** bit-identical in the lunar theory:
+**6 of 21,915 analytical-oracle rows differ, all of them the Moon** — at most 1 ULP in
+longitude (2.29 × 10⁻⁵ µas), 4 ULP in latitude, 28 ULP in speed. That is far below any
+meaningful precision and moves no accuracy figure, but the SPK path remains byte-identical and
+we would rather state the difference than let a bit-reproducibility claim quietly stop being
+true. The analytical digest is pinned by `analytical_bit_digest.rs` so any future drift is
+caught deliberately.
 
 ---
 
