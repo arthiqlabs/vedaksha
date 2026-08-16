@@ -1,9 +1,9 @@
-# Vedākṣha v5.0.0 — The vara, the ascendant, and a sunrise the engine never had
+# Vedākṣha v5.0.0 — The ascendant, the vara, and a sunrise the engine never had
 
 **Release date:** 2026-08-16
 
-A major release, and **unlike v4.0.0 it changes numerical results.** Two long-standing
-defects are corrected, and both move output that existing callers already have:
+A major release, and **unlike v4.0.0 it changes numerical results.** Three long-standing
+defects are corrected. Two of them move output that every existing caller already has:
 
 - **every chart's ascendant, MC and house cusps shift** (measured 5.18′–30.23′, varying
   with latitude), and
@@ -27,7 +27,24 @@ caught deliberately.
 
 ---
 
-## The headline: a vara is not a weekday
+## Two corrections that move every chart
+
+**The ascendant was built on the wrong time scale.** Sidereal time measures Earth's rotation,
+so it is defined on UT1 — the engine converted to Terrestrial Time first, adding ΔT worth of
+rotation where it should have removed it. The RAMC error is uniform (~0.29° today); the
+resulting ascendant error is not, because it varies with latitude — measured between 5.18′ and
+30.23′ across three test charts. Every ascendant, MC and house cusp the engine has returned
+carries it.
+
+**Sidereal charts mixed two coordinate frames.** `compute_chart` rotated the planets by the
+ayanamsha and left the house cusps tropical, then placed the rotated planets against the
+unrotated cusps. With Lahiri (~24.2°) that is 0.81 of a house: **77.4% of placements (669 of
+864 measured) fell in the wrong bhava.** The default `Tropical` configuration was unaffected,
+which is precisely why it survived this long.
+
+Both are detailed under [Breaking](#breaking).
+
+## And a vara is not a weekday
 
 `weekday_from_jd` returned the **Universal Time** calendrical weekday. A *vara* — the Vedic
 weekday — runs from local sunrise to local sunrise, so it depends on where the observer is
