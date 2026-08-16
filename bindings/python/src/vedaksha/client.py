@@ -88,7 +88,7 @@ class Vedaksha:
         return self.call_tool("compute_natal_chart", **args)
 
     # ``compute_natal_chart`` is the one tool that takes time + location and
-    # computes everything. The other 14 tools have heterogeneous inputs — many
+    # computes everything. The remaining tools have heterogeneous inputs — many
     # take precomputed planetary longitudes rather than a time — so rather than
     # ship fragile typed wrappers that would drift from the engine's schemas,
     # call them by name with ``call_tool`` and discover their inputs with

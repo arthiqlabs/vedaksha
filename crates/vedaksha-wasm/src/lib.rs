@@ -1378,12 +1378,24 @@ fn compute_panchanga_inner(
 ) -> Result<String, String> {
     use vedaksha_astro::riseset::sun_equatorial_deg;
     use vedaksha_ephem_core::analytical::AnalyticalProvider;
+    use vedaksha_ephem_core::jpl::EphemerisProvider as _;
     use vedaksha_vedic::muhurta::{Paksha, Weekday, compute_tithi};
     use vedaksha_vedic::nakshatra::Nakshatra;
     use vedaksha_vedic::panchanga::{compute_karana, compute_panchanga_yoga};
 
-    if !jd.is_finite() {
-        return Err("jd must be a finite number".to_string());
+    // Range-checked, not merely finite, to match the MCP surface's
+    // `validation::validate_jd`. Without this the two surfaces disagree on the
+    // same input: MCP rejects an out-of-range Julian Day outright, while here
+    // the ephemeris returns `DateOutOfRange`, `sun_equatorial_deg` swallows it
+    // to `None`, and the vara silently falls back to the local civil weekday —
+    // reported as `from_sunrise: false`, which would then mean either "polar
+    // day or night" or "this date is outside the ephemeris", two very different
+    // things a caller cannot tell apart.
+    let (jd_min, jd_max) = AnalyticalProvider.time_range();
+    if !jd.is_finite() || jd < jd_min || jd > jd_max {
+        return Err(format!(
+            "jd must be a finite Julian Day in [{jd_min:.1}, {jd_max:.1}]"
+        ));
     }
     for (name, lon) in [("sun", sun), ("moon", moon)] {
         if !lon.is_finite() || !(0.0..360.0).contains(&lon) {

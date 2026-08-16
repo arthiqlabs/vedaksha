@@ -23,6 +23,12 @@
 //!
 //! # What is asserted
 //!
+//! **Scope: three tools, not the whole surface.** `compute_panchanga` (the tool
+//! this release reshaped), plus `compute_synastry` and `compute_composite` (the
+//! two it added). The rest are NOT compared here — a key added to one surface
+//! and forgotten on the other would still ship green for those. Extend this
+//! file when you change a tool's emitted shape.
+//!
 //! The full set of leaf key-paths, exactly, plus every non-numeric leaf value
 //! exactly and every numeric leaf to 1e-9. Numbers are compared with a
 //! tolerance rather than bit-for-bit because the two surfaces are separately
