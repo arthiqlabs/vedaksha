@@ -44,58 +44,91 @@
 //!
 //! **So: drive [`rise_set`], [`sun_rise_set`], [`previous_rise`] and
 //! [`next_rise`] with the Sun.** They are held to the scan oracle for the Sun
-//! across longitude, elevation, three eras and latitude to ±89 by the sweeps
-//! in this file (see the next section for why the gate stops there), and
-//! nothing in this engine drives them with anything else. A fast-moving body
-//! needs a bracketing scan over the whole search interval — the shape
-//! `scan_reference::search_rise_by_scan` has — not this hour-angle walk. That
-//! scan is deliberately retained (it is also [`refine_event`]'s fallback), but
-//! it is not exported: adding a Moon-capable surface means proving a walk
-//! against the oracle for that body first, not re-pointing these functions.
+//! across longitude, elevation, three eras and every latitude to the poles by
+//! the sweeps in this file, and nothing in this engine drives them with
+//! anything else. A fast-moving body needs a bracketing scan over the whole
+//! search interval — the shape [`scan_reference::search_rise_by_scan`] has —
+//! not this hour-angle walk. That scan is deliberately retained (it is also
+//! [`refine_event`]'s fallback and, above [`ANALYTIC_LATITUDE_LIMIT_DEG`], the
+//! production search) but it is not exported: adding a Moon-capable surface
+//! means proving a walk against the oracle for that body first, not
+//! re-pointing these functions.
 //! `a_moon_like_body_is_measurably_outside_this_modules_scope` holds this
 //! paragraph to its numbers, and fails if they move in EITHER direction.
 //!
-//! # SCOPE: the ship gate runs to |lat| 89, and the band beyond it is measured
+//! # SCOPE: |lat| ≤ 89 is analytic; above it the SCAN is the implementation
 //!
 //! Above about |lat| 88 the rotational wobble in altitude (amplitude `cos φ`,
 //! which is 0.035 at 88° and 6.1e-17 at the pole) stops dominating the Sun's
 //! ~0.4 °/day declination drift, and a horizon crossing becomes a DECLINATION
-//! event rather than a rotational one. Eq. 15.1 has less and less to say —
-//! at the pole it has nothing at all, `cos H₀` being of order 1e14 — and a
-//! search built on "one rise per rotation, within half a rotation of its
-//! transit" is modelling something that has stopped being true.
+//! event rather than a rotational one. Eq. 15.1 has less and less to say — at
+//! the pole it has nothing at all, `cos H₀` being −2.375e14 — and a search
+//! built on "one rise per rotation, within half a rotation of its transit" is
+//! modelling something that has stopped being true.
 //!
-//! Two of the three changes in this module attack that directly.
-//! [`refine_event`] no longer reads its own failure — an exhausted budget, or
+//! Earlier commits repaired the walk in that band and got a long way.
+//! [`refine_event`] stopped reading its own failure — an exhausted budget, or
 //! an iterate that stepped out of eq. 15.1's domain — as "there is no
-//! crossing"; it hands the case to the bisection scan.
-//! [`boundary_is_reachable`] turns the existence test from a point sample into
+//! crossing", and hands the case to the bisection scan.
+//! [`boundary_is_reachable`] turned the existence test from a point sample into
 //! an interval one, and scans the rotation whenever the declination could have
 //! carried the boundary across it. Both are bounded: they cost nothing where
 //! the analytic search already works, and deep polar night at Svalbard
-//! (`cos H₀ ≈ 1.14` against a reach of 0.017) never scans at all.
+//! (`cos H₀ ≈ 1.14` against a reach of 0.017) never scans at all. Over
+//! |lat| 88–90 × 8 longitudes × 8 solstice/equinox dates × 2 elevations × both
+//! directions that took the walk from **53 dropped sunrises and 16 wrong
+//! instants, worst 1.214 d, to 0 and 0 at one ULP**.
 //!
-//! Measured against the scan oracle over |lat| 88–90 × 8 longitudes × 8 dates
-//! × 2 elevations × both search directions (5 376 samples):
+//! It did not close the class, and the residual was the dangerous shape.
+//! `polar_band_disagreement_is_measured_not_asserted` — the same comparison at
+//! EQUINOX-STRADDLING dates, which is when a high-latitude crossing exists at
+//! all — recorded a worst [`previous_rise`] error of **0.496 686 570 346 355 4
+//! d at lat 89.9**, lon 0, 3650 m, JD 2 451 617.5. That is not a rounding
+//! error; it is the sunrise of the NEIGHBOURING ROTATION, and since
+//! `vedaksha_vedic::muhurta::kalam_windows` marks any `Some` from
+//! [`previous_rise`] as an authentic sunrise-anchored reckoning, it is emitted
+//! as a wrong **vara** — a wrong weekday — with wrong Rahu/Gulika windows
+//! attached. Nothing downstream re-checks rotation membership and
+//! [`scan_reference::ROTATION_SCAN_HALF_SPAN_DAYS`] permits a crossing a full
+//! rotation from its transit, so 0.4967 d was the worst OBSERVED, not a bound:
+//! the structural ceiling is a whole vara.
 //!
-//! | | dropped sunrises | wrong instants | worst error |
-//! |---|---|---|---|
-//! | before | 53 | 16 | 1.214 d |
-//! | after  | **0** | **0** | **one ULP** |
+//! **So this module stops repairing the walk near the poles and stops using
+//! it.** Above [`ANALYTIC_LATITUDE_LIMIT_DEG`] = 89°, [`search_rise`] and
+//! [`rise_set`] hand the entire search to the retained bisection scan — the
+//! same oracle every sweep in this file measures them against — which closes
+//! the class outright rather than documenting it. The limit is derived from
+//! measurement in that constant's own documentation, the fast path below it is
+//! untouched (`the_analytic_fast_path_is_untouched_at_mid_latitudes` pins the
+//! routed-scan count at zero for five mid-latitude cities), and
+//! `a_polar_sunrise_is_never_attributed_to_the_wrong_rotation` pins the case
+//! above.
 //!
-//! The real-Sun SHIP GATE
-//! (`analytic_rise_agrees_with_the_scan_oracle_dense`) runs to **±89** — 36 120
-//! comparisons, worst disagreement one ULP, zero presence disagreements — and
-//! the fixed-RA tier runs to the poles at 441 000 comparisons on the same
-//! terms. Beyond ±89 the real Sun is MEASURED rather than asserted, by
-//! `polar_band_disagreement_is_measured_not_asserted`, because
-//! the rotation walk still misses an hour-long dip below `h₀` around a lower
-//! transit there — 8 of 16 800 polar comparisons, all in [`rise_set`]'s
-//! window, plus a worst `previous_rise` error of 0.497 d at |lat| 89.9. That
-//! test does gate the property which matters most in the band —
-//! [`previous_rise`] and [`next_rise`] never disagreeing with the oracle about
-//! whether a sunrise EXISTS — and records the rest rather than hiding it
-//! behind a loosened tolerance.
+//! Measured after the routing, real Sun, |lat| 88 to the poles ×
+//! 4 longitudes × 30 equinox-straddling dates × 2 elevations
+//! (**16 800 comparisons**):
+//!
+//! | | presence disagreements | worst value gap |
+//! |---|---|---|
+//! | before the routing | 8 (prev 0, next 0, rise 6, set 2, transit 0) | 0.496 686 570 346 355 4 d |
+//! | after | 2 (prev 0, next 0, rise 2, set 0, transit 0) | 4.656612873077393e-10 d (one ULP) |
+//!
+//! The 0.4967 d wrong instant is gone and the worst disagreement anywhere in
+//! the band is the last bit. What remains is two `rise_set().rise` presence
+//! disagreements, and they are necessarily at |lat| ≤ 89 — above the limit the
+//! two compared paths are the same function — so they are the hour-long dip
+//! below `h₀` around a LOWER transit that the rotation walk does not enumerate,
+//! documented on `polar_band_disagreement_is_measured_not_asserted`. That is a
+//! different search, not a tuning problem, and it does not touch the vara:
+//! [`previous_rise`] and [`next_rise`] disagree with the oracle nowhere in the
+//! band, about existence or value.
+//!
+//! The real-Sun SHIP GATES now run to the poles rather than stopping at ±89:
+//! `analytic_rise_agrees_with_the_scan_oracle_dense` (36 120 comparisons) and
+//! `the_high_latitude_band_agrees_with_the_scan_oracle` (9 408 comparisons at
+//! 0.1° resolution over |lat| 88–90), both at zero presence disagreements and a
+//! worst value disagreement of one ULP. The fixed-RA tier sweeps the poles at
+//! 441 000 comparisons on the same terms.
 //!
 //! Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 12 (sidereal time),
 //! Ch. 13 (altitude), Ch. 15 (rising, transit, setting), Ch. 47 (the Moon's
@@ -291,6 +324,121 @@ const RISE_SEARCH_ROUNDS: u32 = 8;
 /// accepted by both implementations alike.
 const WINDOW_EDGE_SLACK_DAYS: f64 = 1e-9;
 
+/// Above this |latitude| the rotation walk is not used at all: [`rise_set`]
+/// and [`search_rise`] hand the whole search to the retained bisection scan.
+///
+/// # Why a hard cut-off rather than another repair to the walk
+///
+/// Every premise the analytic search rests on is a statement about ROTATION.
+/// [`search_rise`] enumerates candidate rotations by their transits, allows
+/// [`HALF_ROTATION_DAYS`] of slack between a rise and the transit that names
+/// its rotation, and [`refine_event`] converges by stepping the hour angle.
+/// Those premises degrade smoothly with latitude — the rotational wobble in
+/// altitude has amplitude `cos φ`, which the Sun's ~0.4 °/day declination
+/// drift overtakes near the pole — and no amount of repair inside the walk
+/// makes a rotational search model a declination event.
+///
+/// The residual that survived the convergence fix is exactly that shape, and
+/// it is SILENT: `vedaksha_vedic::muhurta::kalam_windows` sets its
+/// `from_sunrise` flag from `previous_rise` returning `Some`, so a rise
+/// attributed to the wrong rotation emits a wrong `vara` — a wrong WEEKDAY —
+/// with no signal that anything is uncertain. Worse, nothing downstream
+/// re-checks rotation membership, and
+/// [`scan_reference::ROTATION_SCAN_HALF_SPAN_DAYS`] permits a crossing to be
+/// accepted a full [`ROTATION_DAYS`] from the transit it was sought on, so the
+/// structural ceiling on that error is a whole vara (0.9973 d) rather than the
+/// worst value yet observed.
+///
+/// # Derivation of 89
+///
+/// Measured against this module's own scan oracle with the ANALYTIC path
+/// called directly — `search_rise_analytic`, so the number stays reproducible
+/// after the routing that acts on it exists — over lat 88.0 to 90.0 in 0.1°
+/// steps × 8 longitudes × 14 anchors × 2 elevations × both search directions,
+/// **9 408 comparisons**, by
+/// `the_latitude_limit_is_derived_from_where_the_walk_first_disagrees`. A
+/// comparison is WRONG when the two differ by more than the sweeps' 1e-9 d
+/// tolerance and DROPPED when they disagree about whether a sunrise exists:
+///
+/// | latitude band, 0.1° steps | comparisons | dropped | wrong | worst gap |
+/// |---|---|---|---|---|
+/// | 88.0 – 89.0, at and below the limit | 4 928 | 0 | 0 | 4.656612873077393e-10 d (1 ULP) |
+/// | 89.1 – 89.8 | 3 584 | 0 | 0 | 4.656612873077393e-10 d (1 ULP) |
+/// | **89.9** | 448 | 0 | **1** | **4.9668657034635544e-1 d** |
+/// | 90.0 | 448 | 0 | 0 | 0 (the walk already scans at the pole) |
+///
+/// So on this grid the walk is clean through 89.8 and fails exactly once, at
+/// 89.9 — the 0.4967 d wrong-rotation case
+/// `a_polar_sunrise_is_never_attributed_to_the_wrong_rotation` pins.
+///
+/// # Why 89 and not 89.5, given that
+///
+/// Because 89.9 is not the only latitude any measurement has implicated. The
+/// grid above is northern and samples 14 anchors; the MIRRORED polar-band grid
+/// (`polar_band_disagreement_is_measured_not_asserted`, 4 longitudes × 30
+/// equinox-straddling dates) put its remaining presence disagreements at
+/// |lat| ≥ 89.5. The limit is therefore set below the lowest latitude ANY
+/// measurement has implicated, not just below the one this sweep found — and
+/// 89 is also exactly where the real-Sun ship gate was already validated at
+/// one ULP before this commit, so it is the last latitude with independent
+/// evidence behind it rather than a fresh guess. The margin is 0.9° against
+/// this grid and 0.5° against the polar one, in a band where the cost of being
+/// generous is ~0.4 s per call for essentially nobody.
+///
+/// # What it costs, and where
+///
+/// The scan is ~1 150 `equatorial` evaluations against the walk's five or six,
+/// so a routed call costs ~0.4 s with `AnalyticalProvider` where the walk costs
+/// microseconds. That is paid ONLY above |lat| 89, a band with essentially no
+/// resident population: there is no land at all above 89° N (the Arctic Ocean
+/// under the pole), and the one inhabited site above 89° S is the
+/// Amundsen–Scott station AT the pole. It is also the same oracle the sweeps
+/// hold this module to, so
+/// above the cut-off the module is correct by construction rather than by an
+/// argument about contraction. Below it nothing changes: the routing is one
+/// `libm::fabs` comparison, and
+/// `the_analytic_fast_path_is_untouched_at_mid_latitudes` pins the routed-scan
+/// count at zero for five mid-latitude cities.
+const ANALYTIC_LATITUDE_LIMIT_DEG: f64 = 89.0;
+
+/// Count a search that left the analytic fast path for the scan.
+///
+/// Thread-local rather than process-wide: `cargo test` runs tests in parallel
+/// threads and a global tally would let one test's scans leak into another
+/// test's assertion. Compiled away entirely outside `cfg(test)` — see the
+/// no-op twin below.
+#[cfg(test)]
+mod scan_tally {
+    use core::cell::Cell;
+
+    std::thread_local! {
+        /// Entries into the [`super::ANALYTIC_LATITUDE_LIMIT_DEG`] routing in
+        /// [`super::search_rise`] and [`super::rise_set`].
+        pub(super) static LATITUDE_ROUTED: Cell<u64> = const { Cell::new(0) };
+        /// Entries into [`super::scan_reference::event_near_by_scan`] — the
+        /// fallback a refinement that did not converge is handed to.
+        pub(super) static REFINE_FALLBACK: Cell<u64> = const { Cell::new(0) };
+    }
+}
+
+#[cfg(test)]
+fn tally_latitude_routed() {
+    scan_tally::LATITUDE_ROUTED.with(|c| c.set(c.get() + 1));
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+fn tally_latitude_routed() {}
+
+#[cfg(test)]
+fn tally_refine_fallback() {
+    scan_tally::REFINE_FALLBACK.with(|c| c.set(c.get() + 1));
+}
+
+#[cfg(not(test))]
+#[inline(always)]
+fn tally_refine_fallback() {}
+
 /// Rise, set and upper-meridian transit of a body, as Julian Days (UT).
 ///
 /// Any field is `None` when that event does not occur within the scanned day —
@@ -407,10 +555,20 @@ fn rise_hour_angle_deg(lat_deg: f64, dec_deg: f64, h0_deg: f64) -> Option<f64> {
 /// value is rather than merely that it is: [`boundary_is_reachable`], which
 /// has to ask whether the declination could carry it back in.
 ///
-/// Returns NaN when `cos φ · cos δ = 0` — a geographic or celestial pole. That
-/// NaN is load-bearing: every comparison against it is false, which is how the
-/// pole keeps reporting "no rotational crossing" instead of being scanned for
-/// an annual one.
+/// # There is no NaN at a pole, and nothing may be built on one
+///
+/// A NaN needs `cos φ · cos δ` to be EXACTLY zero, and `libm::cos` never
+/// returns exactly zero for a representable argument: `deg_to_rad(90.0)` is the
+/// `f64` nearest π/2, whose cosine is 6.123 233 995 736 766e-17. At |lat| 90
+/// the denominator is therefore ~6.1e-17, not 0, and this returns a finite
+/// `cos H₀` of **−2.375e14** (at δ = 0, `h₀` = −0°50′).
+/// [`rise_hour_angle_deg`]'s range test rejects that for being far outside
+/// [−1, 1] — which is the correct answer, and the
+/// one `a_degenerate_geometry_yields_none_rather_than_nan` and
+/// `the_geographic_pole_has_no_hour_angle_root_and_is_scanned_instead` both
+/// pin — but it is a MAGNITUDE test, not a NaN test, and callers that reason
+/// about the size of the value (as [`boundary_is_reachable`] does) get a real
+/// number here rather than something every comparison is false against.
 ///
 /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15, eq. 15.1.
 fn cos_rise_hour_angle(lat_deg: f64, dec_deg: f64, h0_deg: f64) -> f64 {
@@ -700,13 +858,17 @@ fn refine_event(
 /// hours beginning at `jd_ut_day_start`, for an observer at `lat_deg` /
 /// `lon_deg_east`.
 ///
-/// ⚠️ **Sun-scoped, and gated to |lat| ≤ 89.** The closure will accept any
-/// body, but the search is validated against the scan oracle for the Sun only.
-/// This 24-hour window is also the surface with the most residual disagreement
-/// in the polar band and on a Moon-like fixture, in both cases for the same
-/// reason: an hour-long dip below `h₀` around a lower transit is an event the
-/// rotation walk does not enumerate. See the two SCOPE sections in the module
+/// ⚠️ **Sun-scoped.** The closure will accept any body, but the search is
+/// validated against the scan oracle for the Sun only. This 24-hour window is
+/// the surface with the most residual disagreement on a Moon-like fixture: an
+/// hour-long dip below `h₀` around a lower transit is an event the rotation
+/// walk does not enumerate. See the SCOPE sections in the module
 /// documentation.
+///
+/// Above [`ANALYTIC_LATITUDE_LIMIT_DEG`] this delegates the whole window to
+/// [`scan_reference::rise_set_by_scan`], the bisection oracle the sweeps hold
+/// this module to; below it, the analytic path in [`rise_set_analytic`] runs
+/// unchanged.
 ///
 /// `h0_deg` is the target apparent altitude of the body's centre — use
 /// [`SUN_STANDARD_ALTITUDE_DEG`] (plus [`horizon_dip_deg`]) for the Sun.
@@ -746,6 +908,36 @@ fn refine_event(
 /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
 #[must_use]
 pub fn rise_set(
+    jd_ut_day_start: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    h0_deg: f64,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> RiseSet {
+    if libm::fabs(lat_deg) > ANALYTIC_LATITUDE_LIMIT_DEG {
+        tally_latitude_routed();
+        return scan_reference::rise_set_by_scan(
+            jd_ut_day_start,
+            lat_deg,
+            lon_deg_east,
+            h0_deg,
+            equatorial,
+        );
+    }
+    rise_set_analytic(jd_ut_day_start, lat_deg, lon_deg_east, h0_deg, equatorial)
+}
+
+/// [`rise_set`]'s analytic body — the hour-angle search of Meeus eq. 15.1,
+/// reached only at |lat| ≤ [`ANALYTIC_LATITUDE_LIMIT_DEG`].
+///
+/// Split out from the public entry point so the routing is one comparison at
+/// the top of `rise_set` rather than a branch threaded through the search, and
+/// so the measurement tests can drive the walk DIRECTLY at any latitude — the
+/// numbers that derive [`ANALYTIC_LATITUDE_LIMIT_DEG`] have to stay
+/// reproducible after the routing that acts on them exists.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
+fn rise_set_analytic(
     jd_ut_day_start: f64,
     lat_deg: f64,
     lon_deg_east: f64,
@@ -1031,10 +1223,13 @@ fn event_on_transits_rotation(
 /// `equatorial` evaluations on the two declinations, and answers `false`
 /// without scanning unless the boundary is genuinely within reach: at Svalbard
 /// (78.22 N) in December `cos H₀ ≈ 1.14` against a reach of 0.017, so deep
-/// polar night still costs only those two evaluations per rotation. Near
-/// |lat| 89.9 the reach is ~2 and the ~290-evaluation scan becomes the normal
-/// path, which is the correct trade at a latitude where the rotational wobble
-/// no longer dominates the declination drift.
+/// polar night still costs only those two evaluations per rotation. Just below
+/// [`ANALYTIC_LATITUDE_LIMIT_DEG`] — |lat| 88 to 89, the band where this
+/// function does its real work — the reach grows past 1 and the
+/// ~290-evaluation scan becomes a normal path, which is the correct trade where
+/// the rotational wobble no longer dominates the declination drift. Above the
+/// limit the question no longer arises: the whole search is the scan, and no
+/// rotation is probed.
 ///
 /// Measured end to end through the MCP `compute_panchanga` path, release,
 /// warm, 20 calls a case: the five mid-latitude cities are unchanged
@@ -1044,9 +1239,25 @@ fn event_on_transits_rotation(
 /// 3 ms, paid only above the polar circles, and still ~13× faster than the
 /// 203 ms the 5-minute scan cost before the analytic search replaced it.
 ///
-/// NaN propagates as `false` (every comparison against NaN is false), so a
-/// geographic pole is never scanned: see the SCOPE note in the module
-/// documentation.
+/// # A geographic pole IS scanned, and this is what sends it to the scan
+///
+/// An earlier revision of this note claimed the opposite — that `cos φ = 0`
+/// makes `cos H₀` NaN, that every comparison against NaN is false, and that a
+/// pole is therefore never scanned. All three are wrong, and
+/// `the_geographic_pole_has_no_hour_angle_root_and_is_scanned_instead` has
+/// asserted the contrary in this same file the whole time. `libm::cos` of the
+/// `f64` nearest π/2 is 6.123 233 995 736 766e-17, not 0, so there is no NaN:
+/// `cos H₀` comes out −2.375e14 and `|tan φ|` 1.633e16, which makes `reach`
+/// enormous, `|cos H₀| ≤ 1 + reach` TRUE, and the answer `Some(true)` — the
+/// rotation is handed to the scan, which finds the ANNUAL crossing.
+///
+/// That is the right answer for the right reason: at the pole the point test
+/// genuinely is worthless, because a declination drift really can carry the
+/// boundary anywhere. Above [`ANALYTIC_LATITUDE_LIMIT_DEG`] the pole no longer
+/// reaches this function at all — [`search_rise`] and [`rise_set`] route the
+/// whole search to the scan before a rotation is ever probed — so this path is
+/// now what the |lat| ≤ 89 band relies on, and the pole's correctness rests on
+/// the routing instead.
 ///
 /// Returns `None` only when `equatorial` cannot supply a position.
 ///
@@ -1085,6 +1296,14 @@ fn boundary_is_reachable(
 /// body whose right ascension moves fast enough puts its rise outside the
 /// slack and the walk visits the wrong rotation. See the SCOPE section in the
 /// module documentation for the measured Moon-like numbers.
+///
+/// The same premise fails for the SUN itself close enough to a pole, where a
+/// horizon crossing is driven by the declination rather than by rotation. That
+/// is not documented and lived with here: above
+/// [`ANALYTIC_LATITUDE_LIMIT_DEG`] this function does not walk at all, and
+/// hands the search to [`scan_reference::search_rise_by_scan`] — the same
+/// bisection oracle the sweep tests measure the walk against. Below the limit
+/// the walk below runs exactly as before.
 ///
 /// Unlike [`rise_set`], whose 24 h window is fixed by the caller and which
 /// therefore reports only the FIRST rise inside it, this measures from
@@ -1145,6 +1364,44 @@ fn boundary_is_reachable(
 ///
 /// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
 fn search_rise(
+    anchor: f64,
+    lat_deg: f64,
+    lon_deg_east: f64,
+    h0_deg: f64,
+    forward: bool,
+    equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
+) -> Option<f64> {
+    if libm::fabs(lat_deg) > ANALYTIC_LATITUDE_LIMIT_DEG {
+        tally_latitude_routed();
+        return scan_reference::search_rise_by_scan(
+            anchor,
+            lat_deg,
+            lon_deg_east,
+            h0_deg,
+            forward,
+            equatorial,
+        );
+    }
+    search_rise_analytic(anchor, lat_deg, lon_deg_east, h0_deg, forward, equatorial)
+}
+
+/// [`search_rise`]'s analytic body — the rotation walk itself, reached only at
+/// |lat| ≤ [`ANALYTIC_LATITUDE_LIMIT_DEG`].
+///
+/// Split out for the same two reasons [`rise_set_analytic`] is: the routing
+/// stays one comparison at the entry point, and the measurement tests can
+/// drive the walk directly at any latitude so the numbers that derive
+/// [`ANALYTIC_LATITUDE_LIMIT_DEG`] remain reproducible after the routing
+/// exists.
+///
+/// Both acceptance rules are unchanged here and hold identically in
+/// [`scan_reference::search_rise_by_scan`], which is what makes the routing
+/// contract-preserving: `forward = true` accepts a crossing strictly after
+/// `anchor`, `forward = false` one at or before it, and both paths test the
+/// refined root itself rather than a window.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 15.
+fn search_rise_analytic(
     anchor: f64,
     lat_deg: f64,
     lon_deg_east: f64,
@@ -1222,10 +1479,10 @@ fn search_rise(
 /// ⚠️ **Sun-scoped.** `equatorial` will accept any body, but [`search_rise`]
 /// enumerates rotations on the EARTH's stride, and that premise has never been
 /// re-derived for a faster one — a Moon-like fixture still drops 14 real
-/// events out of 73 500 comparisons, measured. Above |lat| 89 the Sun itself
-/// starts to stretch the same premise; the existence answer is still gated
-/// against the oracle there, the exact instant is not. See the two SCOPE
-/// sections in the module documentation.
+/// events out of 73 500 comparisons, measured. For the Sun the premise is now
+/// held everywhere: above [`ANALYTIC_LATITUDE_LIMIT_DEG`] the search is the
+/// bisection scan rather than the walk, so the instant is the oracle's own.
+/// See the two SCOPE sections in the module documentation.
 ///
 /// Specialised to the Sun's horizon: [`SUN_STANDARD_ALTITUDE_DEG`] plus
 /// [`horizon_dip_deg`], the same target [`sun_rise_set`] applies.
@@ -1329,9 +1586,7 @@ pub fn next_rise(
 /// bracketed root, five orders of magnitude below the ~4.66e-10 d ULP, so that
 /// polish cannot hide a disagreement of any size the sweep's tolerance can see.
 pub(crate) mod scan_reference {
-    #[cfg(test)]
-    use super::RiseSet;
-    use super::{Event, geometric_altitude_deg, local_sidereal_degrees};
+    use super::{Event, RiseSet, geometric_altitude_deg, local_sidereal_degrees};
     use vedaksha_math::angle::normalize_degrees;
 
     /// Coarse scan step when bracketing a horizon crossing: 5 minutes.
@@ -1346,7 +1601,6 @@ pub(crate) mod scan_reference {
     /// 1152, four days at five minutes a step — the same four-day horizon
     /// `super::RISE_SEARCH_DAYS` now expresses directly, so the oracle and the
     /// production path look exactly as far.
-    #[cfg(test)]
     const RISE_SEARCH_STEPS: u32 = 4 * 24 * 60 / 5;
 
     /// Hard step bound for [`event_near_by_scan`], sized for its widest caller:
@@ -1360,10 +1614,33 @@ pub(crate) mod scan_reference {
     /// iteration fails, in days.
     ///
     /// [`super::refine_event`] folds its correction to [−180°, 180°), so the
-    /// occurrence it was converging on is within half a rotation (0.498 6 d) of
-    /// the seed. Half a flat day covers that with 0.001 4 d to spare and keeps
-    /// the window symmetric, which is what "the occurrence NEAREST to `t₀`"
-    /// requires.
+    /// occurrence it was converging on is within half a rotation
+    /// ([`super::HALF_ROTATION_DAYS`] = 0.498 634 783 164 536 97 d) of the
+    /// seed. Half a flat day covers that and keeps the window symmetric, which
+    /// is what "the occurrence NEAREST to `t₀`" requires.
+    ///
+    /// # The 0.001 365 d of excess, and why it is not tightened away
+    ///
+    /// `0.5 − HALF_ROTATION_DAYS` = 1.365 216 835 463 034 5e-3 d = 117.955 s.
+    /// That
+    /// is **39 % of one [`SCAN_STEP_DAYS`]** — this function cannot place a
+    /// window edge more finely than the 5-minute grid it steps on, so
+    /// tightening the constant to `super::HALF_ROTATION_DAYS` would move the
+    /// edge by less than half a step of the only resolution that exists here.
+    ///
+    /// Nor can the excess change an answer. [`event_near_by_scan`] returns the
+    /// crossing NEAREST `t₀`, so a wider window can only admit candidates
+    /// strictly farther from `t₀` than one already inside the fold: where the
+    /// fold's occurrence exists, the extra 118 s is unreachable. Where it does
+    /// NOT exist — the case this fallback is for, a refinement that never
+    /// converged — a real crossing sitting 0.4990 d away is a better answer
+    /// than `None`, which is precisely the verdict this module spent a commit
+    /// removing.
+    ///
+    /// What tightening WOULD cost is real: every measured table in this file
+    /// was produced at 0.5, and re-deriving them is hours of oracle time to buy
+    /// a window edge two minutes tighter than a five-minute grid. Recorded as a
+    /// justification rather than acted on.
     pub(super) const REFINE_FALLBACK_HALF_SPAN_DAYS: f64 = 0.5;
 
     /// Half-window [`super::event_on_transits_rotation`] hands
@@ -1439,6 +1716,7 @@ pub(crate) mod scan_reference {
         event: Event,
         equatorial: &dyn Fn(f64) -> Option<(f64, f64)>,
     ) -> Option<f64> {
+        super::tally_refine_fallback();
         let residual = |jd: f64| -> Option<f64> {
             let (ra, dec) = equatorial(jd)?;
             Some(match event {
@@ -1499,8 +1777,12 @@ pub(crate) mod scan_reference {
         best
     }
 
-    /// Reference implementation of [`super::rise_set`].
-    #[cfg(test)]
+    /// Reference implementation of [`super::rise_set`] — and, above
+    /// [`super::ANALYTIC_LATITUDE_LIMIT_DEG`], the PRODUCTION implementation
+    /// that [`super::rise_set`] routes to. It is compiled into the shipped
+    /// binary for that reason; the two `previous_rise` / `next_rise` wrappers
+    /// below stay `#[cfg(test)]`, because production reaches the same walk
+    /// through [`search_rise_by_scan`] directly.
     pub(crate) fn rise_set_by_scan(
         jd_ut_day_start: f64,
         lat_deg: f64,
@@ -1561,8 +1843,14 @@ pub(crate) mod scan_reference {
     }
 
     /// Reference implementation of [`super::search_rise`] — the outward walk
-    /// from the anchor instant, at 5-minute resolution.
-    #[cfg(test)]
+    /// from the anchor instant, at 5-minute resolution — and, above
+    /// [`super::ANALYTIC_LATITUDE_LIMIT_DEG`], the PRODUCTION implementation
+    /// [`super::search_rise`] routes to.
+    ///
+    /// It carries the same two acceptance rules the analytic walk does, which
+    /// is what lets the routing preserve [`super::previous_rise`]'s "at or
+    /// before" and [`super::next_rise`]'s "strictly after" contracts: the test
+    /// is applied to the bisected root itself, not to the bracket it came from.
     pub(crate) fn search_rise_by_scan(
         anchor: f64,
         lat_deg: f64,
@@ -2460,41 +2748,31 @@ mod tests {
         88.0, 88.5, 89.0, 89.3, 89.5, 89.9, 90.0,
     ];
 
-    /// [`SWEEP_LATITUDES_DEG`] restricted to |lat| ≤ 89, for the REAL Sun.
-    ///
-    /// # This is a measured scope boundary, not a convenience
-    ///
-    /// Above |lat| ~88 the rotational wobble in altitude (amplitude `cos φ`)
-    /// stops dominating the Sun's ~0.4 °/day declination drift, and a horizon
-    /// crossing becomes a declination event that this module's rotation walk
-    /// only partly models. The convergence fix narrowed that enormously —
-    /// over |lat| 88–90 × 8 longitudes × 8 dates × 2 elevations × both
-    /// directions (5 376 samples) the disagreement with the scan oracle went
-    /// from 53 dropped sunrises and 16 wrong instants to **1 and 1** — but it
-    /// did not close it, and `previous_rise` / `next_rise` / `rise_set` are
-    /// still not exact against the oracle everywhere beyond ±89.
-    ///
-    /// So the real-Sun SHIP GATE runs to ±89, where the measured worst
-    /// disagreement is **one ULP** across 7 200 comparisons at the hardest
-    /// dates of the year, and the band beyond it is MEASURED rather than
-    /// asserted by `polar_band_disagreement_is_measured_not_asserted`. Pinning
-    /// a gate at a tolerance the code does not meet would be worse than saying
-    /// where it stops; the fixed-RA tier still sweeps every latitude to the
-    /// poles, because a body at constant declination has no drift to model.
-    const REAL_SUN_SWEEP_LATITUDES_DEG: [f64; 43] = real_sun_latitudes(&SWEEP_LATITUDES_DEG);
-
-    /// `SWEEP_LATITUDES_DEG[3..46]` — dropping ±89.5, ±89.9 and ±90 from each
-    /// end — as a `const fn`, since a fixed-size array cannot be produced by
-    /// slicing in a `const`.
-    const fn real_sun_latitudes(all: &[f64; 49]) -> [f64; 43] {
-        let mut out = [0.0_f64; 43];
-        let mut i = 0;
-        while i < 43 {
-            out[i] = all[i + 3];
-            i += 1;
-        }
-        out
-    }
+    // ── The real Sun is swept at every latitude in `SWEEP_LATITUDES_DEG`,
+    // poles included, and there is no longer a `REAL_SUN_SWEEP_LATITUDES_DEG`.
+    //
+    // THERE USED TO BE A SCOPE BOUNDARY HERE, AND TWO RECORDS OF IT DISAGREED.
+    // That constant was a 43-entry restriction to |lat| ≤ 89, because the
+    // rotation walk was not exact against the oracle beyond that. Its doc
+    // recorded the |lat| 88–90 grid (8 longitudes × 8 dates × 2 elevations ×
+    // both directions, 5 376 comparisons) as going from 53 dropped sunrises and
+    // 16 wrong instants to "1 and 1", while the module header and
+    // `the_high_latitude_band_agrees_with_the_scan_oracle` recorded 0 AND 0 for
+    // the identical grid. One of the two was a stale staging result.
+    //
+    // MEASURED, on the commit before this one, that exact grid and that exact
+    // test: `5 376 comparisons, max gap 4.656612873077393e-10 d, presence
+    // mismatches 0` — 0 and 0, worst one ULP. The "1 and 1" was the stale one
+    // and is gone; neither record was harmonised toward whichever read better.
+    //
+    // The restriction itself is gone for a different reason:
+    // `ANALYTIC_LATITUDE_LIMIT_DEG` means the surfaces ARE the scan oracle
+    // above |lat| 89, so those samples compare a function with itself and agree
+    // bit-exactly by construction. There is no longer a latitude at which the
+    // real Sun cannot be gated, and holding the real-Sun tier back from the
+    // poles would now hide the routing rather than scope the walk. The recorded
+    // maximum in `AGREEMENT_TOL_DAYS` was measured on the 43-latitude grid; the
+    // six added latitudes are the by-construction ones.
 
     /// Dates that STRADDLE the polar-night and polar-day boundaries, which is
     /// where a high-latitude rise exists at all.
@@ -2601,12 +2879,39 @@ mod tests {
     /// | fixed-RA fixture, |lat| ≤ 90 | **441 000** | 4.656612873077393e-10 d | 0 |
     /// | real Sun, |lat| ≤ 89         |  **36 120** | 4.656612873077393e-10 d | 0 |
     ///
+    /// The real-Sun row was measured on the 43-latitude grid that stopped at
+    /// ±89. That restriction is gone (see the note where it used to be defined)
+    /// and the tier now sweeps all 49 latitudes, 41 160 comparisons; the six
+    /// added latitudes are above [`ANALYTIC_LATITUDE_LIMIT_DEG`], where the
+    /// compared paths are the same function and agree bit-exactly by
+    /// construction, so the measured maximum above is unaffected.
+    ///
     /// 4.656612873077393e-10 d is **exactly one ULP** at JD ≈ 2.45e6
     /// (`2^-31` d), i.e. the two implementations never differ by more than the
     /// last bit. This tolerance is 1e-9 d — the next round figure above that
     /// measured maximum, about two ULP, and 8.64e-5 seconds. That is four
     /// orders of magnitude tighter than the one-second gate this change was
     /// allowed to spend, so no real regression can hide beneath it.
+    ///
+    /// # Headroom, re-derived after the polar routing
+    ///
+    /// This tolerance is 2.147× the one-ULP (4.656 612 873 077 393e-10 d)
+    /// maximum both SHIP GATES measure — the fixed-RA tier to the poles and the
+    /// real-Sun tier, which now runs to the poles as well because above
+    /// [`ANALYTIC_LATITUDE_LIMIT_DEG`] the shipped path IS the oracle. That is
+    /// the margin that matters, and it is not thin.
+    ///
+    /// The 7 % figure sometimes quoted against it belongs to a different
+    /// number: `a_moon_like_body_is_measurably_outside_this_modules_scope`
+    /// carries its own `<= 1e-9` bound against a measured 2-ULP worst gap of
+    /// 9.313 225 746 154 785e-10 d — the bound is 7.37 % ABOVE that
+    /// measurement, or equivalently the measurement sits 6.87 % below the
+    /// bound. That is a
+    /// deliberately tight ceiling on a body this module does not support, whose
+    /// job is to fail if the fast body's instants start drifting again. It must
+    /// NOT be widened to buy margin — widening it is how a regression on an
+    /// out-of-scope body would go unnoticed — and it says nothing about the
+    /// Sun, whose two tiers sit at one ULP.
     ///
     /// # The counts above were wrong, and the grid they came from was too small
     ///
@@ -2621,8 +2926,10 @@ mod tests {
     /// defect lived. The grid now runs to the poles, carries 0 m and 3650 m on
     /// both tiers, and spans all three eras for the real Sun (the old real-Sun
     /// slice `jds[..12]` was twelve dates in **1950 alone**, despite a comment
-    /// claiming four per era). The polar band beyond ±89 is measured separately
-    /// — see `polar_band_disagreement_is_measured_not_asserted`.
+    /// claiming four per era). The polar band is additionally measured at
+    /// equinox-straddling dates by
+    /// `polar_band_disagreement_is_measured_not_asserted`, which is where the
+    /// residual that motivated [`ANALYTIC_LATITUDE_LIMIT_DEG`] was found.
     const AGREEMENT_TOL_DAYS: f64 = 1e-9;
 
     /// SHIP GATE, committed tier. The analytic search must agree with the
@@ -2724,7 +3031,7 @@ mod tests {
             *slot = jds[i * 3];
         }
         let real = sweep(
-            &REAL_SUN_SWEEP_LATITUDES_DEG,
+            &SWEEP_LATITUDES_DEG,
             &sparse_lons,
             &era_spanning_jds,
             &[0.0, 3_650.0],
@@ -2742,7 +3049,7 @@ mod tests {
     ///
     /// This is deliberately NOT an `assert_agrees` tier. The rotation walk does
     /// not fully model a horizon crossing driven by the declination rather than
-    /// by rotation (see [`REAL_SUN_SWEEP_LATITUDES_DEG`]), and pinning a gate
+    /// by rotation, and pinning a gate
     /// at a tolerance the code does not meet would be worse than recording
     /// exactly where it stops. Run it to see whether a change moves the number:
     ///
@@ -2751,36 +3058,46 @@ mod tests {
     ///     polar_band_disagreement_is_measured_not_asserted -- --ignored --nocapture
     /// ```
     ///
-    /// # Recorded, with this commit in place
+    /// # Recorded, both sides of [`ANALYTIC_LATITUDE_LIMIT_DEG`]
     ///
     /// 3 360 samples = **16 800 comparisons** (14 latitudes × 4 longitudes ×
-    /// 30 equinox-straddling dates × 2 elevations):
+    /// 30 equinox-straddling dates × 2 elevations), `--release`:
     ///
-    /// | surface | presence disagreements |
+    /// | surface | presence disagreements, before the routing | after |
+    /// |---|---|---|
+    /// | `previous_rise` | **0** | **0** |
+    /// | `next_rise` | **0** | **0** |
+    /// | `rise_set().rise` | 6 | 2 |
+    /// | `rise_set().set` | 2 | **0** |
+    /// | `rise_set().transit` | **0** | **0** |
+    ///
+    /// | | worst value disagreement |
     /// |---|---|
-    /// | `previous_rise` | **0** |
-    /// | `next_rise` | **0** |
-    /// | `rise_set().rise` | 6 |
-    /// | `rise_set().set` | 2 |
-    /// | `rise_set().transit` | **0** |
+    /// | before | **0.496 686 570 346 355 44 d** at lat 89.9, lon 0, 3650 m, JD 2 451 617.5 |
+    /// | after | **4.656 612 873 077 393e-10 d** = one ULP, at lat −89.0 |
     ///
-    /// Worst value disagreement **0.496 686 570 346 355 44 d**, at lat 89.9,
-    /// lon 0, 3650 m, anchor JD 2 451 617.5: `previous_rise` returns
-    /// JD 2 451 616.975 991 497 where the scan finds JD 2 451 617.472 678 067.
-    /// Every remaining case sits at |lat| ≥ 89.5.
+    /// The before row is the wrong-rotation case in full: `previous_rise`
+    /// returned JD 2 451 616.975 991 497 where the scan finds
+    /// JD 2 451 617.472 678 067 — half a day, and a different weekday. It is
+    /// pinned by `a_polar_sunrise_is_never_attributed_to_the_wrong_rotation`
+    /// and it is why [`ANALYTIC_LATITUDE_LIMIT_DEG`] exists.
     ///
-    /// What is left is one shape: an hour-long dip below `h₀` around a LOWER
-    /// transit, which the rotation walk does not enumerate because it is not
-    /// the rise-set pair of any rotation. Measured directly at lat −88.5,
-    /// lon 90, 3650 m, JD 2 433 544.5 — the Sun sets at
+    /// Every "after" worst case this test prints sits at |lat| 89.0 — the last
+    /// latitude the walk still runs at — which is what the routing predicts:
+    /// above the limit the analytic surface IS
+    /// [`scan_reference::search_rise_by_scan`], so those samples compare a
+    /// function with itself. The two remaining presence disagreements are
+    /// therefore in the analytic band, and they are one shape: an hour-long dip
+    /// below `h₀` around a LOWER transit, which the rotation walk does not
+    /// enumerate because it is not the rise-set pair of any rotation. Measured
+    /// directly at lat −88.5, lon 90, 3650 m, JD 2 433 544.5 — the Sun sets at
     /// JD 2 433 545.218 178 468 8 and rises again at JD 2 433 545.259 663 000 7,
     /// 1 h 0 m later, and [`rise_set`] reports the set but not the rise.
     /// [`scan_reference::ROTATION_SCAN_HALF_SPAN_DAYS`] widened the fallback
     /// window far enough to catch most of that class; catching the rest means
-    /// enumerating dips as well as rotations, which is a different search.
-    ///
-    /// Before this commit the same grid gave 12 presence disagreements
-    /// (rise 8, set 4) and a worst value disagreement of 0.794 d.
+    /// enumerating dips as well as rotations, which is a different search, and
+    /// it does not reach the vara — [`previous_rise`] and [`next_rise`] agree
+    /// with the oracle everywhere in this band, before and after.
     #[test]
     #[ignore = "measurement: polar-band disagreement, ~30 min in --release"]
     fn polar_band_disagreement_is_measured_not_asserted() {
@@ -3310,12 +3627,18 @@ mod tests {
     /// by the declination alone. `cos H₀` is ~1e14 and eq. 15.1 has nothing to
     /// say: the seeded refinement reports no crossing, correctly.
     ///
-    /// [`boundary_is_reachable`] is then the thing that keeps the answer right.
-    /// `tan φ` is 1.6e16 at the pole, so its reach bound says — truthfully —
-    /// that a declination drift can carry `cos H₀` anywhere at all, the point
-    /// test is worthless, and the rotation must be scanned. The scan finds the
-    /// annual crossing, and the analytic surface reproduces the oracle
-    /// BIT-EXACTLY rather than reporting a false polar night.
+    /// [`ANALYTIC_LATITUDE_LIMIT_DEG`] is what keeps the answer right: |lat| 90
+    /// is above it, so [`search_rise`] never walks here and hands the search
+    /// straight to [`scan_reference::search_rise_by_scan`], which finds the
+    /// annual crossing. The surface therefore reproduces the oracle BIT-EXACTLY
+    /// rather than reporting a false polar night.
+    ///
+    /// Before that routing existed the same answer came out of
+    /// [`boundary_is_reachable`], whose reach bound is ~1.6e16 at the pole and
+    /// so — truthfully — reports that a declination drift can carry `cos H₀`
+    /// anywhere at all and the rotation must be scanned. That path still runs
+    /// at every latitude below the limit; it is simply no longer what decides
+    /// this case.
     ///
     /// Two assertions, and the first is what stops the second from being
     /// satisfied the wrong way: `rise_hour_angle_deg` must STILL return `None`
@@ -3409,16 +3732,42 @@ mod tests {
     /// [`SWEEP_LATITUDES_DEG`] jumps 85 → 89 → 90, and every wrong sunrise the
     /// convergence defect produced sat between those points. A tolerance
     /// calibrated on a grid that never enters a regime says nothing about that
-    /// regime, so this walks the regime itself: 21 latitudes at 0.1° × 8
-    /// longitudes × 8 anchors (2021 near the March boundary, and the 1950 /
-    /// 2000 / 2100 solstices and equinoxes) × 2 elevations × both search
-    /// directions.
+    /// regime, so this walks the regime itself: 21 latitudes at 0.1° ×
+    /// [`HIGH_LATITUDE_LONGITUDES`] × [`HIGH_LATITUDE_ANCHORS`] × 2 elevations
+    /// × both search directions.
     ///
-    /// Recorded: **53 dropped sunrises and 16 wrong instants, worst 1.214 d**,
-    /// before the fix; **0 and 0, worst one ULP**, after it. See
-    /// [`REFINE_ITERS`] for the change-by-change breakdown.
+    /// # This test used to pass without covering its own regime
+    ///
+    /// Its eight original anchors were solstices and equinoxes on the nose,
+    /// and the high-latitude residual lives in the ten-day window either side
+    /// of an equinox where the declination carries the crossing across the
+    /// rotation — the window `polar_sweep_julian_days` samples and this array
+    /// stepped over. The 0.4967 d `previous_rise` error at lat 89.9 sat six
+    /// days from an anchor this grid held, so 1e-9 d agreement was asserted
+    /// over exactly the band that was wrong, and held. Six equinox-straddling
+    /// anchors were added for that reason; see [`HIGH_LATITUDE_ANCHORS`].
+    ///
+    /// # Recorded
+    ///
+    /// | grid | code | comparisons | presence | worst gap |
+    /// |---|---|---|---|---|
+    /// | original 8 anchors | this commit's parent | 5 376 | **0** | 4.656612873077393e-10 d |
+    /// | 14 anchors | routing REMOVED | 9 408 | 0 | **4.9668657034635544e-1 d** — FAILS |
+    /// | 14 anchors | as shipped | 9 408 | **0** | **4.656612873077393e-10 d** |
+    ///
+    /// The first row is the measurement that settled which of this file's two
+    /// records of this grid was stale: **0 and 0**, not "1 and 1" (see the note
+    /// where `REAL_SUN_SWEEP_LATITUDES_DEG` used to be defined). Before the
+    /// convergence fix the same grid gave 53 dropped sunrises and 16 wrong
+    /// instants at a worst 1.214 d.
+    ///
+    /// The second row is the MUTATION-CHECK Fix-4 owes: with the six added
+    /// anchors present and the [`ANALYTIC_LATITUDE_LIMIT_DEG`] branch deleted
+    /// from `search_rise`, this test fails on the lat 89.9 / lon 0 / 3650 m /
+    /// JD 2 451 617.5 comparison. With the original eight it passed. That is
+    /// the difference the six anchors buy.
     #[test]
-    #[ignore = "ship gate, tier 2: 5376 real-Sun samples against the scan oracle, ~35 min in --release"]
+    #[ignore = "ship gate, tier 2: 9408 real-Sun comparisons against the scan oracle, ~1.5 h in --release"]
     fn the_high_latitude_band_agrees_with_the_scan_oracle() {
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
@@ -3429,7 +3778,7 @@ mod tests {
             // Tenths of a degree, so the grid step is exact in the integer and
             // the division is the only float operation — no `as` cast.
             let lat = f64::from(lat_tenths) / 10.0;
-            for lon in [-150.0_f64, -90.0, -45.0, 0.0, 45.0, 90.0, 150.0, 179.0] {
+            for lon in HIGH_LATITUDE_LONGITUDES {
                 for jd in HIGH_LATITUDE_ANCHORS {
                     for elevation in [0.0_f64, 3_650.0] {
                         agreement.record(
@@ -3464,18 +3813,45 @@ mod tests {
         );
         std::println!("worst: {:?}", agreement.worst);
         assert_eq!(
-            agreement.samples, 5_376,
-            "sanity: 21 latitudes × 8 longitudes × 8 dates × 2 elevations × 2 directions"
+            agreement.samples, 9_408,
+            "sanity: 21 latitudes × 8 longitudes × 14 dates × 2 elevations × 2 directions"
         );
         agreement.assert_agrees("|lat| 88 to the pole", AGREEMENT_TOL_DAYS);
     }
 
-    /// Anchors for [`the_high_latitude_band_agrees_with_the_scan_oracle`]: the
-    /// two 2021 instants where the defect was first reproduced, the 2488343
-    /// instant from the third pinned row, and the solstices and equinoxes of
-    /// the three eras the engine serves — the dates on which a high-latitude
-    /// rise exists at all.
-    const HIGH_LATITUDE_ANCHORS: [f64; 8] = [
+    /// Anchors for [`the_high_latitude_band_agrees_with_the_scan_oracle`] and
+    /// [`the_latitude_limit_is_derived_from_where_the_walk_first_disagrees`]:
+    /// the two 2021 instants where the convergence defect was first
+    /// reproduced, the 2488343 instant from the third pinned row, the
+    /// solstices and equinoxes of the three eras the engine serves, and six
+    /// EQUINOX-STRADDLING dates.
+    ///
+    /// # The last six are the ones that make this grid cover its own regime
+    ///
+    /// The first eight were solstices and equinoxes on the nose. At |lat| 88
+    /// eq. 15.1 admits a rise only while `sin δ` is inside a ~4° band that the
+    /// Sun crosses at ~0.4 °/day — about ten days, twice a year — and
+    /// `polar_sweep_julian_days` samples that crossing at a 3-day stride
+    /// centred on day-of-year 79 and 265, which is why the polar-band
+    /// measurement saw wrong instants this grid did not.
+    ///
+    /// The gap was not academic. The worst disagreement the polar band ever
+    /// recorded — lat 89.9, lon 0, 3650 m, JD 2 451 617.5, `previous_rise`
+    /// 0.4967 d from the oracle, a WRONG WEEKDAY — sits at day-of-year 73 of
+    /// the 2000 era, six days before the equinox this array's `2 451 809.5`
+    /// samples exactly. The eight anchors missed it, so a test asserting
+    /// 1e-9 d agreement over exactly the band the residual lived in passed
+    /// anyway. The six added entries are day-of-year 73 and 259 of each era —
+    /// `polar_sweep_julian_days`'s `−6` offset from both of its centres — so
+    /// the grid now enters the declination band rather than stepping over it.
+    ///
+    /// MUTATION-CHECK, measured rather than assumed: with these six present
+    /// and the [`ANALYTIC_LATITUDE_LIMIT_DEG`] routing removed,
+    /// `the_high_latitude_band_agrees_with_the_scan_oracle` FAILS — see the
+    /// per-latitude table recorded in
+    /// [`the_latitude_limit_is_derived_from_where_the_walk_first_disagrees`],
+    /// which drives the bare walk over this identical grid.
+    const HIGH_LATITUDE_ANCHORS: [f64; 14] = [
         2_459_287.5,
         2_459_295.5,
         2_488_343.437_5,
@@ -3484,7 +3860,20 @@ mod tests {
         2_451_716.5,
         2_451_809.5,
         2_451_899.5,
+        // ── Equinox-straddling: era + day-of-year 73 and 259. ──
+        2_433_355.5,
+        2_433_541.5,
+        2_451_617.5, // the pinned wrong-rotation case
+        2_451_803.5,
+        2_488_142.5,
+        2_488_328.5,
     ];
+
+    /// Longitude grid shared by the two |lat| 88-to-90 sweeps, so the ship
+    /// gate and the measurement that derives [`ANALYTIC_LATITUDE_LIMIT_DEG`]
+    /// walk the identical grid and their numbers are directly comparable.
+    const HIGH_LATITUDE_LONGITUDES: [f64; 8] =
+        [-150.0, -90.0, -45.0, 0.0, 45.0, 90.0, 150.0, 179.0];
 
     /// A Moon-like fixture: right ascension advancing at the Moon's mean rate
     /// (13.176 396 6 °/day, the mean-longitude coefficient of Meeus Ch. 47) and
@@ -3505,15 +3894,25 @@ mod tests {
     /// SCOPE section of the module documentation stays a measured claim rather
     /// than a remembered one.
     ///
-    /// The fix in this commit — "a search that failed is not a body that did
-    /// not rise", applied at four places — helps the Moon fixture enormously
-    /// even though none of it was aimed at the Moon. Over 49 latitudes × 25
-    /// longitudes × 12 dates in three eras (**73 500 comparisons**):
+    /// The preceding commit's fix — "a search that failed is not a body that
+    /// did not rise", applied at four places — helped the Moon fixture
+    /// enormously even though none of it was aimed at the Moon. Over 49
+    /// latitudes × 25 longitudes × 12 dates in three eras
+    /// (**73 500 comparisons**):
     ///
     /// | | presence disagreements | worst value gap |
     /// |---|---|---|
     /// | before | 455 | 0.943 d |
     /// | after  | **14** | **9.313 225 746 154 785e-10 d** (2 ULP) |
+    ///
+    /// [`ANALYTIC_LATITUDE_LIMIT_DEG`] applies to this fixture as well — six of
+    /// the 49 latitudes swept here are above it and are answered by the scan —
+    /// and it moved the count by NOTHING: 14 before the routing and 14 after,
+    /// same per-surface split (prev 1, next 0, rise 6, set 7, transit 0),
+    /// re-measured. The Moon's dropped events are not a polar phenomenon; they
+    /// are the 13 °/day right ascension breaking the rotation walk at every
+    /// latitude, which is exactly why routing a polar band does not make this
+    /// module Moon-capable.
     ///
     /// So the instants it does report are now right to the last two bits, and
     /// what remains is purely a handful of missed events. That is still not
@@ -3567,6 +3966,348 @@ mod tests {
              instants this module reports for a fast body are wrong by a whole day \
              again, not by two bits",
             swept.max_gap_days()
+        );
+    }
+    // ── The polar latitude routing ────────────────────────────────────────────
+
+    /// SHIP GATE, the wrong-vara case, pinned.
+    ///
+    /// The rotation walk does not merely lose precision near a pole: it can
+    /// attribute a sunrise to the WRONG ROTATION, and nothing downstream
+    /// re-checks rotation membership. `vedaksha_vedic::muhurta::kalam_windows`
+    /// sets `from_sunrise: true` for any `Some` this returns, so the wrong
+    /// instant is emitted as an authentic vara — a wrong WEEKDAY, plus wrong
+    /// Rahu/Gulika slots and window instants.
+    ///
+    /// This is that case at its worst measured point, from the polar-band
+    /// measurement's own output: lat 89.9 N, lon 0, 3650 m, anchored on
+    /// JD 2 451 617.5. The walk answered JD 2 451 616.975 991 497; the scan
+    /// oracle answers JD 2 451 617.472 678 067 — **0.496 686 570 346 355 4 d**
+    /// apart, which straddles a UT midnight and therefore changes the weekday
+    /// outright at half the timezone offsets the surfaces accept.
+    ///
+    /// The literal is the ORACLE's, not the analytic path's: it is the value
+    /// `polar_band_disagreement_is_measured_not_asserted` printed as its worst
+    /// `previous_rise` disagreement, produced by
+    /// `scan_reference::previous_rise_by_scan`. The assertion is bit-exact
+    /// because above [`ANALYTIC_LATITUDE_LIMIT_DEG`] `previous_rise` now IS
+    /// that scan, so anything less than equality would mean the routing did
+    /// not happen.
+    ///
+    /// MUTATION-CHECK: deleting the [`ANALYTIC_LATITUDE_LIMIT_DEG`] branch from
+    /// `search_rise` makes this test fail with the 0.4967 d walk answer.
+    #[test]
+    fn a_polar_sunrise_is_never_attributed_to_the_wrong_rotation() {
+        let provider = real_sun_provider();
+        let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
+        let (lat, lon, elevation, jd) = (89.9_f64, 0.0_f64, 3_650.0_f64, 2_451_617.5_f64);
+
+        const ORACLE: f64 = 2_451_617.472_678_067;
+        const THE_WRONG_ROTATION: f64 = 2_451_616.975_991_497;
+
+        let got = previous_rise(jd, lat, lon, elevation, &real_sun)
+            .expect("the oracle finds a sunrise 0.027 d before this anchor");
+        assert_eq!(
+            got,
+            ORACLE,
+            "previous_rise at lat={lat} lon={lon} elev={elevation} jd={jd}: got {got}, \
+             the scan oracle says {ORACLE}. A gap near {} d means the rotation walk \
+             ran here and picked the neighbouring rotation, which is a wrong VARA",
+            libm::fabs(THE_WRONG_ROTATION - ORACLE)
+        );
+        assert!(
+            libm::fabs(got - THE_WRONG_ROTATION) > 0.4,
+            "previous_rise returned the wrong rotation's sunrise ({THE_WRONG_ROTATION})"
+        );
+    }
+
+    /// The routing must not cost the 99.98 % of the globe below it anything.
+    ///
+    /// The scan is ~1 150 `equatorial` evaluations against the walk's five or
+    /// six, so "the fast path is untouched" is a claim about a COUNT, not about
+    /// a wall clock that a noisy machine could flatter. Both tallies are
+    /// thread-local (see [`scan_tally`]), so a test running in parallel on
+    /// another thread cannot leak into these numbers — an earlier revision of
+    /// this instrument used a process-wide counter and produced exactly that
+    /// false failure.
+    ///
+    /// Five mid-latitude cities, each exercising all three vara-producing
+    /// surfaces. Both counts must be ZERO: no latitude routing, and no
+    /// non-converging refinement either.
+    #[test]
+    fn the_analytic_fast_path_is_untouched_at_mid_latitudes() {
+        let provider = real_sun_provider();
+        let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
+
+        let before_routed = scan_tally::LATITUDE_ROUTED.with(core::cell::Cell::get);
+        let before_fallback = scan_tally::REFINE_FALLBACK.with(core::cell::Cell::get);
+
+        // (name, lat, lon, elevation_m) — the same five the timing note on
+        // `boundary_is_reachable` is measured over.
+        for (city, lat, lon, elevation) in [
+            ("Chennai", 13.0827_f64, 80.2707_f64, 0.0_f64),
+            ("Greenwich", 51.4778, -0.0015, 100.0),
+            ("Sydney", -33.8688, 151.2093, 20.0),
+            ("Reykjavik", 64.1466, -21.9426, 50.0),
+            ("Lhasa", 29.65, 91.13, 3_650.0),
+        ] {
+            let jd = 2_461_100.0;
+            let rise = previous_rise(jd, lat, lon, elevation, &real_sun)
+                .unwrap_or_else(|| panic!("{city}: the Sun rises here"));
+            next_rise(jd, lat, lon, elevation, &real_sun)
+                .unwrap_or_else(|| panic!("{city}: the Sun rises again here"));
+            let windowed = sun_rise_set(rise, lat, lon, elevation, &real_sun);
+            assert!(
+                windowed.set.is_some(),
+                "{city}: the window opened on a sunrise must contain the sunset"
+            );
+        }
+
+        let routed = scan_tally::LATITUDE_ROUTED.with(core::cell::Cell::get) - before_routed;
+        let fallback = scan_tally::REFINE_FALLBACK.with(core::cell::Cell::get) - before_fallback;
+        std::println!(
+            "mid-latitude cities: latitude-routed scans={routed}, refine fallbacks={fallback}"
+        );
+        assert_eq!(
+            routed, 0,
+            "the |lat| > {ANALYTIC_LATITUDE_LIMIT_DEG} routing fired at a mid latitude"
+        );
+        assert_eq!(
+            fallback, 0,
+            "a mid-latitude refinement stopped converging and fell back to the scan"
+        );
+    }
+
+    /// Above [`ANALYTIC_LATITUDE_LIMIT_DEG`] the routing fires, and every
+    /// invariant the analytic path held must survive it — INCLUDING the
+    /// bit-exactness of `previous_rise(r) == r`.
+    ///
+    /// # Why this needed measuring rather than assuming
+    ///
+    /// Below the limit that equality rests on the refinement returning a FIXED
+    /// POINT: re-entering the Meeus correction from its own output cannot move
+    /// it (`a_converged_rise_is_a_fixed_point_of_the_refinement`). The scan has
+    /// no fixed-point argument at all — [`scan_reference::bisect`] returns
+    /// `0.5·(lo + hi)` of whichever 5-minute bracket the walk landed on, and
+    /// re-anchoring on `r` shifts that bracket. It would have been entirely
+    /// reasonable to expect the last bit to move, and this test was written
+    /// expecting exactly that.
+    ///
+    /// It does not, and the reason is arithmetic rather than luck. Re-anchored
+    /// on `r`, the scan opens `[r, r + 5 min]` and finds a crossing there when
+    /// `rel_alt(r) < 0`, or `[r − 5 min, r]` when it is `≥ 0`; either way the
+    /// root sits ON an endpoint of the bracket, so 40 halvings drive the
+    /// opposite end to within `5 min / 2^40` = 3.158e-15 d of it. The final
+    /// midpoint is therefore within 1.58e-15 d of `r` — five orders of magnitude
+    /// inside the 4.66e-10 d ULP at these Julian Days — and rounds to `r`
+    /// exactly. Measured drift over this test's grid: **0 ULP at every point**.
+    ///
+    /// So the assertion is bit-exact, and it is a real one: it fails if the
+    /// scan ever returns a bracket midpoint that is not the anchor, and it
+    /// fails if the routing silently stops accepting a root that sits exactly
+    /// on `anchor` (the "at or before" boundary, which is where the
+    /// sub-ULP-negative-altitude defect lived on the pre-analytic code — see
+    /// `anchoring_exactly_on_a_rise_respects_the_strictness_of_each_side`).
+    ///
+    /// The fixture is a Sun held at δ = −0.8°, inside the ~±0.5° band around
+    /// δ = −0°50′ where eq. 15.1 still admits a crossing at |lat| 89.5:
+    /// `cos H₀ = −0.0667` there. [`flat_sun`] (δ = 0) is in polar DAY at this
+    /// latitude and never rises, so it cannot exercise the routed regime at
+    /// all.
+    #[test]
+    fn the_scanned_regime_keeps_containment_and_bit_exactness() {
+        // δ = −0.8°: `cos H₀ = (sin(−0°50′) − sin(89.5°)·sin(−0.8°)) /
+        // (cos(89.5°)·cos(−0.8°)) = −0.0667`, in range, so this rises once a
+        // sidereal rotation at |lat| 89.5.
+        let grazing_sun = |_jd: f64| Some((0.0_f64, -0.8_f64));
+        let anchor = 2_451_545.0;
+        let mut checked = 0_u32;
+
+        for lat in [89.5_f64, 89.9, 90.0] {
+            for lon in [-150.0_f64, 0.0, 77.2] {
+                let before = scan_tally::LATITUDE_ROUTED.with(core::cell::Cell::get);
+                let Some(rise) = previous_rise(anchor, lat, lon, 0.0, &grazing_sun) else {
+                    // At |lat| 90 the rotational wobble has amplitude 6.1e-17
+                    // and this fixture's declination never moves, so there is
+                    // no crossing at all — the correct answer, and not a case
+                    // this test can exercise.
+                    assert!(
+                        lat >= 90.0,
+                        "lat={lat} lon={lon}: the grazing fixture must rise below the pole"
+                    );
+                    continue;
+                };
+                assert!(
+                    scan_tally::LATITUDE_ROUTED.with(core::cell::Cell::get) > before,
+                    "lat={lat} is above the limit, so this must have been routed to the scan"
+                );
+
+                assert!(
+                    rise <= anchor,
+                    "lat={lat} lon={lon}: previous_rise must be at or before {anchor}"
+                );
+                let next = next_rise(anchor, lat, lon, 0.0, &grazing_sun).unwrap_or_else(|| {
+                    panic!("lat={lat} lon={lon}: the grazing fixture rises again")
+                });
+                assert!(
+                    next > anchor,
+                    "lat={lat} lon={lon}: next_rise must be strictly after {anchor}"
+                );
+                assert!(
+                    libm::fabs((next - rise) - SIDEREAL_ROTATION_DAYS) < 1e-6,
+                    "lat={lat} lon={lon}: bracket width {} d is not one sidereal rotation",
+                    next - rise
+                );
+
+                let again = previous_rise(rise, lat, lon, 0.0, &grazing_sun).unwrap_or_else(|| {
+                    panic!("lat={lat} lon={lon}: a rise is at or before a rise")
+                });
+                assert_eq!(
+                    again,
+                    rise,
+                    "lat={lat} lon={lon}: previous_rise(r) must equal r bit-exactly in the \
+                     SCANNED regime too — got {again}, {} ULP away",
+                    again.to_bits().abs_diff(rise.to_bits())
+                );
+                checked += 1;
+            }
+        }
+        assert_eq!(
+            checked, 6,
+            "sanity: 2 sub-polar latitudes × 3 longitudes must have been exercised"
+        );
+    }
+
+    /// MEASUREMENT + DERIVATION of [`ANALYTIC_LATITUDE_LIMIT_DEG`]: the
+    /// latitude at which the rotation walk first disagrees with the scan
+    /// oracle, resolved to 0.1°.
+    ///
+    /// This drives `search_rise_analytic` DIRECTLY rather than
+    /// [`previous_rise`] / [`next_rise`], for one reason: the routing this
+    /// number justifies would otherwise hide the measurement it came from.
+    /// Before this commit the two were the same function, so these numbers are
+    /// exactly what the shipped surfaces did.
+    ///
+    /// The grid is identical to
+    /// [`the_high_latitude_band_agrees_with_the_scan_oracle`]'s — 21 latitudes
+    /// at 0.1° × [`HIGH_LATITUDE_LONGITUDES`] × [`HIGH_LATITUDE_ANCHORS`] × 2
+    /// elevations × both directions, 9 408 comparisons — so this measurement
+    /// and that ship gate are the same experiment on the two sides of the
+    /// routing. Southern latitudes are covered at 0.5° by
+    /// `polar_band_disagreement_is_measured_not_asserted`, whose grid is
+    /// mirrored.
+    ///
+    /// ```text
+    /// cargo test --release -p vedaksha-astro --lib \
+    ///     the_latitude_limit_is_derived_from_where_the_walk_first_disagrees \
+    ///     -- --ignored --nocapture
+    /// ```
+    ///
+    /// It asserts in BOTH directions, like the Moon-like scope test: the walk
+    /// must be clean at and below the limit (or the limit is too high), and it
+    /// must be dirty above it (or the routing is buying nothing and the limit
+    /// should be retired rather than left in place).
+    ///
+    /// # Recorded, `--release`, 6 197 s
+    ///
+    /// ```text
+    /// walk vs oracle: first bad latitude Some(89.9), bad at or below 89: 0,
+    ///                 bad above: 1, worst gap 4.9668657034635544e-1 d
+    /// ```
+    ///
+    /// Every latitude from 88.0 to 89.8 inclusive reported `dropped 0, wrong 0,
+    /// worst 4.656612873077393e-10 d` — one ULP. 89.9 reported `wrong 1, worst
+    /// 4.9668657034635544e-1 d`. 90.0 reported a worst gap of exactly 0,
+    /// because [`boundary_is_reachable`]'s reach bound already sends every
+    /// rotation at the pole to the scan. The per-band totals are tabulated in
+    /// [`ANALYTIC_LATITUDE_LIMIT_DEG`].
+    #[test]
+    #[ignore = "measurement: derives ANALYTIC_LATITUDE_LIMIT_DEG, ~1 h in --release"]
+    fn the_latitude_limit_is_derived_from_where_the_walk_first_disagrees() {
+        let provider = real_sun_provider();
+        let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
+
+        let mut first_bad_lat: Option<f64> = None;
+        let mut bad_at_or_below_limit = 0_u32;
+        let mut bad_above_limit = 0_u32;
+        let mut worst_overall = 0.0_f64;
+
+        let mut lat_tenths = 880_i32;
+        while lat_tenths <= 900 {
+            // Tenths of a degree, so the grid step is exact in the integer and
+            // the division is the only float operation — no `as` cast.
+            let lat = f64::from(lat_tenths) / 10.0;
+            let (mut comparisons, mut dropped, mut wrong) = (0_u32, 0_u32, 0_u32);
+            let mut worst = 0.0_f64;
+
+            for lon in HIGH_LATITUDE_LONGITUDES {
+                for jd in HIGH_LATITUDE_ANCHORS {
+                    for elevation in [0.0_f64, 3_650.0] {
+                        let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation);
+                        for forward in [false, true] {
+                            let walk = search_rise_analytic(jd, lat, lon, h0, forward, &real_sun);
+                            let scan = scan_reference::search_rise_by_scan(
+                                jd, lat, lon, h0, forward, &real_sun,
+                            );
+                            comparisons += 1;
+                            match (walk, scan) {
+                                (Some(a), Some(b)) => {
+                                    let gap = libm::fabs(a - b);
+                                    if gap > worst {
+                                        worst = gap;
+                                    }
+                                    if gap > AGREEMENT_TOL_DAYS {
+                                        wrong += 1;
+                                    }
+                                }
+                                (None, None) => {}
+                                _ => dropped += 1,
+                            }
+                        }
+                    }
+                }
+            }
+
+            std::println!(
+                "lat {lat}: {comparisons} comparisons, dropped {dropped}, wrong {wrong}, \
+                 worst {worst:e} d"
+            );
+            if worst > worst_overall {
+                worst_overall = worst;
+            }
+            let bad = dropped + wrong;
+            if bad > 0 {
+                if first_bad_lat.is_none() {
+                    first_bad_lat = Some(lat);
+                }
+                if lat > ANALYTIC_LATITUDE_LIMIT_DEG {
+                    bad_above_limit += bad;
+                } else {
+                    bad_at_or_below_limit += bad;
+                }
+            }
+            lat_tenths += 1;
+        }
+
+        std::println!(
+            "walk vs oracle: first bad latitude {first_bad_lat:?}, bad at or below \
+             {ANALYTIC_LATITUDE_LIMIT_DEG}: {bad_at_or_below_limit}, bad above: \
+             {bad_above_limit}, worst gap {worst_overall:e} d"
+        );
+
+        assert_eq!(
+            bad_at_or_below_limit, 0,
+            "the rotation walk disagreed with the oracle AT OR BELOW \
+             ANALYTIC_LATITUDE_LIMIT_DEG = {ANALYTIC_LATITUDE_LIMIT_DEG}; the limit is \
+             too high and the fast path is shipping a wrong vara below it"
+        );
+        assert!(
+            bad_above_limit > 0,
+            "the rotation walk agreed with the oracle everywhere above \
+             ANALYTIC_LATITUDE_LIMIT_DEG = {ANALYTIC_LATITUDE_LIMIT_DEG}. That is good \
+             news, and it means the routing is buying nothing on this grid — retire the \
+             limit and its derivation rather than leaving a claim standing that the \
+             measurement no longer supports"
         );
     }
 }
