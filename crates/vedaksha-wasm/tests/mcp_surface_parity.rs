@@ -45,9 +45,9 @@
 //! * `compute_transit`, `search_transits`, `search_muhurta`, `emit_graph` —
 //!   no `#[wasm_bindgen]` export of any name implements them. No transit
 //!   search, no muhurta search and no graph emission is reachable from the
-//!   wasm surface at all. (`vedaksha-wasm` does declare a `vedaksha-graph`
-//!   dependency with the `emitters` feature, but `src/lib.rs` never names
-//!   `vedaksha_graph` — it buys no export.)
+//!   wasm surface at all. (`vedaksha-wasm` used to declare a `vedaksha-graph`
+//!   dependency with the `emitters` feature while `src/lib.rs` never named
+//!   `vedaksha_graph`; it bought no export and has been dropped.)
 //! * `compute_vargas` — the wasm surface has `compute_varga` (singular), and
 //!   it is a DIFFERENT SHAPE, not a renamed twin: it takes one longitude and
 //!   one varga name and returns a bare `u8` sign index, while the MCP tool

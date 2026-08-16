@@ -721,7 +721,6 @@ dependencies = [
  "vedaksha",
  "vedaksha-astro",
  "vedaksha-ephem-core",
- "vedaksha-graph",
  "vedaksha-math",
  "vedaksha-mcp",
  "vedaksha-vedic",
