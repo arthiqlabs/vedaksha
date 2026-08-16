@@ -112,7 +112,6 @@ Vedākṣha is the calculation engine under ArthIQ Labs' Jyotish properties:
 | Product | What it is |
 |---------|------------|
 | [kundalimcp.com](https://kundalimcp.com) | The B2B/developer engine — an agentic-AI Jyotish MCP with the full computation suite (yogas, all five dasha systems, shadbala, school-specific interpretation). Builds directly on the `vedaksha-*` crates. |
-| [janampatri.net](https://janampatri.net) | Vedic astrology marketplace — expert consultations, plus BPHS-grounded charts and life-trajectory analysis. |
 | [kundali.live](https://kundali.live) | Consumer endpoint — chat-based readings and self-serve PDF reports. |
 
 ## Workspace
