@@ -909,16 +909,14 @@ fn compute_shadbala_surfaces_agree() {
 /// the clock's. Wasm also defaults to nine bodies against MCP's fixed ten, so
 /// the tenth (`TrueNodeOsculating`) is named explicitly.
 ///
-/// **This case does not use [`compare`] — the two surfaces do not currently
-/// agree.** `vedaksha-wasm` emits a top-level `ayanamsha_value`;
-/// `vedaksha-mcp` emits no such key, so a sidereal MCP caller cannot read the
-/// offset that was applied to every longitude in the payload it just got.
-/// That is precisely the class of drift this file exists to find, and fixing
-/// it is a change to a shipped surface, not to a test. Until it is fixed this
-/// pins the divergence exactly: every one of the other leaves must still
-/// agree, no NEW path may appear on either side, and closing the gap fails
-/// this test too — at which point replace the whole body with a `compare`
-/// call.
+/// This case found a real divergence when it was first written: wasm emitted a
+/// top-level `ayanamsha_value` and MCP emitted no such key, so a sidereal MCP
+/// caller could not read the offset that had been applied to every longitude in
+/// the payload it had just received. That was fixed on the *surface* rather than
+/// in this test — `call_compute_natal` now reports the value, tropical included
+/// as an explicit `0.0` — and the case reverted to a plain [`compare`]. Recorded
+/// because the temptation in that moment is to relax the comparison, and the
+/// whole worth of this file is that it does not.
 ///
 /// Derived sanity facts:
 ///   * ten bodies in, ten planet rows out; twelve house cusps.
@@ -933,7 +931,7 @@ fn compute_shadbala_surfaces_agree() {
 ///     0.01397 = 23.65°.
 ///   * each planet's emitted `sign_index` must be `floor(longitude / 30)`.
 #[test]
-fn compute_natal_chart_surfaces_agree_sidereal_except_the_ayanamsha_value_gap() {
+fn compute_natal_chart_surfaces_agree_sidereal() {
     // 1985-06-15 10:30:00 UT.
     let jd =
         vedaksha_ephem_core::julian::calendar_to_jd(1985, 6, 15.0 + 10.0 / 24.0 + 30.0 / 1440.0);
@@ -948,48 +946,16 @@ fn compute_natal_chart_surfaces_agree_sidereal_except_the_ayanamsha_value_gap() 
         .to_string(),
     )
     .expect("valid input");
-    let mcp = mcp_tool(
+    compare(
+        "natal-sidereal",
         "compute_natal_chart",
         serde_json::json!({
             "julian_day": jd, "latitude": 28.6, "longitude": 77.2,
             "ayanamsha": "Lahiri", "house_system": "Placidus"
         }),
+        &out,
     );
     let wasm: Value = serde_json::from_str(&out).expect("wasm output is JSON");
-
-    let (mut m, mut w) = (Vec::new(), Vec::new());
-    leaves(&mcp, String::new(), &mut m);
-    leaves(&wasm, String::new(), &mut w);
-    let mpaths: std::collections::BTreeSet<&str> = m.iter().map(|(p, _)| p.as_str()).collect();
-    let wpaths: std::collections::BTreeSet<&str> = w.iter().map(|(p, _)| p.as_str()).collect();
-
-    assert!(
-        mpaths.difference(&wpaths).next().is_none(),
-        "[natal-sidereal] MCP emits a key wasm does not: {:?}",
-        mpaths.difference(&wpaths).collect::<Vec<_>>()
-    );
-    assert_eq!(
-        wpaths.difference(&mpaths).copied().collect::<Vec<&str>>(),
-        vec![".ayanamsha_value"],
-        "[natal-sidereal] the known gap is `.ayanamsha_value` and nothing else. \
-         If this list is now EMPTY the surfaces have been reconciled — delete \
-         this bespoke body and call `compare` like every other case does."
-    );
-
-    let by_path: std::collections::BTreeMap<&str, &Value> =
-        m.iter().map(|(p, v)| (p.as_str(), v)).collect();
-    for (path, wv) in &w {
-        let Some(mv) = by_path.get(path.as_str()) else {
-            continue; // the single known gap, already pinned above
-        };
-        match (mv.as_f64(), wv.as_f64()) {
-            (Some(a), Some(b)) => assert!(
-                (a - b).abs() < 1e-9,
-                "[natal-sidereal] {path}: mcp {a} vs wasm {b}"
-            ),
-            _ => assert_eq!(*mv, wv, "[natal-sidereal] {path} differs"),
-        }
-    }
 
     assert_eq!(
         wasm["config_summary"], "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",

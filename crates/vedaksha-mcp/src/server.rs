@@ -408,6 +408,17 @@ impl McpServer {
             &config,
         );
 
+        // Report the offset that was applied, not just the name that was asked
+        // for. Every longitude, the ascendant, the MC and all twelve cusps below
+        // have been rotated by this value; without it a sidereal caller cannot
+        // check the rotation or convert back to tropical. `None` is tropical,
+        // which is a zero rotation — the same number `ayanamsha_value` returns
+        // for `Ayanamsha::Tropical`, which is what the wasm surface passes.
+        // Must stay identical to the wasm path (`vedaksha-wasm/src/lib.rs`);
+        // `mcp_surface_parity` enforces it.
+        let ayanamsha_value =
+            ayanamsha.map_or(0.0, |a| vedaksha_astro::sidereal::ayanamsha_value(a, jd));
+
         // Build output JSON
         let output = serde_json::json!({
             "planets": chart.planets,
@@ -426,6 +437,7 @@ impl McpServer {
                 "applying": a.motion == vedaksha_astro::aspects::AspectMotion::Applying,
                 "strength": a.strength,
             })).collect::<Vec<_>>(),
+            "ayanamsha_value": ayanamsha_value,
             "julian_day": jd,
             "config_summary": chart.config_summary,
         });
@@ -1679,6 +1691,70 @@ mod tests {
         assert_eq!(planets.len(), 10, "expected 10 planets");
         let asc = chart["houses"]["asc"].as_f64().unwrap();
         assert!(asc > 0.0 && asc < 360.0, "ASC out of range: {asc}");
+    }
+
+    /// The chart reports the rotation it applied, not merely the name it was
+    /// asked for.
+    ///
+    /// Every longitude, the ascendant, the MC and all twelve cusps in a sidereal
+    /// response have been rotated by this offset; a caller that cannot read it
+    /// cannot check the rotation or convert back to tropical. The wasm surface
+    /// emitted `ayanamsha_value` and this one did not — a real divergence, found
+    /// by `mcp_surface_parity` in `vedaksha-wasm`, which covers only the sidereal
+    /// request. The tropical case is asserted here because that is the default,
+    /// and 0.0 is a claim ("no rotation was applied"), not an absent answer.
+    #[test]
+    fn compute_natal_reports_the_ayanamsha_offset_it_applied() {
+        let s = server();
+        let chart = |args: &str| -> serde_json::Value {
+            let resp = s.handle_request(&format!(
+                r#"{{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{{
+                    "name":"compute_natal_chart","arguments":{args}}}}}"#
+            ));
+            let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+            let text = val["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or_else(|| panic!("expected a result, got: {val}"));
+            serde_json::from_str(text).unwrap()
+        };
+
+        let tropical = chart(r#"{"julian_day":2451545.0,"latitude":28.6,"longitude":77.2}"#);
+        assert_eq!(
+            tropical["ayanamsha_value"].as_f64(),
+            Some(0.0),
+            "the tropical default is a zero rotation, stated explicitly"
+        );
+
+        let sidereal = chart(
+            r#"{"julian_day":2451545.0,"latitude":28.6,"longitude":77.2,"ayanamsha":"Lahiri"}"#,
+        );
+        let offset = sidereal["ayanamsha_value"].as_f64().expect("a number");
+        assert!(
+            (23.8..23.9).contains(&offset),
+            "Lahiri at J2000 is 23°51′ ≈ 23.86°, got {offset}"
+        );
+        assert!(
+            (offset
+                - vedaksha_astro::sidereal::ayanamsha_value(
+                    vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                    2451545.0
+                ))
+            .abs()
+                < f64::EPSILON,
+            "the reported offset must be the one the library computed"
+        );
+
+        // And it must describe the payload it arrived with: the ascendant is
+        // rotated by exactly this much relative to the tropical request.
+        let (trop_asc, sid_asc) = (
+            tropical["houses"]["asc"].as_f64().unwrap(),
+            sidereal["houses"]["asc"].as_f64().unwrap(),
+        );
+        let applied = (trop_asc - sid_asc).rem_euclid(360.0);
+        assert!(
+            (applied - offset).abs() < 1e-9,
+            "asc moved {applied}° but the report claims {offset}°"
+        );
     }
 
     #[test]
