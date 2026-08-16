@@ -1,7 +1,7 @@
 # Multi-arch build. `docker buildx build --platform linux/amd64,linux/arm64 .`
 # builds each platform in its target-arch container, so TARGETARCH selects the
 # right codegen below.
-FROM rust:1.85-slim AS builder
+FROM rust:1.89-slim AS builder
 
 # Populated by buildx: "amd64", "arm64", …
 ARG TARGETARCH

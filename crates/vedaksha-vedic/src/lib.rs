@@ -14,6 +14,13 @@
 #![allow(clippy::enum_glob_use)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::uninlined_format_args)]
+// Raising the MSRV to 1.89 brought two newly-stable constructs into the
+// supported range — `is_multiple_of` (1.87) and let-chains (1.88) — so clippy
+// now offers to rewrite `n % k == 0` and `if cond { if let … }` throughout.
+// Both are stylistic rewrites of working, tested code, not defects, so they are
+// declined rather than churned through the dasha and gochara rules.
+#![allow(clippy::manual_is_multiple_of)]
+#![allow(clippy::collapsible_if)]
 
 pub mod ashtakavarga;
 pub mod bhava;

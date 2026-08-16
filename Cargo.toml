@@ -20,7 +20,7 @@ homepage = "https://vedaksha.net"
 repository = "https://github.com/arthiqlabs/vedaksha"
 license = "BUSL-1.1"
 license-file = "LICENSE"
-rust-version = "1.85"
+rust-version = "1.89"
 
 [workspace.dependencies]
 vedaksha-math = { version = "4.0.0", path = "crates/vedaksha-math" }

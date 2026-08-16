@@ -16,6 +16,11 @@
 #![deny(unsafe_code)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
+// Raising the MSRV to 1.89 put let-chains (stable in 1.88) inside the supported
+// range, so clippy now offers to fold every `if cond { if let … }` into
+// `if cond && let …`. That is a stylistic rewrite of working, tested code, not a
+// defect — so it is declined here rather than churned through the emitters.
+#![allow(clippy::collapsible_if)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

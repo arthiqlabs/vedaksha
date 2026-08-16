@@ -52,7 +52,7 @@ Algorithmic sources cited in code comments:
 
 - Release artifacts are published by `.github/workflows/release.yml` on `v*` tag push.
 - No third-party build-time code execution. VSOP87A and ELP/MPP02 coefficient tables are committed as pre-generated Rust source. The Python generators in `scripts/` are not invoked by `cargo build`.
-- MSRV (minimum supported Rust version): 1.85. Rust edition 2024.
+- MSRV (minimum supported Rust version): 1.89. Rust edition 2024.
 - Dependabot alerts, secret scanning, and push protection are enabled on this repository.
 
 ## Cryptographic Integrity

@@ -4,7 +4,7 @@ target/
 LICENSE
 
 # Keep the toolchain pin out of the builder image. The Dockerfile deliberately
-# builds on `rust:1.85-slim` to prove the crate still compiles at its declared
+# builds on `rust:1.89-slim` to prove the crate still compiles at its declared
 # MSRV, and those images ship rustup on PATH — so a copied rust-toolchain.toml
 # would make cargo download the pinned toolchain instead, silently retiring the
 # MSRV check and rebuilding the shipped binary with a different compiler.

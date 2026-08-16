@@ -6,8 +6,8 @@
 # makes a toolchain change an explicit, reviewable, revertable commit.
 #
 # This is NOT the MSRV. The minimum supported Rust version is declared
-# separately as `rust-version = "1.85"` in [workspace.package], and the release
-# Docker image builds on `rust:1.85-slim` to keep that claim honest. This pin is
+# separately as `rust-version = "1.89"` in [workspace.package], and the release
+# Docker image builds on `rust:1.89-slim` to keep that claim honest. This pin is
 # only the version CI and local development build *with*.
 #
 # `targets` is load-bearing, not decoration. rustup treats `stable` and

@@ -34,6 +34,11 @@
 //!   VEDAKSHA_MCP_HOST         bind host (default 0.0.0.0; --host overrides)
 //!   VEDAKSHA_MCP_CORS_ORIGIN  Access-Control-Allow-Origin value (default *)
 
+// Raising the MSRV to 1.89 put let-chains (stable in 1.88) inside the supported
+// range, so clippy now offers to fold every `if cond { if let … }` into
+// `if cond && let …`. A stylistic rewrite of working, tested code, so declined.
+#![allow(clippy::collapsible_if)]
+
 use std::io::{self, BufRead, Write};
 
 fn main() {
