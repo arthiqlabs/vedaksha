@@ -308,9 +308,18 @@ impl McpServer {
             ("TrueNodeOsculating", Body::TrueNodeOsculating),
         ];
 
+        // Every body is wanted at the same instant, so use the batch entry
+        // point: it builds the three central-difference frames once instead of
+        // once per body, and shares one memoizing provider so the ELP/MPP02
+        // lunar series pulled in by each light-time correction is evaluated per
+        // timestamp rather than per body. Bit-identical to `apparent_position`
+        // per body — asserted by `batch_matches_per_body_bit_for_bit`.
+        let body_list: Vec<Body> = bodies.iter().map(|(_, body)| *body).collect();
+        let computed = coordinates::apparent_positions(&provider, &body_list, jd);
+
         let mut planet_data: Vec<(String, f64, f64, f64, f64)> = Vec::new();
-        for (name, body) in &bodies {
-            let pos = coordinates::apparent_position(&provider, *body, jd).map_err(|e| {
+        for ((name, _), (_, result)) in bodies.iter().zip(computed) {
+            let pos = result.map_err(|e| {
                 McpError::computation_failed(&format!("Failed to compute {name}: {e}"))
             })?;
             planet_data.push((
@@ -1013,11 +1022,19 @@ impl McpServer {
             ("TrueNodeOsculating", Body::TrueNodeOsculating),
         ];
 
+        // Both sweeps below want every body at one shared instant, so each goes
+        // through the batch entry point: frames built once per instant instead
+        // of once per body, and a memoizing provider shared across the set.
+        // Bit-identical to per-body `apparent_position` — asserted by
+        // `batch_matches_per_body_bit_for_bit`.
+        let body_list: Vec<Body> = bodies.iter().map(|(_, body)| *body).collect();
+
         // Compute natal positions
+        let natal_computed = coordinates::apparent_positions(&provider, &body_list, input.natal_jd);
         let mut natal_positions: Vec<serde_json::Value> = Vec::new();
-        for (name, body) in &bodies {
-            let pos = coordinates::apparent_position(&provider, *body, input.natal_jd)
-                .map_err(|e| McpError::computation_failed(&format!("Natal {name}: {e}")))?;
+        for ((name, _), (_, result)) in bodies.iter().zip(natal_computed) {
+            let pos =
+                result.map_err(|e| McpError::computation_failed(&format!("Natal {name}: {e}")))?;
             natal_positions.push(serde_json::json!({
                 "name": name,
                 "longitude": pos.ecliptic.longitude.to_degrees(),
@@ -1028,9 +1045,11 @@ impl McpServer {
         }
 
         // Compute transit positions
+        let transit_computed =
+            coordinates::apparent_positions(&provider, &body_list, input.transit_jd);
         let mut transit_positions: Vec<serde_json::Value> = Vec::new();
-        for (name, body) in &bodies {
-            let pos = coordinates::apparent_position(&provider, *body, input.transit_jd)
+        for ((name, _), (_, result)) in bodies.iter().zip(transit_computed) {
+            let pos = result
                 .map_err(|e| McpError::computation_failed(&format!("Transit {name}: {e}")))?;
             transit_positions.push(serde_json::json!({
                 "name": name,
