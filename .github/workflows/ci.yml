@@ -1,9 +1,18 @@
 name: CI
 
-# Routine CI gate: fast feedback on every push and PR.
-# Heavy validation (full integration tests, clippy across 36k+ lines of
-# generated coefficient tables) lives in:
-#   - .github/workflows/full-validation.yml — manual + weekly
+# Routine CI gate: fast feedback on every push and PR. Runs the whole
+# workspace test surface in debug — lib, bins, tests/ and doctests.
+#
+# What is still NOT here, and why, lives in:
+#   - .github/workflows/full-validation.yml — manual + weekly. Release-mode
+#     build; downloads the 32 MB DE440s kernel so the SpkReader and oracle
+#     tests actually execute instead of skipping; sets
+#     VEDAKSHA_REQUIRE_FIXTURES=1 so a missing fixture is red, not green;
+#     runs the #[ignore]d tiers via --include-ignored (JPL Horizons
+#     live-fetch, the legacy lunar oracle, the multi-hour riseset scan
+#     sweeps, the MCP 365-day transit search) plus the unskipped
+#     analytical_oracle_regression; runs clippy; and re-fetches the IMCCE
+#     primary distributions to verify the coefficient blobs have not drifted.
 #   - .github/workflows/release.yml         — every tag
 # This workflow targets ~3 minutes total.
 
@@ -26,14 +35,41 @@ jobs:
         with:
           components: rustfmt
       - uses: Swatinem/rust-cache@v2
-      - name: Unit tests + Tier-2 paper-example acceptance
-        # Debug mode — one build artifact set. Unit tests do 1-2 series
-        # evaluations each (microseconds even in debug). Tier-2 paper
-        # examples does ~10 ELP/MPP02 evals; debug ~50ms each = ~0.5s
-        # total. Total target for this step ≤90s on cold cache.
-        run: |
-          cargo test --workspace --lib --locked
-          cargo test -p vedaksha-ephem-core --test lunar_paper_examples --locked
+      - name: Unit + integration tests + doctests
+        # Debug mode — one build artifact set.
+        #
+        # This step used to be `--lib` plus one hand-picked integration
+        # target. `--lib` compiles neither `tests/` nor the bin targets, so
+        # every integration test and every doctest ran ONLY in the weekly
+        # Full Validation job. That is the same blind spot that let Full
+        # Validation sit red for a fortnight when clippy 1.97 started firing
+        # on untouched code: what runs per push was never what runs on the
+        # schedule. Concretely it meant `vedaksha-wasm`'s
+        # mcp_surface_parity.rs — added precisely because the Python
+        # conformance harness compares one crate compiled twice rather than
+        # two surfaces — could not fail a push.
+        #
+        # A bare `cargo test --workspace` covers lib + bins + tests/ + doctests.
+        #
+        # `--skip analytical_oracle_regression`: that test walks all 24,350
+        # committed Horizons oracle rows through the analytical provider.
+        # Its fixture IS in git, so unlike the kernel-backed tests it does not
+        # skip — and in debug it had not finished after 300 s of measurement
+        # (~51 s in --release). It is a release-mode test by nature and Full
+        # Validation runs it there, unskipped. Nothing else is filtered.
+        #
+        # VEDAKSHA_REQUIRE_FIXTURES is deliberately NOT set here: the
+        # SpkReader/oracle tests need the 32 MB gitignored DE440s kernel and
+        # are designed to skip cleanly without it (see
+        # crates/vedaksha-ephem-core/tests/common/mod.rs). Full Validation
+        # sets it so a missing fixture goes red there instead of lying.
+        # Nothing in this step touches the network.
+        #
+        # Measured cost of this change on an M4: 100.9 s -> 106.9 s
+        # (workspace crates cleaned, dependency cache warm — what
+        # Swatinem/rust-cache leaves behind). The vedaksha-astro lib tests
+        # dominate at ~88 s; the added test targets and doctests are ~6 s.
+        run: cargo test --workspace --locked -- --skip analytical_oracle_regression
       - name: Format check
         run: cargo fmt --all -- --check
 
