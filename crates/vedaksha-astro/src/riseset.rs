@@ -130,6 +130,15 @@
 //! worst value disagreement of one ULP. The fixed-RA tier sweeps the poles at
 //! 441 000 comparisons on the same terms.
 //!
+//! Those two sweeps, and the two measurements beside them, are DERIVATION
+//! EVIDENCE — produced once, recorded on each test, and gated behind the
+//! non-default `derivation-sweeps` feature so `--include-ignored` cannot pull
+//! hours of re-derivation into the weekly Full Validation. Re-run them when the
+//! SEARCH ALGORITHM changes; each carries its own re-run command. Four coarse
+//! `_sampled` counterparts stay in the plain `#[ignore]`d tier and keep the
+//! regimes — polar transition, |lat| 88 to the pole, non-zero elevation, all
+//! three eras — asserted on every full validation.
+//!
 //! Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 12 (sidereal time),
 //! Ch. 13 (altitude), Ch. 15 (rising, transit, setting), Ch. 47 (the Moon's
 //! mean rate, used only to size the fixture above).
@@ -2837,9 +2846,9 @@ mod tests {
         lons
     }
 
-    /// Print a sweep's outcome. Only reached under `--nocapture` in the
-    /// `#[ignore]`d tier, where the numbers in the tolerance derivation come
-    /// from.
+    /// Print a sweep's outcome. Only visible under `--nocapture`, in the
+    /// `derivation-sweeps` tier where the numbers in the tolerance derivation
+    /// come from and in the `#[ignore]`d `_sampled` tier that guards it.
     fn report(label: &str, r: &SweepResult) {
         std::println!(
             "{label}: {} comparisons, max gap {:e} d ({:e} s), presence mismatches {}",
@@ -2864,6 +2873,33 @@ mod tests {
     }
 
     /// Tolerance for analytic-vs-scan agreement, in days.
+    ///
+    /// # Where this number comes from, and when to re-earn it
+    ///
+    /// It was DERIVED by the four brute-force scan-oracle sweeps that now sit
+    /// behind the non-default `derivation-sweeps` feature:
+    /// [`analytic_rise_agrees_with_the_scan_oracle_dense`],
+    /// [`polar_band_disagreement_is_measured_not_asserted`],
+    /// [`the_high_latitude_band_agrees_with_the_scan_oracle`] and
+    /// [`the_latitude_limit_is_derived_from_where_the_walk_first_disagrees`].
+    /// Each records its own numbers, the commit it was last run at, and its
+    /// exact re-run command. Re-run all four with:
+    ///
+    /// ```text
+    /// cargo test --release -p vedaksha-astro --lib \
+    ///     --features derivation-sweeps -- --nocapture
+    /// ```
+    ///
+    /// **Run them when the SEARCH ALGORITHM changes — not on a schedule.**
+    /// Evidence produced once and recorded is not re-earned by re-running it,
+    /// and the defects these sweeps found are pinned as cheap named cases in
+    /// [`REAL_SUN_CASES`] that run on every push. The four coarse `_sampled`
+    /// counterparts in the plain `#[ignore]`d tier keep the same regimes —
+    /// polar transition, |lat| 88 to the pole, non-zero elevation, all three
+    /// eras — under guard on every full validation; they assert this tolerance
+    /// rather than deriving it.
+    ///
+    /// # The derivation itself
     ///
     /// **DERIVED, not chosen.** Both implementations converge on the same root
     /// of the same continuous function: the bisection halves a 5-minute
@@ -2965,20 +3001,37 @@ mod tests {
         flat.assert_agrees("fixed-RA fixture", AGREEMENT_TOL_DAYS);
     }
 
-    /// SHIP GATE, dense tier: the same comparison at full grid resolution and
-    /// for the REAL Sun as well as the fixture, plus a third tier aimed
-    /// squarely at the regime the convergence defect lived in.
+    /// DERIVATION, dense tier: the same comparison at full grid resolution and
+    /// for the REAL Sun as well as the fixture.
     ///
-    /// `#[ignore]`d because the oracle is the 5-minute scan — the very cost
-    /// this change removed — and the real Sun costs 415 µs per ephemeris
-    /// evaluation even in `--release`. This is where the numbers in
-    /// [`AGREEMENT_TOL_DAYS`]'s derivation come from. Run it deliberately, in
-    /// release:
+    /// # Gated behind `derivation-sweeps` — read this before re-running it
+    ///
+    /// This produced [`AGREEMENT_TOL_DAYS`]. It is evidence, produced once and
+    /// recorded below; re-running it does not re-earn it. Every defect it ever
+    /// found is pinned as a named case in [`REAL_SUN_CASES`], which runs in the
+    /// normal tier on every push. Run this when the SEARCH ALGORITHM changes —
+    /// not on a schedule.
+    ///
+    /// `#[ignore]` was not enough to keep it off the schedule:
+    /// `full-validation.yml` runs `--include-ignored`, which pulled it in. It is
+    /// therefore feature-gated, so `--include-ignored` cannot compile it, let
+    /// alone run it. Coarse coverage of the same regimes stays in the plain
+    /// `#[ignore]`d tier as
+    /// [`analytic_rise_agrees_with_the_scan_oracle_sampled`].
+    ///
+    /// The oracle is the 5-minute scan — the very cost this module's analytic
+    /// path removed — and the real Sun costs 415 µs per ephemeris evaluation
+    /// even in `--release`. Exact re-run command:
     ///
     /// ```text
     /// cargo test --release -p vedaksha-astro --lib \
-    ///     analytic_rise_agrees_with_the_scan_oracle_dense -- --ignored --nocapture
+    ///     --features derivation-sweeps \
+    ///     analytic_rise_agrees_with_the_scan_oracle_dense -- --nocapture
     /// ```
+    ///
+    /// # Recorded — last run at commit `57e74cc`, aarch64 `--release`
+    ///
+    /// TODO_FILL_DENSE
     ///
     /// # What is sampled, exactly
     ///
@@ -2997,8 +3050,8 @@ mod tests {
     /// The tiers are all measured before any is asserted, so one failure still
     /// reports every tier's numbers — which is what makes this the place the
     /// tolerance is derived from rather than merely checked at.
+    #[cfg(feature = "derivation-sweeps")]
     #[test]
-    #[ignore = "tier-2: full-density scan-oracle sweep; ~2 h in --release, run manually"]
     fn analytic_rise_agrees_with_the_scan_oracle_dense() {
         let jds = sweep_julian_days(12);
         let lons = longitude_grid();
@@ -3042,6 +3095,63 @@ mod tests {
         real.assert_agrees("real Sun (dense)", AGREEMENT_TOL_DAYS);
     }
 
+    /// The affordable stand-in for
+    /// [`analytic_rise_agrees_with_the_scan_oracle_dense`], kept in the plain
+    /// `#[ignore]`d tier so full validation still walks these regimes.
+    ///
+    /// The fixed-RA tier is NOT sampled — it runs the dense grid in full
+    /// (441 000 comparisons in 5.1 s measured, because `flat_sun` is a
+    /// constant closure and the scan is then pure arithmetic). All of the
+    /// dense tier's cost is the real Sun, so that is the only axis thinned:
+    ///
+    /// | axis | dense | sampled | why |
+    /// |---|---|---|---|
+    /// | latitude | all 49 | **all 49** | the axis that decides whether a crossing exists, and where both polar transitions live — never thinned |
+    /// | elevation | 0 m, 3650 m | **both** | the horizon dip moves `h₀` by 1.77°, which moves every polar boundary with it |
+    /// | longitude | 7 | 1 (0°) | pure hour-angle offset; the geometry it varies is already varied by date |
+    /// | date | 12 (4 per era) | 3 (**1 per era**) | keeps 1950/2000/2100, so ΔT and obliquity still differ across samples |
+    ///
+    /// Real-Sun sampling factor **28×**: 8 232 samples → 294, i.e. 41 160
+    /// comparisons → 1 470.
+    ///
+    /// This is coverage, not derivation. It cannot re-derive
+    /// [`AGREEMENT_TOL_DAYS`] — 1 470 comparisons do not license a tolerance —
+    /// and it is not asked to. It asserts the tolerance the dense run derived,
+    /// which is what a regression guard is for.
+    #[test]
+    #[ignore = "sampled scan-oracle sweep; minutes in --release, seconds-scale in the ignored tier"]
+    fn analytic_rise_agrees_with_the_scan_oracle_sampled() {
+        let jds = sweep_julian_days(12);
+        let lons = longitude_grid();
+
+        // Tier 1 at full dense resolution — the fixture costs nothing.
+        let flat = sweep(
+            &SWEEP_LATITUDES_DEG,
+            &lons,
+            &jds,
+            &[0.0, 3_650.0],
+            &flat_sun,
+        );
+        report("fixed-RA fixture (sampled tier, dense grid)", &flat);
+
+        let provider = real_sun_provider();
+        let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
+        // One date per era: jds is laid out 12 consecutive dates per era, so
+        // indices 0, 12 and 24 are 1950, 2000 and 2100.
+        let era_spanning_jds = [jds[0], jds[12], jds[24]];
+        let real = sweep(
+            &SWEEP_LATITUDES_DEG,
+            &[0.0],
+            &era_spanning_jds,
+            &[0.0, 3_650.0],
+            &real_sun,
+        );
+        report("real Sun (sampled)", &real);
+
+        flat.assert_agrees("fixed-RA fixture (sampled)", AGREEMENT_TOL_DAYS);
+        real.assert_agrees("real Sun (sampled)", AGREEMENT_TOL_DAYS);
+    }
+
     /// MEASUREMENT, not a gate: how far the analytic path and the scan oracle
     /// still differ in the polar band, |lat| 88 to the pole, at dates that
     /// straddle the polar-night and polar-day boundaries.
@@ -3050,12 +3160,27 @@ mod tests {
     /// not fully model a horizon crossing driven by the declination rather than
     /// by rotation, and pinning a gate
     /// at a tolerance the code does not meet would be worse than recording
-    /// exactly where it stops. Run it to see whether a change moves the number:
+    /// exactly where it stops.
+    ///
+    /// # Gated behind `derivation-sweeps`
+    ///
+    /// A measurement is derivation by definition: its output is the table
+    /// below, and re-running it on a schedule re-produces a number that is
+    /// already written down. It is gated for the same reason as the dense
+    /// sweep — `#[ignore]` did not keep it out of `full-validation.yml`'s
+    /// `--include-ignored`, and a feature does. Run it when the SEARCH
+    /// ALGORITHM changes, to see whether a change moves the number:
     ///
     /// ```text
     /// cargo test --release -p vedaksha-astro --lib \
-    ///     polar_band_disagreement_is_measured_not_asserted -- --ignored --nocapture
+    ///     --features derivation-sweeps \
+    ///     polar_band_disagreement_is_measured_not_asserted -- --nocapture
     /// ```
+    ///
+    /// The one thing it does gate — that `previous_rise`/`next_rise` never
+    /// disagree with the oracle about EXISTENCE anywhere in the band — is kept
+    /// on every full validation by
+    /// [`polar_band_disagreement_is_measured_not_asserted_sampled`].
     ///
     /// # Recorded, both sides of [`ANALYTIC_LATITUDE_LIMIT_DEG`]
     ///
@@ -3097,8 +3222,8 @@ mod tests {
     /// enumerating dips as well as rotations, which is a different search, and
     /// it does not reach the vara — [`previous_rise`] and [`next_rise`] agree
     /// with the oracle everywhere in this band, before and after.
+    #[cfg(feature = "derivation-sweeps")]
     #[test]
-    #[ignore = "measurement: polar-band disagreement, ~30 min in --release"]
     fn polar_band_disagreement_is_measured_not_asserted() {
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
@@ -3121,6 +3246,62 @@ mod tests {
         // The one thing this tier DOES gate: the instant-anchored searches —
         // the primitives the vara is reckoned from — must never disagree with
         // the oracle about whether a sunrise exists, anywhere in the band.
+        assert_eq!(
+            polar.previous_rise.presence_mismatches, 0,
+            "previous_rise disagreed about EXISTENCE somewhere in the polar band; \
+             first at {:?}",
+            polar.previous_rise.first_presence_mismatch
+        );
+        assert_eq!(
+            polar.next_rise.presence_mismatches, 0,
+            "next_rise disagreed about EXISTENCE somewhere in the polar band; \
+             first at {:?}",
+            polar.next_rise.first_presence_mismatch
+        );
+    }
+
+    /// The affordable stand-in for
+    /// [`polar_band_disagreement_is_measured_not_asserted`], carrying the one
+    /// assertion that tier makes into every full validation.
+    ///
+    /// | axis | full | sampled | why |
+    /// |---|---|---|---|
+    /// | latitude | all 14 | **all 14** | the band IS the regime under test |
+    /// | elevation | 0 m, 3650 m | **both** | 3650 m moves `h₀` by 1.77°, and every polar boundary with it |
+    /// | longitude | 4 | 1 (0°) | a pure hour-angle offset within a band selected by latitude and date |
+    /// | date | 30 | 6 | one per (era × equinox), at ±6 d — the straddle, not the equinox itself |
+    ///
+    /// The date subset is the load-bearing choice. `polar_sweep_julian_days`
+    /// lays out 3 eras × 2 equinox centres × offsets −6, −3, 0, +3, +6, and the
+    /// residual this band exists to watch lives in the window either side of an
+    /// equinox, not on it — a grid of on-the-nose equinoxes is how this regime
+    /// went unmeasured before. Indices 0, 9, 10, 19, 20 and 29 take k = −6 and
+    /// k = +6, at both centres, in all three eras.
+    ///
+    /// Sampling factor **20×**: 3 360 samples → 168, i.e. 16 800 comparisons →
+    /// 840.
+    #[test]
+    #[ignore = "sampled polar-band existence gate; ~1.5 min in --release"]
+    fn polar_band_disagreement_is_measured_not_asserted_sampled() {
+        let provider = real_sun_provider();
+        let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
+        let all_jds = polar_sweep_julian_days();
+        let jds = [
+            all_jds[0],
+            all_jds[9],
+            all_jds[10],
+            all_jds[19],
+            all_jds[20],
+            all_jds[29],
+        ];
+        let polar = sweep(
+            &POLAR_SWEEP_LATITUDES_DEG,
+            &[0.0],
+            &jds,
+            &[0.0, 3_650.0],
+            &real_sun,
+        );
+        report("real Sun (polar band, sampled)", &polar);
         assert_eq!(
             polar.previous_rise.presence_mismatches, 0,
             "previous_rise disagreed about EXISTENCE somewhere in the polar band; \
@@ -3718,13 +3899,27 @@ mod tests {
     /// SHIP GATE, |lat| 88 to the pole: the band the convergence defect lived
     /// in, swept against the scan oracle at 0.1° resolution.
     ///
-    /// `#[ignore]`d for cost — 5 376 real-Sun samples, ~35 min in `--release`
-    /// — not because it is optional. Run it after any change to the search:
+    /// # Gated behind `derivation-sweeps`
+    ///
+    /// Not because it is optional — because it is DERIVATION, run once and
+    /// recorded, and `#[ignore]` did not keep it off the weekly schedule:
+    /// `full-validation.yml` runs `--include-ignored`. Run it when the SEARCH
+    /// ALGORITHM changes:
     ///
     /// ```text
     /// cargo test --release -p vedaksha-astro --lib \
-    ///     the_high_latitude_band_agrees_with_the_scan_oracle -- --ignored --nocapture
+    ///     --features derivation-sweeps \
+    ///     the_high_latitude_band_agrees_with_the_scan_oracle -- --nocapture
     /// ```
+    ///
+    /// The regime stays covered on every full validation by
+    /// [`the_high_latitude_band_agrees_with_the_scan_oracle_sampled`].
+    ///
+    /// The "5 376 real-Sun samples, ~35 min in `--release`" this note used to
+    /// carry was stale on both halves. 5 376 was the ORIGINAL eight-anchor grid;
+    /// the shipped grid has fourteen anchors and 9 408 comparisons, as the
+    /// assertion at the end of the body states. See the recorded timing below
+    /// for the measured cost.
     ///
     /// # Why this grid exists
     ///
@@ -3765,8 +3960,10 @@ mod tests {
     /// from `search_rise`, this test fails on the lat 89.9 / lon 0 / 3650 m /
     /// JD 2 451 617.5 comparison. With the original eight it passed. That is
     /// the difference the six anchors buy.
+    ///
+    /// TODO_FILL_HILAT
+    #[cfg(feature = "derivation-sweeps")]
     #[test]
-    #[ignore = "ship gate, tier 2: 9408 real-Sun comparisons against the scan oracle, ~1.5 h in --release"]
     fn the_high_latitude_band_agrees_with_the_scan_oracle() {
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
@@ -3816,6 +4013,89 @@ mod tests {
             "sanity: 21 latitudes × 8 longitudes × 14 dates × 2 elevations × 2 directions"
         );
         agreement.assert_agrees("|lat| 88 to the pole", AGREEMENT_TOL_DAYS);
+    }
+
+    /// The affordable stand-in for
+    /// [`the_high_latitude_band_agrees_with_the_scan_oracle`], kept in the
+    /// plain `#[ignore]`d tier so full validation still walks |lat| 88 to the
+    /// pole.
+    ///
+    /// | axis | full | sampled | why |
+    /// |---|---|---|---|
+    /// | latitude | 21 at 0.1° | **21 at 0.1°** | this IS the regime; every wrong sunrise the convergence defect produced sat between [`SWEEP_LATITUDES_DEG`]'s 85 → 89 → 90 jumps |
+    /// | elevation | 0 m, 3650 m | **both** | 3650 m is where the pinned failure sits |
+    /// | direction | both | **both** | `previous_rise` and `next_rise` fail differently |
+    /// | longitude | 8 | 2 (0°, 90°) | pure hour-angle offset |
+    /// | anchor | 14 | 3 | see below |
+    ///
+    /// The three anchors are chosen, not decimated: index 0 (JD 2 459 287.5,
+    /// where the convergence defect was first reproduced), index 4
+    /// (JD 2 451 544.5, an on-the-nose era anchor) and index 10
+    /// (JD 2 451 617.5, the equinox-STRADDLING date the pinned wrong-rotation
+    /// case sits on). Taking every fifth anchor instead would have kept only
+    /// on-the-nose solstices and equinoxes — exactly the grid that let this
+    /// regime pass while it was broken.
+    ///
+    /// Sampling factor **18.7×**: 9 408 comparisons → 504.
+    ///
+    /// It asserts the same tolerance on a smaller grid. It does not re-derive
+    /// [`ANALYTIC_LATITUDE_LIMIT_DEG`]; that is
+    /// [`the_latitude_limit_is_derived_from_where_the_walk_first_disagrees`]'s
+    /// job, and that one is gated.
+    #[test]
+    #[ignore = "sampled |lat| 88-to-pole ship gate; ~1.5 min in --release"]
+    fn the_high_latitude_band_agrees_with_the_scan_oracle_sampled() {
+        let provider = real_sun_provider();
+        let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
+        let mut agreement = Agreement::default();
+
+        let anchors = [
+            HIGH_LATITUDE_ANCHORS[0],
+            HIGH_LATITUDE_ANCHORS[4],
+            HIGH_LATITUDE_ANCHORS[10],
+        ];
+        let mut lat_tenths = 880_i32;
+        while lat_tenths <= 900 {
+            let lat = f64::from(lat_tenths) / 10.0;
+            for lon in [0.0_f64, 90.0] {
+                for jd in anchors {
+                    for elevation in [0.0_f64, 3_650.0] {
+                        agreement.record(
+                            lat,
+                            lon,
+                            elevation,
+                            jd,
+                            previous_rise(jd, lat, lon, elevation, &real_sun),
+                            scan_reference::previous_rise_by_scan(
+                                jd, lat, lon, elevation, &real_sun,
+                            ),
+                        );
+                        agreement.record(
+                            lat,
+                            lon,
+                            elevation,
+                            jd,
+                            next_rise(jd, lat, lon, elevation, &real_sun),
+                            scan_reference::next_rise_by_scan(jd, lat, lon, elevation, &real_sun),
+                        );
+                    }
+                }
+            }
+            lat_tenths += 1;
+        }
+
+        std::println!(
+            "high-latitude band (sampled): {} comparisons, max gap {:e} d, presence mismatches {}",
+            agreement.samples,
+            agreement.max_gap_days,
+            agreement.presence_mismatches
+        );
+        std::println!("worst: {:?}", agreement.worst);
+        assert_eq!(
+            agreement.samples, 504,
+            "sanity: 21 latitudes × 2 longitudes × 3 anchors × 2 elevations × 2 directions"
+        );
+        agreement.assert_agrees("|lat| 88 to the pole (sampled)", AGREEMENT_TOL_DAYS);
     }
 
     /// Anchors for [`the_high_latitude_band_agrees_with_the_scan_oracle`] and
@@ -4196,11 +4476,24 @@ mod tests {
     /// `polar_band_disagreement_is_measured_not_asserted`, whose grid is
     /// mirrored.
     ///
+    /// # Gated behind `derivation-sweeps`
+    ///
+    /// This is the purest derivation in the file: its entire product is the
+    /// value of [`ANALYTIC_LATITUDE_LIMIT_DEG`], and that value is written
+    /// down. Re-running it weekly re-derives a constant nobody changed, and
+    /// `#[ignore]` did not stop `full-validation.yml`'s `--include-ignored`
+    /// from doing exactly that. Run it when the SEARCH ALGORITHM changes — it
+    /// is the measurement that would tell you the limit has moved:
+    ///
     /// ```text
     /// cargo test --release -p vedaksha-astro --lib \
+    ///     --features derivation-sweeps \
     ///     the_latitude_limit_is_derived_from_where_the_walk_first_disagrees \
-    ///     -- --ignored --nocapture
+    ///     -- --nocapture
     /// ```
+    ///
+    /// [`the_latitude_limit_is_derived_from_where_the_walk_first_disagrees_sampled`]
+    /// keeps the both-directions claim on every full validation.
     ///
     /// It asserts in BOTH directions, like the Moon-like scope test: the walk
     /// must be clean at and below the limit (or the limit is too high), and it
@@ -4220,8 +4513,10 @@ mod tests {
     /// because [`boundary_is_reachable`]'s reach bound already sends every
     /// rotation at the pole to the scan. The per-band totals are tabulated in
     /// [`ANALYTIC_LATITUDE_LIMIT_DEG`].
+    ///
+    /// TODO_FILL_LATLIMIT
+    #[cfg(feature = "derivation-sweeps")]
     #[test]
-    #[ignore = "measurement: derives ANALYTIC_LATITUDE_LIMIT_DEG, ~1 h in --release"]
     fn the_latitude_limit_is_derived_from_where_the_walk_first_disagrees() {
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
@@ -4307,6 +4602,108 @@ mod tests {
              news, and it means the routing is buying nothing on this grid — retire the \
              limit and its derivation rather than leaving a claim standing that the \
              measurement no longer supports"
+        );
+    }
+
+    /// The affordable stand-in for
+    /// [`the_latitude_limit_is_derived_from_where_the_walk_first_disagrees`],
+    /// carrying its BOTH-DIRECTIONS claim into every full validation.
+    ///
+    /// It walks the identical grid as
+    /// [`the_high_latitude_band_agrees_with_the_scan_oracle_sampled`] — 21
+    /// latitudes at 0.1°, longitudes 0° and 90°, anchors 0/4/10, both
+    /// elevations, both directions, 504 comparisons, a **18.7×** sampling
+    /// factor — so the gated pair and the sampled pair stay the same experiment
+    /// on the two sides of the routing, exactly as the full versions do.
+    ///
+    /// # The anchor choice is what makes this test able to fail
+    ///
+    /// The `bad_above_limit > 0` half is a mutation check: it fails if the
+    /// routing stops buying anything. That only works if the sample CONTAINS a
+    /// case the rotation walk gets wrong, and there is exactly one shape of
+    /// those — lat 89.9, lon 0, 3650 m, JD 2 451 617.5, the equinox-straddling
+    /// date. `HIGH_LATITUDE_ANCHORS[10]` is that date and 0° is that longitude,
+    /// which is why the subset is chosen rather than decimated. A grid that
+    /// dropped it would assert `bad_above_limit > 0` over a band with no bad
+    /// case in it, and go green having tested nothing — the failure mode this
+    /// whole tiering exercise exists to avoid.
+    ///
+    /// It does NOT re-derive the limit: 0.1° resolution over three anchors
+    /// cannot locate a first-bad latitude with the authority the gated version
+    /// has. It checks that the limit still separates clean from dirty.
+    #[test]
+    #[ignore = "sampled ANALYTIC_LATITUDE_LIMIT_DEG both-directions check; ~1.5 min in --release"]
+    fn the_latitude_limit_is_derived_from_where_the_walk_first_disagrees_sampled() {
+        let provider = real_sun_provider();
+        let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
+
+        let anchors = [
+            HIGH_LATITUDE_ANCHORS[0],
+            HIGH_LATITUDE_ANCHORS[4],
+            HIGH_LATITUDE_ANCHORS[10],
+        ];
+        let mut comparisons = 0_u32;
+        let mut bad_at_or_below_limit = 0_u32;
+        let mut bad_above_limit = 0_u32;
+        let mut worst_overall = 0.0_f64;
+
+        let mut lat_tenths = 880_i32;
+        while lat_tenths <= 900 {
+            let lat = f64::from(lat_tenths) / 10.0;
+            for lon in [0.0_f64, 90.0] {
+                for jd in anchors {
+                    for elevation in [0.0_f64, 3_650.0] {
+                        let h0 = SUN_STANDARD_ALTITUDE_DEG + horizon_dip_deg(elevation);
+                        for forward in [false, true] {
+                            let walk = search_rise_analytic(jd, lat, lon, h0, forward, &real_sun);
+                            let scan = scan_reference::search_rise_by_scan(
+                                jd, lat, lon, h0, forward, &real_sun,
+                            );
+                            comparisons += 1;
+                            let bad = match (walk, scan) {
+                                (Some(a), Some(b)) => {
+                                    let gap = libm::fabs(a - b);
+                                    if gap > worst_overall {
+                                        worst_overall = gap;
+                                    }
+                                    u32::from(gap > AGREEMENT_TOL_DAYS)
+                                }
+                                (None, None) => 0,
+                                _ => 1,
+                            };
+                            if lat > ANALYTIC_LATITUDE_LIMIT_DEG {
+                                bad_above_limit += bad;
+                            } else {
+                                bad_at_or_below_limit += bad;
+                            }
+                        }
+                    }
+                }
+            }
+            lat_tenths += 1;
+        }
+
+        std::println!(
+            "walk vs oracle (sampled): {comparisons} comparisons, bad at or below \
+             {ANALYTIC_LATITUDE_LIMIT_DEG}: {bad_at_or_below_limit}, bad above: \
+             {bad_above_limit}, worst gap {worst_overall:e} d"
+        );
+        assert_eq!(
+            comparisons, 504,
+            "sanity: 21 latitudes × 2 longitudes × 3 anchors × 2 elevations × 2 directions"
+        );
+        assert_eq!(
+            bad_at_or_below_limit, 0,
+            "the rotation walk disagreed with the oracle AT OR BELOW \
+             ANALYTIC_LATITUDE_LIMIT_DEG = {ANALYTIC_LATITUDE_LIMIT_DEG}; the limit is \
+             too high and the fast path is shipping a wrong vara below it"
+        );
+        assert!(
+            bad_above_limit > 0,
+            "the rotation walk agreed with the oracle everywhere above \
+             ANALYTIC_LATITUDE_LIMIT_DEG = {ANALYTIC_LATITUDE_LIMIT_DEG} on the sampled \
+             grid. Either the routing is buying nothing, or the sample lost the lat 89.9 \
+             / lon 0 / 3650 m / JD 2451617.5 case it is anchored on"
         );
     }
 }

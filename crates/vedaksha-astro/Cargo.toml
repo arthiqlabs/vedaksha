@@ -21,3 +21,30 @@ serde = { workspace = true }
 [features]
 default = ["std"]
 std = ["vedaksha-ephem-core/std"]
+
+# Compiles the four brute-force scan-oracle sweeps in `riseset.rs` that DERIVED
+# `AGREEMENT_TOL_DAYS` and `ANALYTIC_LATITUDE_LIMIT_DEG`. Deliberately not in
+# `default`, and deliberately a feature rather than an env-var early return.
+#
+# They are one-time derivation evidence, not regression guards. Evidence
+# produced once and recorded is not re-earned by re-running it, and every defect
+# they found is already pinned as a cheap named case (`REAL_SUN_CASES`) that
+# runs in the normal tier. Re-run them when the SEARCH ALGORITHM changes — not
+# on a schedule.
+#
+# `#[ignore]` alone was not enough: full-validation.yml runs
+# `cargo test --workspace --release --locked -- --include-ignored`, which pulled
+# all four in and took that job from ~25 minutes to hours, against a GitHub
+# Actions hard cap of 6 h per job — on a job that had already sat red for two
+# weeks unnoticed. Behind a non-default feature `--include-ignored` cannot reach
+# them at all, because they are not compiled.
+#
+# An env-var early return would have been the wrong instrument: a test that
+# returns early still reports PASS, so the suite would go green having verified
+# nothing. This repo has already been bitten by exactly that (see
+# `tests/common/mod.rs`). Not compiling a test cannot be mistaken for passing
+# one.
+#
+# Each gated sweep keeps a coarse SAMPLED counterpart in the plain `#[ignore]`d
+# tier, so the regimes stay covered on every full validation.
+derivation-sweeps = []
