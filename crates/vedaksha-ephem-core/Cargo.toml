@@ -42,10 +42,19 @@ vedaksha-math = { version = "5.0.0", path = "../vedaksha-math" }
 # amplifies). That is ~10 orders of magnitude below ELP/MPP02's own ~0.169"
 # disagreement with DE441, so no accuracy claim in the repo moves.
 #
-# Attribution is exact, not inferred: no commit in ee85cdf^..HEAD touches
-# crates/vedaksha-ephem-core/src or crates/vedaksha-math/src, ee85cdf's own
-# Cargo.lock delta is wide + safe_arch and nothing else, and the ee85cdf digest
-# already equals HEAD's. Digests reproduce byte-for-byte on re-run.
+# Attribution is exact, not inferred. Exactly one commit in ee85cdf^..HEAD
+# touches crates/vedaksha-ephem-core/src or crates/vedaksha-math/src — 57e74cc —
+# and every changed line in it is a `//!` comment, so it cannot alter codegen
+# (`git diff ee85cdf^ HEAD -- crates/vedaksha-ephem-core/src` filtered to
+# non-comment lines is empty). ee85cdf's own Cargo.lock delta is wide +
+# safe_arch and nothing else, and the ee85cdf digest already equals HEAD's.
+#
+# Independently reproduced 2026-08-16 in a second session from clean worktrees
+# (`ee85cdf^` = 391367d with wide 0.7.33/safe_arch 0.7.4 vs HEAD): both
+# all-bodies digests and both Moon-only digests came back byte-for-byte equal to
+# the values above, over 21,915 rows each with 0 out-of-range and 0 error rows.
+# The 6 differing rows are the 6 listed by `diff`; magnitudes re-derived from
+# the raw bit patterns rather than carried over.
 #
 # Re-run: see the module comment of tests/analytical_bit_digest.rs.
 wide = { version = "1.6.1", default-features = false }

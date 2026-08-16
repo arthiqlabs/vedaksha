@@ -14,6 +14,37 @@
 //! Regenerate the fixture with `python3 scripts/generate_horizons_oracle.py`;
 //! that script documents the frame and time-scale contract both sides must
 //! honour.
+//!
+//! # Scope — and what this test does NOT cover
+//!
+//! This file and `analytical_oracle.rs` have near-identical names, share one
+//! fixture, and print near-identical reports. They are nonetheless **disjoint
+//! instruments**: they read the same reference rows through two providers that
+//! share no evaluation code.
+//!
+//! | | provider | positions come from | enters `analytical/`? |
+//! |---|---|---|---|
+//! | `oracle_comparison.rs` (this file) | `SpkReader` | DE440s binary kernel, Chebyshev interpolation | **no** |
+//! | `analytical_oracle.rs` | `AnalyticalProvider` | VSOP87A + ELP/MPP02 series, zero data files | **yes** |
+//!
+//! What this file covers is the SPK reader, the Chebyshev evaluation and the
+//! shared apparent-place pipeline (light-time, aberration, precession,
+//! nutation). What it does **not** cover is the entire `analytical/` module:
+//! nothing here constructs an `AnalyticalProvider`, so VSOP87A, ELP/MPP02,
+//! `analytical/simd_trig.rs` and the `wide` dependency behind it are all
+//! invisible to it.
+//!
+//! That matters because this test's per-row digest (`6dea5ddbd3c61b08…`) has
+//! twice been used as a gate on changes it cannot see. Both times it was
+//! demonstrated, not assumed:
+//!
+//! - an FMA change that rewrote **90.67%** of ELP/MPP02's output bits left this
+//!   digest byte-identical;
+//! - the `wide` 0.7.33 → 1.6.1 bump (`ee85cdf`) moved 6 Moon rows in
+//!   `analytical_bit_digest.rs` while this digest did not move at all.
+//!
+//! If a change touches `analytical/`, this digest is the wrong instrument. Use
+//! `analytical_oracle.rs` for accuracy and `analytical_bit_digest.rs` for bits.
 
 mod common;
 

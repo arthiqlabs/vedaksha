@@ -10,6 +10,35 @@
 //! `analytical_accuracy.rs` compares it against our own DE440s.
 //!
 //! Regenerate the fixture with `python3 scripts/generate_horizons_oracle.py`.
+//!
+//! # Scope — and what this test does NOT cover
+//!
+//! This file and `oracle_comparison.rs` have near-identical names, share one
+//! fixture, and print near-identical reports. They are nonetheless **disjoint
+//! instruments**: they read the same reference rows through two providers that
+//! share no evaluation code.
+//!
+//! | | provider | positions come from | enters `analytical/`? |
+//! |---|---|---|---|
+//! | `analytical_oracle.rs` (this file) | `AnalyticalProvider` | VSOP87A + ELP/MPP02 series, zero data files | **yes** |
+//! | `oracle_comparison.rs` | `SpkReader` | DE440s binary kernel, Chebyshev interpolation | **no** |
+//!
+//! So `oracle_comparison.rs` is blind to everything this test covers, and vice
+//! versa. Changes to `analytical/elp_mpp02.rs`, `analytical/vsop87a.rs`,
+//! `analytical/simd_trig.rs`, or a dependency they pull in (`wide`) can only be
+//! seen here or in `analytical_accuracy.rs` — never there. Treating that test's
+//! digest as a gate on this path is the specific mistake this note exists to
+//! prevent; see the `wide` entry in `Cargo.toml` for the case where it happened.
+//!
+//! Two further limits of this test specifically:
+//!
+//! - **Pluto is not covered.** It has no analytical theory, so `body_from_name`
+//!   drops it: 21,915 of the fixture's 24,350 rows are compared (9 bodies ×
+//!   2,435).
+//! - **It is an accuracy gate, not a bit-level one.** It asserts an arcsecond
+//!   ceiling (`MEASURED_MAX_ARCSEC`), so any change smaller than that — a
+//!   1-ULP shift in the lunar series, say — passes it silently. For bit-level
+//!   movement use `analytical_bit_digest.rs`.
 
 mod common;
 
