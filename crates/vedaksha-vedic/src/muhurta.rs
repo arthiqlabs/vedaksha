@@ -657,31 +657,51 @@ fn refine_crossing(
     Some(jd)
 }
 
+/// The Moon and the Sun as evaluated at one instant:
+/// `((moon_longitude_deg, moon_daily_motion), (sun_longitude_deg,
+/// sun_daily_motion))`, both motions in degrees per day.
+///
+/// This is what [`compute_tithi_end`]'s callback returns. Pairing them in one
+/// return value is the point: every quantity that function derives is a
+/// difference between the two, so it only ever wants them together, and a
+/// caller can then serve both from a single ephemeris evaluation at that
+/// instant.
+pub type MoonAndSun = ((f64, f64), (f64, f64));
+
 /// Julian Day at which the current **tithi** ends — when the Moon–Sun
 /// elongation reaches the next multiple of 12° — refined against true
 /// longitudes. The variable real duration of a tithi (≈20–27 h) comes
 /// entirely from the varying lunar speed, which is why the daily motion is
 /// required here rather than a mean-motion approximation.
 ///
-/// `moon` / `sun` return `(longitude_deg, daily_motion_deg_per_day)`. Tropical
-/// or sidereal input both work — the ayanamsha cancels in the elongation and
-/// its rate.
+/// `moon_and_sun` returns both bodies at one instant — see [`MoonAndSun`].
+/// Tropical or sidereal input both work: the ayanamsha cancels in the
+/// elongation and its rate.
+///
+/// # Why one callback and not two
+///
+/// Every quantity this function needs is an elongation, so it never wants one
+/// body without the other at the same `t`. Two callbacks made that impossible
+/// to exploit: a caller backing them with an ephemeris had to enter the
+/// provider twice per instant and recompute whatever is shared between the two
+/// evaluations. One callback lets the caller answer both from a single
+/// evaluation at `t` — which is exactly what `vedaksha_ephem_core`'s batch
+/// entry point does, hoisting the per-timestamp frames and sharing one
+/// memoizing provider across the pair.
 ///
 /// # Errors / `None`
-/// Returns `None` if a callback yields `None` or the elongation rate vanishes.
+/// Returns `None` if the callback yields `None` or the elongation rate
+/// vanishes.
 #[must_use]
 pub fn compute_tithi_end(
     jd: f64,
-    moon: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
-    sun: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
+    moon_and_sun: &(dyn Fn(f64) -> Option<MoonAndSun> + Sync),
 ) -> Option<f64> {
-    let (m0, _) = moon(jd)?;
-    let (s0, _) = sun(jd)?;
+    let ((m0, _), (s0, _)) = moon_and_sun(jd)?;
     let elong = (m0 - s0).rem_euclid(360.0);
     let next_boundary = ((elong / 12.0).floor() + 1.0) * 12.0;
     let angle_at = |t: f64| -> Option<(f64, f64)> {
-        let (ml, ms) = moon(t)?;
-        let (sl, ss) = sun(t)?;
+        let ((ml, ms), (sl, ss)) = moon_and_sun(t)?;
         Some(((ml - sl).rem_euclid(360.0), ms - ss))
     };
     refine_crossing(next_boundary, jd, &angle_at)
@@ -2150,9 +2170,13 @@ mod tests {
     fn tithi_end_linear_synthetic() {
         // Moon 13.176°/day, Sun 0.985°/day; both at 0° at j0 ⇒ elongation 0.
         let j0 = 2_451_545.0;
-        let moon = |jd: f64| Some(((13.176 * (jd - j0)).rem_euclid(360.0), 13.176));
-        let sun = |jd: f64| Some(((0.985 * (jd - j0)).rem_euclid(360.0), 0.985));
-        let end = compute_tithi_end(j0, &moon, &sun).expect("tithi end");
+        let moon_and_sun = |jd: f64| {
+            Some((
+                ((13.176 * (jd - j0)).rem_euclid(360.0), 13.176),
+                ((0.985 * (jd - j0)).rem_euclid(360.0), 0.985),
+            ))
+        };
+        let end = compute_tithi_end(j0, &moon_and_sun).expect("tithi end");
         let expected = j0 + 12.0 / (13.176 - 0.985); // first 12° elongation boundary
         assert!((end - expected).abs() < 1e-9, "end {end} vs {expected}");
     }
@@ -2631,18 +2655,16 @@ mod tests {
         let jd = 2_460_676.5;
 
         // Elongation is frame-agnostic, so tropical (lon, daily-motion) is fine.
-        let moon_trop = |t: f64| {
-            apparent_position(&provider, Body::Moon, t)
+        let trop = |body: Body, t: f64| {
+            apparent_position(&provider, body, t)
                 .ok()
                 .map(|p| (p.ecliptic.longitude.to_degrees(), p.longitude_speed))
         };
-        let sun_trop = |t: f64| {
-            apparent_position(&provider, Body::Sun, t)
-                .ok()
-                .map(|p| (p.ecliptic.longitude.to_degrees(), p.longitude_speed))
-        };
+        let moon_trop = |t: f64| trop(Body::Moon, t);
+        let sun_trop = |t: f64| trop(Body::Sun, t);
+        let moon_and_sun_trop = |t: f64| Some((moon_trop(t)?, sun_trop(t)?));
 
-        let t_end = compute_tithi_end(jd, &moon_trop, &sun_trop).expect("tithi end");
+        let t_end = compute_tithi_end(jd, &moon_and_sun_trop).expect("tithi end");
         // A tithi lasts ≈ 20–27 h, so the boundary is < ~1.13 days ahead.
         assert!(
             t_end > jd && t_end - jd < 1.2,

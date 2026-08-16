@@ -1246,6 +1246,17 @@ impl McpServer {
         use vedaksha_ephem_core::bodies::Body;
         use vedaksha_ephem_core::coordinates;
 
+        /// One memo slot for the enrichment loop below: an instant, keyed on
+        /// the JD's exact bit pattern, and whatever was computed there.
+        type Slot<T> = Mutex<Option<(u64, T)>>;
+
+        /// Read a slot, hitting only on a bit-for-bit identical JD.
+        fn read_slot<T: Copy>(slot: &Slot<T>, jd: f64) -> Option<T> {
+            slot.lock()
+                .expect("memo slot")
+                .and_then(|(bits, payload)| (bits == jd.to_bits()).then_some(payload))
+        }
+
         let input: crate::tools::search_muhurta::SearchMuhurtaInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
@@ -1308,9 +1319,9 @@ impl McpServer {
         // (position + speed) — but only for the few windows that passed the
         // quality filter, not the position-only scan above.
         //
-        // One `apparent_position` per body per instant, shared by every
-        // consumer of that instant. Two things asked the provider for the same
-        // evaluation twice over:
+        // One ephemeris evaluation per instant, shared by every consumer of
+        // that instant. Three things asked the provider for the same evaluation
+        // twice over:
         //
         //   * The Moon is wanted tropical by the tithi refinement (the
         //     ayanamsha cancels in the elongation) and sidereal by the
@@ -1319,42 +1330,93 @@ impl McpServer {
         //   * Each refinement asks for its body at the candidate instant twice
         //     — once to identify the boundary it is aiming at, once on the
         //     first Newton step, which starts from that same instant.
+        //   * The tithi refinement wants the Moon AND the Sun at each `t` it
+        //     visits. Asked separately, that entered the provider twice per
+        //     instant and rebuilt the same three central-difference frames both
+        //     times.
         //
         // `apparent_position` is a ±0.5-day central difference, i.e. three
         // ephemeris evaluations a call, so these repeats are the dominant cost
-        // of the enrichment loop. A one-slot memo keyed on the *bit pattern* of
-        // the JD collapses them and nothing else: an identical `jd` hands back
-        // the identical `f64`s the provider already produced, and any other
-        // `jd` — including one differing in the last ulp — replaces the slot
-        // and recomputes. `AnalyticalProvider` is a unit struct, so its output
-        // depends on nothing but `(body, jd)`. Values are therefore unchanged,
-        // not approximated.
+        // of the enrichment loop. Three things collapse them, and all three are
+        // reuse of an identical call rather than a different computation, so
+        // values are unchanged rather than approximated:
         //
-        // Slot layout: `(jd.to_bits(), tropical_longitude_deg, longitude_speed)`.
+        //   1. `apparent_positions` (plural) serves the tithi refinement's
+        //      Moon-and-Sun pair from ONE entry: it builds the three frames once
+        //      and shares a memoizing provider across the pair, so the ELP/MPP02
+        //      lunar series each light-time correction pulls in is evaluated per
+        //      timestamp rather than per body. It is bit-identical to
+        //      `apparent_position` per body — asserted by
+        //      `batch_matches_per_body_bit_for_bit`.
+        //   2. Memo slots keyed on the *bit pattern* of the JD. An identical
+        //      `jd` hands back the identical `f64`s the provider already
+        //      produced; any other `jd` — including one differing in the last
+        //      ulp — misses and recomputes. `AnalyticalProvider` is a unit
+        //      struct, so its output depends on nothing but `(body, jd)`.
+        //   3. A slot PINNED to the candidate instant for the whole of one
+        //      iteration. Both refinements start their Newton walk at `a.jd`,
+        //      but the tithi walk steps away from it first, so with a single
+        //      rolling slot the nakshatra refinement's opening ask for `a.jd`
+        //      always missed. The pinned slot is primed once per candidate,
+        //      by the one evaluation the tithi refinement was going to make
+        //      anyway.
         //
-        // The slot is a `Mutex`, not a `Cell`, because the callback types these
-        // are passed as now carry `+ Sync` — a `&Cell` is not shareable across
+        // The slots are `Mutex`, not `Cell`, because the callback types these
+        // are passed as carry `+ Sync` — a `&Cell` is not shareable across
         // threads and so cannot appear inside one. The lock is never contended
         // (this loop is serial) and is taken a few thousand times per served
         // request against a request measured in seconds, so it does not show up
         // in the timings below.
-        let moon_memo = Mutex::new(None);
-        let sun_memo = Mutex::new(None);
-        let apparent_memoised =
-            |memo: &Mutex<Option<(u64, f64, f64)>>, body: Body, jd: f64| -> Option<(f64, f64)> {
-                if let Some((jd_bits, lon_deg, speed)) = *memo.lock().expect("memo slot")
-                    && jd_bits == jd.to_bits()
-                {
-                    return Some((lon_deg, speed));
-                }
-                let p = coordinates::apparent_position(&provider, body, jd).ok()?;
-                let lon_deg = p.ecliptic.longitude.to_degrees();
-                *memo.lock().expect("memo slot") = Some((jd.to_bits(), lon_deg, p.longitude_speed));
-                Some((lon_deg, p.longitude_speed))
-            };
+        //
+        // Slot layout: `(jd.to_bits(), payload)`, the payload being
+        // `(tropical_longitude_deg, longitude_speed)` per body.
+        // Moon and Sun together, from one batch evaluation.
+        let pair_at = |jd: f64| -> Option<vedaksha_vedic::muhurta::MoonAndSun> {
+            let computed = coordinates::apparent_positions(&provider, &[Body::Moon, Body::Sun], jd);
+            let mut it = computed.into_iter();
+            let moon = it.next()?.1.ok()?;
+            let sun = it.next()?.1.ok()?;
+            Some((
+                (moon.ecliptic.longitude.to_degrees(), moon.longitude_speed),
+                (sun.ecliptic.longitude.to_degrees(), sun.longitude_speed),
+            ))
+        };
 
-        let moon_pos_speed = |jd: f64| apparent_memoised(&moon_memo, Body::Moon, jd);
-        let sun_pos_speed = |jd: f64| apparent_memoised(&sun_memo, Body::Sun, jd);
+        // Pinned to the candidate instant; primed once per iteration below.
+        let pinned: Slot<vedaksha_vedic::muhurta::MoonAndSun> = Mutex::new(None);
+        // Rolling slot for the instants the Newton walks step to.
+        let pair_rolling: Slot<vedaksha_vedic::muhurta::MoonAndSun> = Mutex::new(None);
+        // Rolling slot for the nakshatra walk, which wants the Moon alone —
+        // evaluating the Sun alongside it would be work nothing reads.
+        let moon_rolling: Slot<(f64, f64)> = Mutex::new(None);
+
+        let moon_and_sun = |jd: f64| -> Option<vedaksha_vedic::muhurta::MoonAndSun> {
+            if let Some(hit) = read_slot(&pinned, jd).or_else(|| read_slot(&pair_rolling, jd)) {
+                return Some(hit);
+            }
+            let pair = pair_at(jd)?;
+            *pair_rolling.lock().expect("memo slot") = Some((jd.to_bits(), pair));
+            Some(pair)
+        };
+
+        let moon_pos_speed = |jd: f64| -> Option<(f64, f64)> {
+            // The pinned and rolling PAIR slots are consulted first: whenever
+            // the Moon is already known at this instant, the pair holding it is
+            // the cheapest place to find it.
+            if let Some(((lon, speed), _)) =
+                read_slot(&pinned, jd).or_else(|| read_slot(&pair_rolling, jd))
+            {
+                return Some((lon, speed));
+            }
+            if let Some(hit) = read_slot(&moon_rolling, jd) {
+                return Some(hit);
+            }
+            let p = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
+            let moon = (p.ecliptic.longitude.to_degrees(), p.longitude_speed);
+            *moon_rolling.lock().expect("memo slot") = Some((jd.to_bits(), moon));
+            Some(moon)
+        };
+
         let moon_sid_speed = |jd: f64| -> Option<(f64, f64)> {
             let (tropical_lon, speed) = moon_pos_speed(jd)?;
             let sid = vedaksha_astro::sidereal::tropical_to_sidereal(
@@ -1365,8 +1427,11 @@ impl McpServer {
             Some((sid, speed))
         };
         for a in &mut assessments {
-            a.tithi_end_jd =
-                vedaksha_vedic::muhurta::compute_tithi_end(a.jd, &moon_pos_speed, &sun_pos_speed);
+            // Prime the pinned slot. This is the evaluation `compute_tithi_end`
+            // makes on its first line, hoisted so it also survives the tithi
+            // Newton walk and serves `compute_nakshatra_end`'s opening ask.
+            *pinned.lock().expect("memo slot") = pair_at(a.jd).map(|p| (a.jd.to_bits(), p));
+            a.tithi_end_jd = vedaksha_vedic::muhurta::compute_tithi_end(a.jd, &moon_and_sun);
             a.nakshatra_end_jd =
                 vedaksha_vedic::muhurta::compute_nakshatra_end(a.jd, &moon_sid_speed);
         }
