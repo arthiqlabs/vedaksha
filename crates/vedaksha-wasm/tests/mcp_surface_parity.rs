@@ -4,8 +4,7 @@
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! Cross-surface parity: a `vedaksha-wasm` export and the `vedaksha-mcp` tool
-//! of the same name must emit the SAME JSON SHAPE. Covered here:
-//! `compute_panchanga`, `compute_synastry`, `compute_composite`.
+//! of the same name must emit the SAME JSON SHAPE.
 //!
 //! # Why this file exists
 //!
@@ -21,13 +20,50 @@
 //! So a key added to one surface and misspelled — or forgotten — on the other
 //! shipped green. `vara.from_sunrise` is exactly such a key.
 //!
-//! # What is asserted
+//! # Scope: 12 of the MCP surface's 17 tools
 //!
-//! **Scope: three tools, not the whole surface.** `compute_panchanga` (the tool
-//! this release reshaped), plus `compute_synastry` and `compute_composite` (the
-//! two it added). The rest are NOT compared here — a key added to one surface
-//! and forgotten on the other would still ship green for those. Extend this
-//! file when you change a tool's emitted shape.
+//! Compared here — every tool that exists on BOTH surfaces:
+//!
+//! | tool | wasm export |
+//! |---|---|
+//! | `compute_panchanga`    | `compute_panchanga`    |
+//! | `compute_synastry`     | `compute_synastry`     |
+//! | `compute_composite`    | `compute_composite`    |
+//! | `compute_ashtakavarga` | `compute_ashtakavarga` |
+//! | `compute_bhavas`       | `compute_bhavas`       |
+//! | `compute_combustion`   | `compute_combustion`   |
+//! | `compute_dasha`        | `compute_dasha`        |
+//! | `compute_drishti`      | `compute_drishti`      |
+//! | `compute_gochara`      | `compute_gochara`      |
+//! | `compute_karakas`      | `compute_karakas`      |
+//! | `compute_natal_chart`  | `compute_natal_chart`  |
+//! | `compute_shadbala`     | `compute_shadbala`     |
+//!
+//! The five remaining MCP tools are NOT compared, because there is nothing on
+//! the wasm surface to compare them against:
+//!
+//! * `compute_transit`, `search_transits`, `search_muhurta`, `emit_graph` —
+//!   no `#[wasm_bindgen]` export of any name implements them. No transit
+//!   search, no muhurta search and no graph emission is reachable from the
+//!   wasm surface at all. (`vedaksha-wasm` does declare a `vedaksha-graph`
+//!   dependency with the `emitters` feature, but `src/lib.rs` never names
+//!   `vedaksha_graph` — it buys no export.)
+//! * `compute_vargas` — the wasm surface has `compute_varga` (singular), and
+//!   it is a DIFFERENT SHAPE, not a renamed twin: it takes one longitude and
+//!   one varga name and returns a bare `u8` sign index, while the MCP tool
+//!   takes a whole chart and a list of vargas and returns a JSON divisional
+//!   chart. There are no leaf paths to line up.
+//!
+//! Note that "same tool on both surfaces" is a claim about the OUTPUT shape,
+//! not the input one: several pairs deliberately take different arguments
+//! (`compute_natal_chart` takes a Julian Day on MCP and a calendar date on
+//! wasm; `compute_karakas` takes capitalised graha keys on wasm and lowercase
+//! scalars on MCP; `compute_combustion` splits longitudes and retrograde
+//! flags into two JSON objects on wasm and one flat object on MCP). Each case
+//! below therefore hand-maps the arguments and then demands that the payloads
+//! match exactly. Extend this file when you change a tool's emitted shape.
+//!
+//! # What is asserted
 //!
 //! The full set of leaf key-paths, exactly, plus every non-numeric leaf value
 //! exactly and every numeric leaf to 1e-9. Numbers are compared with a
@@ -362,4 +398,619 @@ fn compute_composite_rejects_mismatched_grahas() {
             .contains("Moon"),
         "the error must name the offending graha: {response}"
     );
+}
+
+// ── The nine remaining shared tools ──────────────────────────────────────────
+//
+// Every expected figure below is derived in the comment above the assertion
+// that uses it, from the engine's own rules — masks, orb tables, house lists,
+// dasha year counts. None is copied out of a run.
+
+/// Bhinna Ashtakavarga and its Sarva roll-up.
+///
+/// Derivation of the two totals asserted:
+///   `bhinna_ashtakavarga` walks all 12 signs and, for each of the 8
+///   contributors, adds one bindu when bit `(sign − contributor_sign) mod 12`
+///   of that contributor's mask is set. Over a full circuit of 12 signs each
+///   bit index is hit exactly once, so a table's `total` is the summed
+///   popcount of its 8 masks and is INDEPENDENT of where the grahas actually
+///   are. For the Sun row `[1995, 1572, 1995, 3892, 1328, 2144, 1995, 3628]`
+///   the popcounts are 8, 4, 8, 7, 4, 3, 8, 6 → 48. Doing the same for the
+///   other six rows gives 49, 39, 54, 56, 52, 39; Sarvashtakavarga is the
+///   per-sign sum of all seven tables, so its 12 entries sum to
+///   48+49+39+54+56+52+39 = 337.
+/// Because those totals are position-independent they cannot show that the
+/// input was read at all, so the spread across signs is asserted too: eight
+/// distinct sign indices must produce a non-uniform Sarva row.
+#[test]
+fn compute_ashtakavarga_surfaces_agree() {
+    let args = serde_json::json!({
+        "sun": 3, "moon": 7, "mars": 1, "mercury": 10,
+        "jupiter": 5, "venus": 8, "saturn": 11, "lagna": 0
+    });
+    let out = vedaksha_wasm::compute_ashtakavarga(&args.to_string()).expect("valid input");
+    compare("ashtakavarga", "compute_ashtakavarga", args, &out);
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let tables = v["tables"].as_array().expect("tables array");
+    assert_eq!(tables.len(), 7, "seven bhinna tables, got {v}");
+    assert_eq!(tables[0]["planet"], "Sun");
+    assert_eq!(tables[0]["total"], 48, "summed popcount of the Sun masks");
+    let sarva: Vec<u64> = v["sarvashtakavarga"]
+        .as_array()
+        .expect("sarva array")
+        .iter()
+        .map(|x| x.as_u64().unwrap())
+        .collect();
+    assert_eq!(sarva.len(), 12);
+    assert_eq!(sarva.iter().sum::<u64>(), 337, "48+49+39+54+56+52+39");
+    assert!(
+        sarva.iter().min() != sarva.iter().max(),
+        "sanity: the sign positions must move bindus around, got {sarva:?}"
+    );
+}
+
+/// The whole-sign bhava chart, with grahas placed.
+///
+/// Derivation, with `lagna_sign = floor(218.5 / 30) = 7` (Scorpio) and
+/// `planet_bhava(sign) = (sign + 12 − 7) mod 12 + 1`:
+///   Jupiter 5.0°   → sign 0  → bhava (0+5) mod 12 + 1 = 6
+///   Ketu    350.0° → sign 11 → bhava (11+5) mod 12 + 1 = 5
+///   Mars    200.4° → sign 6  → bhava (6+5) mod 12 + 1 = 12
+///   Sun     218.0° → sign 7  → bhava (7+5) mod 12 + 1 = 1
+/// Emitted in sorted-name order on both surfaces — MCP deserialises into a
+/// `BTreeMap`, and `serde_json`'s object map is a `BTreeMap` too (the
+/// `preserve_order` feature is not enabled anywhere in this workspace).
+/// Bhava 1 is both a kendra (1/4/7/10) and a trikona (1/5/9), and neither a
+/// dusthana (6/8/12) nor an upachaya (3/6/10/11), so all four flags are
+/// exercised on the first house alone.
+#[test]
+fn compute_bhavas_surfaces_agree() {
+    let planets = serde_json::json!({
+        "Jupiter": 5.0, "Ketu": 350.0, "Mars": 200.4, "Sun": 218.0
+    });
+    let out = vedaksha_wasm::compute_bhavas(218.5, &planets.to_string()).expect("valid input");
+    compare(
+        "bhavas",
+        "compute_bhavas",
+        serde_json::json!({ "ascendant": 218.5, "planets": planets }),
+        &out,
+    );
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["lagna_sign"], 7, "218.5° is Scorpio");
+    let houses = v["houses"].as_array().expect("houses array");
+    assert_eq!(houses.len(), 12);
+    assert_eq!(houses[0]["sign"], 7);
+    assert_eq!(houses[0]["is_kendra"], true);
+    assert_eq!(houses[0]["is_trikona"], true);
+    assert_eq!(houses[0]["is_dusthana"], false);
+    assert_eq!(houses[0]["is_upachaya"], false);
+    let placed = v["planets"].as_array().expect("planets array");
+    assert_eq!(placed.len(), 4, "four grahas placed, got {v}");
+    for (i, (name, sign, bhava)) in [
+        ("Jupiter", 0, 6),
+        ("Ketu", 11, 5),
+        ("Mars", 6, 12),
+        ("Sun", 7, 1),
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert_eq!(placed[i]["planet"], *name);
+        assert_eq!(placed[i]["sign"], *sign);
+        assert_eq!(placed[i]["bhava"], *bhava);
+    }
+}
+
+/// Combustion, covering all three states and the retrograde-narrowed orb.
+///
+/// Derivation with the Sun at 100°. `combustion_state` compares the shortest
+/// arc to the graha's orb: `< orb/3` → DeeplyCombust, `< orb` → Combust, else
+/// None. Orbs are Moon 12°, Mars 17° direct / 8° retrograde, Mercury 14°/12°,
+/// Jupiter 11°, Venus 10°/8°, Saturn 16°.
+///   Moon    108.0° → sep 8.0°;  8 ≥ 12/3 = 4 and 8 < 12   → Combust
+///   Mars    109.0° → sep 9.0°;  retrograde orb 8, 9 ≥ 8   → None
+///                    (the discriminator: at the 17° direct orb this same
+///                     placement would be Combust, so a dropped or misspelled
+///                     `mars_retrograde` flips the answer)
+///   Mercury 102.0° → sep 2.0°;  2 < 14/3 = 4.666…         → DeeplyCombust
+///   Jupiter 150.0° → sep 50.0°                             → None
+///   Venus   107.5° → sep 7.5°;  7.5 ≥ 10/3 and 7.5 < 10   → Combust
+///   Saturn  200.0° → sep 100.0°                            → None
+/// Six entries, always in the fixed Moon→Saturn order; the Sun is not one of
+/// them (it is never combust relative to itself).
+#[test]
+fn compute_combustion_surfaces_agree_across_all_three_states() {
+    let out = vedaksha_wasm::compute_combustion(
+        r#"{"sun":100.0,"moon":108.0,"mars":109.0,"mercury":102.0,
+            "jupiter":150.0,"venus":107.5,"saturn":200.0}"#,
+        r#"{"mars":true}"#,
+    )
+    .expect("valid input");
+    compare(
+        "combustion",
+        "compute_combustion",
+        serde_json::json!({
+            "sun": 100.0, "moon": 108.0, "mars": 109.0, "mercury": 102.0,
+            "jupiter": 150.0, "venus": 107.5, "saturn": 200.0,
+            "mars_retrograde": true
+        }),
+        &out,
+    );
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let arr = v.as_array().expect("array");
+    assert_eq!(arr.len(), 6, "the six combustible grahas, got {v}");
+    for (i, (name, state, sep)) in [
+        ("Moon", "Combust", 8.0),
+        ("Mars", "None", 9.0),
+        ("Mercury", "DeeplyCombust", 2.0),
+        ("Jupiter", "None", 50.0),
+        ("Venus", "Combust", 7.5),
+        ("Saturn", "None", 100.0),
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert_eq!(arr[i]["planet"], *name);
+        assert_eq!(arr[i]["state"], *state, "at {name}: {v}");
+        assert!((arr[i]["degrees_from_sun"].as_f64().unwrap() - sep).abs() < 1e-9);
+    }
+}
+
+/// The Vimshottari tree. `levels = 2` deliberately: it is not the MCP
+/// default of 3, so a `levels` argument dropped on one surface changes the
+/// payload instead of silently landing on the same default — and two levels
+/// already exercise the nesting (9 × 9 periods) without the 9× larger tree
+/// three levels would build.
+///
+/// Derivation. A nakshatra spans 360/27 = 13.333…°, so Moon 100.0° falls in
+/// index floor(100 / 13.333…) = 7 = Pushya, whose Vimshottari lord is
+/// `LORDS[7 mod 9]` = Saturn. The elapsed fraction is
+/// (100 − 7 × 13.333…) / 13.333… = 0.5, so `initial_balance` = 0.5 and the
+/// first (partial) maha dasha runs 19 years × 365.25 d × 0.5 = 3469.875 d
+/// from `birth_jd`. The nine maha dashas then follow the fixed cycle from
+/// Saturn, so the second is Mercury; sub-periods restart from the parent
+/// lord, so the first antar dasha of the Saturn maha is Saturn's.
+#[test]
+fn compute_dasha_surfaces_agree() {
+    let birth_jd = 2_446_231.937_5_f64;
+    let out = vedaksha_wasm::compute_dasha(100.0, birth_jd, 2).expect("valid input");
+    compare(
+        "dasha-vimshottari",
+        "compute_dasha",
+        serde_json::json!({
+            "system": "Vimshottari",
+            "moon_longitude": 100.0,
+            "birth_jd": birth_jd,
+            "levels": 2
+        }),
+        &out,
+    );
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["moon_nakshatra"], "Pushya");
+    assert!((v["initial_balance"].as_f64().unwrap() - 0.5).abs() < 1e-9);
+    let maha = v["maha_dashas"].as_array().expect("maha array");
+    assert_eq!(maha.len(), 9, "one full 120-year cycle");
+    assert_eq!(maha[0]["lord"], "Saturn");
+    assert_eq!(maha[1]["lord"], "Mercury");
+    assert!((maha[0]["duration_days"].as_f64().unwrap() - 3469.875).abs() < 1e-6);
+    assert!((maha[0]["start_jd"].as_f64().unwrap() - birth_jd).abs() < 1e-9);
+    let antar = maha[0]["sub_periods"].as_array().expect("sub_periods");
+    assert_eq!(antar.len(), 9);
+    assert_eq!(
+        antar[0]["lord"], "Saturn",
+        "sub-periods start at the parent"
+    );
+    assert_eq!(antar[0]["level"], 2);
+    assert!(
+        antar[0]["sub_periods"].as_array().unwrap().is_empty(),
+        "levels = 2 must stop at antar"
+    );
+}
+
+/// Graded graha drishti, covering the plain grade and all three overrides.
+///
+/// Derivation. `aspect_strength` returns a non-`None` grade for exactly seven
+/// house distances — 3, 4, 5, 7, 8, 9, 10 — and `find_vedic_aspects` walks
+/// distances 1..=12 for each graha in the order given, so the payload is
+/// 9 grahas × 7 grades = 63 aspects in a fixed layout: graha `p` occupies
+/// indices `7p..7p+7`, and within a graha the order is 3, 4, 5, 7, 8, 9, 10.
+/// The aspected sign is `(sign + houses − 1) mod 12` (houses are counted
+/// inclusively in Jyotish). Grades: the 7th is Full for everyone; 3/10 are
+/// Quarter except Saturn (Full), 4/8 are ThreeQuarter except Mars (Full),
+/// 5/9 are Half except Jupiter (Full). Signs used below are
+/// `floor(longitude / 30)`: Sun 10° → 0, Mars 200° → 6, Jupiter 250° → 8,
+/// Saturn 170° → 5.
+#[test]
+fn compute_drishti_surfaces_agree() {
+    let args = serde_json::json!({
+        "sun": 10.0, "moon": 100.0, "mars": 200.0, "mercury": 40.0,
+        "jupiter": 250.0, "venus": 320.0, "saturn": 170.0,
+        "rahu": 80.0, "ketu": 260.0
+    });
+    let out = vedaksha_wasm::compute_drishti(&args.to_string()).expect("valid input");
+    compare("drishti", "compute_drishti", args, &out);
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let arr = v.as_array().expect("array");
+    assert_eq!(
+        arr.len(),
+        63,
+        "9 grahas × 7 graded distances, got {}",
+        arr.len()
+    );
+
+    // Sun (graha 0) at sign 0, its first emitted distance: 3 houses away.
+    assert_eq!(arr[0]["aspecting_planet"], "Sun");
+    assert_eq!(arr[0]["aspecting_sign"], 0);
+    assert_eq!(arr[0]["houses_away"], 3);
+    assert_eq!(arr[0]["aspected_sign"], 2, "(0 + 3 − 1) mod 12");
+    assert_eq!(
+        arr[0]["strength"], "Quarter",
+        "3rd is Quarter for non-Saturn"
+    );
+
+    // The three special-aspect overrides, at index 7·p + offset with the
+    // offsets 3→0, 4→1, 5→2, 7→3, 8→4, 9→5, 10→6.
+    let mars_4th = &arr[7 * 2 + 1];
+    assert_eq!(mars_4th["aspecting_planet"], "Mars");
+    assert_eq!(mars_4th["houses_away"], 4);
+    assert_eq!(
+        mars_4th["strength"], "Full",
+        "Mars overrides the 4th to Full"
+    );
+    assert_eq!(mars_4th["aspected_sign"], 9, "(6 + 4 − 1) mod 12");
+
+    let jupiter_5th = &arr[7 * 4 + 2];
+    assert_eq!(jupiter_5th["aspecting_planet"], "Jupiter");
+    assert_eq!(jupiter_5th["houses_away"], 5);
+    assert_eq!(jupiter_5th["strength"], "Full");
+    assert_eq!(jupiter_5th["aspected_sign"], 0, "(8 + 5 − 1) mod 12");
+
+    let saturn_3rd = &arr[7 * 6];
+    assert_eq!(saturn_3rd["aspecting_planet"], "Saturn");
+    assert_eq!(saturn_3rd["houses_away"], 3);
+    assert_eq!(saturn_3rd["strength"], "Full");
+    assert_eq!(saturn_3rd["aspected_sign"], 7, "(5 + 3 − 1) mod 12");
+
+    // The 7th is Full for every graha, including the nodes.
+    for p in 0..9 {
+        let seventh = &arr[7 * p + 3];
+        assert_eq!(seventh["houses_away"], 7);
+        assert_eq!(seventh["strength"], "Full", "7th must be Full: {seventh}");
+    }
+}
+
+/// Gochara with the raw geometry (`school = "Geometry"`).
+///
+/// Derivation, all against `natal_reference_sign = 0` so the house from the
+/// reference is simply `sign + 1`, with the BPHS Ch.29 favourable-house lists
+/// and vedha pairs. A vedha candidate is another graha standing in sign
+/// `(0 + vedha_house − 1) mod 12`.
+///   Sun     sign 2  → house 3;  favourable [3,6,10,11];      vedha 3→9  → sign 8  → Moon
+///   Moon    sign 8  → house 9;  favourable [1,3,6,7,10,11]   → unfavourable, no vedha
+///   Mars    sign 5  → house 6;  favourable [3,6,11];         vedha 6→9  → sign 8  → Moon
+///   Mercury sign 3  → house 4;  favourable [2,4,6,8,10,11];  vedha 4→3  → sign 2  → Sun
+///   Jupiter sign 4  → house 5;  favourable [2,5,7,9,11];     vedha 5→4  → sign 3  → Mercury
+///   Venus   sign 10 → house 11; favourable [1,2,3,4,5,8,9,11,12]; vedha 11→6 → sign 5 → Mars
+///   Saturn  sign 11 → house 12; favourable [3,6,11]          → unfavourable, no vedha
+/// Seven entries — Rahu and Ketu are never returned, BPHS Ch.29 being silent
+/// on the nodes.
+#[test]
+fn compute_gochara_surfaces_agree_on_raw_geometry() {
+    let args = serde_json::json!({
+        "sun": 2, "moon": 8, "mars": 5, "mercury": 3,
+        "jupiter": 4, "venus": 10, "saturn": 11,
+        "natal_reference_sign": 0, "school": "Geometry", "vedha_table": "Bphs29"
+    });
+    let out = vedaksha_wasm::compute_gochara(&args.to_string()).expect("valid input");
+    compare("gochara-geometry", "compute_gochara", args, &out);
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let entries = v["entries"].as_array().expect("entries array");
+    assert_eq!(entries.len(), 7, "seven grahas, no nodes, got {v}");
+    for (i, (graha, house, effect, vedha)) in [
+        ("Sun", 3, "Favourable", vec!["Moon"]),
+        ("Moon", 9, "Unfavourable", vec![]),
+        ("Mars", 6, "Favourable", vec!["Moon"]),
+        ("Mercury", 4, "Favourable", vec!["Sun"]),
+        ("Jupiter", 5, "Favourable", vec!["Mercury"]),
+        ("Venus", 11, "Favourable", vec!["Mars"]),
+        ("Saturn", 12, "Unfavourable", vec![]),
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert_eq!(entries[i]["graha"], *graha);
+        assert_eq!(entries[i]["house_from_natal"], *house);
+        assert_eq!(entries[i]["classical_effect"], *effect);
+        assert_eq!(
+            entries[i]["vedha_candidates"],
+            serde_json::json!(vedha),
+            "at {graha}: {v}"
+        );
+    }
+}
+
+/// The same transits under `school = "Parashari"`, whose exemption list drops
+/// the Sun↔Moon and Jupiter↔Mercury vedha pairs. Same input, different
+/// payload — which is what makes this a real second case rather than a
+/// re-run: if `school` were dropped on one surface, that surface would fall
+/// back to the `"Geometry"` default and the two would disagree here while
+/// still agreeing above.
+///
+/// Derivation from the Geometry result above: the Sun's `[Moon]` and
+/// Jupiter's `[Mercury]` are struck out; Mercury's `[Sun]`, Mars's `[Moon]`
+/// and Venus's `[Mars]` are not exempt pairs and survive.
+#[test]
+fn compute_gochara_surfaces_agree_under_the_parashari_exemptions() {
+    let args = serde_json::json!({
+        "sun": 2, "moon": 8, "mars": 5, "mercury": 3,
+        "jupiter": 4, "venus": 10, "saturn": 11,
+        "natal_reference_sign": 0, "school": "Parashari"
+    });
+    let out = vedaksha_wasm::compute_gochara(&args.to_string()).expect("valid input");
+    compare("gochara-parashari", "compute_gochara", args, &out);
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let entries = v["entries"].as_array().expect("entries array");
+    assert_eq!(entries.len(), 7);
+    assert_eq!(entries[0]["graha"], "Sun");
+    assert!(
+        entries[0]["vedha_candidates"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "Sun↔Moon is exempt under Parashari: {v}"
+    );
+    assert_eq!(entries[4]["graha"], "Jupiter");
+    assert!(
+        entries[4]["vedha_candidates"]
+            .as_array()
+            .unwrap()
+            .is_empty(),
+        "Jupiter↔Mercury is exempt under Parashari: {v}"
+    );
+    assert_eq!(
+        entries[3]["vedha_candidates"],
+        serde_json::json!(["Sun"]),
+        "Mercury↔Sun is NOT exempt, so it must survive: {v}"
+    );
+    assert_eq!(entries[2]["vedha_candidates"], serde_json::json!(["Moon"]));
+    assert_eq!(entries[5]["vedha_candidates"], serde_json::json!(["Mars"]));
+}
+
+/// Chara Karakas on the 8-graha scheme — the branch that adds Rahu and the
+/// Pitrikaraka role, and the only one where a longitude is not used as-is.
+///
+/// Derivation. Ranking is by degrees within the sign, descending, with Rahu
+/// reflected (30 − d) because it moves retrograde:
+///   Sun 25° → 25, Moon 50° → 20, Mars 75° → 15, Mercury 100° → 10,
+///   Jupiter 125° → 5, Venus 152° → 2, Saturn 181° → 1,
+///   Rahu 202° → 22 reflected to 8.
+/// Descending: Sun 25, Moon 20, Mars 15, Mercury 10, Rahu 8, Jupiter 5,
+/// Venus 2, Saturn 1 — zipped onto the eight roles Atmakaraka, Amatyakaraka,
+/// Bhratrikaraka, Matrikaraka, Pitrikaraka, Putrakaraka, Gnatikaraka,
+/// Darakaraka. Rahu lands on Pitrikaraka, the role the 7-scheme does not
+/// have, so a mis-wired scheme argument cannot produce this payload.
+#[test]
+fn compute_karakas_surfaces_agree_on_the_eight_graha_scheme() {
+    let out = vedaksha_wasm::compute_karakas(
+        r#"{"Sun":25.0,"Moon":50.0,"Mars":75.0,"Mercury":100.0,
+            "Jupiter":125.0,"Venus":152.0,"Saturn":181.0,"Rahu":202.0}"#,
+        "8",
+    )
+    .expect("valid input");
+    compare(
+        "karakas-8",
+        "compute_karakas",
+        serde_json::json!({
+            "sun": 25.0, "moon": 50.0, "mars": 75.0, "mercury": 100.0,
+            "jupiter": 125.0, "venus": 152.0, "saturn": 181.0,
+            "rahu": 202.0, "scheme": "8"
+        }),
+        &out,
+    );
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let arr = v.as_array().expect("array");
+    assert_eq!(arr.len(), 8, "eight assignments under scheme '8', got {v}");
+    for (i, (planet, karaka, degrees)) in [
+        ("Sun", "Atmakaraka", 25.0),
+        ("Moon", "Amatyakaraka", 20.0),
+        ("Mars", "Bhratrikaraka", 15.0),
+        ("Mercury", "Matrikaraka", 10.0),
+        ("Rahu", "Pitrikaraka", 8.0),
+        ("Jupiter", "Putrakaraka", 5.0),
+        ("Venus", "Gnatikaraka", 2.0),
+        ("Saturn", "Darakaraka", 1.0),
+    ]
+    .iter()
+    .enumerate()
+    {
+        assert_eq!(arr[i]["planet"], *planet);
+        assert_eq!(arr[i]["karaka"], *karaka, "at {planet}: {v}");
+        assert!((arr[i]["degrees_in_sign"].as_f64().unwrap() - degrees).abs() < 1e-9);
+    }
+}
+
+/// Shadbala, with both optional flags set and non-zero aspect counts so the
+/// kala and drik components are live rather than sitting on their defaults.
+///
+/// Derivation of the asserted figures — the two that are fixed constants and
+/// the two that are structural identities:
+///   `naisargika_bala` is a per-graha constant: Sun 60.0, Saturn 8.57.
+///   `total` is defined as naisargika + dig + sthana + kala + cheshta + drik,
+///     so it must equal the sum of the six emitted components exactly.
+///   `uccha_bala` is the same value as `sthana_bala`.
+/// Those hold for every graha in the payload, so they are checked for all
+/// three rather than for a chosen one. Output order follows input order.
+#[test]
+fn compute_shadbala_surfaces_agree() {
+    let args = serde_json::json!({
+        "planets": [
+            { "planet": "Sun", "sign": 2, "longitude": 60.6, "bhava": 10,
+              "speed": 0.9556, "average_speed": 0.9856,
+              "benefic_aspect_count": 1, "malefic_aspect_count": 2 },
+            { "planet": "Moon", "sign": 5, "longitude": 165.0, "bhava": 12,
+              "speed": 13.2, "average_speed": 13.176,
+              "benefic_aspect_count": 2, "malefic_aspect_count": 0 },
+            { "planet": "Saturn", "sign": 7, "longitude": 225.0, "bhava": 4,
+              "speed": -0.05, "average_speed": 0.033,
+              "benefic_aspect_count": 0, "malefic_aspect_count": 1 }
+        ],
+        "is_daytime": true,
+        "moon_phase_waxing": true
+    });
+    let out = vedaksha_wasm::compute_shadbala(&args.to_string()).expect("valid input");
+    compare("shadbala", "compute_shadbala", args, &out);
+
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let arr = v.as_array().expect("array");
+    assert_eq!(arr.len(), 3, "one row per supplied graha, got {v}");
+    assert_eq!(arr[0]["planet"], "Sun");
+    assert_eq!(arr[1]["planet"], "Moon");
+    assert_eq!(arr[2]["planet"], "Saturn");
+    assert!((arr[0]["naisargika_bala"].as_f64().unwrap() - 60.0).abs() < 1e-9);
+    assert!((arr[2]["naisargika_bala"].as_f64().unwrap() - 8.57).abs() < 1e-9);
+    for row in arr {
+        let f = |k: &str| row[k].as_f64().unwrap();
+        let six = f("sthana_bala")
+            + f("dig_bala")
+            + f("kala_bala")
+            + f("cheshta_bala")
+            + f("naisargika_bala")
+            + f("drik_bala");
+        assert!(
+            (f("total") - six).abs() < 1e-9,
+            "total must be the sum of the six components: {row}"
+        );
+        assert!(
+            (f("uccha_bala") - f("sthana_bala")).abs() < 1e-9,
+            "uccha_bala is sthana_bala: {row}"
+        );
+    }
+}
+
+/// The natal chart, SIDEREAL. Lahiri rather than the MCP schema's `Tropical`
+/// default on purpose: the frame defect this release fixed — feeding the
+/// TT Julian Day to the Earth-rotation term instead of the UT1 one — moves
+/// the ascendant, the MC and all twelve cusps, and the tropical path exercises
+/// neither the ayanamsha subtraction nor the sidereal `config_summary`.
+///
+/// The two surfaces take different arguments here: MCP takes a UT1 Julian Day
+/// directly, wasm takes a calendar date it turns into one via
+/// `julian::calendar_to_jd(year, month, day + h/24 + m/1440 + s/86400)`. That
+/// same function is called here to produce the MCP argument, so both sides
+/// land on bit-identical `jd` and any divergence below is the payload's, not
+/// the clock's. Wasm also defaults to nine bodies against MCP's fixed ten, so
+/// the tenth (`TrueNodeOsculating`) is named explicitly.
+///
+/// **This case does not use [`compare`] — the two surfaces do not currently
+/// agree.** `vedaksha-wasm` emits a top-level `ayanamsha_value`;
+/// `vedaksha-mcp` emits no such key, so a sidereal MCP caller cannot read the
+/// offset that was applied to every longitude in the payload it just got.
+/// That is precisely the class of drift this file exists to find, and fixing
+/// it is a change to a shipped surface, not to a test. Until it is fixed this
+/// pins the divergence exactly: every one of the other leaves must still
+/// agree, no NEW path may appear on either side, and closing the gap fails
+/// this test too — at which point replace the whole body with a `compare`
+/// call.
+///
+/// Derived sanity facts:
+///   * ten bodies in, ten planet rows out; twelve house cusps.
+///   * `config_summary` is `format!("Houses: {:?}, Zodiac: {}, Rulership: {:?}")`
+///     over the resolved config, so the sidereal request must surface as
+///     `Zodiac: Lahiri` — under the schema default it would read
+///     `Zodiac: Tropical`, and that string is the cheapest proof the frame
+///     argument survived the trip on both surfaces.
+///   * `ayanamsha_value` must sit in [23.6, 23.7]: Lahiri is 23°51′ (23.853°)
+///     at J2000, and this instant is 5313.06 d = 14.55 yr earlier, so at the
+///     ~50.3″/yr general-precession rate the offset is 23.853 − 14.55 ×
+///     0.01397 = 23.65°.
+///   * each planet's emitted `sign_index` must be `floor(longitude / 30)`.
+#[test]
+fn compute_natal_chart_surfaces_agree_sidereal_except_the_ayanamsha_value_gap() {
+    // 1985-06-15 10:30:00 UT.
+    let jd =
+        vedaksha_ephem_core::julian::calendar_to_jd(1985, 6, 15.0 + 10.0 / 24.0 + 30.0 / 1440.0);
+    let out = vedaksha_wasm::compute_natal_chart(
+        &serde_json::json!({
+            "year": 1985, "month": 6, "day": 15, "hour": 10, "minute": 30, "second": 0,
+            "latitude": 28.6, "longitude": 77.2,
+            "ayanamsha": "Lahiri", "house_system": "Placidus",
+            "bodies": ["Sun", "Moon", "Mercury", "Venus", "Mars", "Jupiter",
+                       "Saturn", "MeanNode", "TrueNode", "TrueNodeOsculating"]
+        })
+        .to_string(),
+    )
+    .expect("valid input");
+    let mcp = mcp_tool(
+        "compute_natal_chart",
+        serde_json::json!({
+            "julian_day": jd, "latitude": 28.6, "longitude": 77.2,
+            "ayanamsha": "Lahiri", "house_system": "Placidus"
+        }),
+    );
+    let wasm: Value = serde_json::from_str(&out).expect("wasm output is JSON");
+
+    let (mut m, mut w) = (Vec::new(), Vec::new());
+    leaves(&mcp, String::new(), &mut m);
+    leaves(&wasm, String::new(), &mut w);
+    let mpaths: std::collections::BTreeSet<&str> = m.iter().map(|(p, _)| p.as_str()).collect();
+    let wpaths: std::collections::BTreeSet<&str> = w.iter().map(|(p, _)| p.as_str()).collect();
+
+    assert!(
+        mpaths.difference(&wpaths).next().is_none(),
+        "[natal-sidereal] MCP emits a key wasm does not: {:?}",
+        mpaths.difference(&wpaths).collect::<Vec<_>>()
+    );
+    assert_eq!(
+        wpaths.difference(&mpaths).copied().collect::<Vec<&str>>(),
+        vec![".ayanamsha_value"],
+        "[natal-sidereal] the known gap is `.ayanamsha_value` and nothing else. \
+         If this list is now EMPTY the surfaces have been reconciled — delete \
+         this bespoke body and call `compare` like every other case does."
+    );
+
+    let by_path: std::collections::BTreeMap<&str, &Value> =
+        m.iter().map(|(p, v)| (p.as_str(), v)).collect();
+    for (path, wv) in &w {
+        let Some(mv) = by_path.get(path.as_str()) else {
+            continue; // the single known gap, already pinned above
+        };
+        match (mv.as_f64(), wv.as_f64()) {
+            (Some(a), Some(b)) => assert!(
+                (a - b).abs() < 1e-9,
+                "[natal-sidereal] {path}: mcp {a} vs wasm {b}"
+            ),
+            _ => assert_eq!(*mv, wv, "[natal-sidereal] {path} differs"),
+        }
+    }
+
+    assert_eq!(
+        wasm["config_summary"], "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",
+        "sanity: the sidereal frame must have reached the chart config"
+    );
+    let planets = wasm["planets"].as_array().expect("planets array");
+    assert_eq!(planets.len(), 10, "ten bodies requested, ten rows back");
+    assert_eq!(wasm["houses"]["cusps"].as_array().unwrap().len(), 12);
+    let ayanamsha = wasm["ayanamsha_value"].as_f64().expect("a number");
+    assert!(
+        (23.6..23.7).contains(&ayanamsha),
+        "sanity: Lahiri in mid-1985 is ≈23.65°, got {ayanamsha}"
+    );
+    for planet in planets {
+        let lon = planet["longitude"].as_f64().unwrap();
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let expected = (lon / 30.0).floor() as u64;
+        assert_eq!(
+            planet["sign_index"].as_u64().unwrap(),
+            expected,
+            "sanity: sign_index must be floor(longitude/30): {planet}"
+        );
+    }
 }
