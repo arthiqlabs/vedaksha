@@ -1240,6 +1240,7 @@ impl McpServer {
     }
 
     fn call_search_muhurta(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        use std::cell::Cell;
         use vedaksha_astro::riseset::sun_equatorial_deg;
         use vedaksha_ephem_core::analytical::AnalyticalProvider;
         use vedaksha_ephem_core::bodies::Body;
@@ -1306,22 +1307,55 @@ impl McpServer {
         // These need the Moon/Sun daily motion, so they use apparent_position
         // (position + speed) — but only for the few windows that passed the
         // quality filter, not the position-only scan above.
-        let moon_pos_speed = |jd: f64| -> Option<(f64, f64)> {
-            let p = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
-            Some((p.ecliptic.longitude.to_degrees(), p.longitude_speed))
-        };
-        let sun_pos_speed = |jd: f64| -> Option<(f64, f64)> {
-            let p = coordinates::apparent_position(&provider, Body::Sun, jd).ok()?;
-            Some((p.ecliptic.longitude.to_degrees(), p.longitude_speed))
-        };
+        //
+        // One `apparent_position` per body per instant, shared by every
+        // consumer of that instant. Two things asked the provider for the same
+        // evaluation twice over:
+        //
+        //   * The Moon is wanted tropical by the tithi refinement (the
+        //     ayanamsha cancels in the elongation) and sidereal by the
+        //     nakshatra refinement. Those are one `tropical_to_sidereal` apart,
+        //     so a single evaluation yields both.
+        //   * Each refinement asks for its body at the candidate instant twice
+        //     — once to identify the boundary it is aiming at, once on the
+        //     first Newton step, which starts from that same instant.
+        //
+        // `apparent_position` is a ±0.5-day central difference, i.e. three
+        // ephemeris evaluations a call, so these repeats are the dominant cost
+        // of the enrichment loop. A one-slot memo keyed on the *bit pattern* of
+        // the JD collapses them and nothing else: an identical `jd` hands back
+        // the identical `f64`s the provider already produced, and any other
+        // `jd` — including one differing in the last ulp — replaces the slot
+        // and recomputes. `AnalyticalProvider` is a unit struct, so its output
+        // depends on nothing but `(body, jd)`. Values are therefore unchanged,
+        // not approximated.
+        //
+        // Slot layout: `(jd.to_bits(), tropical_longitude_deg, longitude_speed)`.
+        let moon_memo = Cell::new(None);
+        let sun_memo = Cell::new(None);
+        let apparent_memoised =
+            |memo: &Cell<Option<(u64, f64, f64)>>, body: Body, jd: f64| -> Option<(f64, f64)> {
+                if let Some((jd_bits, lon_deg, speed)) = memo.get()
+                    && jd_bits == jd.to_bits()
+                {
+                    return Some((lon_deg, speed));
+                }
+                let p = coordinates::apparent_position(&provider, body, jd).ok()?;
+                let lon_deg = p.ecliptic.longitude.to_degrees();
+                memo.set(Some((jd.to_bits(), lon_deg, p.longitude_speed)));
+                Some((lon_deg, p.longitude_speed))
+            };
+
+        let moon_pos_speed = |jd: f64| apparent_memoised(&moon_memo, Body::Moon, jd);
+        let sun_pos_speed = |jd: f64| apparent_memoised(&sun_memo, Body::Sun, jd);
         let moon_sid_speed = |jd: f64| -> Option<(f64, f64)> {
-            let p = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
+            let (tropical_lon, speed) = moon_pos_speed(jd)?;
             let sid = vedaksha_astro::sidereal::tropical_to_sidereal(
-                p.ecliptic.longitude.to_degrees(),
+                tropical_lon,
                 vedaksha_astro::sidereal::Ayanamsha::Lahiri,
                 jd,
             );
-            Some((sid, p.longitude_speed))
+            Some((sid, speed))
         };
         for a in &mut assessments {
             a.tithi_end_jd =
