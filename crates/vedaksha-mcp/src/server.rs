@@ -1198,11 +1198,20 @@ impl McpServer {
         };
 
         // Closure: look up body longitude from AnalyticalProvider by index.
+        //
+        // Position only. `search_transits` takes longitude and nothing else —
+        // its `applying` flag comes from comparing successive orbs, not from a
+        // speed — so skip the two extra half-day evaluations that
+        // `apparent_position`'s central-difference `longitude_speed` needs and
+        // use `ecliptic_position` (≈3× cheaper per step). Same reasoning, and
+        // the same call, as `call_search_muhurta` below; the returned
+        // `.longitude` is the identical value `apparent_position` would have
+        // put in `.ecliptic.longitude`.
         let get_longitude = |body_idx: usize, jd: f64| -> Option<f64> {
             let (_, body) = all_bodies.get(body_idx)?;
-            coordinates::apparent_position(&provider, *body, jd)
+            coordinates::ecliptic_position(&provider, *body, jd)
                 .ok()
-                .map(|pos| pos.ecliptic.longitude.to_degrees())
+                .map(|pos| pos.longitude.to_degrees())
         };
 
         let events = vedaksha_astro::transits::search_transits(&config, &get_longitude);
