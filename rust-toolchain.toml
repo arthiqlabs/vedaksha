@@ -1,0 +1,22 @@
+# Pin the toolchain so CI is reproducible.
+#
+# Before this file, every workflow resolved `stable`, so the compiler changed
+# under the repo without a commit. That is how Full Validation sat red for two
+# weeks: a new clippy release began firing on code nobody had touched. Pinning
+# makes a toolchain change an explicit, reviewable, revertable commit.
+#
+# This is NOT the MSRV. The minimum supported Rust version is declared
+# separately as `rust-version = "1.85"` in [workspace.package], and the release
+# Docker image builds on `rust:1.85-slim` to keep that claim honest. This pin is
+# only the version CI and local development build *with*.
+#
+# `targets` is load-bearing, not decoration. rustup treats `stable` and
+# `1.97.1` as distinct toolchain installs, so the `targets:` input on
+# dtolnay/rust-toolchain@stable adds wasm32 to `stable` while cargo — honouring
+# this file — runs under `1.97.1` without it. Declaring it here is what keeps
+# the WASM, Python-binding and PyPI jobs building.
+[toolchain]
+channel = "1.97.1"
+components = ["clippy", "rustfmt"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"
