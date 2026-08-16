@@ -1942,6 +1942,53 @@ pub(crate) mod scan_reference {
 mod tests {
     use super::*;
 
+    /// Refuse to run a `_sampled` sweep in a `debug` build.
+    ///
+    /// The `_sampled` tier is `#[ignore]`d, which means the natural way to
+    /// reach it is `cargo test -p vedaksha-astro -- --include-ignored` — and
+    /// that runs in the DEFAULT profile, which is `debug`. These sweeps are
+    /// sized for `--release`, and the gap between the two profiles is not a
+    /// constant factor you can shrug at: the real-Sun ephemeris call every one
+    /// of them makes in its inner loop,
+    /// [`sun_equatorial_deg`] against `AnalyticalProvider`, measures
+    ///
+    ///   * `--release`  ~280 us per call
+    ///   * `debug`    ~12 800 us per call
+    ///
+    /// — a factor of about **46** (aarch64, best of three runs of 20 000 and
+    /// 600 calls respectively).
+    ///
+    /// The tier already runs for minutes in `--release`: measured on the same
+    /// machine, [`polar_band_disagreement_is_measured_not_asserted_sampled`]
+    /// alone took **172 s** — note that its own `#[ignore]` reason still says
+    /// "~1.5 min", which is optimistic — so the four together are the better
+    /// part of a quarter-hour. Multiply by the profile factor and `debug` is
+    /// HOURS. CI
+    /// never hits this — the per-push job passes no `--include-ignored`, and
+    /// full validation runs `--release` — which is exactly what makes it a
+    /// trap: it only ever catches someone running the most obvious local
+    /// command.
+    ///
+    /// This PANICS rather than skipping. A test that quietly skips reports
+    /// green having verified nothing, which is strictly worse than not running
+    /// it at all: the sweep exists to be evidence, and a skip that looks like a
+    /// pass destroys the evidence while claiming to supply it. A loud failure
+    /// naming the right command costs a second.
+    fn require_release_profile(test_name: &str) {
+        assert!(
+            !cfg!(debug_assertions),
+            "{test_name} is a `--release`-only sweep and will not be run in a \
+             debug build.\n\
+             \n\
+             The real-Sun ephemeris call in its inner loop costs ~280 us in \
+             --release and ~12 800 us in debug — about 46x — so this tier goes \
+             from minutes to hours when the profile is wrong.\n\
+             \n\
+             Run it as:\n\
+             \n    cargo test --release -p vedaksha-astro -- --include-ignored\n"
+        );
+    }
+
     /// GMST is otherwise only ever checked against this module's own use of
     /// it, which cannot catch a time-scale bug (feeding TT instead of UT into
     /// `sidereal_time::gmst`) — both sides of the comparison would be wrong
@@ -3121,6 +3168,7 @@ mod tests {
     #[test]
     #[ignore = "sampled scan-oracle sweep; minutes in --release, seconds-scale in the ignored tier"]
     fn analytic_rise_agrees_with_the_scan_oracle_sampled() {
+        require_release_profile("analytic_rise_agrees_with_the_scan_oracle_sampled");
         let jds = sweep_julian_days(12);
         let lons = longitude_grid();
 
@@ -3283,6 +3331,7 @@ mod tests {
     #[test]
     #[ignore = "sampled polar-band existence gate; ~1.5 min in --release"]
     fn polar_band_disagreement_is_measured_not_asserted_sampled() {
+        require_release_profile("polar_band_disagreement_is_measured_not_asserted_sampled");
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
         let all_jds = polar_sweep_julian_days();
@@ -4045,6 +4094,7 @@ mod tests {
     #[test]
     #[ignore = "sampled |lat| 88-to-pole ship gate; ~1.5 min in --release"]
     fn the_high_latitude_band_agrees_with_the_scan_oracle_sampled() {
+        require_release_profile("the_high_latitude_band_agrees_with_the_scan_oracle_sampled");
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
         let mut agreement = Agreement::default();
@@ -4634,6 +4684,9 @@ mod tests {
     #[test]
     #[ignore = "sampled ANALYTIC_LATITUDE_LIMIT_DEG both-directions check; ~1.5 min in --release"]
     fn the_latitude_limit_is_derived_from_where_the_walk_first_disagrees_sampled() {
+        require_release_profile(
+            "the_latitude_limit_is_derived_from_where_the_walk_first_disagrees_sampled",
+        );
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
 
