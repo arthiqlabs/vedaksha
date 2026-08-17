@@ -12,7 +12,15 @@
 //! - **Coordinate transformations** — ICRS, ecliptic, equatorial frame conversions
 //! - **Julian Day** — calendar conversions and epoch utilities
 
-#![cfg_attr(not(feature = "std"), no_std)]
+//! **Not `no_std`.** This crate declared `#![cfg_attr(not(feature = "std"),
+//! no_std)]` until v5.0.0 and could not honour it: `--no-default-features`
+//! failed to compile, so the attribute was a claim no build ever checked.
+//! `vedaksha-math` is the one crate in this workspace that is genuinely
+//! `no_std`, and CI proves it. The `std` feature and the `alloc` shims are
+//! kept — they gate real optional code and are the scaffolding a future
+//! `no_std` effort would build on — but the claim is gone until something
+//! verifies it.
+
 #![deny(unsafe_code)]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::module_name_repetitions)]
