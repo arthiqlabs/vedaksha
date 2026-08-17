@@ -25,7 +25,7 @@
 //! Sources:
 //! - Lahiri: Indian Calendar Reform Committee (1955); IAE polynomial.
 //! - Fagan-Bradley: Cyril Fagan & Donald Bradley, *Primer of Sidereal Astrology* (1967).
-//! - Raman: B. V. Raman, *A Manual of Hindu Astrology* (1935 revised).
+//! - Raman: anchored on the vernal equinox at 0° Aries in 397 CE.
 //! - Others: Published reference values from respective traditions.
 
 /// Ayanamsha system selector.
@@ -40,9 +40,8 @@ pub enum Ayanamsha {
     /// Source: Indian Calendar Reform Committee (1955).
     Lahiri,
 
-    /// Raman — B. V. Raman's ayanamsha.
+    /// Raman ayanamsha.
     ///
-    /// Source: B. V. Raman, *A Manual of Hindu Astrology*.
     Raman,
 
     /// Krishnamurti — K. S. Krishnamurti Paddhati (KP system).
@@ -84,7 +83,7 @@ pub enum Ayanamsha {
     /// De Luce — Robert De Luce's Western sidereal system.
     DeLuce,
 
-    /// B. V. Raman Mean Ayanamsha — alternative Raman computation.
+    /// Raman Mean Ayanamsha — alternative Raman computation, same anchor.
     BvRamanMean,
 
     /// Usha-Shashi — Usha and Shashi ayanamsha.
@@ -393,13 +392,11 @@ pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
         // fallback; full epoch-anchored definitions for these variants are
         // not yet sourced from primary publications.
         Ayanamsha::LahiriVp285 | Ayanamsha::AyanamshaOfDate => 23.856,
-        // Raman: B.V. Raman, "A Manual of Hindu Astrology" (1935 revised).
         // Anchor: vernal equinox at 0° Aries in 397 CE. J2000 value ≈ 22.411°.
-        // Derived from Raman's anchor: vernal equinox at 0° Aries in 397 CE.
         Ayanamsha::Raman => 22.411,
         // Yukteshwar: Sri Yukteshwar, "The Holy Science" (1894).
         Ayanamsha::Yukteshwar => 22.461,
-        // B.V. Raman mean ayanamsha (alternate computation, same anchor).
+        // Raman mean ayanamsha (alternate computation, same anchor).
         Ayanamsha::BvRamanMean => 22.410,
 
         // --- Star-based systems (derived from Hipparcos J2000 star positions) ---

@@ -9,14 +9,13 @@
 //! (13.3333°) segments. Each nakshatra has 4 padas of 3°20' (3.3333°) each.
 //!
 //! Source: BPHS (Brihat Parashara Hora Shastra);
-//! B.V. Raman, "Hindu Predictive Astrology".
 
 use serde::{Deserialize, Serialize};
 
 /// The 27 Vedic nakshatras (lunar mansions).
 ///
 /// Each spans exactly 13°20' (13.3333°) of the sidereal zodiac.
-/// Source: BPHS; B.V. Raman, "Hindu Predictive Astrology".
+/// Source: BPHS.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum Nakshatra {

@@ -10,7 +10,7 @@
 //! in the 8-karaka scheme, using a reflected degree (30° − degrees) because
 //! it moves retrograde.
 //!
-//! Source: Jaimini Sutras 1.1; B.V. Raman, *Studies in Jaimini Astrology*, Ch. 2.
+//! Source: Jaimini Sutras 1.1.
 
 use serde::{Deserialize, Serialize};
 

@@ -41,8 +41,13 @@ pub fn precession_matrix(jd: f64) -> Matrix3 { ... }
 ```
 
 Acceptable sources: NASA JPL, IAU standards, Meeus "Astronomical Algorithms",
-BPHS, B.V. Raman, Holden "Elements of House Division", published academic
-papers.
+the classical Sanskrit texts (BPHS, Jaimini Sutras, Surya Siddhanta), and
+published academic papers.
+
+Do not cite a 20th-century commercial edition, a named modern translator, or a
+page number from one, and never use a book's worked-value table as a
+conformance oracle. Cite the classical text by chapter, or state the defining
+rule in the doc-comment so the code needs no external reference at all.
 
 ## Prohibited References
 

@@ -9,7 +9,7 @@
 //! 0 = Sun, 1 = Moon, 2 = Mars, 3 = Mercury, 4 = Jupiter,
 //! 5 = Venus, 6 = Saturn, 7 = Rahu, 8 = Ketu
 //!
-//! Sources: BPHS Ch. 3, B.V. Raman "A Manual of Hindu Astrology".
+//! Sources: BPHS Ch. 3.
 
 use super::Language;
 

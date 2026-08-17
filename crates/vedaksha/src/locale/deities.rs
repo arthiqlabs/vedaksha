@@ -16,7 +16,7 @@
 //!  7  Brihaspati       16 Mitra           25  Ahirbudhnya
 //!  8  Sarpas           17 Indra           26  Pushan
 //!
-//! Sources: BPHS Ch. 3-6, B.V. Raman "A Manual of Hindu Astrology".
+//! Sources: BPHS Ch. 3-6.
 
 use super::Language;
 

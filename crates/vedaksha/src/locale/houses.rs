@@ -7,7 +7,7 @@
 //!
 //! Index mapping (0-based): 0 = First House (Lagna) … 11 = Twelfth House.
 //!
-//! Sources: BPHS Ch. 11; B.V. Raman "A Manual of Hindu Astrology" Ch. 4.
+//! Sources: BPHS Ch. 11.
 
 use super::Language;
 

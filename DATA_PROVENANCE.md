@@ -72,11 +72,9 @@ Note: The 27-element mapping (ASHTOTTARI_LORDS_BY_NAK) was independently derived
 BPHS Sanskrit source, not copied from any software implementation.
 
 ### Fix 8 — Bhakoot (Ashtakoota) Compatibility Score
-Source 1: B.V. Raman. "Muhurtha (Electional Astrology)", 10th ed., UBS Publishers, 1979.
-Ch. on Ashtakoota — defines Shadashtak and Nava-Pancham dosha conditions.
-Source 2: BPHS, Stree Jataka Adhyaya — on compatibility (public domain).
-License: Raman's authored text is copyrighted; the underlying rules (dosha conditions for specific
-sign separations) are traditional Vedic computational rules, not copyrightable expression.
+Source: BPHS, Stree Jataka Adhyaya — on compatibility (public domain).
+License: Public domain. The rules implemented (dosha conditions for specific sign separations)
+are traditional Vedic computational rules, not copyrightable expression.
 Note: The bhakoot_score() function implements the logical rule independently; no numerical tables
 or code were copied from any published implementation.
 

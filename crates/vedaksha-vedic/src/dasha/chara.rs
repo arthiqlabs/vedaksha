@@ -18,7 +18,7 @@
 //! used here (full Jaimini treatment involves Chara/Sthira/Dwiswabhava
 //! distinctions not yet implemented).
 //!
-//! Source: Jaimini Sutras 1.2; B.V. Raman, "Studies in Jaimini Astrology".
+//! Source: Jaimini Sutras 1.2.
 
 use serde::{Deserialize, Serialize};
 

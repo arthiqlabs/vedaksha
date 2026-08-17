@@ -20,7 +20,7 @@
 //!
 //! For Hindi/Sanskrit: Vedic terms are used where established.
 //! Western-only aspects (semi-square, sesquiquadrate, quintile, bi-quintile)
-//! use transliterated Sanskrit neologisms consistent with B.V. Raman's usage.
+//! use transliterated Sanskrit neologisms in common modern usage.
 
 use super::Language;
 

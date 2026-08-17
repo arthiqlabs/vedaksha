@@ -11,9 +11,9 @@ rust-version.workspace = true
 description = "Vedic astrology: nakshatras, dashas, vargas, yogas, shadbala"
 
 [dependencies]
-vedaksha-math = { version = "5.0.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "5.0.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "5.0.0", path = "../vedaksha-astro" }
+vedaksha-math = { version = "5.0.1", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "5.0.1", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "5.0.1", path = "../vedaksha-astro" }
 serde = { workspace = true }
 libm = "0.2"
 

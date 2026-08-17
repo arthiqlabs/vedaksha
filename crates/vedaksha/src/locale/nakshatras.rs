@@ -16,7 +16,7 @@
 //!  7  Pushya         16 Anuradha       25 Uttara Bhadrapada
 //!  8  Ashlesha       17 Jyeshtha       26 Revati
 //!
-//! Sources: BPHS Ch. 3-6, B.V. Raman "A Manual of Hindu Astrology".
+//! Sources: BPHS Ch. 3-6.
 
 use super::Language;
 

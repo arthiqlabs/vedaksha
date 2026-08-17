@@ -10,7 +10,7 @@
 //! This shifts each house boundary to the middle of the corresponding
 //! Porphyry house, creating a system popular in Indian astrology.
 //!
-//! Source: B.V. Raman, *A Manual of Hindu Astrology*.
+//! The construction above is the definition; it needs no external table.
 
 use vedaksha_math::angle::normalize_degrees;
 

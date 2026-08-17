@@ -13,7 +13,7 @@
 //!
 //! **Dasha year length:** 365.25 days (Julian year, consistent with Vimshottari).
 //!
-//! Source: BPHS Ch. 56; B.V. Raman, "Hindu Predictive Astrology".
+//! Source: BPHS Ch. 56.
 
 use serde::{Deserialize, Serialize};
 

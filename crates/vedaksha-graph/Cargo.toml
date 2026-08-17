@@ -16,7 +16,7 @@ serde_json = { workspace = true }
 # Only for `from_chart`, which turns a computed chart into a graph. Optional so
 # a caller that just wants the ontology and emitters does not build the astro
 # stack. No cycle: vedaksha-astro does not depend on this crate.
-vedaksha-astro = { version = "5.0.0", path = "../vedaksha-astro", optional = true }
+vedaksha-astro = { version = "5.0.1", path = "../vedaksha-astro", optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }

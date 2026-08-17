@@ -10,7 +10,7 @@
 //! The Shodasha Vargas (16 divisional charts) from D-1 through D-60 are
 //! implemented here.
 //!
-//! Source: BPHS Ch. 6-7; B.V. Raman — _A Manual of Hindu Astrology_.
+//! Source: BPHS Ch. 6-7.
 
 use vedaksha_math::angle::normalize_degrees;
 

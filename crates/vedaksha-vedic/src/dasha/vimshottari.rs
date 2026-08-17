@@ -14,7 +14,7 @@
 //! **Boundary convention:** Moon at exactly 0° sidereal is in Ashwini (not Revati).
 //! The nakshatra boundary uses `>=` lower / `<` upper, matching `Nakshatra::from_longitude`.
 //!
-//! Source: BPHS Ch. 46-47; B.V. Raman, "Hindu Predictive Astrology" Ch. 18.
+//! Source: BPHS Ch. 46-47.
 
 use serde::{Deserialize, Serialize};
 
@@ -127,7 +127,7 @@ fn compute_sub_periods(
 /// * `birth_jd` — Julian Day of birth
 /// * `levels` — how many levels deep (1=Maha only, 2=Maha+Antar, ..., max 5)
 ///
-/// Source: BPHS Ch. 46-47; B.V. Raman Ch. 18.
+/// Source: BPHS Ch. 46-47.
 #[must_use]
 pub fn compute_vimshottari(
     moon_sidereal_longitude: f64,

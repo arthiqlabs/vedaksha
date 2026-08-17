@@ -11,7 +11,7 @@
 //! (temporal), Cheshta Bala (motional), Naisargika Bala (natural), and Drik
 //! Bala (aspectual).
 //!
-//! Source: BPHS Ch. 27; B.V. Raman, *Graha and Bhava Balas*.
+//! Source: BPHS Ch. 27.
 
 use crate::graha::{Graha, GrahaPosition};
 use serde::Serialize;
