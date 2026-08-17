@@ -6,7 +6,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `sub-arcsecond vs JPL Horizons` · `1,007 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+`clean-room` · `sub-arcsecond vs JPL Horizons` · `1,011 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
 
 ---
 
@@ -100,7 +100,7 @@ Python, WebAssembly, or as an MCP server for AI agents.
 ## Why Vedākṣha
 
 - **Clean-room, cited.** Every module that implements a cited algorithm carries a `// Source:` doc-comment pointing at the primary paper or treatise (VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini) — never derived from other software, no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/).
-- **Sub-arcsecond, measured.** 1,007 tests on every push (Ubuntu and macOS) — unit, integration and doctests, the whole surface; a scheduled full run brings it to 1,013 and adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run, and [Accuracy](#accuracy) is equally explicit about what is *not* measured.
+- **Sub-arcsecond, measured.** 1,011 tests on every push (Ubuntu and macOS) — unit, integration and doctests, the whole surface; a scheduled full run brings it to 1,017 and adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run, and [Accuracy](#accuracy) is equally explicit about what is *not* measured.
 - **Agentic-AI-native.** A Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
 - **Runs everywhere.** One Rust codebase → native, **Python** (`pip install vedaksha`, the engine hosted via WebAssembly — no Rust toolchain, one `py3-none-any` wheel), in-browser WebAssembly (no data files), and a multi-arch containerized MCP server. No FFI to a C library, no platform-specific build.
 - **Jyotish in the type system.** Nakshatras, dashas, vargas, shadbala, ayanamshas — first-class, not a Western afterthought.
@@ -132,7 +132,7 @@ Vedākṣha is the calculation engine under ArthIQ Labs' Jyotish properties:
 | Provider | Accuracy | Data | Use case |
 |----------|----------|------|----------|
 | **SpkReader** | Sub-arcsecond | DE440s (~31 MB on disk) | Servers, containers |
-| **AnalyticalProvider** | <25″ planets, <1″ Moon | Zero files (compiled constants) | WASM, edge, Cloudflare Workers, `no_std` |
+| **AnalyticalProvider** | <25″ planets, <1″ Moon | Zero files (compiled constants) | WASM, edge, Cloudflare Workers |
 
 The AnalyticalProvider evaluates VSOP87A (Bretagnon & Francou 1988) for planets and ELP/MPP02 (Chapront 2002) for the Moon — all coefficients are compile-time constants, so there are no runtime data files.
 
