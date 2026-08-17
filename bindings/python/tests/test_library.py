@@ -12,8 +12,17 @@ def vk() -> Vedaksha:
     return Vedaksha()
 
 
-def test_version() -> None:
-    assert __version__ == "5.0.0"
+def test_version_matches_the_package_metadata() -> None:
+    """`__version__` must equal the version pip actually installed.
+
+    This used to hardcode the literal, which meant every release bumped it by
+    hand and a missed bump failed CI *after* the tag was cut. Comparing against
+    the installed distribution's metadata pins the real invariant — that the
+    constant and the wheel agree — and needs no edit at release time.
+    """
+    from importlib.metadata import version
+
+    assert __version__ == version("vedaksha")
 
 
 def test_lists_the_engine_tool_catalog(vk: Vedaksha) -> None:
