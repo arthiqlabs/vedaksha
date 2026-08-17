@@ -1490,9 +1490,52 @@ impl McpServer {
             .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::emit_graph::validate(&input)?;
 
-        // Parse the ChartGraph from the supplied JSON.
-        let graph: vedaksha_graph::ChartGraph = serde_json::from_value(input.chart_json)
-            .map_err(|e| McpError::invalid_parameter("chart_json", &e.to_string()))?;
+        // Two accepted shapes. A ChartGraph passes straight through; the output
+        // of `compute_natal_chart` is converted here. Before v5.0.1 only the
+        // first worked while the schema documented the second, so the
+        // documented call failed with `missing field 'nodes'`.
+        let graph: vedaksha_graph::ChartGraph = if input.chart_json.get("nodes").is_some() {
+            serde_json::from_value(input.chart_json)
+                .map_err(|e| McpError::invalid_parameter("chart_json", &e.to_string()))?
+        } else {
+            let chart =
+                crate::tools::emit_graph::computed_chart_from_tool_output(&input.chart_json)
+                    .map_err(|e| {
+                        McpError::invalid_parameter(
+                            "chart_json",
+                            &format!("not a ChartGraph (no `nodes`) and not a computed chart: {e}"),
+                        )
+                    })?;
+            // A chart result records neither the observer nor, reliably, the
+            // instant. Rather than default them to zero — which would put a
+            // fabricated observer into the emitted graph — require them.
+            let (Some(latitude), Some(longitude)) = (input.latitude, input.longitude) else {
+                return Err(McpError::invalid_parameter(
+                    "latitude",
+                    "building a graph from a computed chart needs `latitude` and \
+                     `longitude`: the chart does not record where it was cast, and the \
+                     graph's Chart node does. Pass the same values used to compute it.",
+                ));
+            };
+            let julian_day = input
+                .chart_json
+                .get("julian_day")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(f64::NAN);
+            let classification = match input.classification.as_deref() {
+                Some("identified") => vedaksha_graph::DataClassification::Identified,
+                Some("pseudonymized") => vedaksha_graph::DataClassification::Pseudonymized,
+                _ => vedaksha_graph::DataClassification::Anonymous,
+            };
+            vedaksha_graph::from_chart::chart_to_graph(
+                &chart,
+                julian_day,
+                latitude,
+                longitude,
+                vedaksha_astro::dignity::RulershipScheme::Traditional,
+                classification,
+            )
+        };
 
         // Emit using the requested format (validate() already normalises case,
         // but validate() doesn't mutate, so normalise here as well).
@@ -1924,6 +1967,105 @@ mod tests {
         let emitted: serde_json::Value = serde_json::from_str(text).unwrap();
         assert!(emitted["nodes"].is_array());
         assert!(emitted["edges"].is_array());
+    }
+
+    /// The documented workflow: compute a chart, hand it straight to
+    /// `emit_graph`. Before v5.0.1 this returned `missing field 'nodes'` — the
+    /// tool's own schema described a call that could not work, because nothing
+    /// in the engine converted a computed chart into a graph.
+    ///
+    /// Note what the test above does NOT catch: it emits an *empty*
+    /// `ChartGraph`, so it passes with zero nodes and zero edges. That is how a
+    /// green suite coexisted with an unreachable feature. This one asserts the
+    /// graph has real content drawn from the chart.
+    #[test]
+    fn emit_graph_consumes_compute_natal_chart_output() {
+        let s = server();
+        let call = |args: serde_json::Value| -> serde_json::Value {
+            let req = serde_json::json!({
+                "jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": args
+            });
+            let resp = s.handle_request(&serde_json::to_string(&req).unwrap());
+            serde_json::from_str(&resp).unwrap()
+        };
+
+        let natal = call(serde_json::json!({
+            "name": "compute_natal_chart",
+            "arguments": {"julian_day": 2451545.0, "latitude": 28.6, "longitude": 77.2}
+        }));
+        let chart: serde_json::Value = serde_json::from_str(
+            natal["result"]["content"][0]["text"]
+                .as_str()
+                .unwrap_or_else(|| panic!("natal chart failed: {natal}")),
+        )
+        .unwrap();
+        assert!(
+            chart.get("nodes").is_none(),
+            "premise: this is a chart, not a graph"
+        );
+
+        let emitted = call(serde_json::json!({
+            "name": "emit_graph",
+            "arguments": {
+                "chart_json": chart, "format": "json",
+                "latitude": 28.6, "longitude": 77.2
+            }
+        }));
+        let text = emitted["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap_or_else(|| panic!("emit_graph rejected a computed chart: {emitted}"));
+        let graph: serde_json::Value = serde_json::from_str(text).unwrap();
+
+        let nodes = graph["nodes"].as_array().expect("nodes array");
+        let edges = graph["edges"].as_array().expect("edges array");
+        // 1 chart + 12 signs + 12 houses + 10 planets.
+        assert_eq!(
+            nodes.len(),
+            35,
+            "expected a fully populated graph, got {}",
+            nodes.len()
+        );
+        assert!(
+            edges.len() > 30,
+            "expected placement edges, got {}",
+            edges.len()
+        );
+        assert!(
+            text.contains("Sun") && text.contains("Aries"),
+            "the graph must carry the chart's own planets and signs"
+        );
+    }
+
+    /// Building from a computed chart without an observer must fail loudly
+    /// rather than record latitude 0, longitude 0 in the graph's Chart node. A
+    /// fabricated observer would be indistinguishable from a real one downstream.
+    #[test]
+    fn emit_graph_refuses_a_chart_without_an_observer() {
+        let s = server();
+        let req = serde_json::json!({
+            "jsonrpc": "2.0", "id": 13, "method": "tools/call",
+            "params": {"name": "emit_graph", "arguments": {
+                "chart_json": {"planets": [], "houses": {
+                    "cusps": [0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0, 210.0, 240.0, 270.0, 300.0, 330.0],
+                    "asc": 0.0, "mc": 270.0,
+                    "system": "WholeSign", "polar_fallback": false
+                }, "aspects": [], "config_summary": "x"},
+                "format": "json"
+            }}
+        });
+        let val: serde_json::Value =
+            serde_json::from_str(&s.handle_request(&serde_json::to_string(&req).unwrap())).unwrap();
+        assert_eq!(
+            val["error"]["data"]["error_code"].as_str().unwrap(),
+            "INVALID_PARAMETER"
+        );
+        assert!(
+            val["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("latitude"),
+            "the error must name what is missing: {val}"
+        );
     }
 
     // ── compute_vargas — real varga computation ───────────────────────────────

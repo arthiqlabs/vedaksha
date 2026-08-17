@@ -324,11 +324,11 @@
       "name": "compute_vargas"
     },
     {
-      "description": "Convert a ChartGraph JSON (as produced by compute_natal_chart or compute_vargas) into a target output format for downstream storage or retrieval. Supports Neo4j Cypher, SurrealDB SurrealQL, JSON-LD, plain JSON, and RAG embedding text.",
+      "description": "Turn a chart into a queryable property graph. Accepts the output of compute_natal_chart directly (pass latitude and longitude alongside it), or an existing ChartGraph. Emits Neo4j Cypher, SurrealDB SurrealQL, JSON-LD, plain JSON, or RAG embedding text.",
       "inputSchema": {
         "properties": {
           "chart_json": {
-            "description": "ChartGraph JSON as returned by compute_natal_chart or compute_vargas",
+            "description": "Either the output of compute_natal_chart ({planets, houses, aspects, ...}), which is converted to a graph here, or an existing ChartGraph ({nodes, edges, chart_id, classification})",
             "type": "object"
           },
           "classification": {
@@ -345,6 +345,18 @@
               "embedding"
             ],
             "type": "string"
+          },
+          "latitude": {
+            "description": "Observer latitude, degrees north. Required when chart_json is a computed chart; a chart result does not record where it was cast. Ignored for an existing ChartGraph.",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Observer longitude, degrees east. Required when chart_json is a computed chart.",
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
           }
         },
         "required": [

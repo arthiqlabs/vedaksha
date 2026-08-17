@@ -32,6 +32,23 @@ impl NodeId {
         Self(format!("chart:{chart_id}:{category}:{name}"))
     }
 
+    /// Hash a chart's configuration summary into the `config_hash` that
+    /// [`Self::chart_hash`] takes.
+    ///
+    /// Exists so callers do not write a second FNV-1a: `from_chart` had its own
+    /// copy until it was folded in here. Two charts sharing an instant and a
+    /// place but differing in house system or zodiac must not collide, and the
+    /// config summary is what distinguishes them.
+    #[must_use]
+    pub fn config_hash(config_summary: &str) -> u64 {
+        let mut hash: u64 = 0xcbf2_9ce4_8422_2325; // FNV offset basis
+        for byte in config_summary.as_bytes() {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0100_0000_01b3); // FNV prime
+        }
+        hash
+    }
+
     /// Generate a deterministic chart ID from computation parameters.
     /// Same (jd, lat, lon, `config_hash`) always produces the same ID.
     #[must_use]

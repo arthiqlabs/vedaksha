@@ -13,6 +13,10 @@ description = "Graph data model and ontology for astronomical/astrological chart
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Only for `from_chart`, which turns a computed chart into a graph. Optional so
+# a caller that just wants the ontology and emitters does not build the astro
+# stack. No cycle: vedaksha-astro does not depend on this crate.
+vedaksha-astro = { version = "5.0.0", path = "../vedaksha-astro", optional = true }
 
 [dev-dependencies]
 serde_json = { workspace = true }
@@ -23,3 +27,6 @@ std = []
 # Emitters: Neo4j Cypher, SurrealDB, JSON-LD, plain JSON, RAG embedding text.
 # Folded in from the standalone `vedaksha-emit` crate (v2.x) in v3.0.0.
 emitters = []
+# Build a ChartGraph from a ComputedChart. Kept out of `default` because it
+# pulls in vedaksha-astro; enabled by vedaksha-mcp and the umbrella crate.
+from-chart = ["dep:vedaksha-astro"]

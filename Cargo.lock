@@ -668,6 +668,7 @@ version = "5.0.0"
 dependencies = [
  "serde",
  "serde_json",
+ "vedaksha-astro",
 ]
 
 [[package]]

@@ -37,8 +37,14 @@ pub mod ontology;
 #[cfg(feature = "emitters")]
 pub mod emitters;
 
+#[cfg(feature = "from-chart")]
+pub mod from_chart;
+
 // Re-exports
 pub use chart_graph::ChartGraph;
 pub use classification::DataClassification;
 pub use ids::NodeId;
 pub use ontology::{Edge, EdgeProperties, EdgeType, Node, NodeProperties, NodeType};
+
+#[cfg(feature = "from-chart")]
+pub use from_chart::chart_to_graph;
