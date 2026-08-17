@@ -173,6 +173,18 @@ jobs:
         # It did not, before the false no_std attributes came off.
         run: cargo check --workspace --no-default-features --locked
 
+  publish-order:
+    name: Release publish order
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # cargo publish resolves each dependency against crates.io, not the path.
+      # A crate published before something it depends on kills the release
+      # HALFWAY -- and crates.io publishes cannot be withdrawn. v5.0.1 shipped
+      # two of seven crates that way. Cheap check, expensive failure.
+      - name: Check release.yml publishes in dependency order
+        run: python3 scripts/check_publish_order.py
+
   msrv:
     name: MSRV (rust-version in workspace.package)
     runs-on: ubuntu-latest

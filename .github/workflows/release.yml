@@ -118,10 +118,25 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -eo pipefail
+          # ORDER IS DEPENDENCY ORDER, not alphabetical. Every crate must appear
+          # after everything it depends on, because cargo resolves each
+          # dependency against what is already ON crates.io -- a path dependency
+          # is not enough at publish time.
+          #
+          # v5.0.1 learned this the hard way: vedaksha-graph gained an optional
+          # vedaksha-astro dependency (the from-chart feature) while still
+          # sitting BEFORE astro in this list, so the publish died on
+          # "failed to select a version for the requirement vedaksha-astro
+          # = ^5.0.1" after math and ephem-core had already gone out --
+          # a partial release, and crates.io publishes cannot be withdrawn.
+          #
+          # If you add a dependency between two workspace crates, re-check this
+          # line. `cargo tree -p <crate>` shows what must precede it.
+          #
           # v3.0.0: vedaksha-emit folded into vedaksha-graph[emitters];
           # vedaksha-locale folded into vedaksha[locale]; vedaksha-wasm
           # is published to npm only (publish = false in its Cargo.toml).
-          for crate in vedaksha-math vedaksha-ephem-core vedaksha-graph vedaksha-astro vedaksha-vedic vedaksha-mcp vedaksha; do
+          for crate in vedaksha-math vedaksha-ephem-core vedaksha-astro vedaksha-graph vedaksha-vedic vedaksha-mcp vedaksha; do
             echo "::group::Publishing $crate"
             log=$(mktemp)
             if cargo publish -p "$crate" --allow-dirty 2>&1 | tee "$log"; then
