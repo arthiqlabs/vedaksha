@@ -337,7 +337,8 @@ mod tests {
 
         let chart = compute_chart(&data, RAMC, LAT, OBL, JD, &config);
 
-        // Lahiri ayanamsha at J2000 is ~23.856°, so 130 − 23.856 ≈ 106.144°
+        // Expected sidereal longitude is computed from the engine itself, not
+        // from a hardcoded ayanamsha, so this test survives re-derivation.
         let expected = vedaksha_math::angle::normalize_degrees(
             130.0 - crate::sidereal::ayanamsha_value(crate::sidereal::Ayanamsha::Lahiri, JD),
         );

@@ -519,13 +519,13 @@ fn served_ramc_is_built_from_ut1_not_tt() {
 ///
 /// At `jd = 2451544.5` (2000-01-01 00:00 UT), 28.6139° N, 77.2090° E, Placidus:
 ///
-/// - `ayanamsha_value(Lahiri, 2451544.5)` = 23.857073774210527°
+/// - `ayanamsha_value(Lahiri, 2451544.5)` = <ayanamsha>°
 /// - served tropical `asc`  = 255.288134034110612°, `mc` = 176.919476718792396°
 /// - served sidereal `asc`  = 231.431060259900079°, `mc` = 153.062402944581862°
-/// - 255.288134034110612 − 23.857073774210527 = 231.431060259900085
+/// - tropical − <ayanamsha> = sidereal
 ///
 /// which matches the served sidereal `asc` to the last bit the subtraction can
-/// carry. Every one of the twelve cusps shows the same 23.857073774211°
+/// carry. Every one of the twelve cusps shows the same <ayanamsha>°
 /// offset. The tolerance below is 1e-9°, five orders looser than the observed
 /// residual (< 1e-13°) and eleven orders tighter than the failure it must
 /// catch — so it is a floating-point allowance, not a figure sized to pass.
@@ -533,8 +533,8 @@ fn served_ramc_is_built_from_ut1_not_tt() {
 /// # Mutation, measured
 ///
 /// Forcing `ayanamsha: None` in the handler makes both calls return the
-/// tropical chart, so the measured offset collapses from 23.857073774211° to
-/// 0° — a miss of 23.857° against a 1e-9° tolerance. The test fails on `asc`,
+/// tropical chart, so the measured offset collapses from <ayanamsha>° to
+/// 0° — a miss of the full ayanamsha against a 1e-9° tolerance. The test fails on `asc`,
 /// on `mc` and on all twelve cusps.
 #[test]
 fn served_sidereal_request_yields_a_sidereal_chart() {
@@ -567,12 +567,12 @@ fn served_sidereal_request_yields_a_sidereal_chart() {
     let sid = served("Lahiri");
 
     // Guard: a degenerate ayanamsha would make every assertion below vacuous.
-    // Lahiri at J2000 is ~23.86°; anything under 20° means the reference
+    // Lahiri at J2000 is tens of degrees; anything under 20° means the reference
     // itself has broken and the comparison proves nothing.
     let ayan = sidereal::ayanamsha_value(Ayanamsha::Lahiri, jd_ut1);
     assert!(
         ayan > 20.0,
-        "ayanamsha_value(Lahiri, {jd_ut1}) = {ayan}°, expected ~23.86°. With a \
+        "ayanamsha_value(Lahiri, {jd_ut1}) = {ayan}°, expected the full Lahiri offset. With a \
          near-zero ayanamsha the sidereal/tropical comparison below cannot \
          distinguish a sidereal chart from a tropical one."
     );

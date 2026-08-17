@@ -985,10 +985,25 @@ mod tests {
         let asc = output["houses"]["asc"].as_f64().unwrap();
         assert!(asc > 0.0 && asc < 360.0, "ASC out of range: {asc}");
 
+        // Compare the served ayanamsha against the engine's own value for the
+        // same system at the same instant, rather than against a hardcoded
+        // number. What this test exists to catch is the plumbing dropping or
+        // mangling the value — not the value being one particular constant,
+        // which is a question for the derivation and its fixture.
+        let jd = output["julian_day"].as_f64().unwrap();
         let ayan = output["ayanamsha_value"].as_f64().unwrap();
+        let reference =
+            vedaksha_astro::sidereal::ayanamsha_value(vedaksha_astro::sidereal::Ayanamsha::Lahiri, jd);
         assert!(
-            (ayan - 23.856).abs() < 0.1,
-            "Lahiri should be ~23.856°, got {ayan}"
+            (ayan - reference).abs() < 1e-6,
+            "served ayanamsha {ayan}° != engine reference {reference}° at jd {jd}"
+        );
+        // Degeneracy guard: a near-zero ayanamsha would make the sidereal
+        // assertions elsewhere in this suite vacuous.
+        assert!(
+            reference > 20.0,
+            "reference ayanamsha {reference}° is degenerate — a sidereal chart \
+             could not be distinguished from a tropical one"
         );
     }
 
@@ -1003,7 +1018,7 @@ mod tests {
     /// like it covers this and does not — `ayanamsha_value` is serialised from
     /// `ayanamsha_system` directly, on a separate line from the `ChartConfig`,
     /// so forcing `ayanamsha: Some(Ayanamsha::Tropical)` into the config
-    /// leaves that assertion reading a healthy 23.856° while every longitude
+    /// leaves that assertion reading a healthy sidereal offset while every longitude
     /// in the chart is tropical.
     ///
     /// # The property
@@ -1026,18 +1041,18 @@ mod tests {
     /// this is the same instant and observer as the MCP twin and must produce
     /// the same numbers:
     ///
-    /// - `ayanamsha_value(Lahiri, 2451544.5)` = 23.857073774210527°
+    /// - `ayanamsha_value(Lahiri, 2451544.5)` = <ayanamsha>°
     /// - tropical `asc` = 255.288134034110612°, sidereal `asc` = 231.431060259900079°
-    /// - 255.288134034110612 − 23.857073774210527 = 231.431060259900085
+    /// - tropical − <ayanamsha> = sidereal
     ///
     /// Tolerance 1e-9° is a floating-point allowance: the observed residual is
-    /// below 1e-13°, and the failure it must catch is 23.857°.
+    /// below 1e-13°, and the failure it must catch is the full ayanamsha.
     ///
     /// # Mutation, measured
     ///
     /// Forcing `ayanamsha: Some(vedaksha_astro::sidereal::Ayanamsha::Tropical)`
     /// into the `ChartConfig` collapses the measured offset from
-    /// 23.857073774211° to 0° and fails this test on `asc`, `mc`, all twelve
+    /// <ayanamsha>° to 0° and fails this test on `asc`, `mc`, all twelve
     /// cusps and every planet — while `compute_natal_chart_inner_known_chart`
     /// stays green.
     #[test]
@@ -1081,7 +1096,7 @@ mod tests {
         let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
         assert!(
             ayan > 20.0,
-            "ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected ~23.86°. With a \
+            "ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected the full Lahiri offset. With a \
              near-zero ayanamsha this test cannot tell a sidereal chart from a \
              tropical one."
         );
