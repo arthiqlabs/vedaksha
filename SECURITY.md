@@ -9,11 +9,14 @@ responsibly by emailing: **info@arthiq.net**
 
 ## What Qualifies
 
-- MCP server vulnerabilities (injection, authentication bypass, authorization flaws)
-- Input validation bypasses that could cause crashes or undefined behavior
-- Cryptographic issues in license key signing/verification
-- Webhook security issues in the Stripe integration
+- MCP server vulnerabilities — injection, bearer-token bypass, authorization flaws
+- Input validation bypasses that could cause a crash, a panic, or unbounded resource use
+- Unsafe deserialization of ephemeris kernels or tool arguments
 - Dependencies with known CVEs
+
+This repository is a computation library and an MCP server. It handles no
+payments, issues no license keys, and stores no user data, so there is no
+billing or key-signing surface here to report against.
 
 ## What Does Not Qualify
 
@@ -45,8 +48,7 @@ Algorithmic sources cited in code comments:
 - Capitaine et al. — IAU 2006 precession/nutation
 - Bretagnon & Francou — VSOP87 planetary theory
 - Chapront — ELP/MPP02 lunar theory
-- BPHS — *Brihat Parashara Hora Shastra* (R. Santhanam translation)
-- Raman — *Hindu Predictive Astrology*, *Three Hundred Important Combinations*
+- BPHS — *Brihat Parashara Hora Shastra*, cited by chapter
 
 ## Supply Chain
 

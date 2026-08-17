@@ -1,291 +1,113 @@
 # Vedākṣha — Vision from Vedas
 
-**Clean-room Rust ephemeris and Vedic astrology engine, built for the agentic-AI era.** Sub-arcsecond planetary precision, every algorithm traced to a primary source, every chart emitted as a queryable property graph.
+**Clean-room Rust ephemeris and Vedic astrology engine, built for the agentic-AI era.** Sub-arcsecond planetary precision, every algorithm traced to a primary source, any chart queryable as a property graph.
 
 *Celestial computation. Agentic precision.*
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `sub-arcsecond vs JPL Horizons` · `1,011 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+`clean-room` · `0.106″ vs JPL Horizons` · `1,011 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
 
 ---
-
-## Quick start
-
-```rust
-use vedaksha::ephem::{delta_t, nutation, obliquity, sidereal_time};
-use vedaksha::prelude::*;
-
-// New Delhi, 2024-03-20 12:00 UT1. `calendar_to_jd` takes the day as a
-// fraction — noon on the 20th is 20.5 — and it wants UT1, not TT/TDB.
-let jd = calendar_to_jd(2024, 3, 20.5);
-let (latitude, longitude): (f64, f64) = (28.6139, 77.2090);
-
-// 1. Apparent positions. `compute_chart` takes them as
-//    (name, longitude°, latitude°, distance AU, speed °/day).
-let provider = AnalyticalProvider;
-let mut planets = Vec::new();
-for (name, body) in [
-    ("Sun", Body::Sun),
-    ("Moon", Body::Moon),
-    ("Mars", Body::Mars),
-    ("Jupiter", Body::Jupiter),
-] {
-    let p = apparent_position(&provider, body, jd).expect("analytical provider");
-    planets.push((
-        name.to_string(),
-        p.ecliptic.longitude.to_degrees(),
-        p.ecliptic.latitude.to_degrees(),
-        p.ecliptic.distance,
-        p.longitude_speed,
-    ));
-}
-
-// 2. Earth orientation, which fixes the houses. Nutation and obliquity are
-//    dynamical terms and take TT; sidereal time is the Earth's rotation and
-//    takes UT1. Mixing the two costs ΔT worth of rotation on every cusp.
-let jd_tt = delta_t::ut1_to_tt(jd);
-let (dpsi, deps) = nutation::nutation(jd_tt);
-let eps_true = obliquity::true_obliquity(jd_tt, deps);
-let ramc = sidereal_time::local_sidereal_time(jd, longitude.to_radians(), dpsi, eps_true)
-    .to_degrees();
-
-// 3. The chart — sidereal (Lahiri) with whole-sign bhavas, i.e. a kundali.
-let config = ChartConfig {
-    house_system: HouseSystem::WholeSign,
-    ayanamsha: Some(Ayanamsha::Lahiri),
-    ..ChartConfig::default()
-};
-let chart = compute_chart(
-    &planets,
-    ramc,
-    latitude,
-    obliquity::mean_obliquity(jd_tt).to_degrees(),
-    jd,
-    &config,
-);
-
-println!("Lagna {:.3}°", chart.houses.asc);
-for planet in &chart.planets {
-    println!("{:<8} {:>8.3}°", planet.name, planet.longitude);
-}
-```
-
-This exact block is a doctest on the `vedaksha` crate
-([`crates/vedaksha/src/lib.rs`](crates/vedaksha/src/lib.rs)), so it is compiled
-and run rather than only read.
-
-Every Julian Day on the public surfaces — the Rust API, the MCP tools, the
-Python client, the WASM bindings — is **UT1** (Universal Time), not TT and not
-TDB. The engine converts to TT internally for the dynamical terms (planetary
-positions, nutation, obliquity) and uses UT1 directly for the Earth's rotation,
-which fixes the ascendant, the MC and all twelve house cusps. Handing it a TDB
-Julian Day instead adds ΔT worth of rotation rather than removing it — 0.289°
-(17.3′) at today's ΔT ≈ 69 s, straight onto every cusp. The one exception is
-the raw JPL SPK query (`state_vector` in the Python client), which indexes the
-kernel's Chebyshev coefficients directly and therefore takes TDB.
-
-```bash
-cargo add vedaksha          # Rust
-pip install vedaksha        # Python (runs the engine via WebAssembly)
-npm install vedaksha-wasm   # WebAssembly / JavaScript
-```
-
-Compute **janam kundali** (natal charts), **panchanga** (the five limbs of the
-day), **vimshottari and other dashas**, **nakshatras**, **vargas** (divisional
-charts), **shadbala**, **ashtakavarga**, **muhurta**, and **transits/gochara** —
-from a sub-arcsecond ephemeris (VSOP87A, ELP/MPP02, JPL DE440s/DE441), in Rust,
-Python, WebAssembly, or as an MCP server for AI agents.
-
-## Why Vedākṣha
-
-- **Clean-room, cited.** Every module that implements a cited algorithm carries a `// Source:` doc-comment pointing at the primary paper or treatise (VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini) — never derived from other software, no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/).
-- **Sub-arcsecond, measured.** 1,011 tests on every push (Ubuntu and macOS) — unit, integration and doctests, the whole surface; a scheduled full run brings it to 1,017 and adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run, and [Accuracy](#accuracy) is equally explicit about what is *not* measured.
-- **Agentic-AI-native.** A Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
-- **Runs everywhere.** One Rust codebase → native, **Python** (`pip install vedaksha`, the engine hosted via WebAssembly — no Rust toolchain, one `py3-none-any` wheel), in-browser WebAssembly (no data files), and a multi-arch containerized MCP server. No FFI to a C library, no platform-specific build.
-- **Jyotish in the type system.** Nakshatras, dashas, vargas, shadbala, ayanamshas — first-class, not a Western afterthought.
-
-## In production
-
-Vedākṣha is the calculation engine under ArthIQ Labs' Jyotish properties:
-
-| Product | What it is |
-|---------|------------|
-| [kundalimcp.com](https://kundalimcp.com) | The B2B/developer engine — an agentic-AI Jyotish MCP with the full computation suite (yogas, all five dasha systems, shadbala, school-specific interpretation). Builds directly on the `vedaksha-*` crates. |
-| [kundali.live](https://kundali.live) | Consumer endpoint — chat-based readings and self-serve PDF reports. |
-
-## Workspace
-
-| Crate | Description |
-|-------|-------------|
-| [vedaksha](crates/vedaksha) | Umbrella crate — `prelude`, `compute_chart`, `ChartConfig`. Optional `locale` feature (7 languages: en · hi · sa · ta · te · kn · bn). |
-| [vedaksha-math](crates/vedaksha-math) | Chebyshev polynomials, angle arithmetic, interpolation, rotation matrices |
-| [vedaksha-ephem-core](crates/vedaksha-ephem-core) | JPL DE440 SPK reader, **AnalyticalProvider** (VSOP87A + ELP/MPP02), coordinate pipeline, precession, nutation, ΔT |
-| [vedaksha-astro](crates/vedaksha-astro) | 10 house systems, 44 ayanamshas (IAU 2006 P03 5th-order), aspects, dignities, transits |
-| [vedaksha-vedic](crates/vedaksha-vedic) | 27 nakshatras, 5 dasha systems, 16 vargas, Shadbala |
-| [vedaksha-graph](crates/vedaksha-graph) | Property-graph ontology (9 node types, 12 edge types) + Cypher / SurrealQL / JSON-LD emitters |
-| [vedaksha-mcp](crates/vedaksha-mcp) | Model Context Protocol server — JSON-RPC tools for AI agents |
-| [vedaksha-wasm](crates/vedaksha-wasm) | WebAssembly bindings — full chart computation in the browser, no data files |
-
-## Two ephemeris providers
-
-| Provider | Accuracy | Data | Use case |
-|----------|----------|------|----------|
-| **SpkReader** | Sub-arcsecond | DE440s (~31 MB on disk) | Servers, containers |
-| **AnalyticalProvider** | <25″ planets, <1″ Moon | Zero files (compiled constants) | WASM, edge, Cloudflare Workers |
-
-The AnalyticalProvider evaluates VSOP87A (Bretagnon & Francou 1988) for planets and ELP/MPP02 (Chapront 2002) for the Moon — all coefficients are compile-time constants, so there are no runtime data files.
-
-## Computation pipeline
-
-```
-JPL DE440 SPK → Chebyshev evaluation → ICRS barycentric
-  → light-time correction → precession (IAU 2006 P03, 5th-order)
-  → nutation (IAU 2000B) → frame bias (ICRS→J2000)
-  → aberration → ecliptic coordinates
-```
-
-Zero-data path (WASM / edge):
-
-```
-VSOP87A / ELP coefficients (compiled) → Poisson series evaluation
-  → heliocentric ecliptic → equatorial rotation → barycentric ICRS
-  → same downstream pipeline
-```
-
-**Delta T:** IERS measured table (1620–2025) + Espenak–Meeus predictions to 2050.
-
-## Vedic astrology
-
-First-class Jyotish, drawn from primary classical sources.
-
-- **Nakshatras** — 27 lunar mansions with padas, lords, symbols, deities
-- **Dashas** — Vimshottari (120-yr), Yogini (36-yr), Ashtottari (108-yr), and Chara & Narayana (Jaimini, sign-based)
-- **Vargas** — all 16 divisional charts (D-1 Rashi → D-60 Shashtiamsha)
-- **Shadbala** — complete six-component planetary strength, with Ishta / Kashta phala
-- **Ayanamsha** — 44 sidereal systems (Lahiri, Raman, KP, Fagan-Bradley, +40). Three of them — Lahiri, KP and Fagan-Bradley — are numerically validated against their published epoch anchors; the other 41 are range-checked only, and no accuracy figure is claimed for them. See [Accuracy](#accuracy).
-- **Lunar nodes** — Mean, True (Meeus 5-term, ~0.09°), and Osculating (0.6″ max vs JPL DE441 over 1900–2100) — KP sub-lord ready
-- **Panchanga** — full five limbs: Tithi (paksha, lord), Vara (reckoned from local sunrise, with Rahu and Gulika Kalam windows), Nakshatra (deity, yoni, nadi), Yoga (27), Karana (60)
-- **Drishti** — graded aspects: Full, ¾ (75%), ½ (50%), ¼ (25%) per BPHS Ch. 26
-
-## Western astrology — calculation, not interpretation
-
-The tropical primitives are real and shared with the Vedic path, which is why
-they exist: 10 house systems (Placidus, Koch, Campanus, Regiomontanus,
-Alcabitius, Morinus, Porphyry, Sripathi, Equal, Whole-Sign), major aspects with
-applying/separating motion and orb strength, essential dignities, synastry and
-composite charts. `ChartConfig` defaults to the tropical zodiac.
-
-Positioned honestly: this is **calculation only**, and it is not at parity with
-the Jyotish surface. There is no Western interpretive layer, no Western-specific
-narrative or report, and — as [Accuracy](#accuracy) says plainly — house cusps
-are not validated against any external reference. Every other figure in that
-section is. If you need computed cusps, aspects and dignities to build on, they
-are here and they are tested for internal consistency; if you are expecting the
-depth the Vedic side has, it is not there.
-
-## AI-native: MCP + property graph
-
-Every computation produces a **property graph**, not flat structs — so an agent can ask "which planets aspect the 7th-house lord?" as a graph query instead of re-implementing chart logic. The MCP server exposes its whole tool surface, discoverable with a single `tools/list` call:
-
-`compute_natal_chart` · `compute_dasha` · `compute_vargas` · `compute_karakas` · `compute_combustion` · `compute_shadbala` · `compute_ashtakavarga` · `compute_transit` · `compute_gochara` · `search_transits` · `search_muhurta` · `compute_panchanga` · `compute_drishti` · `compute_bhavas` · `compute_synastry` · `compute_composite` · `emit_graph`
-
-```bash
-cargo install vedaksha-mcp
-vedaksha-mcp                                          # stdio (Claude Desktop, Cursor, VS Code)
-VEDAKSHA_MCP_TOKEN=… vedaksha-mcp --http --port 3100  # HTTP transport (auth required)
-docker run -e VEDAKSHA_MCP_TOKEN=… -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp
-```
-
-HTTP mode requires a bearer token (`Authorization: Bearer <token>` on every POST); the server refuses to start without `VEDAKSHA_MCP_TOKEN` unless you pass `--insecure-no-auth` for a trusted-network deployment. `/health` and the informational `GET` stay open. The Docker image is multi-arch (amd64 + arm64).
-
-The tool surface is generated from the Rust definitions and locked by a snapshot test, so the published catalog can't silently drift from the code.
-
-## Accuracy
-
-Every figure below is printed by a named test. Reproduce them with
-`bash scripts/download_de440s.sh` then
-`cargo test -p vedaksha-ephem-core --release -- --include-ignored --nocapture`.
-
-**SpkReader vs JPL Horizons (DE441)** — `oracle_comparison.rs`, over the
-24,350 rows in [`tests/oracle_jpl/`](tests/oracle_jpl) (10 bodies × 2,435 dates,
-1900–2100). Horizons serves DE441, so this measures our DE440s pipeline against
-an independent kernel:
-
-| Era | Comparisons | Mean | Max |
-|-----|-------------|------|-----|
-| 1900–2025 (ΔT measured) | 15,350 | **0.106″** | 1.184″ (Uranus) |
-| 1900–2100 (all) | 24,350 | 0.880″ | 44.914″ (Moon, 2099) |
-
-15,349 of 15,350 comparisons before 2026 are sub-arcsecond. Past 2025 the
-residual is dominated by **ΔT prediction**, not ephemeris error: our Espenak &
-Meeus extrapolation and Horizons' own ΔT diverge by ~68 s at 2099, which shows
-up in proportion to a body's angular rate (the Moon, at 0.64″/s, picks up ~45″;
-Pluto, essentially none). At 2099-02-06 the Sun, Moon, Mercury, Venus and Mars —
-rates spanning 0.03–0.64″/s — all imply the same 66–71 s offset. ΔT beyond the
-IERS measured record is unpredictable in principle, not a defect we can fix.
-
-**AnalyticalProvider vs JPL Horizons (DE441)** — `analytical_oracle.rs`, the
-same fixture over 1900–2025 (13,815 comparisons). VSOP87A is a truncated
-analytical theory, so it is necessarily looser than the numerical kernel:
-
-| Body | Mean | Max |
-|------|------|-----|
-| Venus | 4.83″ | **24.22″** |
-| Mercury | 4.27″ | 11.49″ |
-| Sun | 4.09″ | 7.00″ |
-| Mars | 3.06″ | 18.08″ |
-| Jupiter | 0.81″ | 1.97″ |
-| Neptune | 0.50″ | 1.70″ |
-| Saturn | 0.46″ | 1.11″ |
-| Uranus | 0.33″ | 1.44″ |
-| Moon | 0.17″ | 0.61″ |
-
-Overall mean 2.06″. `analytical_accuracy.rs` reports a friendlier 13.09″ max for
-the same provider, but it samples 10 dates against this test's 2,435 per body —
-the sparse grid never lands near Venus's worst case. The table above is the
-better-sampled number and the one to trust.
-
-**ELP/MPP02 Moon vs JPL Horizons (DE441)** — `lunar_horizons.rs`, live-fetched
-over −3000…+3000 CE: **0.015″ at J2000** (tolerance 0.06″), 0.020–0.053″ across
-1500–2500 CE, degrading to 85.5″ in deep antiquity where ELP/MPP02's own
-published precision is the limit.
-
-**Ayanamsha** — Lahiri, Fagan-Bradley and KP are checked at J2000 to
-0.003–0.005° (`sidereal.rs`), propagating documented epoch anchors with IAU 1976
-/ Newcomb precession. Every anchor's origin is listed in
-[`DATA_PROVENANCE.md`](DATA_PROVENANCE.md). The other 41 systems are
-range-checked only — no accuracy figure is claimed for them.
-
-Dasha totals and nakshatra boundaries are covered by invariant tests
-(`vimshottari.rs`, `nakshatra.rs`). Those verify internal consistency — that our
-BPHS constants sum to 120 years, that boundaries tile the circle — and are not
-comparisons against an external reference. **House-cusp accuracy is not measured
-against any reference.**
 
 ## Install
 
 | Platform | Install | Notes |
 |----------|---------|-------|
 | Rust | `cargo add vedaksha` | full pipeline |
-| Python | `pip install vedaksha` | engine via WebAssembly, `py3-none-any`, any Python ≥ 3.9 — no Rust toolchain |
+| Python | `pip install vedaksha` | engine via WebAssembly, `py3-none-any`, Python ≥ 3.9 — no Rust toolchain |
 | WASM | `npm install vedaksha-wasm` | browser & edge, no data files |
 | MCP | `cargo install vedaksha-mcp` | stdio + HTTP (bearer auth) |
-| Docker | `docker run -e VEDAKSHA_MCP_TOKEN=… ghcr.io/arthiqlabs/vedaksha-mcp` | MCP server on :3100, multi-arch (amd64 + arm64) |
+| Docker | `docker run -e VEDAKSHA_MCP_TOKEN=… -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp` | multi-arch (amd64 + arm64) |
 
-**Published:** crates.io — 7 crates (`vedaksha`, `vedaksha-math`, `vedaksha-ephem-core`, `vedaksha-astro`, `vedaksha-vedic`, `vedaksha-graph`, `vedaksha-mcp`) · PyPI `vedaksha` · npm `vedaksha-wasm` · Docker `ghcr.io/arthiqlabs/vedaksha-mcp` (multi-arch).
+Compute **janam kundali** (natal charts), **panchanga**, **dashas**, **nakshatras**, **vargas**, **shadbala**, **ashtakavarga**, **muhurta** and **transits/gochara** from a sub-arcsecond ephemeris (VSOP87A, ELP/MPP02, JPL DE440s/DE441).
 
-See [`bindings/python/`](bindings/python/) for the Python package (library, `vedaksha` CLI, self-hostable MCP server, and optional FastAPI REST).
+## Quick start
+
+```python
+from vedaksha import Vedaksha
+
+vk = Vedaksha()
+chart = vk.natal_chart(julian_day=2451545.0, latitude=28.6139, longitude=77.2090)
+```
+
+```bash
+cargo install vedaksha-mcp && vedaksha-mcp     # stdio: Claude Desktop, Cursor, VS Code
+```
+
+The Rust path is a compiled doctest in [`crates/vedaksha/src/lib.rs`](crates/vedaksha/src/lib.rs), shown there in full because the time scales are where engines quietly go wrong.
+
+**Every Julian Day on the public surfaces is UT1**, not TT and not TDB. The engine converts to TT internally for the dynamical terms and uses UT1 for Earth rotation, which fixes the ascendant, MC and all twelve cusps. Passing a TDB Julian Day adds ΔT worth of rotation instead of removing it — 0.289° (17.3′) at today's ΔT ≈ 69 s, on every cusp. The one exception is the raw SPK query (`state_vector`), which indexes the kernel directly and takes TDB.
+
+## Accuracy
+
+Every figure is printed by a named test. Reproduce the ephemeris tables with `bash scripts/download_de440s.sh`, then `cargo test -p vedaksha-ephem-core --release -- --include-ignored --nocapture`; the ayanamsha figures come from `cargo test -p vedaksha-astro sidereal`.
+
+**SpkReader vs JPL Horizons (DE441)** — `oracle_comparison.rs`, 24,350 committed rows (10 bodies × 2,435 dates, 1900–2100). Horizons serves DE441, so this measures our DE440s pipeline against an independent kernel.
+
+| Era | Comparisons | Mean | Max |
+|-----|-------------|------|-----|
+| 1900–2025 (ΔT measured) | 15,350 | **0.106″** | 1.184″ (Uranus) |
+| 1900–2100 (all) | 24,350 | 0.880″ | 44.914″ (Moon, 2099) |
+
+15,349 of 15,350 comparisons before 2026 are sub-arcsecond. **Past 2025 the residual is ΔT prediction, not ephemeris error:** our Espenak–Meeus extrapolation and Horizons' ΔT diverge by ~68 s at 2099, and the error scales with a body's angular rate — the Moon (0.64″/s) picks up ~45″, Pluto essentially none. At 2099-02-06, five bodies spanning 0.03–0.64″/s all imply the same 66–71 s offset, which is the signature of a clock difference, not a position error.
+
+**AnalyticalProvider vs JPL Horizons** — `analytical_oracle.rs`, 1900–2025. VSOP87A is a truncated theory, necessarily looser than the numerical kernel: overall mean **2.06″**, worst case **24.22″** (Venus), Moon 0.17″ mean via ELP/MPP02. Densely sampled at 2,435 dates per body; a sparser 10-date test in the same crate reports a friendlier 13.09″ max because it never lands near Venus's worst case.
+
+**ELP/MPP02 Moon** — `lunar_horizons.rs`: **0.015″ at J2000**, 0.020–0.053″ across 1500–2500 CE.
+
+### What is *not* measured
+
+Stated plainly, because a validation claim is worth what it excludes:
+
+- **House cusps are not validated against any external reference.**
+- **3 of 44 ayanamshas** — Lahiri, KP, Fagan-Bradley — are numerically validated (0.003–0.005° at J2000, anchors in [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md)). The other 41 are range-checked only.
+- **Dasha and nakshatra tests are invariant tests**, not external comparisons: they verify that BPHS constants sum to 120 years and that boundaries tile the circle.
+
+## What's inside
+
+**Two ephemeris providers.** `SpkReader` reads JPL DE440s (~31 MB) for sub-arcsecond work. `AnalyticalProvider` compiles VSOP87A + ELP/MPP02 to constants and needs no data files — for WASM, edge and Cloudflare Workers.
+
+**Jyotish, from primary sources.** 27 nakshatras with padas and lords · 5 dasha systems (Vimshottari, Yogini, Ashtottari, and Jaimini's Chara & Narayana) · all 16 vargas (D-1 → D-60) · six-component shadbala with Ishta/Kashta phala · 44 ayanamshas · panchanga's five limbs, with vara reckoned from local sunrise and Rahu/Gulika Kalam as real time windows · graded drishti per BPHS Ch. 26 · mean, true and osculating nodes (0.6″ max vs DE441, KP sub-lord ready).
+
+**Western: calculation, not interpretation.** 10 house systems, major aspects with applying/separating motion, essential dignities, synastry and composite. `ChartConfig` defaults to tropical. There is no Western interpretive layer and no parity with the Jyotish surface.
+
+**Crates**, published to crates.io in lockstep: [`vedaksha`](crates/vedaksha) (umbrella, 7 locales) · [`-math`](crates/vedaksha-math) · [`-ephem-core`](crates/vedaksha-ephem-core) · [`-astro`](crates/vedaksha-astro) · [`-vedic`](crates/vedaksha-vedic) · [`-graph`](crates/vedaksha-graph) · [`-mcp`](crates/vedaksha-mcp).
+
+## MCP + property graph
+
+17 tools, discoverable with a single `tools/list`. The catalog is generated from the Rust definitions and locked by a snapshot test, so it cannot silently drift from the code.
+
+`compute_natal_chart` · `compute_dasha` · `compute_vargas` · `compute_karakas` · `compute_combustion` · `compute_shadbala` · `compute_ashtakavarga` · `compute_transit` · `compute_gochara` · `search_transits` · `search_muhurta` · `compute_panchanga` · `compute_drishti` · `compute_bhavas` · `compute_synastry` · `compute_composite` · `emit_graph`
+
+Any chart converts to a property graph — 9 node types, 12 edge types — via `emit_graph` or `vedaksha_graph::chart_to_graph`, emitting Cypher, SurrealQL, JSON-LD, JSON or RAG embedding text. An agent can then ask "which planets aspect the 7th-house lord?" as a graph query instead of re-implementing chart logic. Computations themselves return typed structs; the graph is a projection you ask for.
+
+```bash
+VEDAKSHA_MCP_TOKEN=… vedaksha-mcp --http --port 3100
+```
+
+HTTP mode requires `Authorization: Bearer <token>` on every POST and refuses to start without `VEDAKSHA_MCP_TOKEN`, unless you pass `--insecure-no-auth` for a trusted network. `/health` and the informational `GET` stay open.
+
+## Clean-room provenance
+
+Every implemented algorithm carries a `// Source:` doc-comment naming its primary paper or treatise — VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini. Nothing is derived from other astrology software, and there is no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/): this is the evidence a BSL licensee can audit.
+
+## In production
+
+| Product | What it is |
+|---------|------------|
+| [kundalimcp.com](https://kundalimcp.com) | Agentic-AI Jyotish MCP with the full computation suite. Builds directly on the `vedaksha-*` crates. |
+| [kundali.live](https://kundali.live) | Consumer endpoint — chat-based readings and self-serve PDF reports. |
 
 ## License
 
 **Business Source License 1.1.**
 
-- **Non-commercial use** — free (personal projects, research, education, internal tools).
-- **Commercial use** — $500 one-time per organization. [Purchase →](https://vedaksha.net/pricing)
-- **Converts to Apache 2.0** five years after each version's release date.
+- **Non-commercial** — free (personal, research, education, internal tools).
+- **Commercial** — $500 one-time per organization. [Purchase →](https://vedaksha.net/pricing)
+- **Converts to Apache 2.0** five years after each version's release.
 
-See [LICENSE](LICENSE) for full terms.
+See [LICENSE](LICENSE), [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [MAINTENANCE.md](MAINTENANCE.md).
 
 ---
 
