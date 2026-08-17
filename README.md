@@ -6,7 +6,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `sub-arcsecond vs JPL Horizons` · `820 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+`clean-room` · `sub-arcsecond vs JPL Horizons` · `1,007 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
 
 ---
 
@@ -100,7 +100,7 @@ Python, WebAssembly, or as an MCP server for AI agents.
 ## Why Vedākṣha
 
 - **Clean-room, cited.** Every module that implements a cited algorithm carries a `// Source:` doc-comment pointing at the primary paper or treatise (VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini) — never derived from other software, no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/).
-- **Sub-arcsecond, measured.** 820 tests on every push (Ubuntu and macOS); a scheduled full run adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run.
+- **Sub-arcsecond, measured.** 1,007 tests on every push (Ubuntu and macOS) — unit, integration and doctests, the whole surface; a scheduled full run brings it to 1,013 and adds 24,350 oracle comparisons against JPL Horizons / DE441 — mean residual **0.106″** over 1900–2025. Every number in [Accuracy](#accuracy) is printed by a test you can run, and [Accuracy](#accuracy) is equally explicit about what is *not* measured.
 - **Agentic-AI-native.** A Model Context Protocol server, and every chart is a property graph you can query in Cypher, SurrealQL, or JSON-LD.
 - **Runs everywhere.** One Rust codebase → native, **Python** (`pip install vedaksha`, the engine hosted via WebAssembly — no Rust toolchain, one `py3-none-any` wheel), in-browser WebAssembly (no data files), and a multi-arch containerized MCP server. No FFI to a C library, no platform-specific build.
 - **Jyotish in the type system.** Nakshatras, dashas, vargas, shadbala, ayanamshas — first-class, not a Western afterthought.
@@ -163,10 +163,26 @@ First-class Jyotish, drawn from primary classical sources.
 - **Dashas** — Vimshottari (120-yr), Yogini (36-yr), Ashtottari (108-yr), and Chara & Narayana (Jaimini, sign-based)
 - **Vargas** — all 16 divisional charts (D-1 Rashi → D-60 Shashtiamsha)
 - **Shadbala** — complete six-component planetary strength, with Ishta / Kashta phala
-- **Ayanamsha** — 44 sidereal systems (Lahiri, Raman, KP, Fagan-Bradley, +40)
+- **Ayanamsha** — 44 sidereal systems (Lahiri, Raman, KP, Fagan-Bradley, +40). Three of them — Lahiri, KP and Fagan-Bradley — are numerically validated against their published epoch anchors; the other 41 are range-checked only, and no accuracy figure is claimed for them. See [Accuracy](#accuracy).
 - **Lunar nodes** — Mean, True (Meeus 5-term, ~0.09°), and Osculating (0.6″ max vs JPL DE441 over 1900–2100) — KP sub-lord ready
 - **Panchanga** — full five limbs: Tithi (paksha, lord), Vara (reckoned from local sunrise, with Rahu and Gulika Kalam windows), Nakshatra (deity, yoni, nadi), Yoga (27), Karana (60)
 - **Drishti** — graded aspects: Full, ¾ (75%), ½ (50%), ¼ (25%) per BPHS Ch. 26
+
+## Western astrology — calculation, not interpretation
+
+The tropical primitives are real and shared with the Vedic path, which is why
+they exist: 10 house systems (Placidus, Koch, Campanus, Regiomontanus,
+Alcabitius, Morinus, Porphyry, Sripathi, Equal, Whole-Sign), major aspects with
+applying/separating motion and orb strength, essential dignities, synastry and
+composite charts. `ChartConfig` defaults to the tropical zodiac.
+
+Positioned honestly: this is **calculation only**, and it is not at parity with
+the Jyotish surface. There is no Western interpretive layer, no Western-specific
+narrative or report, and — as [Accuracy](#accuracy) says plainly — house cusps
+are not validated against any external reference. Every other figure in that
+section is. If you need computed cusps, aspects and dignities to build on, they
+are here and they are tested for internal consistency; if you are expecting the
+depth the Vedic side has, it is not there.
 
 ## AI-native: MCP + property graph
 
