@@ -1,9 +1,9 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Vedākṣha MCP server — stdio and HTTP transports.
+//! Vedaksha MCP server — stdio and HTTP transports.
 //!
 //! ## Stdio (default)
 //! Reads JSON-RPC 2.0 requests from stdin (one per line), writes responses
@@ -203,7 +203,7 @@ fn run_http(port: u16, args: &[String]) {
     };
     let workers = worker_count(args);
     eprintln!(
-        "Vedākṣha MCP server listening on http://{addr}/mcp  \
+        "Vedaksha MCP server listening on http://{addr}/mcp  \
          ({auth_state}, {workers} worker threads)"
     );
 

@@ -1,4 +1,4 @@
-# Vedākṣha v3.0.0 — Surface Consolidation
+# Vedaksha v3.0.0 — Surface Consolidation
 
 **Release date:** 2026-05-12 (target)
 **Type:** Breaking — published-crate surface change. No runtime semantics

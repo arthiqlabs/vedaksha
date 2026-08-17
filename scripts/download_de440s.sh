@@ -1,6 +1,6 @@
 #!/bin/bash
 # Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-# Vedākṣha — Vision from Vedas
+# Vedaksha — Vision from Vedas
 #
 # Download the JPL DE440s SPK kernel that SpkReader reads.
 #

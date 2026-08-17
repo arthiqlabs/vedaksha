@@ -1,4 +1,4 @@
-# Vedākṣha v5.0.0 — The ascendant, the vara, and a sunrise the engine never had
+# Vedaksha v5.0.0 — The ascendant, the vara, and a sunrise the engine never had
 
 **Release date:** 2026-08-16
 

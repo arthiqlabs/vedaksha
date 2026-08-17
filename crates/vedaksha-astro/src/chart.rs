@@ -1,5 +1,5 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
@@ -162,7 +162,7 @@ pub fn compute_chart(
         // sign and a 1st house starting in another. Re-anchor on the rotated
         // ascendant, applying the module's own rule (`whole_sign::compute`:
         // cusp 1 = floor(asc/30)·30, twelve 30° houses) in the chart's frame.
-        // This keeps bhāva = rāśi, which is what the Vedic surface means by
+        // This keeps bhava = rashi, which is what the Vedic surface means by
         // whole-sign and what `vedaksha_mcp::tools::compute_bhavas` documents.
         if houses.system == HouseSystem::WholeSign {
             let sign_start = libm::floor(houses.asc / 30.0) * 30.0;
@@ -532,7 +532,7 @@ mod tests {
     }
 
     /// Whole-Sign on a sidereal chart must anchor on the **sidereal** sign of
-    /// the ascendant — bhāva = rāśi, the meaning
+    /// the ascendant — bhava = rashi, the meaning
     /// `vedaksha_mcp::tools::compute_bhavas` documents ("the entire sign
     /// containing the ascendant is the 1st bhava").
     ///

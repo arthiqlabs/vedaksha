@@ -1,4 +1,4 @@
-"""Low-level wasmtime host for the Vedākṣha engine.
+"""Low-level wasmtime host for the Vedaksha engine.
 
 Loads ``vedaksha.wasm`` and wraps its C ABI (see ``engine/src/lib.rs``). This is
 the only module that touches wasmtime; everything above it speaks JSON or typed
@@ -37,7 +37,7 @@ def _load_wasm_bytes() -> bytes:
 
 
 class Engine:
-    """A single loaded instance of the Vedākṣha wasm engine."""
+    """A single loaded instance of the Vedaksha wasm engine."""
 
     def __init__(self) -> None:
         try:
@@ -45,7 +45,7 @@ class Engine:
             from wasmtime import Engine as WtEngine
         except ImportError as exc:  # pragma: no cover
             raise EngineNotAvailable(
-                "wasmtime is required to run the Vedākṣha engine; "
+                "wasmtime is required to run the Vedaksha engine; "
                 "install `vedaksha` (which depends on it) or `pip install wasmtime`"
             ) from exc
 

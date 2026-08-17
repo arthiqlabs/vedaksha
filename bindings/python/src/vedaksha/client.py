@@ -1,4 +1,4 @@
-"""High-level Vedākṣha client.
+"""High-level Vedaksha client.
 
 A thin, typed facade over the wasm engine's JSON-RPC surface. Every astrology
 computation is an MCP tool call; this class handles the JSON-RPC envelope, the
@@ -27,7 +27,7 @@ NAIF_IDS: dict[str, int] = {
 
 
 class Vedaksha:
-    """The primary entry point for computing with the Vedākṣha engine."""
+    """The primary entry point for computing with the Vedaksha engine."""
 
     def __init__(self, engine: Engine | None = None) -> None:
         self._engine = engine or default_engine()

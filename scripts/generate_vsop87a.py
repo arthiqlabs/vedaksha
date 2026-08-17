@@ -211,7 +211,7 @@ def generate_wrapper_rs(planet_name: str) -> str:
     """Generate the thin LazyLock wrapper .rs file for a planet."""
     lines = []
     lines.append("// Copyright © 2026 ArthIQ Labs LLC. All rights reserved.")
-    lines.append("// Vedākṣha — Vision from Vedas")
+    lines.append("// Vedaksha — Vision from Vedas")
     lines.append("// Licensed under BSL 1.1. See LICENSE file.")
     lines.append("//")
     lines.append("// GENERATED FILE — do not edit manually.")

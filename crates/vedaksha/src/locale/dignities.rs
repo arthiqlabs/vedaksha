@@ -1,15 +1,15 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! Localized planetary dignity names.
 //!
 //! Index mapping (0-based):
-//!  0  Domicile   — planet in its own sign (svakṣetra)
+//!  0  Domicile   — planet in its own sign (svakshetra)
 //!  1  Exaltation — planet in its sign of exaltation (ucca)
-//!  2  Detriment  — planet opposite its domicile (nīcabhañga opposite)
-//!  3  Fall       — planet in its sign of debilitation (nīca)
+//!  2  Detriment  — planet opposite its domicile (nicabhanga opposite)
+//!  3  Fall       — planet in its sign of debilitation (nica)
 //!  4  Peregrine  — planet in a neutral/unaffiliated sign
 //!
 //! Sources: BPHS Ch. 3; Ptolemy "Tetrabiblos" I.17-20.

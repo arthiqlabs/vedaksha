@@ -1,6 +1,6 @@
 # Architecture — the Python binding
 
-This package runs the real Vedākṣha engine from Python. It reimplements none of
+This package runs the real Vedaksha engine from Python. It reimplements none of
 the engine's logic. The Rust workspace in this repository is compiled to a
 WebAssembly module, and the Python package loads that module with
 [`wasmtime`](https://pypi.org/project/wasmtime/) and drives it over a small C ABI.

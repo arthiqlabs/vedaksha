@@ -1,5 +1,5 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 
 //! Binary coefficient blob loader.
@@ -33,7 +33,7 @@
 
 #![allow(clippy::module_name_repetitions)]
 
-/// Magic bytes prefixed to every Vedākṣha coefficient blob.
+/// Magic bytes prefixed to every Vedaksha coefficient blob.
 pub const MAGIC: [u8; 8] = *b"VDKBLOB1";
 
 /// Current binary format version.

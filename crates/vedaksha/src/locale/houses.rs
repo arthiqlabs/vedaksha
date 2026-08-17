@@ -1,9 +1,9 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Localized house (bhāva) names.
+//! Localized house (bhava) names.
 //!
 //! Index mapping (0-based): 0 = First House (Lagna) … 11 = Twelfth House.
 //!
@@ -14,7 +14,7 @@ use super::Language;
 /// Number of houses in a chart.
 pub const HOUSE_COUNT: usize = 12;
 
-/// Get the localized name of a house (bhāva).
+/// Get the localized name of a house (bhava).
 ///
 /// `number` is 1-based (1–12); internally mapped to 0-based index.
 ///

@@ -33,14 +33,14 @@ from .errors import ToolError
 def create_app(*, token: Optional[str] = None) -> "FastAPI":
     """Build the FastAPI app. If ``token`` is set, all tool routes require it."""
     app = FastAPI(
-        title="Vedākṣha",
+        title="Vedaksha",
         # Derived, never a literal. This was a hardcoded "4.0.0" — a third
         # copy of the version inside one package, and the only one that
         # release.yml's version-check does not assert. The Python wheel
         # already sat at 3.0.1 across two releases once; do not leave a
         # second place for that to happen.
         version=__version__,
-        description="REST projection of the Vedākṣha engine's tool surface.",
+        description="REST projection of the Vedaksha engine's tool surface.",
     )
     vk = Vedaksha()
     tools = {t["name"]: t for t in vk.list_tools()}

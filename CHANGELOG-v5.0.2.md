@@ -1,4 +1,4 @@
-# Vedākṣha v5.0.2 — completes the 5.0.1 release
+# Vedaksha v5.0.2 — completes the 5.0.1 release
 
 **Release date:** 2026-08-17
 

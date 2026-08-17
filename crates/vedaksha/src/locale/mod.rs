@@ -1,11 +1,11 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! # `vedaksha::locale`
 //!
-//! Localization engine for the Vedākṣha platform.
+//! Localization engine for the Vedaksha platform.
 //!
 //! Provides localized names for all astrological terms in 7 Tier 1 languages:
 //! English, Hindi, Sanskrit, Tamil, Telugu, Kannada, Bengali.

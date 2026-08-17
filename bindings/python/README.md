@@ -1,6 +1,6 @@
-# Vedākṣha for Python — Vedic astrology & ephemeris
+# Vedaksha for Python — Vedic astrology & ephemeris
 
-The clean-room [Vedākṣha](https://vedaksha.net) Vedic-astronomy and Jyotish engine,
+The clean-room [Vedaksha](https://vedaksha.net) Vedic-astronomy and Jyotish engine,
 runnable from Python with **no Rust toolchain and no per-platform build**. Compute
 **kundali / janam kundali** (natal charts), **panchanga**, **vimshottari and other
 dashas**, **nakshatras**, **vargas** (divisional charts), **shadbala**, **ashtakavarga**,

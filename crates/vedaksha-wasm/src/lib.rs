@@ -1,11 +1,11 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! # vedaksha-wasm
 //!
-//! WASM bindings for Vedākṣha, enabling browser-based astronomical
+//! WASM bindings for Vedaksha, enabling browser-based astronomical
 //! and astrological computation.
 
 use wasm_bindgen::prelude::*;

@@ -1,4 +1,4 @@
-# Vedākṣha v5.0.1 — the property graph, made reachable
+# Vedaksha v5.0.1 — the property graph, made reachable
 
 **Release date:** 2026-08-17
 

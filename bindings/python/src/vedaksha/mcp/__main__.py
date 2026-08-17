@@ -11,7 +11,7 @@ from .server import McpServer, serve_http, serve_stdio
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m vedaksha.mcp",
-        description="Self-hosted Vedākṣha MCP server (full engine tool surface).",
+        description="Self-hosted Vedaksha MCP server (full engine tool surface).",
     )
     parser.add_argument("--http", action="store_true", help="serve over HTTP instead of stdio")
     parser.add_argument("--host", default="127.0.0.1", help="HTTP bind host (default: localhost)")

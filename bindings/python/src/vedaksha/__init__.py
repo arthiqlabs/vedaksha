@@ -1,6 +1,6 @@
-"""Vedākṣha — clean-room Vedic astronomy & Jyotish engine, hosted from Python.
+"""Vedaksha — clean-room Vedic astronomy & Jyotish engine, hosted from Python.
 
-This package runs the real Rust Vedākṣha engine (compiled to WebAssembly) via
+This package runs the real Rust Vedaksha engine (compiled to WebAssembly) via
 ``wasmtime``. It is **not** a reimplementation: every number it returns is the
 Rust engine's own, bit-for-bit. That is what makes one architecture-independent
 wheel possible — no Rust toolchain, no per-platform build, any OS and CPU

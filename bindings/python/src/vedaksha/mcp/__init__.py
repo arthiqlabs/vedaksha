@@ -1,4 +1,4 @@
-"""Self-hostable MCP server for the Vedākṣha engine.
+"""Self-hostable MCP server for the Vedaksha engine.
 
 Two transports over the same engine:
 

@@ -1,9 +1,9 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Localized zodiac sign (rāśi) names.
+//! Localized zodiac sign (rashi) names.
 //!
 //! Index mapping (0-based):
 //! 0=Aries, 1=Taurus, 2=Gemini, 3=Cancer, 4=Leo, 5=Virgo,
@@ -16,7 +16,7 @@ use super::Language;
 /// Number of zodiac signs.
 pub const SIGN_COUNT: usize = 12;
 
-/// Get the localized name of a zodiac sign (rāśi).
+/// Get the localized name of a zodiac sign (rashi).
 ///
 /// # Panics
 ///

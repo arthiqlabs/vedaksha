@@ -8,7 +8,7 @@
 
 ## Provenance and clean-room status
 
-This fixture contains numerical outputs of the **pre-rederivation** Vedākṣha lunar implementation, which derived structurally from `ytliu0/ElpMpp02` (GPL-3.0). It is committed for use as a Tier-3 regression oracle by the clean-room re-derivation that replaces that implementation.
+This fixture contains numerical outputs of the **pre-rederivation** Vedaksha lunar implementation, which derived structurally from `ytliu0/ElpMpp02` (GPL-3.0). It is committed for use as a Tier-3 regression oracle by the clean-room re-derivation that replaces that implementation.
 
 Numerical values cross the clean-room firewall as facts (Feist v. Rural — uncopyrightable). No source code, structural information, or attribution from the contaminated implementation crosses. The capture binary that produced this file is part of the contaminated implementation and is deleted in the same commit that quarantines the rest.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-# Vedākṣha — Vision from Vedas
+# Vedaksha — Vision from Vedas
 # Licensed under BSL 1.1. See LICENSE file.
 """Generate the JPL Horizons oracle fixture for `oracle_comparison.rs`.
 
@@ -8,7 +8,7 @@ Fetches apparent geocentric ecliptic longitudes from the NASA/JPL Horizons
 API and writes `tests/oracle_jpl/reference_positions.json`, the independent
 reference the SpkReader accuracy test compares against.
 
-Why Horizons (and not a third-party ephemeris library): Vedākṣha's BSL 1.1
+Why Horizons (and not a third-party ephemeris library): Vedaksha's BSL 1.1
 position rests on a documented clean-room trail. Horizons output is a NASA
 public-domain US Government work, so using it as reference data carries no
 copyleft question. It is also an *independent* kernel from the one under

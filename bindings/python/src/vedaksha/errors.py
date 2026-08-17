@@ -1,9 +1,9 @@
-"""Exception hierarchy for the Vedākṣha Python package."""
+"""Exception hierarchy for the Vedaksha Python package."""
 from __future__ import annotations
 
 
 class VedakshaError(Exception):
-    """Base class for all Vedākṣha errors."""
+    """Base class for all Vedaksha errors."""
 
 
 class EngineNotAvailable(VedakshaError):

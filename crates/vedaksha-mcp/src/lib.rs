@@ -1,11 +1,11 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! # vedaksha-mcp
 //!
-//! MCP (Model Context Protocol) server for Vedākṣha.
+//! MCP (Model Context Protocol) server for Vedaksha.
 //!
 //! Provides tools for AI agents to compute charts, dashas, vargas, transits,
 //! synastry and composites, and to emit graph data. The catalog is

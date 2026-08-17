@@ -1,4 +1,4 @@
-//! C-ABI wasm host shim for the Vedākṣha engine.
+//! C-ABI wasm host shim for the Vedaksha engine.
 //!
 //! This compiles the real `vedaksha-ephem-core` and `vedaksha-mcp` crates to a
 //! `wasm32-unknown-unknown` module with a small, stable C ABI. The Python

@@ -1,4 +1,4 @@
-# Vedākṣha v3.1.0 — Performance + Panchanga Ending Times
+# Vedaksha v3.1.0 — Performance + Panchanga Ending Times
 
 **Release date:** 2026-05-23
 

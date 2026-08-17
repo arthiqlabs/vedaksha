@@ -1,11 +1,11 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! # vedaksha-vedic
 //!
-//! Vedic (Jyotish) astrology engine for the Vedākṣha platform.
+//! Vedic (Jyotish) astrology engine for the Vedaksha platform.
 
 //!
 //! **Not `no_std`.** This crate declared `#![cfg_attr(not(feature = "std"),

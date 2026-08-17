@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "vedaksha"
 version = "5.0.2"
-description = "Clean-room Vedic astronomy & Jyotish engine — the Rust Vedākṣha engine hosted from Python via WebAssembly"
+description = "Clean-room Vedic astronomy & Jyotish engine — the Rust Vedaksha engine hosted from Python via WebAssembly"
 readme = "README.md"
 requires-python = ">=3.9"
 license = "BUSL-1.1"

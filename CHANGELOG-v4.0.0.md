@@ -1,4 +1,4 @@
-# Vedākṣha v4.0.0 — Secure MCP, multi-arch, and a Python package
+# Vedaksha v4.0.0 — Secure MCP, multi-arch, and a Python package
 
 **Release date:** 2026-07-23
 

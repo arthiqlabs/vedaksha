@@ -1,4 +1,4 @@
-# Vedākṣha dependency policy
+# Vedaksha dependency policy
 # Run: cargo deny check
 
 [advisories]

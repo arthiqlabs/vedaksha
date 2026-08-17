@@ -1,5 +1,5 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
@@ -8,7 +8,7 @@
 //! Numeric primitives for astronomical and astrological computation.
 //!
 //! This crate provides foundational mathematical operations used throughout
-//! the Vedākṣha platform:
+//! the Vedaksha platform:
 //!
 //! - **Chebyshev polynomials** — evaluation of Chebyshev polynomials of the
 //!   first kind, used for JPL ephemeris interpolation

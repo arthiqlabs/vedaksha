@@ -12,7 +12,7 @@ repository.workspace = true
 license.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
-description = "C-ABI wasm32 host shim for the Vedākṣha engine (Python binding artifact)"
+description = "C-ABI wasm32 host shim for the Vedaksha engine (Python binding artifact)"
 publish = false
 
 [lib]

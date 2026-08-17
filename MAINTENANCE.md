@@ -1,4 +1,4 @@
-# Vedākṣha — Ongoing Maintenance Guide
+# Vedaksha — Ongoing Maintenance Guide
 
 > **Annual review recommended: April 1st each year.**
 > This document lists every component that may need periodic updates. If ArthIQ Labs LLC ceases maintenance, any fork maintainer can follow this guide to keep the platform accurate and secure.
@@ -272,7 +272,7 @@ rewriting 90.67% of the lunar theory's output bits once left the SPK digest byte
 
 ## What Happens If Nobody Maintains This
 
-If Vedākṣha is abandoned entirely, here is the degradation timeline:
+If Vedaksha is abandoned entirely, here is the degradation timeline:
 
 | Years without maintenance | Impact |
 |---|---|
@@ -287,5 +287,5 @@ If Vedākṣha is abandoned entirely, here is the degradation timeline:
 ---
 
 *© 2026 ArthIQ Labs LLC*
-*Vedākṣha — Vision from Vedas*
+*Vedaksha — Vision from Vedas*
 *Contact: info@arthiq.net | https://vedaksha.net*

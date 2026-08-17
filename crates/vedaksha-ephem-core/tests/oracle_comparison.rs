@@ -1,5 +1,5 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
@@ -161,7 +161,7 @@ fn compare_against_reference() {
     let data_points = fixture.rows;
 
     eprintln!("\n===========================================================================");
-    eprintln!(" Vedākṣha — Accuracy Report");
+    eprintln!(" Vedaksha — Accuracy Report");
     eprintln!("===========================================================================\n");
 
     let mut total = 0;
@@ -200,7 +200,7 @@ fn compare_against_reference() {
             continue;
         }
 
-        // Compute using Vedākṣha
+        // Compute using Vedaksha
         let result = coordinates::apparent_position(&reader, body, dp.jd);
         let vedaksha_lon = match result {
             Ok(pos) => pos.ecliptic.longitude.to_degrees(),
@@ -270,7 +270,7 @@ fn compare_against_reference() {
     // Print detailed results
     eprintln!(
         "{:<10} {:<24} {:>12} {:>12} {:>10}",
-        "Body", "Date", "Ref", "Vedākṣha", "Diff (″)"
+        "Body", "Date", "Ref", "Vedaksha", "Diff (″)"
     );
     eprintln!("{}", "-".repeat(72));
 

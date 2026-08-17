@@ -1,6 +1,6 @@
 # Data Provenance
 
-This file lists every external data source the Vedākṣha repository ingests, with primary URL, license/copyright status, fetch date, and content hash. Every dev shortcut, mock, or sample subset must be logged here per project convention.
+This file lists every external data source the Vedaksha repository ingests, with primary URL, license/copyright status, fetch date, and content hash. Every dev shortcut, mock, or sample subset must be logged here per project convention.
 
 ## External scientific data
 

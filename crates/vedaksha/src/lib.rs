@@ -1,9 +1,9 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! # Vedākṣha
+//! # Vedaksha
 //!
 //! Umbrella crate that re-exports every public sub-crate under a single
 //! dependency.  Add `vedaksha` to your `Cargo.toml` and access the full

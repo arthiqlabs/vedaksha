@@ -1,6 +1,6 @@
 # Implementation Subagent — Final Report (audit artifact)
 
-**Project:** Vedākṣha
+**Project:** Vedaksha
 **Date:** 2026-05-09
 **Phase:** Implementation — clean-room re-derivation of ELP/MPP02 lunar theory
 **Model:** claude-opus-4-7 (1M context)

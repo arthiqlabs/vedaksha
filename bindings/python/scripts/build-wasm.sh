@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build the Vedākṣha engine into the wasm blob the Python package hosts.
+# Build the Vedaksha engine into the wasm blob the Python package hosts.
 #
 # The blob is NOT committed — the engine source lives in this same repo, so the
 # blob is a pure build artifact produced here (locally) or in CI before the

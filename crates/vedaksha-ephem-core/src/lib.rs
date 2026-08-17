@@ -1,11 +1,11 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
-// Vedākṣha — Vision from Vedas
+// Vedaksha — Vision from Vedas
 // Licensed under BSL 1.1. See LICENSE file.
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! # vedaksha-ephem-core
 //!
-//! Astronomy engine for the Vedākṣha platform providing:
+//! Astronomy engine for the Vedaksha platform providing:
 //!
 //! - **JPL SPK/DAF reader** — NAIF binary file parsing and Chebyshev
 //!   interpolation for high-precision planetary positions

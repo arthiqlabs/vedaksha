@@ -1,4 +1,4 @@
-# Vedākṣha — Vision from Vedas
+# Vedaksha — Vision from Vedas
 
 **Clean-room Rust ephemeris and Vedic astrology engine, built for the agentic-AI era.** Sub-arcsecond planetary precision, every algorithm traced to a primary source, any chart queryable as a property graph.
 

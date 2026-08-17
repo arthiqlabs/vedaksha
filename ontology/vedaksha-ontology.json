@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Vedākṣha Astrological Graph Ontology",
+  "title": "Vedaksha Astrological Graph Ontology",
   "version": "1.0.0",
   "description": "Property graph ontology for astronomical and astrological chart data",
   "copyright": "© 2026 ArthIQ Labs LLC. All rights reserved.",

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-ELP/MPP02 Coefficient Generator for Vedākṣha Ephemeris
+ELP/MPP02 Coefficient Generator for Vedaksha Ephemeris
 
 Fetches the IMCCE primary distribution of the Chapront-Francou ELP/MPP02
 lunar theory from cyrano-se.obspm.fr, verifies SHA256 digests against the
@@ -317,7 +317,7 @@ def write_wrapper_rs(out_path: str, component: str) -> None:
     pretty = component.replace("_", " ")
     lines = [
         "// Copyright © 2026 ArthIQ Labs LLC. All rights reserved.",
-        "// Vedākṣha — Vision from Vedas",
+        "// Vedaksha — Vision from Vedas",
         "// Licensed under BSL 1.1. See LICENSE file.",
         "//",
         "// GENERATED FILE — do not edit manually.",
@@ -379,7 +379,7 @@ def emit_component(
 # ---------------------------------------------------------------------------
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="ELP/MPP02 generator for Vedākṣha")
+    ap = argparse.ArgumentParser(description="ELP/MPP02 generator for Vedaksha")
     ap.add_argument("--threshold", type=float, default=DEFAULT_THRESHOLD,
                     help=f"amplitude truncation threshold (default: {DEFAULT_THRESHOLD:g})")
     ap.add_argument("--output-dir", type=str, default=None,
