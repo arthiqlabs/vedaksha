@@ -225,11 +225,29 @@ const EXALTATIONS: [(u8, DignityPlanet); 7] = [
 ///   negative).
 #[must_use]
 pub fn sign_of(longitude_deg: f64) -> Sign {
+    Sign::from_index(sign_index(longitude_deg))
+}
+
+/// Zodiac sign index `0..=11` (0 = Aries) for an ecliptic longitude.
+///
+/// The one place this arithmetic lives. It was open-coded at five call sites
+/// across four crates in two spellings — `(normalized / 30.0) as u8` after an
+/// explicit normalise, and `(lon / 30.0).floor() as u8 % 12` without one. Those
+/// agree on `[0°, 360°)` and disagree below zero: `-10.0` truncates to `-1`,
+/// and `-1_i32 as u8` is 255, so `% 12` yields 3 where the answer is 11
+/// (Pisces). Callers pass longitudes that should already be normalised, so the
+/// divergence was latent rather than live — but five copies of an expression
+/// with a disagreeing edge case is a defect waiting for the first caller that
+/// subtracts an ayanamsha without re-normalising.
+///
+/// Normalises first, so every input has an answer.
+#[must_use]
+pub fn sign_index(longitude_deg: f64) -> u8 {
     let normalized = vedaksha_math::angle::normalize_degrees(longitude_deg);
     // Each sign spans exactly 30°. Cast is safe: value is 0.0–359.999…
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let sign_idx = (normalized / 30.0) as u8;
-    Sign::from_index(sign_idx)
+    let idx = (normalized / 30.0) as u8;
+    idx
 }
 
 /// Get the domicile ruler of a sign under the specified rulership scheme.
@@ -402,6 +420,37 @@ mod tests {
     use super::*;
 
     // ── sign_of ───────────────────────────────────────────────────────────────
+
+    #[test]
+    /// The five call sites this helper replaced used two spellings. Sweep the
+    /// whole circle at 0.1° and assert the helper reproduces BOTH of them
+    /// wherever they agreed, so the dedup is provably behaviour-preserving for
+    /// every longitude a caller actually passes.
+    #[test]
+    fn sign_index_matches_both_open_coded_forms_across_the_circle() {
+        for step in 0..3600 {
+            let lon = f64::from(step) * 0.1;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let truncating = (vedaksha_math::angle::normalize_degrees(lon) / 30.0) as u8;
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let flooring = (lon / 30.0).floor() as u8 % 12;
+            let got = sign_index(lon);
+            assert_eq!(got, truncating, "normalise-then-truncate form at {lon}");
+            assert_eq!(got, flooring, "floor-then-modulo form at {lon}");
+            assert!(got < 12, "index must be 0..=11, got {got} at {lon}");
+        }
+    }
+
+    /// Below zero the two old forms disagreed and the floor-then-modulo one was
+    /// wrong: -10.0 truncates to -1, and `-1_i32 as u8` saturates to 255, so
+    /// `% 12` gave 3 (Cancer) for a longitude that is 350° — Pisces, index 11.
+    #[test]
+    fn sign_index_is_correct_below_zero_where_the_old_form_was_not() {
+        assert_eq!(sign_index(-10.0), 11, "-10° is 350°, which is Pisces");
+        assert_eq!(sign_index(-0.001), 11);
+        assert_eq!(sign_index(-370.0), 11, "-370° is 350°");
+        assert_eq!(sign_index(-90.0), 9, "-90° is 270°, Capricorn");
+    }
 
     #[test]
     fn sign_of_0_is_aries() {

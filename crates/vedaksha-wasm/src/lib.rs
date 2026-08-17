@@ -1547,7 +1547,7 @@ fn compute_drishti_inner(positions_json: &str) -> Result<String, String> {
         if !lon.is_finite() || !(0.0..360.0).contains(&lon) {
             return Err(format!("{key} must be a finite number in [0, 360)"));
         }
-        Ok((lon / 30.0).floor() as u8 % 12)
+        Ok(vedaksha_astro::dignity::sign_index(lon))
     };
 
     let placements = [
@@ -1652,7 +1652,7 @@ fn compute_bhavas_inner(ascendant: f64, planets_json: &str) -> Result<String, St
                     "longitude for '{name}' must be a finite number in [0, 360)"
                 ));
             }
-            let sign = (lon / 30.0).floor() as u8 % 12;
+            let sign = vedaksha_astro::dignity::sign_index(lon);
             placements.push(serde_json::json!({
                 "planet": name,
                 "sign": sign,

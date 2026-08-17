@@ -21,6 +21,19 @@ pub enum ComputeError {
     IoError { detail: String },
 }
 
+/// `ComputeError` participates in the standard error ecosystem, so callers can
+/// use `?` into `Box<dyn Error>` / `anyhow` instead of unwrapping.
+///
+/// This is `core::error::Error`, not `std::error::Error`: the trait moved into
+/// `core` in Rust 1.81 and the declared MSRV here is 1.89, so the impl costs
+/// nothing on a `no_std` target should these crates ever get there. The absence
+/// of this impl is why the README example reached for `.expect()` rather than
+/// `?`.
+///
+/// No `source()` override: none of these variants wraps another error.
+/// `IoError` carries a formatted `String`, not the `std::io::Error` itself.
+impl core::error::Error for ComputeError {}
+
 impl fmt::Display for ComputeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -38,5 +51,32 @@ impl fmt::Display for ComputeError {
                 write!(f, "I/O error: {detail}")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod error_trait_tests {
+    use super::ComputeError;
+
+    /// The point of the `Error` impl is `?` in a caller that returns a boxed
+    /// error — assert that, not merely that the trait is implemented.
+    #[test]
+    fn compute_error_flows_through_the_question_mark_operator() {
+        fn fallible() -> Result<f64, ComputeError> {
+            Err(ComputeError::DateOutOfRange {
+                jd: 3_000_000.0,
+                min: 2_414_864.5,
+                max: 2_488_069.5,
+            })
+        }
+        fn caller() -> Result<f64, Box<dyn core::error::Error>> {
+            Ok(fallible()?)
+        }
+
+        let err = caller().expect_err("the inner call fails");
+        assert!(
+            err.to_string().contains("out of range"),
+            "Display must survive the boxing: {err}"
+        );
     }
 }

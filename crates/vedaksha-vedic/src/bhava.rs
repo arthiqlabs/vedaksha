@@ -31,9 +31,7 @@ pub struct BhavaChart {
 ///   will be normalised to `[0°, 360°)`)
 #[must_use]
 pub fn compute_bhavas(asc_sidereal_deg: f64) -> BhavaChart {
-    let normalized = vedaksha_math::angle::normalize_degrees(asc_sidereal_deg);
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let lagna_sign = (normalized / 30.0) as u8;
+    let lagna_sign = vedaksha_astro::dignity::sign_index(asc_sidereal_deg);
     #[allow(clippy::cast_possible_truncation)]
     let house_signs = core::array::from_fn(|i| (lagna_sign + i as u8) % 12);
     BhavaChart {

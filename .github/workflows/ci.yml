@@ -159,4 +159,37 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check vedaksha-math no_std
+        # vedaksha-math is the ONLY crate in this workspace that is genuinely
+        # no_std, which is why this job names it rather than the workspace.
+        # Four other crates carried `#![cfg_attr(not(feature = "std"),
+        # no_std)]` until v5.0.0 while failing to compile that way — nothing
+        # checked them, because nothing here ever built them without default
+        # features. If you make another crate no_std, add it to this line;
+        # the attribute alone is not evidence.
         run: cargo check -p vedaksha-math --no-default-features --locked
+      - name: Check the workspace builds without default features
+        # Separate guarantee from no_std: this proves `--no-default-features`
+        # resolves and compiles across every crate (with std still available).
+        # It did not, before the false no_std attributes came off.
+        run: cargo check --workspace --no-default-features --locked
+
+  msrv:
+    name: MSRV (rust-version in workspace.package)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned deliberately to the declared MSRV, NOT to `stable`. Every other
+      # job here resolves stable and then defers to rust-toolchain.toml (1.97.1),
+      # so before this job the only mechanical check that the declared MSRV
+      # still held was the release Docker image building on rust:1.89-slim —
+      # i.e. the claim was verified at tag time, or not at all.
+      - uses: dtolnay/rust-toolchain@1.89
+      - uses: Swatinem/rust-cache@v2
+      - name: Check at the declared MSRV
+        # RUSTUP_TOOLCHAIN overrides rust-toolchain.toml, which would otherwise
+        # pull 1.97.1 back in and make this job a no-op that always passed.
+        env:
+          RUSTUP_TOOLCHAIN: "1.89"
+        run: |
+          rustc --version
+          cargo check --workspace --locked --all-features

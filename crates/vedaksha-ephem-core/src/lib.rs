@@ -12,6 +12,7 @@
 //! - **Coordinate transformations** — ICRS, ecliptic, equatorial frame conversions
 //! - **Julian Day** — calendar conversions and epoch utilities
 
+//!
 //! **Not `no_std`.** This crate declared `#![cfg_attr(not(feature = "std"),
 //! no_std)]` until v5.0.0 and could not honour it: `--no-default-features`
 //! failed to compile, so the attribute was a claim no build ever checked.
