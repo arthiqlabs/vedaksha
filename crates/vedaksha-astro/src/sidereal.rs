@@ -668,7 +668,7 @@ const DISPOSITIONS: &[(&str, &str)] = &[
     ),
     (
         "truepushya",
-        "removed — its longitude did not match any located primary. Rao defines Pushya-paksha by delta Cancri at 106 degrees; pass PushyaPaksha",
+        "removed — Pushya-paksha is defined by Rao as delta Cancri at 106 degrees; pass PushyaPaksha",
     ),
     (
         "truemula",
