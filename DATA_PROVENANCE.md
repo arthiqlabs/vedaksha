@@ -45,7 +45,13 @@ added per standard Vedic definition (BPHS).
 > License, or a separate Swiss Ephemeris Professional licence — verified against the upstream
 > `LICENSE` file, which states the developer must choose one or the other. AGPL is the stricter
 > of the two readings, so the earlier description understated the obligation rather than
-> overstating it. The licence name is corrected here; the entries are otherwise unchanged.
+> overstating it. The licence name is corrected here.
+>
+> **Citation sweep, 2026-08-18.** These entries also carried book page numbers and a named
+> modern translator with a link. Both are forbidden by this project's citation rule and by
+> `CONTRIBUTING.md`, and that rule binds the record as much as it binds new text: leaving them
+> in place keeps pointing a reader at exactly what the rule exists to stop. They were removed.
+> The sources themselves, and every claim these entries make, are unchanged.
 >
 > The claim this project makes going forward is procedural, not historical: as of v6.0.0 every
 > ayanamsha is generated from a cited primary, a second implementation re-derives it, and CI
@@ -54,7 +60,7 @@ added per standard Vedic definition (BPHS).
 ### Fix 3 — Lahiri Ayanamsha (epoch-anchored IAU 1976)
 Source 1: Lieske, J.H. et al. (1977). "Expressions for the Precession Quantities Based upon the
 IAU (1976) System of Astronomical Constants." A&A 58, 1–16 (eq. A2). Academic publication.
-Source 2: Indian Astronomical Ephemeris 1989, p. 556 (ICRC 1955 epoch definition).
+Source 2: Indian Astronomical Ephemeris 1989, the ICRC 1955 epoch definition.
 Source 3: Swiss Ephemeris sweph.h, ayanamsa[1] (aloistr/swisseph — see the licence correction above) — epoch JD 2435553.5
 and value 23.245524743° identified from this file. No source code copied; only the numeric
 constants (uncopyrightable facts) were transcribed and the precession formula was independently
@@ -62,14 +68,14 @@ re-derived from Lieske et al.
 License: Academic formulas are not copyrightable; constants are uncopyrightable numerical facts.
 
 ### Fix 4 — KP/Krishnamurti Ayanamsha (epoch-anchored Newcomb)
-Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy", p. 226. Public domain
+Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy". Public domain
 (U.S. Naval Observatory publication, pre-1928).
 Source 2: Swiss Ephemeris sweph.h, ayanamsa[5] (aloistr/swisseph — see the licence correction above) — epoch JD 2415020.31352
 and value 22.363889°. No source code copied; only numeric constants transcribed.
 License: Public domain (Newcomb); numeric constants are uncopyrightable facts.
 
 ### Fix 5 — Fagan-Bradley Ayanamsha (epoch-anchored Newcomb)
-Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy", p. 226. Public domain.
+Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy". Public domain.
 Source 2: Fagan, C. & Bradley, D. "The Synetic Vernal Point." American Astrology, 1967.
 Source 3: American Sidereal Ephemeris (1976), Astro Computing Services — defines SVP at B1950.0.
 Source 4: Swiss Ephemeris sweph.h, ayanamsa[0] (see the licence correction above) — epoch JD 2433282.42346 and value
@@ -85,12 +91,15 @@ physically reasonable output (~−20986 arcsec accumulated from J2000, negative 
 
 ### Fix 7 — Ashtottari Dasha Ardradi Lookup Table
 Source: BPHS (Brihat Parashara Hora Shastra), Ch. 35, vv. 17–20 (Ardradi Ashtottari variant).
-Translation reference: S.P. Tata, cited at astrojyoti.com/bphspage6.htm.
 License: Public domain (ancient Vedic literature; no modern copyright applies to the primary text).
 Note: The 27-element mapping (ASHTOTTARI_LORDS_BY_NAK) was independently derived from the
 BPHS Sanskrit source, not copied from any software implementation.
 
 ### Fix 8 — Bhakoot (Ashtakoota) Compatibility Score
+
+> **Superseded 2026-07-23 — this code no longer ships.** `bhakoot_score()` and the whole
+> Ashtakoota surface were removed in `87290fd`, released in v3.3.0. The entry is left in place
+> for the same reason as Fixes 3–5: it records what was done when it was done.
 Source: BPHS, Stree Jataka Adhyaya — on compatibility (public domain).
 License: Public domain. The rules implemented (dosha conditions for specific sign separations)
 are traditional Vedic computational rules, not copyrightable expression.

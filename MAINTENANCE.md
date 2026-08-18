@@ -5,39 +5,23 @@
 
 ---
 
-## 1. Earth Orientation Parameters (EOP)
+## 1. Earth Orientation Parameters (EOP) — not carried
 
-**What:** The Earth's rotation is irregular and unpredictable. The IERS (International Earth Rotation and Reference Systems Service) publishes measured values for UT1-UTC, polar motion, and LOD (Length of Day) in weekly bulletins.
+**What:** The IERS publishes measured UT1-UTC, polar motion and length-of-day in weekly bulletins.
 
-**Why it matters:** Sidereal time computation and coordinate transforms use UT1. Stale EOP data introduces a slowly growing error in sidereal time, which propagates to house cusps and planetary positions relative to the local horizon.
+**Status: this engine carries none of it, and there is nothing here to maintain.** There is no EOP table and no polar-motion correction anywhere in the workspace. This follows from the public contract: **every Julian Day on the public surfaces is UT1**, supplied by the caller. Because the engine never converts civil time to UT1, it never needs UT1-UTC.
 
-**Impact if neglected:** After 1 year of stale data, error is ~0.5–1.0 arcsecond in sidereal time. Astrological applications will not notice this. Astronomical research applications may.
+**What that means for an integrator:** obtaining UT1 is *your* responsibility. If you feed UTC directly, you inherit up to 0.9 s of Earth rotation error, which is about 13.5 arcseconds of sidereal time. The resulting shift in the ascendant and the house cusps is of that order but not equal to it: it varies with latitude and with the sign rising. For most astrological work that is acceptable and is the usual practice; if it is not acceptable for yours, apply UT1-UTC from `finals2000A.all` before you call.
 
-**How to update:**
-1. Download the latest `finals2000A.all` file from: https://datacenter.iers.org/data/latestVersion/finals2000A.all
-2. Parse the UT1-UTC and polar motion columns
-3. Update the embedded EOP table in `crates/vedaksha-ephem-core/src/eop.rs` (or the data file it reads)
-4. Run `cargo test --package vedaksha-ephem-core` to verify sidereal time accuracy against IAU SOFA
-
-**Frequency:** Annually (or quarterly for research-grade accuracy)
+Polar motion is not applied either. It displaces the pole by under 0.5 arcsecond and is below the threshold of any astrological use.
 
 ---
 
-## 2. Leap Seconds
+## 2. Leap Seconds — not carried
 
-**What:** A leap second is occasionally inserted into UTC to keep it within 0.9 seconds of UT1. The IERS announces new leap seconds ~6 months in advance via Bulletin C.
+**Status: there is no leap-second table in this engine, and no maintenance task attaches to one.** It follows from the same contract as §1: the engine is handed UT1 and never performs a UTC conversion, which is the only place a leap-second table would be consulted.
 
-**Why it matters:** The Julian Day ↔ UTC conversion and the TT-UTC offset depend on a complete leap second table. A missing leap second causes a 1-second error in all time conversions after the insertion date.
-
-**Impact if neglected:** If a new leap second is announced and not added, all computations for dates after the insertion will be off by 1 second. For astrological use this is negligible. For the Moon (which moves ~0.5 arcsec/second) it matters at high precision.
-
-**How to update:**
-1. Check IERS Bulletin C at: https://datacenter.iers.org/data/latestVersion/16_BULLETIN_C16.txt
-2. If a new leap second is announced, add the date to the leap second table in `crates/vedaksha-ephem-core/src/time.rs`
-3. The entry is a single line: the Julian Day of the new leap second insertion
-4. Run `cargo test --package vedaksha-ephem-core` — the JD↔UTC round-trip tests will catch any error
-
-**Frequency:** Check Bulletin C every January and July (leap seconds are only inserted on June 30 or December 31). As of 2026, no new leap second has been added since December 31, 2016. The international community is considering abolishing leap seconds by 2035 (Resolution 4 of the 27th CGPM, 2022).
+If your application converts civil UTC to UT1 before calling, that conversion is where leap seconds belong, and keeping the table current is your side of the boundary. IERS Bulletin C announces insertions about six months ahead. No leap second has been inserted since 2016-12-31, and the 27th CGPM (2022, Resolution 4) resolved to stop inserting them by 2035.
 
 ---
 
@@ -61,53 +45,38 @@
 
 ## 4. JPL Planetary Ephemeris
 
-**What:** NASA JPL periodically releases improved Development Ephemeris versions (DE441 → DE442 → etc.) incorporating new observations from spacecraft and ground-based telescopes.
+**What:** NASA JPL periodically releases improved Development Ephemeris versions incorporating new observations.
 
-**Why it matters:** Each new version has slightly improved accuracy, particularly for outer planets and the Moon. DE441 (currently used) covers 1800–2400 CE.
+**What ships:** `SpkReader` reads **DE440s**, the short-span kernel (`data/de440s.bsp`, 32,726,016 bytes, fetched by `scripts/download_de440s.sh` against a pinned SHA256). Read from the kernel's own segment headers, **it covers 1850-01-01 to 2150-01-01**. DE441 appears in this project only as the *oracle* — Horizons serves DE441, so the accuracy comparison is against a kernel we do not ship.
 
-**Impact if neglected:** DE441 will remain accurate for all practical purposes for decades. The differences between DE441 and a hypothetical DE442 would be sub-milliarcsecond for inner planets — completely invisible to any astrological application.
+**Impact if neglected:** accuracy does not decay; coverage runs out. Requests outside 1850–2150 fail on the SPK path rather than degrading quietly, and `AnalyticalProvider` (VSOP87A + ELP/MPP02, no data files) is the path for dates beyond it. A future DE release would change inner-planet positions by well under a milliarcsecond — invisible to any astrological application.
 
 **How to update:**
 1. Check for new releases at: https://ssd.jpl.nasa.gov/planets/eph_export.html
-2. If a new DE version is released, download the SPK (SPICE) file
-3. Replace the file the `SpkReader` is configured to load
-4. Run the full accuracy test suite against JPL Horizons
+2. Download the new SPK and update the URL and pinned SHA256 in `scripts/download_de440s.sh`
+3. Re-run the oracle suite; regenerate `tests/oracle_jpl/reference_positions.json` only if the comparison kernel changed
 
-**Frequency:** Only when NASA releases a new major version (happens every 5–15 years). DE441 was released in 2021. There is no urgency to upgrade.
-
----
-
-## 5. Fixed Star Catalog (Hipparcos)
-
-**What:** The positions of fixed stars drift due to proper motion (their actual movement through space). The Hipparcos catalog includes proper motion values, so positions can be computed for any epoch. However, the catalog itself may receive corrections.
-
-**Why it matters:** For fixed star conjunctions and parans (fixed star astrology), accurate star positions are needed.
-
-**Impact if neglected:** The code already applies proper motion correction using Hipparcos data, so positions remain accurate indefinitely for the catalog's ~118,000 stars. No update needed unless ESA releases a major Hipparcos revision or you want to incorporate Gaia DR4+ data for higher precision.
-
-**How to update:**
-1. If incorporating Gaia data: download from https://gea.esac.esa.int/archive/
-2. Replace the star data file with new positions and proper motions
-3. Verify against known bright star positions
-
-**Frequency:** Optional. Current data is sufficient for all foreseeable use.
+**Frequency:** Only when NASA releases a new major version (every 5–15 years), or **before 2150** if the engine is still in service. DE440/441 were released in 2021.
 
 ---
 
-## 6. Asteroid Orbital Elements
+## 5. Star Catalogue Data
 
-**What:** The Minor Planet Center (MPC) continuously refines asteroid orbital elements as new observations come in.
+**What:** The engine carries **five** catalogue stars, not a general star catalogue. They exist to serve the sidereal systems that are *defined* by fixing a named star, and nothing else: ζ Piscium, δ Cancri, Spica, λ Scorpii and Sgr A\*, in `crates/vedaksha-astro/src/sidereal.rs`. There is no fixed-star conjunction or paran feature.
 
-**Why it matters:** If users compute positions for specific asteroids (Chiron, Ceres, Juno, Vesta, Pallas, etc.), the orbital elements determine accuracy. Major asteroids are well-determined; minor ones less so.
+**Why it matters:** five of the eleven ayanamshas track a live star, so their values depend on catalogue astrometry rather than on a published constant. Proper motion is applied by `vedaksha_ephem_core::stars`; see §7.
 
-**Impact if neglected:** For the ~20 astrologically significant asteroids, current orbital elements will remain accurate to within 1 arcsecond for 10+ years. For newly discovered or poorly observed asteroids, elements go stale faster.
+**Impact if neglected:** a Hipparcos proper motion good to ~0.5 mas/yr accumulates ~0.5 arcsecond of longitude per thousand years from the catalogue epoch. That is the honest uncertainty on a star-anchored system far from epoch, and no update removes it.
 
-**How to update:**
-1. Download current orbital elements from: https://minorplanetcenter.net/data
-2. Update the asteroid data file
-3. Run position tests against JPL Horizons small-body lookup
+**How to update:** the rows are inputs to the derivation, so they change the same way every other ayanamsha input does — through `derivation-inputs.json` and the spec, never the Rust constants alone. See §7. `python3 scripts/generate_ayanamsha.py --check-catalogue` re-queries VizieR and confirms the committed rows still match.
 
-**Frequency:** Every 2–3 years for the standard asteroid set. Only if asteroid astrology is actively used.
+**Frequency:** Only when a catalogue release supersedes Hipparcos for bright stars (Gaia, eventually).
+
+---
+
+## 6. Asteroid Orbital Elements — not applicable
+
+**This engine computes no asteroids.** There are no orbital elements, no asteroid data file and no Chiron/Ceres/Juno/Vesta/Pallas surface. Nothing here requires maintenance. If asteroid support is ever added, this section becomes a real one and an MPC element source gets a row in `DATA_PROVENANCE.md`.
 
 ---
 
@@ -196,8 +165,8 @@ git commit -m "chore(mcp): regenerate tools/list snapshot"
 The site repo (`arthiqlabs/vedaksha-site`) reads the snapshot from
 `https://raw.githubusercontent.com/arthiqlabs/vedaksha/main/tools/mcp-tools.json`
 at MCP-route cold start, so the snapshot must be on `main` for the live
-endpoint to see the change. Trigger a Vercel redeploy of the site repo
-after merging here.
+endpoint to see the change. Redeploy the site repo (Cloudflare Workers,
+via OpenNext) after merging here.
 
 ---
 
@@ -298,11 +267,8 @@ rewriting 90.67% of the lunar theory's output bits once left the SPK digest byte
 ## Quick Reference: Annual Maintenance Checklist
 
 ```
-[ ] EOP data — download latest finals2000A.all, update eop.rs
-[ ] Leap seconds — check IERS Bulletin C for announcements
 [ ] Delta T — compare predicted vs. observed, update if drift > 0.5s
-[ ] JPL ephemeris — check if NASA released a new DE version
-[ ] Asteroid orbits — update if asteroid features are actively used
+[ ] JPL ephemeris — check if NASA released a new DE version (DE440s coverage ends 2150)
 [ ] Ayanamsha — check for Indian Astronomical Ephemeris revisions (rare), and run `python3 scripts/generate_ayanamsha.py --check-catalogue`
 [ ] cargo audit — run and resolve any advisories
 [ ] cargo deny check — verify no disallowed licenses crept in
@@ -322,9 +288,9 @@ If Vedaksha is abandoned entirely, here is the degradation timeline:
 | 2–5 years | **Negligible.** Delta T prediction drifts by ~1–2 seconds. Moon position may be off by ~1 arcsecond. No astrologer would notice. Dependencies may have unpatched vulnerabilities. |
 | 5–10 years | **Minor.** Delta T drift grows to 5–10 seconds. Sidereal time off by a comparable amount. House cusps could shift by a few arcseconds. Still well below astrological significance. Rust edition may require a `cargo fix --edition`. |
 | 10–20 years | **Moderate for precision users.** Delta T error could reach 30+ seconds. Moon error ~15 arcseconds. Planetary positions still accurate to < 1 arcsecond. Astrologically still perfectly usable. |
-| 20+ years | **Core math and ephemeris remain valid.** DE441 covers until 2400 CE. IAU precession/nutation models valid for centuries. The Rust code itself will compile and produce correct results. |
+| 20+ years | **Core math remains valid.** IAU precession/nutation models hold for centuries and the Rust code will still compile and produce correct results. The shipped DE440s kernel covers to **2150**; past that the SPK path has no data and `AnalyticalProvider` is the only route. |
 
-**Bottom line:** The astronomical computation engine is designed to be durable. The math doesn't expire. The data (DE441) doesn't expire until 2400 CE. The things that decay are the same things that decay in any software project — toolchains and library dependencies.
+**Bottom line:** The math does not expire. The shipped DE440s kernel covers 1850–2150, which bounds the SPK path and nothing else. The things that decay are the ones that decay in any software project — toolchains and library dependencies.
 
 ---
 
