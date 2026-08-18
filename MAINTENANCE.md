@@ -234,6 +234,40 @@ sunrise can otherwise be attributed to the wrong rotation.
   and a 0.4967 d worst gap to 2 and one ULP.
 - **Invalidated by:** a change to the sunrise search algorithm itself.
 
+### The IAU 2006 precession composition — `vedaksha-ephem-core::precession`
+
+`precession_matrix` composes four Fukushima-Williams rotations, and **the order is the whole
+content of the expression**. It is `Rx(−εA) · Rz(−ψ̄) · Rx(φ̄) · Rz(γ̄)`.
+
+- **Established by:** comparison against ERFA's `eraEqec06` at four epochs spanning 6100
+  years, in `precession_matrix_matches_erfa_across_six_millennia`.
+- **Why it needs recording:** a wrong order is **0.014 mas at J2000 and 0.56 arcsecond at
+  499 CE**. It shipped that way through v5 because every existing check sampled 1900–2100,
+  where it hides. If you "simplify" this expression, that test is the only thing that will
+  tell you.
+- **Also:** `general_precession_in_longitude` returns the F-W angle `ψ̄_A`, **not** general
+  precession `p_A`. They differ by ~9.7 arcsec/century and are not interchangeable; use
+  `general_precession_p03` for anything sidereal. A test asserts they stay distinct.
+- **Invalidated by:** adopting a different precession theory. Nothing else.
+
+### Ayanamsha constants — read from primaries, not searched for
+
+No parameter search established these, so there is nothing expensive to re-run — but there is
+a rule, and it is stricter than the ones above.
+
+- **Never validate an ayanamsha against another implementation's numbers.** Not Swiss
+  Ephemeris, not any other engine, not a worked-value table from a published book. That is
+  the reverse engineering the re-derivation exists to undo, and citing a source afterwards
+  does not change what it is.
+- **Change `docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json`, never the Rust
+  constants alone**, and record any change to an anchor, model, convention or declared
+  assumption in that directory's `spec.md` first.
+- **What is already answered** (do not re-search): the search records for all 33 dropped
+  systems, the definition/determination test that excludes every Babylonian system, and the
+  declared assumptions DA-1 through DA-10. All in `spec.md`.
+- **Invalidated by:** a new *Indian Astronomical Ephemeris* revision, or a star catalogue
+  superseding Hipparcos for bright stars. See §7.
+
 ### The two oracles are DISJOINT — check you are using the right one
 
 This has caused a real defect: a dependency upgrade was validated four times against an oracle
