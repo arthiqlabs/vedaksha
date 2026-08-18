@@ -40,14 +40,25 @@ Every public function must include a `///` doc comment citing its primary source
 pub fn precession_matrix(jd: f64) -> Matrix3 { ... }
 ```
 
-Acceptable sources: NASA JPL, IAU standards, Meeus "Astronomical Algorithms",
-the classical Sanskrit texts (BPHS, Jaimini Sutras, Surya Siddhanta), and
-published academic papers.
+Acceptable sources: NASA JPL, IAU standards, published academic papers, the
+classical Sanskrit texts (BPHS, Jaimini Sutras, Surya Siddhanta), and standard
+astronomical references such as Meeus "Astronomical Algorithms" **for frame
+transforms, time scales and numerical method only** — never for the value of
+anything a classical text or an issuing authority defines.
 
-Do not cite a 20th-century commercial edition, a named modern translator, or a
-page number from one, and never use a book's worked-value table as a
-conformance oracle. Cite the classical text by chapter, or state the defining
-rule in the doc-comment so the code needs no external reference at all.
+Two rules follow, and they guard different things.
+
+**Cite a classical text by chapter, never through an edition.** Do not name a
+20th-century commercial edition of one, a modern translator, or a page number
+from either. Cite the chapter, or state the defining rule in the doc-comment so
+the code needs no external reference at all. A translation is one scholar's
+reading of the text; the chapter is what every reading has in common.
+
+**No book's worked-value table is ever a conformance oracle.** This binds every
+source, the acceptable ones included: cite Meeus eq. 15.1 for the method, never
+his worked example for the answer. Tuning code until it reproduces a printed
+value is reverse engineering whatever the book happens to be, and citing that
+book afterwards does not change what was done.
 
 ## Prohibited References
 
