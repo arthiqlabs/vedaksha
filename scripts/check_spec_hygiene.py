@@ -17,7 +17,7 @@ baseline git ref, so that:
 
 Usage:
     scripts/check_spec_hygiene.py SPEC.md [MORE.md ...]
-    scripts/check_spec_hygiene.py --baseline v5.0.2 SPEC.md
+    scripts/check_spec_hygiene.py --baseline <commit-ish> SPEC.md
     scripts/check_spec_hygiene.py --show-pattern-count     # audit, prints no values
 
 Exit 0 clean, 1 on any hit. A hit is a blocking defect, not a style note.
@@ -30,7 +30,14 @@ import re
 import subprocess
 import sys
 
-DEFAULT_BASELINE = "v5.0.2"
+# The commit v5.0.2 pointed at, not the tag. A tag is a mutable ref and it did not
+# survive the release cleanup: v5.0.0-v5.0.2 were fetched by CI on 2026-08-18 at
+# 07:38 and were gone from origin by 22:06, which left this gate with zero patterns
+# and turned it red. It refused to pass vacuously, which is the behaviour we want --
+# but a control whose baseline can be deleted out from under it is fragile in the one
+# direction that matters. This commit is an ancestor of main, so it is reachable from
+# any full clone whatever happens to the tags.
+DEFAULT_BASELINE = "91869cea1578c6b38b6587a0cd403beca29eb9f3"  # v5.0.2
 DEFAULT_SOURCES = ["crates/vedaksha-astro/src/sidereal.rs"]
 DEFAULT_ALLOWLIST = "scripts/spec_hygiene_allow.txt"
 

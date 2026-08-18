@@ -23,7 +23,7 @@ a test fixture: regression-testing against them would reinstate the
 aim-at-the-known-answer failure the re-derivation exists to undo.
 
 Usage:
-    python3 scripts/compare_ayanamsha_migration.py [--baseline v5.0.2]
+    python3 scripts/compare_ayanamsha_migration.py [--baseline <commit-ish>]
 
 Copyright (c) 2026 ArthIQ Labs LLC. All rights reserved.
 """
@@ -91,7 +91,10 @@ def run(cmd, **kw):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baseline", default="v5.0.2", help="git ref of the shipped baseline")
+    # The commit v5.0.2 pointed at. The tag no longer exists on origin; see the note
+    # in check_spec_hygiene.py. This commit is an ancestor of main.
+    ap.add_argument("--baseline", default="91869cea1578c6b38b6587a0cd403beca29eb9f3",
+                    help="git ref of the shipped baseline (default: the v5.0.2 commit)")
     ap.add_argument("--output", default="-", help="write the markdown table here")
     args = ap.parse_args()
 
