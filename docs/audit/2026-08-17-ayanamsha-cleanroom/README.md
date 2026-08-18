@@ -41,11 +41,11 @@ anything.
 
 **Where this diverges from the ELP precedent, deliberately.** That work captured
 a legacy oracle of 10,000 pre-rederivation tuples and regression-tested against
-it. Sound there: ELP's contamination was *structural*, while the coefficient
-values existed independently in the IMCCE primary, so the old outputs were a
-legitimate fact-check. **Here the values themselves were the contaminated
-artefact** — they are the very thing whose provenance could not be established,
-so regression-testing against them would defeat the purpose of re-deriving them.
+it. Sound there: the issue was *structural*, while the coefficient values existed
+independently in the IMCCE primary, so the old outputs were a legitimate
+fact-check. **Here the values themselves are the thing with no derivation in the
+record** — they are precisely what is being re-established, so regression-testing
+against them would defeat the purpose of re-deriving them.
 There is no legacy oracle, and there must never be one.
 
 ## Result: 44 → 11

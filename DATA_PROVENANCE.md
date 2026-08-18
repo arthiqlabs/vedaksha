@@ -152,7 +152,7 @@ Per [`docs/audit/2026-08-17-ayanamsha-cleanroom/`](docs/audit/2026-08-17-ayanams
 the sidereal surface must NEVER again derive from Swiss Ephemeris in any form — source, headers,
 documentation, `swetest` output, or any wrapper or service backed by it. Note the difference from
 the lunar case: there, the coefficient values existed independently in the IMCCE primary, so the
-old outputs were a legitimate fact-check. **Here the values themselves were the contaminated
-artefact**, so the legacy-oracle pattern is specifically forbidden — regression-testing against
-the old ayanamsha numbers would reinstate the aim-at-the-known-answer failure the re-derivation
-exists to undo.
+old outputs were a legitimate fact-check. **Here the values themselves are the thing with no
+derivation in the record**, so the legacy-oracle pattern is specifically forbidden —
+regression-testing against the old ayanamsha numbers would defeat the purpose of re-deriving
+them.

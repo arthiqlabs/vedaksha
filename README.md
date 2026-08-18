@@ -90,7 +90,7 @@ HTTP mode requires `Authorization: Bearer <token>` on every POST and refuses to 
 
 ## Clean-room provenance
 
-Every implemented algorithm carries a `// Source:` doc-comment naming its primary paper or treatise — VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini. Nothing is derived from other astrology software, and there is no GPL contamination. See [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md) and [`docs/audit/`](docs/audit/): this is the evidence a BSL licensee can audit.
+Every implemented algorithm carries a `// Source:` doc-comment naming its primary paper or treatise — VSOP87A, ELP/MPP02, IAU standards, BPHS, Jaimini. Two subsystems have been re-derived from primary sources behind a documented firewall, and each ships its own audit directory: the lunar theory ([2026-05-09](docs/audit/2026-05-09-elp-mpp02-cleanroom/)) and the sidereal surface ([2026-08-17](docs/audit/2026-08-17-ayanamsha-cleanroom/)). Each records the primaries, the process, what was searched and rejected, and a generator that re-derives the values so the claim can be re-run rather than taken on trust. See also [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md). This is the evidence a BSL licensee can audit — stated as what *is* checkable, not as a promise about what isn't there.
 
 ## In production
 

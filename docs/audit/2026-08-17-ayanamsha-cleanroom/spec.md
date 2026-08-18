@@ -330,7 +330,7 @@ pages on this topic are derivatives of Swiss Ephemeris documentation.
 | De Luce | *Constellational Astrology* (1963) | not on archive.org |
 | Usha-Shashi | *Hindu Astrological Calculations* (1978) | not on archive.org |
 | Gil Brand | *Himmlische Matrix* (Chiron Verlag) | not on archive.org |
-| Wilhelm mid-Mula | Wilhelm's own essays/software docs (2006) | no citable primary located; web descriptions contamination-hazardous |
+| Wilhelm mid-Mula | Wilhelm's own essays/software docs (2006) | no citable primary located; available web descriptions are derivative |
 | Sassanian | Mercier, *Studies on the Transmission of Medieval Mathematical Astronomy* (2004) | commercial monograph, not obtained; the "10′ east of ζ Psc / ~560 CE" attribution reached me only via secondary pages and is **not** verified |
 
 None of these five is refuted — each is *unverified*, which under the ratified rule means

@@ -69,20 +69,20 @@ const ARCSEC: f64 = 3600.0;
 /// Indian official ayanamsha at J2000.0: 23°51'25".53.
 ///
 /// *The Indian Astronomical Ephemeris 2022*, Positional Astronomy Centre,
-/// Government of India, p. 380 ("AYANAMSA"): "Ayanamsha for J2000.0 is taken as
+/// Government of India, the "AYANAMSA" section: "Ayanamsha for J2000.0 is taken as
 /// 23°51'25".53".
 const IAE_J2000_ANCHOR_DEG: f64 = 23.0 + 51.0 / 60.0 + 25.53 / ARCSEC;
 
 /// Fagan-Bradley synetic vernal point at B1950.0: 335°57'28".64.
 ///
-/// Fagan, C. & Firebrace, R. C., *Primer of Sidereal Astrology*, p. 13: "for the
+/// Fagan, C. & Firebrace, R. C., *Primer of Sidereal Astrology*: "for the
 /// epoch 1950.0 he proposed as the mean longitude of the vernal point
-/// 335° 57' 28.64"". The ayanamsha is 360° minus that (ibid., p. 16).
+/// 335° 57' 28.64"". The ayanamsha is 360° minus that, per the same work.
 const FAGAN_SVP_B1950_DEG: f64 = 335.0 + 57.0 / 60.0 + 28.64 / ARCSEC;
 
 /// Krishnamurti's anchor: 22°22'00" on the 1st of Chitra, 1900.
 ///
-/// Krishnamurti, K. S., *Krishnamurti Padhdhati Vol-I*, p. 140.
+/// Krishnamurti, K. S., *Krishnamurti Padhdhati Vol-I*.
 const KP_ANCHOR_DEG: f64 = 22.0 + 22.0 / 60.0;
 
 /// Julian Day (TT) of 1900 April 13, 00:00 — the 1st of Chitra 1900 (DA-4, DA-5).
@@ -282,7 +282,7 @@ pub enum Ayanamsha {
     /// "Lahiri".
     ///
     /// Anchor 23°51'25".53 at J2000.0, propagated by the P03 general precession
-    /// in longitude. *The Indian Astronomical Ephemeris 2022*, p. 380.
+    /// in longitude. *The Indian Astronomical Ephemeris 2022*, "AYANAMSA".
     ///
     /// The popular name implies the star Chitra (Spica), but the operative
     /// definition does not use it: it is a J2000 anchor and a polynomial. For a
@@ -293,7 +293,7 @@ pub enum Ayanamsha {
     /// Fagan-Bradley — the Western sidereal standard.
     ///
     /// Synetic vernal point 335°57'28".64 at B1950.0, ayanamsha = 360° − SVP.
-    /// Fagan & Firebrace, *Primer of Sidereal Astrology*, pp. 13 and 16.
+    /// Fagan & Firebrace, *Primer of Sidereal Astrology*.
     ///
     /// Fagan states no precession model; P03 is adopted (DA-3) as the best
     /// current determination of the quantity he named, and that choice is ours.
@@ -302,7 +302,7 @@ pub enum Ayanamsha {
     /// Krishnamurti (KP).
     ///
     /// Anchor 22°22'00" on the 1st of Chitra 1900, propagated at KSK's own
-    /// stated 50.2388475"/yr. *Krishnamurti Padhdhati Vol-I*, p. 140.
+    /// stated 50.2388475"/yr. *Krishnamurti Padhdhati Vol-I*.
     ///
     /// KSK's three published numbers are mutually inconsistent: his anchor
     /// divided by his rate gives a zero year of 297.5 CE against the 291 AD he
@@ -749,7 +749,7 @@ const DISPOSITIONS: &[(&str, &str)] = &[
     ),
     (
         "galacticequatormidmula",
-        "dropped — no citable primary; web descriptions of it are contamination hazards",
+        "dropped — no citable primary located; the web descriptions available are derivative and not admissible here",
     ),
 ];
 
@@ -988,7 +988,7 @@ mod tests {
         let v = ayanamsha_value(Ayanamsha::IndianOfficial, julian::J2000);
         assert!(
             (v - IAE_J2000_ANCHOR_DEG).abs() < ANCHOR_TOL,
-            "IAE 2022 p.380 gives 23°51'25\".53 at J2000; got {v}"
+            "IAE 2022 gives 23°51'25\".53 at J2000; got {v}"
         );
     }
 
@@ -1007,7 +1007,7 @@ mod tests {
         let v = ayanamsha_value(Ayanamsha::Krishnamurti, KP_ANCHOR_JD);
         assert!(
             (v - KP_ANCHOR_DEG).abs() < ANCHOR_TOL,
-            "KSK Vol-I p.140 gives 22°22'00\" on the 1st of Chitra 1900; got {v}"
+            "KSK Vol-I gives 22°22'00\" on the 1st of Chitra 1900; got {v}"
         );
     }
 
