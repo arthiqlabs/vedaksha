@@ -75,7 +75,14 @@ class Vedaksha:
         house_system: str | None = None,
         ayanamsha: str | None = None,
     ) -> dict[str, Any]:
-        """Compute a natal chart (analytical ephemeris tier)."""
+        """Compute a natal chart (analytical ephemeris tier).
+
+        ``ayanamsha`` selects the sidereal system; omit it for tropical. The
+        engine owns the name list and validates it, so this binding forwards the
+        string rather than keeping a copy that could drift. Run
+        ``vedaksha tools`` to see the current enum. Values are the **mean**
+        ayanamsha — add nutation in longitude yourself for the true one.
+        """
         args: dict[str, Any] = {
             "julian_day": julian_day,
             "latitude": latitude,

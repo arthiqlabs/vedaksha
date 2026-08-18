@@ -2686,7 +2686,7 @@ mod tests {
             apparent_position(&provider, Body::Moon, t).ok().map(|p| {
                 let trop = p.ecliptic.longitude.to_degrees();
                 (
-                    tropical_to_sidereal(trop, Ayanamsha::Lahiri, t),
+                    tropical_to_sidereal(trop, Ayanamsha::IndianOfficial, t),
                     p.longitude_speed,
                 )
             })

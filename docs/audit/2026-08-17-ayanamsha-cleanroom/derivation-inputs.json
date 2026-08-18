@@ -1,0 +1,213 @@
+{
+  "_comment": [
+    "Every primary value the ayanamsha derivation consumes, in one auditable place.",
+    "",
+    "Nothing here is derived by this project except `yukteshwar_equinox_1894_jd_tt`,",
+    "which is flagged as computed and is pinned by a Rust test that recomputes it.",
+    "Everything else is a number read from the source named in its `source` field.",
+    "",
+    "scripts/generate_ayanamsha.py reads this file and derives the fixture from it.",
+    "crates/vedaksha-astro/src/sidereal.rs encodes the same values independently.",
+    "The fixture is the contract between those two implementations."
+  ],
+
+  "conventions": {
+    "julian_year_days": 365.25,
+    "output": "mean ayanamsha; nutation in longitude is never included",
+    "star_place": "mean geometric place of date: proper motion applied; aberration, nutation, parallax and deflection not applied",
+    "precession_model": "IAU 2006 P03 — Capitaine, Wallace & Chapront (2003), A&A 412, 567-586",
+    "time_scale": "TT"
+  },
+
+  "precession_p03_general_longitude_arcsec": {
+    "_source": "Capitaine, Wallace & Chapront (2003), A&A 412, 567-586, eq. (37). Powers of T in Julian centuries from J2000.0.",
+    "_note": "This is p_A, general precession in longitude along the moving ecliptic. It is NOT the Fukushima-Williams angle psi_bar (5038.481484\"/cy), which the engine also carries for building the precession matrix. The two differ by ~9.7\"/cy.",
+    "coefficients": [0.0, 5028.796195, 1.1054348, 0.00007964, -0.000023857, -0.0000000383]
+  },
+
+  "precession_fw_angles_arcsec": {
+    "_source": "Capitaine, Wallace & Chapront (2003), Table 1 / eq. (40).",
+    "gamma_bar": [-0.052928, 10.556378, 0.4932044, -0.00031238, -0.000002788, 0.000000026],
+    "phi_bar": [84381.412819, -46.811016, 0.0511268, 0.00053289, -0.00000044, -0.0000000176],
+    "psi_bar": [-0.041775, 5038.481484, 1.5584175, -0.00018522, -0.000026452, -0.0000000148],
+    "epsilon_a": [84381.406, -46.836769, -0.0001831, 0.0020034, -0.000000576, -0.0000000434]
+  },
+
+  "group_a_precession_anchored": [
+    {
+      "system": "IndianOfficial",
+      "anchor_dms": [23, 51, 25.53],
+      "epoch_jd_tt": 2451545.0,
+      "epoch_label": "J2000.0",
+      "source": "The Indian Astronomical Ephemeris 2022, Positional Astronomy Centre, Government of India, p. 380: \"Ayanamsha for J2000.0 is taken as 23°51'25\\\".53\".",
+      "documented_zero_year": 285,
+      "zero_year_source": "IAE 2022 p. 380: the initial point \"coincides with the vernal equinoctial point of vernal equinox day of 285 A.D.\"",
+      "declared_assumptions": []
+    },
+    {
+      "system": "FaganBradley",
+      "svp_dms": [335, 57, 28.64],
+      "anchor_is": "360 degrees minus the synetic vernal point",
+      "epoch_jd_tt": 2433282.42346,
+      "epoch_label": "B1950.0",
+      "source": "Fagan, C. & Firebrace, R. C., Primer of Sidereal Astrology, p. 13 (SVP at 1950.0) and p. 16 (ayanamsa = 360 - SVP).",
+      "documented_zero_year": null,
+      "declared_assumptions": ["DA-3"]
+    }
+  ],
+
+  "group_a_rate_anchored": [
+    {
+      "system": "Krishnamurti",
+      "anchor_dms": [22, 22, 0.0],
+      "epoch_jd_tt": 2415122.5,
+      "epoch_label": "1900 April 13, 00:00 TT — the 1st of Chitra 1900",
+      "rate_arcsec_per_julian_year": 50.2388475,
+      "source": "Krishnamurti, K. S., Krishnamurti Padhdhati Vol-I, p. 140. Rate stated by KSK, twice, attributed to Newcomb.",
+      "documented_zero_year": 291,
+      "exempt_from_zero_year_inversion": true,
+      "exemption_reason": "KSK's three published numbers are mutually inconsistent: anchor divided by stated rate gives 297.5 CE against the 291 AD he states. Reconciling that by choosing a rate which makes the inversion work would be tuning toward an answer.",
+      "declared_assumptions": ["DA-4", "DA-5"]
+    },
+    {
+      "system": "Yukteshwar",
+      "anchor_dms": [20, 54, 36.0],
+      "epoch_jd_tt": 2412908.124077082,
+      "epoch_label": "the March equinox of 1894",
+      "epoch_provenance": "COMPUTED BY THE ENGINE, not read from a source. Root-solved for the Sun's apparent tropical longitude = 0 using vedaksha-ephem-core's AnalyticalProvider. Pinned by the Rust test `yukteshwar_epoch_is_the_1894_march_equinox`, which fails if the solar theory moves it. Corresponds to 1894 March 20, 14:58:40 TT; published almanac value for the 1894 March equinox is 1894 March 20, ~14:56 UT.",
+      "rate_arcsec_per_julian_year": 54.0,
+      "source": "Yukteswar, Swami Sri, The Holy Science (1894), public domain. \"The astronomical reference books show the Vernal Equinox now to be 20°54'36\\\" distant from the first point of Aries (the fixed star Revati).\"",
+      "documented_zero_year": 500,
+      "zero_year_source": "1394 x 54\" = 75276\" = 20°54'36\", exactly the printed figure; 1894 - 1394 = 500.",
+      "declared_assumptions": ["DA-6"]
+    }
+  ],
+
+  "group_a_calendar_year_rule": [
+    {
+      "system": "Raman",
+      "zero_year": 397,
+      "rate_arcsec_per_calendar_year": [151, 3],
+      "rate_note": "50 and 1/3 arcseconds, exactly, as a rational so no decimal rounding enters.",
+      "source": "Raman, B. V., A Manual of Hindu Astrology (1935), Ch. III Art. 49: \"(1) Subtract 397 from the year of birth (a.d.) (2) Multiply the remainder by 50⅓\\\" and reduce the product into degrees, minutes and seconds.\"",
+      "printed_examples": [
+        {"year": 1912, "arcsec": 76255, "dms": [21, 10, 55]},
+        {"year": 1918, "arcsec": 76557, "dms": [21, 15, 57]}
+      ],
+      "documented_zero_year": 397,
+      "declared_assumptions": ["DA-7", "DA-8"]
+    }
+  ],
+
+  "group_c_own_model": [
+    {
+      "system": "SuryaSiddhanta",
+      "kali_epoch_jd": 588465.75,
+      "mahayuga_days": 1577917828.0,
+      "revolutions_per_mahayuga": 600.0,
+      "amplitude_deg": 27.0,
+      "folding": "linear (zigzag), per Ch. 3 v. 10's bhuja rule: multiply by three, divide by ten, i.e. 90 -> 27",
+      "source": "Surya Siddhanta Ch. 3 vv. 9-12.",
+      "documented_zero_year": 499,
+      "zero_year_source": "the half-period crossing after the Kali epoch",
+      "sign_convention": "after the 499 CE crossing the ayanamsa is POSITIVE and INCREASES at a constant 54\"/yr, reaching +27 degrees at 2299 CE and reversing after (DA-10)",
+      "declared_assumptions": ["DA-2", "DA-10"]
+    }
+  ],
+
+  "group_b_star_anchored": [
+    {
+      "system": "RevatiPaksha",
+      "star": "zeta Piscium A",
+      "assigned_sidereal_longitude_deg": 0.0,
+      "assigned_source": "Burgess: \"all authorities agree in placing it upon the ecliptic and all excepting our treatise and the Cakalya make its position exactly mark the initial point of the fixed sidereal sphere\". This is the majority position; the Surya Siddhanta's own zero point sits 10 arcminutes east of it and is a separate system.",
+      "declared_assumptions": ["DA-1"],
+      "catalogue": "I/311/hip2",
+      "catalogue_source": "van Leeuwen, F. (2007), A&A 474, 653 — the re-reduction of the Hipparcos raw data — via VizieR.",
+      "identifier": "HIP 5737",
+      "epoch_jd_tt": 2448349.0625,
+      "epoch_label": "J1991.25",
+      "ra_deg": 18.43250842,
+      "dec_deg": 7.57548938,
+      "pm_ra_cosdec_mas_per_year": 145.00,
+      "pm_dec_mas_per_year": -55.69,
+      "cross_check_catalogue": "I/239/hip_main (ESA 1997): ra 18.43250986, dec 7.57548895, pmRA 141.66, pmDE -55.62",
+      "corroboration": "Inverting to its zero year gives ~575 CE. Burgess states zeta Piscium coincided with the vernal equinox in A.D. 572, and that the Surya Siddhanta's zero point (10' east) did so about A.D. 560 — twelve years earlier at ~50\"/yr. The derived pair reproduces both dates and their twelve-year separation."
+    },
+    {
+      "system": "PushyaPaksha",
+      "star": "delta Cancri (Asellus Australis)",
+      "assigned_sidereal_longitude_deg": 106.0,
+      "assigned_source": "P.V.R. Narasimha Rao, \"Introducing Pushya-paksha Ayanamsa\": \"So we define Pushya-paksha ayanamsa by fixing the sidereal longitude of Delta Cancri at 16Cn0.\" 16 Cn 00 = 106 degrees.",
+      "declared_assumptions": [],
+      "catalogue": "I/311/hip2",
+      "catalogue_source": "van Leeuwen, F. (2007), A&A 474, 653, via VizieR.",
+      "identifier": "HIP 42911",
+      "epoch_jd_tt": 2448349.0625,
+      "epoch_label": "J1991.25",
+      "ra_deg": 131.17129191,
+      "dec_deg": 18.15486373,
+      "pm_ra_cosdec_mas_per_year": -17.67,
+      "pm_dec_mas_per_year": -229.26,
+      "cross_check_catalogue": "I/239/hip_main (ESA 1997): ra 131.17129209, dec 18.15486399, pmRA -17.10, pmDE -228.46",
+      "corroboration": "Rao's stated Surya Siddhanta basis — Pushya at 106 degrees, latitude 0 — is exactly what Ch. 8's v. 1 encoding rule produces, arrived at without reference to his article."
+    },
+    {
+      "system": "TrueChitra",
+      "star": "alpha Virginis (Spica, Chitra)",
+      "assigned_sidereal_longitude_deg": 180.0,
+      "assigned_source": "Self-describing condition: Spica fixed at sidereal 180 degrees. Spica's identity is not contested, so no proposer's text is needed to know what it means.",
+      "declared_assumptions": [],
+      "catalogue": "I/311/hip2",
+      "catalogue_source": "van Leeuwen, F. (2007), A&A 474, 653, via VizieR.",
+      "identifier": "HIP 65474",
+      "epoch_jd_tt": 2448349.0625,
+      "epoch_label": "J1991.25",
+      "ra_deg": 201.29835228,
+      "dec_deg": -11.16124494,
+      "pm_ra_cosdec_mas_per_year": -42.35,
+      "pm_dec_mas_per_year": -30.67,
+      "cross_check_catalogue": "I/239/hip_main (ESA 1997): ra 201.29835230, dec -11.16124491, pmRA -42.50, pmDE -31.73",
+      "corroboration": "Inverting to its zero year gives ~285 CE, the same year the Indian Astronomical Ephemeris documents for its own initial point — reached from a live star catalogue with no input in common with IAE's J2000 polynomial."
+    },
+    {
+      "system": "ChandraHari",
+      "star": "lambda Scorpii (Shaula)",
+      "assigned_sidereal_longitude_deg": 240.0,
+      "assigned_source": "K. Chandra Hari, \"On the Origin of Sidereal Zodiac and Astronomy\", Indian Journal of History of Science 33(4), 1998: \"the initial point of the ancient Babylonian Zodiac was the same as that of Hindu's which had the star Mula of sidereal longitude 240° as fiducial\", with Mula identified as lambda Scorpii.",
+      "declared_assumptions": [],
+      "catalogue": "I/311/hip2",
+      "catalogue_source": "van Leeuwen, F. (2007), A&A 474, 653, via VizieR.",
+      "identifier": "HIP 85927",
+      "epoch_jd_tt": 2448349.0625,
+      "epoch_label": "J1991.25",
+      "ra_deg": 263.40219318,
+      "dec_deg": -37.10374869,
+      "pm_ra_cosdec_mas_per_year": -8.53,
+      "pm_dec_mas_per_year": -30.80,
+      "cross_check_catalogue": "I/239/hip_main (ESA 1997): ra 263.40219373, dec -37.10374835, pmRA -8.90, pmDE -29.95",
+      "corroboration": null
+    },
+    {
+      "system": "GalacticCenter0Sag",
+      "star": "Sgr A*",
+      "assigned_sidereal_longitude_deg": 240.0,
+      "assigned_source": "Self-describing condition: Sgr A* fixed at sidereal 240 degrees, i.e. 0 degrees Sagittarius.",
+      "declared_assumptions": ["DA-9"],
+      "catalogue": "Gordon, de Witt & Jacobs (2023), AJ 165, 49",
+      "catalogue_source": "Gordon, D., de Witt, A. & Jacobs, C. S. (2023), \"Position and Proper Motion of Sagittarius A* in the ICRF3 Frame from VLBI Absolute Astrometry\", AJ 165, 49, doi:10.3847/1538-3881/aca65b, arXiv:2212.00632. Sgr A* is NOT an ICRF3 catalogue entry — undetectable in S band, resolved out at X/Ka — so this paper's no-net-rotation solution against 258 ICRF3 defining sources is the citable ICRF3-frame determination.",
+      "identifier": "Sgr A*",
+      "epoch_jd_tt": 2457023.75,
+      "epoch_label": "J2015.0, the paper's stated reference epoch",
+      "ra_deg": 266.416808529,
+      "dec_deg": -29.007837781,
+      "ra_published": "17h45m40.034047s +/- 0.000018s",
+      "dec_published": "-29d00m28.21601s +/- 0.00044s",
+      "pm_ra_cosdec_mas_per_year": -3.128,
+      "pm_dec_mas_per_year": -5.584,
+      "pm_uncertainty_mas_per_year": [0.042, 0.075],
+      "cross_check_catalogue": "Reid & Brunthaler (2020), ApJ 892, 39, Table 2 combined row: pmRA* -3.156 +/- 0.006, pmDE -5.585 +/- 0.010 mas/yr — agreeing within 1 sigma. Their widely-quoted POSITION is the arbitrary origin their offsets are measured from and sits ~40 mas from the ICRF3 position; it is not a measurement.",
+      "corroboration": null
+    }
+  ]
+}

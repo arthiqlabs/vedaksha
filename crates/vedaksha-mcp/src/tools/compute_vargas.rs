@@ -27,8 +27,6 @@ pub struct ComputeVargasInput {
     pub planet_longitude: Option<f64>,
     /// List of varga division codes to compute, e.g. `["D1", "D9", "D10"]`.
     pub divisions: Vec<String>,
-    /// Ayanamsha system (e.g. `"Lahiri"`, `"Tropical"`).
-    pub ayanamsha: Option<String>,
 }
 
 /// Output of the `compute_vargas` tool.
@@ -74,11 +72,6 @@ pub fn definition() -> super::ToolDefinition {
                 "planet_longitude": {
                     "type": "number",
                     "description": "Sidereal longitude of the planet in degrees [0, 360) for direct varga computation"
-                },
-                "ayanamsha": {
-                    "type": "string",
-                    "description": "Ayanamsha system for sidereal: Lahiri, FaganBradley, Tropical, etc.",
-                    "default": "Lahiri"
                 }
             },
             "required": ["julian_day", "latitude", "longitude", "divisions"]
@@ -127,7 +120,6 @@ mod tests {
             longitude: 80.27,
             planet_longitude: None,
             divisions: vec!["D1".into(), "D9".into()],
-            ayanamsha: None,
         }
     }
 

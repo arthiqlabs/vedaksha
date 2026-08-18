@@ -936,3 +936,150 @@ never appear in a test.
   generator.
 - I am not counsel. This spec is engineering; the disclosure and licensing questions in the
   parent audit note remain the project owner's.
+
+---
+
+## 11. Corrections made during implementation — 2026-08-18
+
+§10 makes this document normative: any change to an anchor, model, convention or
+declared assumption is a change to the derivation and must be recorded here, not in the
+generator. Six changes were needed. Each is recorded with the evidence that forced it.
+
+### 11.1 The engine does not implement the polynomial §4.1 says it does
+
+**§2.3 and §4.1 both assert that `vedaksha_ephem_core::precession::general_precession_in_longitude`
+is the Capitaine et al. (2003) general precession in longitude. It is not.** That function
+returns the Fukushima-Williams angle `ψ̄_A` — precession in longitude referred to the *fixed*
+J2000 ecliptic, which exists to build the precession matrix. The ayanamsha needs `p_A`, general
+precession accumulated along the *moving* ecliptic of date.
+
+| | linear coefficient |
+|---|---|
+| `ψ̄_A`, what the engine had | 5038.481484″/century |
+| `p_A`, what an ayanamsha needs | 5028.796195″/century |
+
+They differ by **9.7 arcseconds per century**, and neither is distinguishable from the other by
+inspecting a result — both grow at roughly 50″/year. §4.1's own transcription note is the tell:
+it states Capitaine's T⁴ coefficient as −0.000023857, which belongs to `p_A`, while the function
+in the tree carries −0.000026452, which belongs to `ψ̄_A`.
+
+Resolution: a new `general_precession_p03` was added, pinned against ERFA's `eraP06e` at six
+epochs from −51 to +10 centuries, where it agrees to machine precision. The two functions are
+documented together, and a test asserts they are not interchangeable.
+
+*This is exactly the failure §2 warns about — "a frame error is indistinguishable from a wrong
+constant" — and it was inside a sentence this spec used to argue that no work was needed.*
+
+### 11.2 The §2.8.4 anchor table gives Revati-paksha the wrong longitude
+
+The normative table's Group B row 5 assigns ζ Piscium **359°50′00″**. The prose in
+"Revati-paksha vs Surya Siddhanta — RESOLVED" says the opposite, and quotes a primary for it:
+
+> "all authorities agree in placing it upon the ecliptic and **all excepting our treatise and the
+> Cakalya** make its position exactly mark the initial point of the fixed sidereal sphere"
+
+so Revati-paksha puts Revati at **0°00′**, and 359°50′ is the *Surya Siddhanta's* minority
+reading. The table row appears to have copied the SS dhruva. The two readings are not
+interchangeable: they are the 10′ by which the section says the systems differ, and adopting the
+table row would have made Revati-paksha and the Surya Siddhanta share a zero point while the
+prose said they differ.
+
+**The derivation settles it numerically, and the check is the one the spec itself set up.** The
+same section records two dates from the commentary: the SS zero point met the vernal equinox
+about A.D. 560, and ζ Piscium itself did so in A.D. 572 — twelve years apart, being 10′ at
+~50.2″/yr. Inverting the derived system to its zero year:
+
+| assigned longitude | derived zero year | commentary |
+|---|---|---|
+| **0°00′** (adopted) | **575 CE** | ζ Piscium at the equinox, **A.D. 572** |
+| 359°50′ (table row) | 563 CE | SS zero point at the equinox, **A.D. 560** |
+
+Both readings land within three years of a date the commentary states, and reproduce the
+twelve-year separation exactly. That confirms the *relationship* and identifies which reading
+belongs to which system. Revati-paksha is implemented at **0°00′00″**; the table row is a
+transcription slip and is corrected here.
+
+### 11.3 DA-9: ICRF3 does not contain Sgr A*, and §1.1(7)'s position is not a measurement
+
+DA-9 asks for "the ICRF3-frame VLBI absolute-astrometry determination, named explicitly". The
+ICRF3 catalogue has no Sgr A* entry — it is undetectable in S band, only smeared in X band, and
+resolved out at X/Ka. A 1° cone search on all three ICRF3 band tables returns zero rows.
+
+The citable determination is **Gordon, D., de Witt, A. & Jacobs, C. S. (2023), AJ 165, 49**
+(doi:10.3847/1538-3881/aca65b), a no-net-rotation solution against 258 ICRF3 defining sources.
+Adopted, with Reid & Brunthaler (2020) as the cross-check; their proper motions agree within 1σ.
+
+Separately: the position stated in §1.1(7) is **not a measurement**. It appears in Reid &
+Brunthaler only as a table note giving the arbitrary origin their offsets are measured from, and
+Gordon+2023 Table 1 puts it 40.1 mas in RA from the ICRF3 position. DA-9's instruction that "the
+implementer must read the values out of the paper, not inherit them from this spec" was therefore
+load-bearing rather than ceremonial.
+
+*Effect on §1.1(7)'s own check value: the spec's position gives ayanamsha(J2000) = 26°51′06.24″
+against the 26°51′06.2″ it states, and the adopted Gordon+2023 astrometry gives 26°51′06.19″. The
+check did its job; the 0.04″ between them is the frame difference, not an error.*
+
+### 11.4 Raman's rate is per calendar year, and §2.8.3's escape clause is why
+
+§2.8.3 adopts the Julian year "wherever the primary does not specify". Raman's primary *does*
+specify, through its own arithmetic: Art. 49 subtracts one year number from another and
+multiplies by 50⅓″, so the unit it counts is the calendar year. Implementing it at 50⅓″ per
+Julian year would miss Art. 49's printed 1912 example by ~1.6″.
+
+Adopted: the value is anchored at 1 January of the stated year (DA-7) and interpolated linearly
+across the actual length of that calendar year — which is Art. 50's optional "odd days"
+correction, and makes the function continuous while leaving every 1 January exact. **Both printed
+examples reproduce to better than a microarcsecond.**
+
+### 11.5 §2.8.4's Surya Siddhanta check value carries a stated rounding
+
+DA-10's normative check is `(2000 − 499) × 54″ = 22°30′54″`. The verse-literal computation gives
+**+22°30′38.4″** at J2000. The whole 15.6″ is accounted for by the two roundings inside the check
+itself: the exact half-period crossing falls at 499.22 CE, not 499.0, and the exact rate implied
+by the text's own three numbers is 53.9987″/yr, not 54.0000.
+
+No change to the derivation. Recorded because the check's stated purpose is to pin the **sign and
+direction**, and it does: the derived value is positive, the extremum is exactly +27°, and it
+falls in 2299 CE — all three as DA-10 states.
+
+### 11.6 §4.5 overstates what the MCP schema contained
+
+§4.5 lists "the MCP tool schema enum in `tools/mcp-tools.json`" among the surfaces to prune. There
+was no enum: both `ayanamsha` properties were free-form strings whose descriptions named three
+systems while the engine had forty-four. A generated JSON-Schema `enum` was added, built from
+`Ayanamsha::ALL`, so the schema can no longer drift from the engine.
+
+Also corrected while there: `compute_vargas` advertised an `ayanamsha` parameter with a default,
+and its handler never read the field. The tool takes an already-sidereal longitude, so the
+parameter was meaningless; it has been removed rather than wired up.
+
+### 11.7 A pre-existing engine defect, found while validating the transform
+
+Not a spec correction, recorded because the derivation rests on it.
+`precession_matrix` composed the four Fukushima-Williams rotations in the wrong order —
+`Rz(γ̄)·Rx(−φ̄)·Rz(−ψ̄)·Rx(ε_A)` instead of `Rx(−ε_A)·Rz(−ψ̄)·Rx(φ̄)·Rz(γ̄)`. The error is
+**0.014 mas at J2000 and 0.56 arcsecond at 499 CE**: invisible in the era the Horizons oracle
+covers, and growing without bound outside it. It was found by checking the star transform against
+ERFA at epochs 1500 years either side of J2000, which is the only reason it surfaced at all.
+
+Fixed, and pinned by an ERFA-derived test spanning six millennia. Three `riseset` tests carried
+scan-oracle literals produced under the old matrix; they were **regenerated from the scan
+reference**, and no tolerance was relaxed — `AGREEMENT_TOL_DAYS` is still 1e-9 d.
+
+### 11.8 §2.8.5's locale claim does not hold, and the honest response is to do nothing
+
+§2.8.5 states that variant names "propagate to seven locale files". They do not:
+`crates/vedaksha/src/locale/` has no ayanamsha module and never had one — its ten tables cover
+aspects, dashas, deities, dignities, houses, karanas, nakshatras, panchanga yogas, planets and
+signs. §4.5's instruction to remove "the locale strings that name them" therefore had nothing to
+remove.
+
+**No ayanamsha locale table was added, and the reason is the project's own fabrication rule.**
+Populating one would mean inventing Hindi, Sanskrit, Tamil, Telugu, Kannada and Bengali renderings
+of "Fagan-Bradley", "Galactic Centre at 0° Sagittarius" and "True Mula (Chandra Hari)". Some of
+those have no traditional rendering because the systems are twentieth- and twenty-first-century
+Western or scientific constructions. Shipping invented translations to fill a table would be
+exactly the failure mode this whole re-derivation exists to remove, one layer up.
+
+If localised ayanamsha names are wanted, they need a source per name per language, which is a
+research task and not part of this derivation.

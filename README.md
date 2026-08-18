@@ -41,7 +41,7 @@ The Rust path is a compiled doctest in [`crates/vedaksha/src/lib.rs`](crates/ved
 
 ## Accuracy
 
-Every figure is printed by a named test. Reproduce the ephemeris tables with `bash scripts/download_de440s.sh`, then `cargo test -p vedaksha-ephem-core --release -- --include-ignored --nocapture`; the ayanamsha figures come from `cargo test -p vedaksha-astro sidereal`.
+Every figure is printed by a named test. Reproduce the ephemeris tables with `bash scripts/download_de440s.sh`, then `cargo test -p vedaksha-ephem-core --release -- --include-ignored --nocapture`; the ayanamsha figures come from `cargo test -p vedaksha-astro sidereal`, and the cross-check against an independent Python derivation of the same primaries from `cargo test -p vedaksha-astro --test ayanamsha_fixture`.
 
 **SpkReader vs JPL Horizons (DE441)** — `oracle_comparison.rs`, 24,350 committed rows (10 bodies × 2,435 dates, 1900–2100). Horizons serves DE441, so this measures our DE440s pipeline against an independent kernel.
 
@@ -61,14 +61,14 @@ Every figure is printed by a named test. Reproduce the ephemeris tables with `ba
 Stated plainly, because a validation claim is worth what it excludes:
 
 - **House cusps are not validated against any external reference.**
-- **3 of 44 ayanamshas** — Lahiri, KP, Fagan-Bradley — are numerically validated (0.003–0.005° at J2000, anchors in [`DATA_PROVENANCE.md`](DATA_PROVENANCE.md)). The other 41 are range-checked only.
+- **No ayanamsha is validated against another implementation, and that is deliberate.** All eleven are derived forward from a primary — a chapter, a committee, a proposer's own paper, or a star catalogue — and each reproduces its own anchor to 1e-9° and, where its primary documents one, its own zero year. What is *not* claimed is agreement with anyone else's numbers: comparing against them would be the reverse-engineering this re-derivation exists to undo. See [`docs/audit/2026-08-17-ayanamsha-cleanroom/`](docs/audit/2026-08-17-ayanamsha-cleanroom/).
 - **Dasha and nakshatra tests are invariant tests**, not external comparisons: they verify that BPHS constants sum to 120 years and that boundaries tile the circle.
 
 ## What's inside
 
 **Two ephemeris providers.** `SpkReader` reads JPL DE440s (~31 MB) for sub-arcsecond work. `AnalyticalProvider` compiles VSOP87A + ELP/MPP02 to constants and needs no data files — for WASM, edge and Cloudflare Workers.
 
-**Jyotish, from primary sources.** 27 nakshatras with padas and lords · 5 dasha systems (Vimshottari, Yogini, Ashtottari, and Jaimini's Chara & Narayana) · all 16 vargas (D-1 → D-60) · six-component shadbala with Ishta/Kashta phala · 44 ayanamshas · panchanga's five limbs, with vara reckoned from local sunrise and Rahu/Gulika Kalam as real time windows · graded drishti per BPHS Ch. 26 · mean, true and osculating nodes (0.6″ max vs DE441, KP sub-lord ready).
+**Jyotish, from primary sources.** 27 nakshatras with padas and lords · 5 dasha systems (Vimshottari, Yogini, Ashtottari, and Jaimini's Chara & Narayana) · all 16 vargas (D-1 → D-60) · six-component shadbala with Ishta/Kashta phala · 11 ayanamshas, each traceable to a chapter, a star or a committee · panchanga's five limbs, with vara reckoned from local sunrise and Rahu/Gulika Kalam as real time windows · graded drishti per BPHS Ch. 26 · mean, true and osculating nodes (0.6″ max vs DE441, KP sub-lord ready).
 
 **Western: calculation, not interpretation.** 10 house systems, major aspects with applying/separating motion, essential dignities, synastry and composite. `ChartConfig` defaults to tropical. There is no Western interpretive layer and no parity with the Jyotish surface.
 

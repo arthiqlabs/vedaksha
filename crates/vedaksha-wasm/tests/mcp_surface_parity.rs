@@ -895,7 +895,9 @@ fn compute_shadbala_surfaces_agree() {
     }
 }
 
-/// The natal chart, SIDEREAL. Lahiri rather than the MCP schema's `Tropical`
+/// The natal chart, SIDEREAL. The Indian official system (passed by its v5
+/// alias "Lahiri", which also proves the alias still resolves) rather than the
+/// MCP schema's `Tropical`
 /// default on purpose: the frame defect this release fixed — feeding the
 /// TT Julian Day to the Earth-rotation term instead of the UT1 one — moves
 /// the ascendant, the MC and all twelve cusps, and the tropical path exercises
@@ -922,10 +924,11 @@ fn compute_shadbala_surfaces_agree() {
 ///   * ten bodies in, ten planet rows out; twelve house cusps.
 ///   * `config_summary` is `format!("Houses: {:?}, Zodiac: {}, Rulership: {:?}")`
 ///     over the resolved config, so the sidereal request must surface as
-///     `Zodiac: Lahiri` — under the schema default it would read
+///     `Zodiac: IndianOfficial` — under the schema default it would read
 ///     `Zodiac: Tropical`, and that string is the cheapest proof the frame
 ///     argument survived the trip on both surfaces.
-///   * `ayanamsha_value` must sit in [23.6, 23.7]: Lahiri is 23°51′ (23.853°)
+///   * `ayanamsha_value` must sit in [23.6, 23.7]: the Indian official
+///     ayanamsha is 23°51′25″.53 (23.857°) at J2000 and 23.654° here
 ///     at J2000, and this instant is 5313.06 d = 14.55 yr earlier, so at the
 ///     ~50.3″/yr general-precession rate the offset is 23.853 − 14.55 ×
 ///     0.01397 = 23.65°.
@@ -958,7 +961,7 @@ fn compute_natal_chart_surfaces_agree_sidereal() {
     let wasm: Value = serde_json::from_str(&out).expect("wasm output is JSON");
 
     assert_eq!(
-        wasm["config_summary"], "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",
+        wasm["config_summary"], "Houses: Placidus, Zodiac: IndianOfficial, Rulership: Traditional",
         "sanity: the sidereal frame must have reached the chart config"
     );
     let planets = wasm["planets"].as_array().expect("planets array");
@@ -967,7 +970,7 @@ fn compute_natal_chart_surfaces_agree_sidereal() {
     let ayanamsha = wasm["ayanamsha_value"].as_f64().expect("a number");
     assert!(
         (23.6..23.7).contains(&ayanamsha),
-        "sanity: Lahiri in mid-1985 is ≈23.65°, got {ayanamsha}"
+        "sanity: the Indian official ayanamsha in mid-1985 is ≈23.65°, got {ayanamsha}"
     );
     for planet in planets {
         let lon = planet["longitude"].as_f64().unwrap();

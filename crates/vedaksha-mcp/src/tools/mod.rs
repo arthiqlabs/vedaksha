@@ -57,6 +57,53 @@ pub fn tool_definitions() -> Vec<ToolDefinition> {
     ]
 }
 
+/// The ayanamsha names the engine accepts, as a JSON-Schema `enum` array.
+///
+/// Generated from [`vedaksha_astro::sidereal::Ayanamsha::ALL`] rather than
+/// hand-listed, so this schema cannot drift from the systems the engine has —
+/// which is exactly what happened before the re-derivation, when the schema
+/// named three systems and the engine had forty-four.
+#[must_use]
+pub fn ayanamsha_schema_enum() -> serde_json::Value {
+    serde_json::Value::Array(
+        vedaksha_astro::sidereal::Ayanamsha::ALL
+            .iter()
+            .map(|a| serde_json::Value::String(a.key().to_string()))
+            .collect(),
+    )
+}
+
+/// A description of the ayanamsha parameter that names every system and the
+/// primary it is derived from.
+///
+/// The provenance is carried into the schema rather than left in a doc file
+/// because it is the point: an agent choosing a sidereal system should be able
+/// to see what defines it. Systems marked `[star]` track a live star, so their
+/// values follow catalogue astrometry and will move when a catalogue is
+/// superseded.
+#[must_use]
+pub fn ayanamsha_schema_description() -> String {
+    use core::fmt::Write as _;
+    let mut s = String::from(
+        "Sidereal zodiac system. Eleven systems, each derived forward from a \
+primary source and none tuned to match another implementation. Returns the MEAN \
+ayanamsha - add nutation in longitude yourself for the true ayanamsha. Pass \
+Tropical for no rotation. Systems: ",
+    );
+    for (i, a) in vedaksha_astro::sidereal::Ayanamsha::SIDEREAL
+        .iter()
+        .enumerate()
+    {
+        if i > 0 {
+            s.push_str("; ");
+        }
+        let star = if a.is_star_anchored() { " [star]" } else { "" };
+        let _ = write!(s, "{}{star} = {}", a.key(), a.primary_source());
+    }
+    s.push('.');
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

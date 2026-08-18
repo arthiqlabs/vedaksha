@@ -62,7 +62,7 @@
 //! // 3. The chart — sidereal (Lahiri) with whole-sign bhavas, i.e. a kundali.
 //! let config = ChartConfig {
 //!     house_system: HouseSystem::WholeSign,
-//!     ayanamsha: Some(Ayanamsha::Lahiri),
+//!     ayanamsha: Some(Ayanamsha::IndianOfficial),
 //!     ..ChartConfig::default()
 //! };
 //! let chart = compute_chart(

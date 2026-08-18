@@ -514,7 +514,8 @@ mod tests {
     #[test]
     fn a_different_configuration_yields_a_different_chart_id() {
         let mut other = fixture();
-        other.config_summary = "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional".into();
+        other.config_summary =
+            "Houses: Placidus, Zodiac: IndianOfficial, Rulership: Traditional".into();
         assert_ne!(graph_of(&fixture()).chart_id, graph_of(&other).chart_id);
     }
 

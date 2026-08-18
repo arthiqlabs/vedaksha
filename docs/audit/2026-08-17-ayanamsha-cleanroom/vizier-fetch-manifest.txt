@@ -1,0 +1,125 @@
+Ayanamsha derivation — primary-source fetch manifest
+====================================================
+
+Date:  2026-08-18
+Host:  vizier.cds.unistra.fr (Centre de Données astronomiques de Strasbourg)
+Terms: https://cds.unistra.fr/vizier-org/licences_vizier.html
+       Redistributable with attribution.
+
+Everything the derivation consumed that came off a network is listed here. The
+values these queries returned are transcribed into
+`derivation-inputs.json`, which is the file the generator and the engine both
+read. Re-run any row below and diff it against that file.
+
+
+ASTROMETRY — PRIMARY
+--------------------
+
+file                    bytes  sha256
+hip2-4stars.tsv          2842  051de61712cb88cc4a7ad66b1646c6fd2ac71d22423130083ee8969392b4dd62
+  https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=I/311/hip2&-out=HIP,RArad,DErad,Plx,pmRA,pmDE,e_RArad,e_DErad,e_pmRA,e_pmDE&HIP=5737,42911,65474,85927
+
+  van Leeuwen, F. (2007), "Validation of the new Hipparcos reduction",
+  A&A 474, 653. The re-reduction of the Hipparcos raw data, and the current
+  best astrometry for these stars.
+
+  Positions are ICRS at epoch J1991.25 (JD 2448349.0625). pmRA is
+  mu_alpha * cos(delta). Returned rows, verbatim:
+
+    HIP     RArad          DErad         Plx     pmRA      pmDE      e_RArad e_DErad e_pmRA e_pmDE
+     5737   018.43250842   +07.57548938   18.76   145.00    -55.69     2.36    1.90    2.75   2.07
+    42911   131.17129191   +18.15486373   24.98   -17.67   -229.26     0.23    0.12    0.27   0.18
+    65474   201.29835228   -11.16124494   13.06   -42.35    -30.67     0.59    0.38    0.62   0.37
+    85927   263.40219318   -37.10374869    5.71    -8.53    -30.80     0.66    0.50    1.08   0.62
+
+  Identity of each row, resolved via SIMBAD (same data centre):
+    HIP  5737 = zeta Piscium A  (HD 7344)   — Revati's yogatara, per DA-1
+    HIP 42911 = delta Cancri    (HD 74442)  — Asellus Australis, Rao's Pushya star
+    HIP 65474 = alpha Virginis  (HD 116658) — Spica / Chitra
+    HIP 85927 = lambda Scorpii  (HD 158926) — Shaula, Chandra Hari's Mula
+
+
+ASTROMETRY — CROSS-CHECK
+------------------------
+
+file                    bytes  sha256
+hip_main-4stars.tsv      2893  656f04027e19c7557e32087b09d9ae434673f771b7eab2bc198710188968f536
+  https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=I/239/hip_main&-out=HIP,RAICRS,DEICRS,Plx,pmRA,pmDE,e_RAICRS,e_DEICRS,e_pmRA,e_pmDE&HIP=5737,42911,65474,85927
+
+  ESA (1997), The Hipparcos and Tycho Catalogues, ESA SP-1200. The original
+  reduction, same epoch and frame.
+
+  Agreement with the primary above:
+    positions      under 0.02 mas on every row
+    proper motions differ by up to 3.3 mas/yr (zeta Piscium: 141.66 vs 145.00)
+
+  That proper-motion spread is not noise to be averaged away — it is the honest
+  uncertainty on any star-anchored system far from the catalogue epoch. 3.3
+  mas/yr accumulates ~0.5 arcsecond of longitude per 1000 years. The derivation
+  uses the van Leeuwen reduction and records the spread rather than claiming a
+  precision neither catalogue supports.
+
+
+SGR A* — NOT FETCHED FROM A CATALOGUE, AND WHY
+----------------------------------------------
+
+  Gordon, D., de Witt, A. & Jacobs, C. S. (2023),
+  "Position and Proper Motion of Sagittarius A* in the ICRF3 Frame from VLBI
+  Absolute Astrometry", AJ 165, 49.
+  doi:10.3847/1538-3881/aca65b   free: https://arxiv.org/abs/2212.00632
+
+    alpha(ICRF3, ep. 2015.0) = 17h45m40.034047s +/- 0.000018s
+    delta(ICRF3, ep. 2015.0) = -29d00'28.21601" +/- 0.00044"
+    mu_alpha cos(delta)      = -3.128 +/- 0.042 mas/yr
+    mu_delta                 = -5.584 +/- 0.075 mas/yr
+
+  DA-9 asked for "the ICRF3-frame VLBI absolute-astrometry determination".
+  Sgr A* is NOT in the ICRF3 catalogue, and the query proving it is:
+
+    https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=J%2fA%2bA%2f644%2fA159&-c=266.4168+-29.0078&-c.rs=120&-out.all
+    -> 0 rows. A 1-degree cone on each of the three band tables also returns 0.
+       The nearest K-band source is 2.29 degrees away. The same query mechanism
+       returns 3C 273 correctly at 0.070", so the null is real.
+
+  Gordon+2023 explains why: Sgr A* "is not detectable at all in the S-band of
+  the traditional X/S geodetic/astrometric observations and only weakly
+  detectable in the X-band, where it is smeared out over ~9 mas", and "gets
+  resolved out at both the X and Ka frequencies". Their no-net-rotation solution
+  against 258 ICRF3 defining sources is therefore the citable ICRF3-frame
+  determination, and it is what DA-9 was asking for even though the catalogue
+  itself cannot supply it.
+
+  Cross-check — Reid, M. J. & Brunthaler, A. (2020), ApJ 892, 39,
+  Table 2 "Combined" row: mu_alpha* = -3.156 +/- 0.006,
+  mu_delta = -5.585 +/- 0.010 mas/yr. Agrees within 1 sigma.
+
+  RECORDED SO IT IS NOT REPEATED: the coordinates 17h45m40.0409s,
+  -29d00'28.118" circulate widely as "the" Sgr A* position, including in the
+  draft spec. They are not a measurement. In Reid & Brunthaler they appear only
+  in a table note, as the arbitrary origin their offsets are measured from, and
+  Gordon+2023 Table 1 shows that origin sits 40.1 mas in RA and 8.8 mas in Dec
+  from the ICRF3 position. Using them would have been inheriting a number rather
+  than reading one.
+
+
+VERIFICATION TOOLING
+--------------------
+
+  ERFA (BSD-3), the IAU SOFA board's approved relicensing of SOFA, installed
+  from PyPI into a throwaway virtualenv. Used for astronomy only — eraP06e,
+  eraPfw06, eraFw2m, eraObl06, eraEqec06 — and never for an ayanamsha value.
+
+  The ERFA-derived expectations that survive in the repository are in
+  `crates/vedaksha-ephem-core/src/precession.rs` and `.../stars.rs`. They pin
+  precession, obliquity and the ICRS->ecliptic transform, and nothing else.
+
+
+NOT FETCHED
+-----------
+
+  No Swiss Ephemeris source, header, documentation or output, at any point, for
+  any purpose. No `swetest`. No wrapper (pyswisseph, swephR, sweph, SwissEphNet,
+  VedAstro) and no service backed by one. No other astrology software.
+
+  The values Vedaksha 5 shipped were removed from the working tree in 4033c6a,
+  before the derivation began, and the git history of that file was not read.

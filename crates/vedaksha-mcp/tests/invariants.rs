@@ -22,7 +22,7 @@ fn sidereal_longitude_equals_tropical_minus_ayanamsha() {
     // For any longitude, any ayanamsha, any date:
     // sidereal = tropical - ayanamsha (mod 360)
     let systems = [
-        Ayanamsha::Lahiri,
+        Ayanamsha::IndianOfficial,
         Ayanamsha::FaganBradley,
         Ayanamsha::Raman,
         Ayanamsha::Krishnamurti,
@@ -67,7 +67,11 @@ fn sidereal_tropical_roundtrip() {
     let mut total = 0;
     let mut pass = 0;
 
-    for sys in [Ayanamsha::Lahiri, Ayanamsha::FaganBradley, Ayanamsha::Raman] {
+    for sys in [
+        Ayanamsha::IndianOfficial,
+        Ayanamsha::FaganBradley,
+        Ayanamsha::Raman,
+    ] {
         for lon in (0..360).map(|i| i as f64) {
             total += 1;
             let trop = sidereal::sidereal_to_tropical(lon, sys, jd);
@@ -569,7 +573,7 @@ fn served_sidereal_request_yields_a_sidereal_chart() {
     // Guard: a degenerate ayanamsha would make every assertion below vacuous.
     // Lahiri at J2000 is tens of degrees; anything under 20° means the reference
     // itself has broken and the comparison proves nothing.
-    let ayan = sidereal::ayanamsha_value(Ayanamsha::Lahiri, jd_ut1);
+    let ayan = sidereal::ayanamsha_value(Ayanamsha::IndianOfficial, jd_ut1);
     assert!(
         ayan > 20.0,
         "ayanamsha_value(Lahiri, {jd_ut1}) = {ayan}°, expected the full Lahiri offset. With a \
@@ -671,7 +675,7 @@ fn served_sidereal_request_yields_a_sidereal_chart() {
     );
     assert_eq!(
         sid["config_summary"].as_str().unwrap(),
-        "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",
+        "Houses: Placidus, Zodiac: IndianOfficial, Rulership: Traditional",
         "the served chart reports a frame other than the one requested"
     );
 }

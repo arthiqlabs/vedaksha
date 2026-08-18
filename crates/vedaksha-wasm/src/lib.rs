@@ -175,7 +175,10 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 ///
 /// # Arguments
 /// * `tropical_longitude` — Tropical longitude in degrees
-/// * `ayanamsha` — Ayanamsha system: "Lahiri", "FaganBradley", "Krishnamurti", etc.
+/// * `ayanamsha` — sidereal system: "IndianOfficial" (alias "Lahiri"),
+/// "FaganBradley", "Krishnamurti", "Raman", "SuryaSiddhanta", "Yukteshwar",
+/// "RevatiPaksha", "PushyaPaksha", "TrueChitra", "ChandraHari",
+/// "GalacticCenter0Sag", or "Tropical". Returns the MEAN ayanamsha.
 /// * `jd` — Julian Day for computation
 #[wasm_bindgen]
 pub fn tropical_to_sidereal(
@@ -255,8 +258,11 @@ struct NatalChartInput {
     bodies: Vec<String>,
 }
 
+/// The default ayanamsha for this surface: the Indian official system.
 fn default_ayanamsha() -> String {
-    "Lahiri".to_string()
+    vedaksha_astro::sidereal::Ayanamsha::IndianOfficial
+        .key()
+        .to_string()
 }
 fn default_house_system() -> String {
     "Placidus".to_string()
@@ -302,8 +308,11 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
     use vedaksha_ephem_core::sidereal_time;
 
     // Parse config
-    let ayanamsha_system = ayanamsha_from_str(&input.ayanamsha)
-        .map_err(|_| format!("Unknown ayanamsha: {}", input.ayanamsha))?;
+    let ayanamsha_system = {
+        use core::str::FromStr as _;
+        vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
+            .map_err(|e| e.to_string())?
+    };
     let house_system = house_system_from_str(&input.house_system)
         .map_err(|_| format!("Unknown house system: {}", input.house_system))?;
 
@@ -425,7 +434,7 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
 /// * `config_json` — JSON string with birth data and optional configuration.
 ///
 /// Required: `year`, `month`, `day`, `hour`, `minute`, `latitude`, `longitude`
-/// Optional: `second` (0), `ayanamsha` ("Lahiri"), `house_system` ("Placidus"),
+/// Optional: `second` (0), `ayanamsha` ("IndianOfficial"), `house_system` ("Placidus"),
 ///           `bodies` (default 9 Jyotish graha + nodes)
 ///
 /// Input datetime is **UTC** — a civil clock reading, not TT and not TDB.
@@ -474,19 +483,15 @@ fn parse_house_system(s: &str) -> Result<vedaksha_astro::houses::HouseSystem, Js
     house_system_from_str(s).map_err(|_| JsError::new(&format!("Unknown house system: {s}")))
 }
 
-fn ayanamsha_from_str(s: &str) -> Result<vedaksha_astro::sidereal::Ayanamsha, &'static str> {
-    match s.to_lowercase().as_str() {
-        "lahiri" => Ok(vedaksha_astro::sidereal::Ayanamsha::Lahiri),
-        "faganbradley" | "fagan_bradley" => Ok(vedaksha_astro::sidereal::Ayanamsha::FaganBradley),
-        "krishnamurti" => Ok(vedaksha_astro::sidereal::Ayanamsha::Krishnamurti),
-        "raman" => Ok(vedaksha_astro::sidereal::Ayanamsha::Raman),
-        "tropical" => Ok(vedaksha_astro::sidereal::Ayanamsha::Tropical),
-        _ => Err("unknown ayanamsha"),
-    }
-}
-
+/// Parse an ayanamsha name.
+///
+/// This delegates to the engine's own parser rather than keeping a second list.
+/// A name that Vedaksha 5 accepted but that no longer names a system produces
+/// the engine's disposition message — what happened to it and what to use
+/// instead — rather than a bare "unknown", and never falls back to a default.
 fn parse_ayanamsha(s: &str) -> Result<vedaksha_astro::sidereal::Ayanamsha, JsError> {
-    ayanamsha_from_str(s).map_err(|_| JsError::new(&format!("Unknown ayanamsha: {s}")))
+    use core::str::FromStr as _;
+    vedaksha_astro::sidereal::Ayanamsha::from_str(s).map_err(|e| JsError::new(&e.to_string()))
 }
 
 fn varga_type_from_str(s: &str) -> Result<vedaksha_vedic::varga::VargaType, &'static str> {
@@ -899,12 +904,64 @@ mod tests {
 
     #[test]
     fn parse_ayanamshas() {
-        assert!(ayanamsha_from_str("lahiri").is_ok());
-        assert!(ayanamsha_from_str("faganbradley").is_ok());
-        assert!(ayanamsha_from_str("fagan_bradley").is_ok());
-        assert!(ayanamsha_from_str("krishnamurti").is_ok());
-        assert!(ayanamsha_from_str("raman").is_ok());
-        assert!(ayanamsha_from_str("tropical").is_ok());
+        // Every system the engine has must be reachable from this surface. The
+        // previous version of this test accepted five hand-listed names while
+        // the engine had far more, which is how the two lists drifted apart.
+        for system in vedaksha_astro::sidereal::Ayanamsha::ALL {
+            assert_eq!(
+                parse_ayanamsha(system.key()).ok(),
+                Some(*system),
+                "{} is not reachable from the wasm surface",
+                system.key()
+            );
+        }
+        assert!(
+            parse_ayanamsha("lahiri").is_ok(),
+            "the v5 alias must keep working"
+        );
+        assert!(parse_ayanamsha("fagan_bradley").is_ok());
+    }
+
+    #[test]
+    fn a_removed_ayanamsha_name_is_refused_with_its_disposition() {
+        // The wasm surface must not silently fall back to its serde default when
+        // a caller passes a name Vedaksha 5 had and this engine does not. Driven
+        // through `compute_natal_chart_inner` rather than `parse_ayanamsha`,
+        // because that is where a fallback would actually happen — and because
+        // `JsError` cannot be formatted outside a wasm host, so its Debug
+        // output is not available to assert on here.
+        for removed in [
+            "BabylonianKuglerStar1",
+            "TrueMula",
+            "Aryabhata",
+            "Hipparchos",
+            "LahiriVp285",
+        ] {
+            let input = NatalChartInput {
+                year: 2000,
+                month: 1,
+                day: 1,
+                hour: 12,
+                minute: 0,
+                second: 0,
+                latitude: 28.0,
+                longitude: 77.0,
+                ayanamsha: removed.to_string(),
+                house_system: "Placidus".to_string(),
+                bodies: vec!["Sun".into()],
+            };
+            let err = compute_natal_chart_inner(input)
+                .err()
+                .unwrap_or_else(|| panic!("{removed} must not silently resolve to a system"));
+            assert!(
+                err.contains(removed),
+                "the error for {removed} should name it, got: {err}"
+            );
+            assert!(
+                err.len() > removed.len() + 32,
+                "the error for {removed} should say what happened to it, got: {err}"
+            );
+        }
     }
 
     #[test]
@@ -992,8 +1049,10 @@ mod tests {
         // which is a question for the derivation and its fixture.
         let jd = output["julian_day"].as_f64().unwrap();
         let ayan = output["ayanamsha_value"].as_f64().unwrap();
-        let reference =
-            vedaksha_astro::sidereal::ayanamsha_value(vedaksha_astro::sidereal::Ayanamsha::Lahiri, jd);
+        let reference = vedaksha_astro::sidereal::ayanamsha_value(
+            vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
+            jd,
+        );
         assert!(
             (ayan - reference).abs() < 1e-6,
             "served ayanamsha {ayan}° != engine reference {reference}° at jd {jd}"
@@ -1093,7 +1152,7 @@ mod tests {
         );
 
         // Guard: a degenerate ayanamsha makes every assertion below vacuous.
-        let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
+        let ayan = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
         assert!(
             ayan > 20.0,
             "ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected the full Lahiri offset. With a \
@@ -1176,7 +1235,7 @@ mod tests {
         );
         assert_eq!(
             sid["config_summary"].as_str().unwrap(),
-            "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",
+            "Houses: Placidus, Zodiac: IndianOfficial, Rulership: Traditional",
             "the served chart reports a frame other than the one requested"
         );
     }

@@ -119,3 +119,9 @@ jobs:
         run: python3 scripts/generate_vsop87a.py --verify --threshold 1e-9
       - name: ELP/MPP02 — regenerate, compare sha256 against committed sidecars
         run: python3 scripts/generate_elpmpp02.py --verify --threshold 1e-6
+      # Unlike the two above, this one needs no network: every primary it
+      # derives from is committed in derivation-inputs.json. It therefore
+      # CANNOT pass vacuously the way an unreachable IMCCE mirror lets the
+      # coefficient jobs pass having checked nothing.
+      - name: Ayanamsha — re-derive from primaries, compare sha256 against the committed fixture
+        run: python3 scripts/generate_ayanamsha.py --verify

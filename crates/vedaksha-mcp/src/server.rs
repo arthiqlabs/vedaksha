@@ -372,22 +372,21 @@ impl McpServer {
             None => vedaksha_astro::houses::HouseSystem::Placidus,
         };
 
+        // Delegates to the engine's own parser so this surface cannot drift from
+        // the systems the engine actually has. A name that Vedaksha 5 accepted
+        // but that no longer names a system is refused with the engine's
+        // disposition message, never silently remapped.
         let ayanamsha = match input.ayanamsha.as_deref() {
-            Some(s) => match s.to_lowercase().as_str() {
-                "lahiri" => Some(vedaksha_astro::sidereal::Ayanamsha::Lahiri),
-                "faganbradley" | "fagan_bradley" => {
-                    Some(vedaksha_astro::sidereal::Ayanamsha::FaganBradley)
+            Some(s) => {
+                use std::str::FromStr as _;
+                match vedaksha_astro::sidereal::Ayanamsha::from_str(s) {
+                    Ok(vedaksha_astro::sidereal::Ayanamsha::Tropical) => None,
+                    Ok(a) => Some(a),
+                    Err(e) => {
+                        return Err(McpError::invalid_parameter("ayanamsha", &e.to_string()));
+                    }
                 }
-                "krishnamurti" => Some(vedaksha_astro::sidereal::Ayanamsha::Krishnamurti),
-                "raman" => Some(vedaksha_astro::sidereal::Ayanamsha::Raman),
-                "tropical" => None,
-                _ => {
-                    return Err(McpError::invalid_parameter(
-                        "ayanamsha",
-                        &format!("Unknown: {s}"),
-                    ));
-                }
-            },
+            }
             None => None, // Tropical default
         };
 
@@ -1285,7 +1284,7 @@ impl McpServer {
             let tropical_lon = pos.longitude.to_degrees();
             Some(vedaksha_astro::sidereal::tropical_to_sidereal(
                 tropical_lon,
-                vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                 jd,
             ))
         };
@@ -1295,7 +1294,7 @@ impl McpServer {
             let tropical_lon = pos.longitude.to_degrees();
             Some(vedaksha_astro::sidereal::tropical_to_sidereal(
                 tropical_lon,
-                vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                 jd,
             ))
         };
@@ -1433,7 +1432,7 @@ impl McpServer {
             let (tropical_lon, speed) = moon_pos_speed(jd)?;
             let sid = vedaksha_astro::sidereal::tropical_to_sidereal(
                 tropical_lon,
-                vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                 jd,
             );
             Some((sid, speed))
@@ -1774,12 +1773,12 @@ mod tests {
         let offset = sidereal["ayanamsha_value"].as_f64().expect("a number");
         assert!(
             (23.8..23.9).contains(&offset),
-            "Lahiri at J2000 is 23°51′ ≈ 23.86°, got {offset}"
+            "the Indian official ayanamsha at J2000 is 23°51′25″.53 ≈ 23.86°, got {offset}"
         );
         assert!(
             (offset
                 - vedaksha_astro::sidereal::ayanamsha_value(
-                    vedaksha_astro::sidereal::Ayanamsha::Lahiri,
+                    vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                     2451545.0
                 ))
             .abs()

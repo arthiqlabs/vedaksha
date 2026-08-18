@@ -185,6 +185,30 @@ jobs:
       - name: Check release.yml publishes in dependency order
         run: python3 scripts/check_publish_order.py
 
+  spec-hygiene:
+    name: Derivation-spec hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check_spec_hygiene.py derives its patterns by reading the baseline
+          # tag out of git history, so a shallow clone would leave it with zero
+          # patterns. It refuses to pass vacuously in that case, but fetching
+          # the history is the fix, not the failure.
+          fetch-depth: 0
+      # A derivation spec that restates the values it is meant to replace hands
+      # the implementation agent its own target. The 2026-08-17 draft did
+      # exactly that while declaring itself clean, which is why this is a
+      # mechanical gate and not a review note. Patterns live in the script,
+      # never in the spec -- an inline list would make the document match its
+      # own check.
+      - name: Derivation specs must not restate previously shipped constants
+        run: |
+          python3 scripts/check_spec_hygiene.py \
+            docs/audit/2026-08-17-ayanamsha-cleanroom/spec.md \
+            docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json \
+            docs/audit/2026-08-17-ayanamsha-cleanroom/README.md
+
   msrv:
     name: MSRV (rust-version in workspace.package)
     runs-on: ubuntu-latest

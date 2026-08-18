@@ -217,7 +217,10 @@ pub fn compute_chart(
         config.house_system,
         config
             .ayanamsha
-            .map_or_else(|| "Tropical".to_string(), |a| format!("{a:?}")),
+            // `key()`, not `{a:?}`: this string is part of the public surface and
+            // feeds the graph chart-id, so it must not be an accident of the
+            // Debug derive.
+            .map_or_else(|| "Tropical".to_string(), |a| a.key().to_string()),
         config.rulership_scheme,
     );
 
@@ -333,14 +336,15 @@ mod tests {
     fn sidereal_mode_shifts_longitudes() {
         let data = vec![planet("Sun", 130.0, 1.0)];
         let mut config = ChartConfig::default();
-        config.ayanamsha = Some(crate::sidereal::Ayanamsha::Lahiri);
+        config.ayanamsha = Some(crate::sidereal::Ayanamsha::IndianOfficial);
 
         let chart = compute_chart(&data, RAMC, LAT, OBL, JD, &config);
 
         // Expected sidereal longitude is computed from the engine itself, not
         // from a hardcoded ayanamsha, so this test survives re-derivation.
         let expected = vedaksha_math::angle::normalize_degrees(
-            130.0 - crate::sidereal::ayanamsha_value(crate::sidereal::Ayanamsha::Lahiri, JD),
+            130.0
+                - crate::sidereal::ayanamsha_value(crate::sidereal::Ayanamsha::IndianOfficial, JD),
         );
         assert!(
             (chart.planets[0].longitude - expected).abs() < 0.01,
@@ -437,14 +441,14 @@ mod tests {
 
         for system in systems {
             for (ramc, lat, jd) in charts {
-                let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
+                let ayan = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
                 let mut trop_cfg = ChartConfig {
                     house_system: system,
                     ..ChartConfig::default()
                 };
                 trop_cfg.ayanamsha = None;
                 let mut sid_cfg = trop_cfg.clone();
-                sid_cfg.ayanamsha = Some(Ayanamsha::Lahiri);
+                sid_cfg.ayanamsha = Some(Ayanamsha::IndianOfficial);
 
                 let trop = compute_chart(&data, ramc, lat, OBL, jd, &trop_cfg);
                 let sid = compute_chart(&data, ramc, lat, OBL, jd, &sid_cfg);
@@ -572,7 +576,7 @@ mod tests {
 
         let cfg = ChartConfig {
             house_system: HouseSystem::WholeSign,
-            ayanamsha: Some(Ayanamsha::Lahiri),
+            ayanamsha: Some(Ayanamsha::IndianOfficial),
             ..ChartConfig::default()
         };
 
@@ -588,7 +592,7 @@ mod tests {
             // left asc/cusps tropical while rotating the planets would satisfy
             // every other assertion below.
             let trop = compute_chart(&data, ramc, lat, OBL, jd, &trop_cfg);
-            let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
+            let ayan = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
             let expected_asc = normalize_degrees(trop.houses.asc - ayan);
             assert!(
                 libm::fabs(asc - expected_asc) < 1e-9,

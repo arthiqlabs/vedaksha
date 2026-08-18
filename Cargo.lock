@@ -644,6 +644,7 @@ version = "5.0.2"
 dependencies = [
  "libm",
  "serde",
+ "serde_json",
  "vedaksha-ephem-core",
  "vedaksha-math",
 ]
