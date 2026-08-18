@@ -99,9 +99,9 @@ machine-readable input manifest are in
 
 | System | Primary | Status |
 |---|---|---|
-| Indian official (Lahiri / Chitra-paksha) | *The Indian Astronomical Ephemeris 2022*, Positional Astronomy Centre, Government of India, p. 380 | Free, unrestricted; archive.org |
-| Fagan-Bradley | Fagan & Firebrace, *Primer of Sidereal Astrology*, pp. 13, 16 | Published definition; not copyrightable as a fact |
-| Krishnamurti (KP) | Krishnamurti, *Krishnamurti Padhdhati Vol-I*, p. 140 | archive.org |
+| Indian official (Lahiri / Chitra-paksha) | *The Indian Astronomical Ephemeris 2022*, Positional Astronomy Centre, Government of India — "AYANAMSA" section | Free, unrestricted; archive.org |
+| Fagan-Bradley | Fagan & Firebrace, *Primer of Sidereal Astrology* — the synetic vernal point at B1950.0, and ayanamsha = 360° − SVP | Published definition; not copyrightable as a fact |
+| Krishnamurti (KP) | Krishnamurti, *Krishnamurti Padhdhati Vol-I* — his anchor at the 1st of Chitra 1900 and his stated rate | archive.org |
 | Raman | B. V. Raman, *A Manual of Hindu Astrology* (1935), Ch. III Art. 49 | Free and unrestricted; archive.org |
 | Surya Siddhanta | Surya Siddhanta Ch. 3 vv. 9–12 | Public domain, cited by chapter |
 | Yukteshwar | Yukteswar, *The Holy Science* (1894) | Public domain; archive.org |

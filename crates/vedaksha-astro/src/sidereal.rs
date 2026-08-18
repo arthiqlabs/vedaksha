@@ -523,9 +523,25 @@ impl Ayanamsha {
     #[must_use]
     pub const fn primary_source(self) -> &'static str {
         match self {
-            Self::IndianOfficial => "Indian Astronomical Ephemeris 2022, p. 380",
-            Self::FaganBradley => "Fagan & Firebrace, Primer of Sidereal Astrology, pp. 13, 16",
-            Self::Krishnamurti => "Krishnamurti, Krishnamurti Padhdhati Vol-I, p. 140",
+            // No page numbers on this surface. The project's source-citation rule
+            // forbids them in user-facing text, and these strings ship to
+            // docs.rs, the MCP tool schema and DATA_PROVENANCE.md. Each names
+            // the work and then STATES THE DEFINING RULE, which is the rule's
+            // own alternative and is strictly more useful to a reader who cannot
+            // open the page anyway. The page references remain in the audit
+            // directory, where they are evidence rather than product.
+            Self::IndianOfficial => {
+                "Indian Astronomical Ephemeris 2022, AYANAMSA section: \
+                 23 deg 51 min 25.53 sec at J2000.0, propagated by P03 general precession"
+            }
+            Self::FaganBradley => {
+                "Fagan & Firebrace, Primer of Sidereal Astrology: synetic vernal point \
+                 335 deg 57 min 28.64 sec at B1950.0, ayanamsha = 360 deg minus SVP"
+            }
+            Self::Krishnamurti => {
+                "Krishnamurti Padhdhati Vol-I: 22 deg 22 min 00 sec on the 1st of Chitra \
+                 1900, propagated at KSK's stated 50.2388475 arcsec/yr"
+            }
             Self::Raman => "Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49",
             Self::SuryaSiddhanta => "Surya Siddhanta Ch. 3 vv. 9-12",
             Self::Yukteshwar => "Yukteswar, The Holy Science (1894)",
@@ -1970,6 +1986,40 @@ mod tests {
             assert!(
                 (star.epoch_jd_tt - row["epoch_jd_tt"].as_f64().unwrap()).abs() < 1e-9,
                 "{key}: catalogue epoch differs between the module and the manifest"
+            );
+        }
+    }
+
+    /// No `primary_source()` string may carry a page number.
+    ///
+    /// The project's source-citation rule forbids a page number in user-facing
+    /// text, and these strings are about as user-facing as this crate gets: they
+    /// reach docs.rs, `tools/mcp-tools.json`, the Python conformance fixture and
+    /// `DATA_PROVENANCE.md`. Three of them carried one until an audit found it.
+    /// The rule's own alternative — state the defining rule — is what they do
+    /// instead, so the citation is now checkable without the page.
+    ///
+    /// Page references still live in the audit directory, which is evidence
+    /// rather than product. This test guards the shipping surface only.
+    #[test]
+    fn no_primary_source_string_carries_a_page_number() {
+        for &system in Ayanamsha::ALL {
+            let source = system.primary_source();
+            let lowered = source.to_ascii_lowercase();
+            // Matches "p. 380", "pp. 13", "p.140": a p or pp, then a period, then
+            // digits. The period is required — without it this also matched
+            // "P03", the precession model, which is not a citation.
+            let has_page = lowered.match_indices('p').any(|(i, _)| {
+                let rest = &lowered[i..];
+                let rest = rest.strip_prefix("pp.").or_else(|| rest.strip_prefix("p."));
+                rest.is_some_and(|r| r.trim_start().starts_with(|c: char| c.is_ascii_digit()))
+            });
+            assert!(
+                !has_page,
+                "{} cites a page number in a string that ships to docs.rs and the MCP \
+                 schema: {source:?}. State the defining rule instead; keep the page \
+                 reference in the audit directory.",
+                system.key()
             );
         }
     }

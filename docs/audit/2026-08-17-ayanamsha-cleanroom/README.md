@@ -62,9 +62,9 @@ proposer's own publication. Plus a tropical identity, which is not a system.
 
 | # | System | Primary | Declared assumptions |
 |---|---|---|---|
-| 1 | Indian official (Lahiri / Chitra-paksha) | *Indian Astronomical Ephemeris 2022*, p. 380 | — |
-| 2 | Fagan-Bradley | Fagan & Firebrace, *Primer of Sidereal Astrology*, pp. 13, 16 | DA-3 |
-| 3 | Krishnamurti (KP) | *Krishnamurti Padhdhati Vol-I*, p. 140 | DA-4, DA-5 |
+| 1 | Indian official (Lahiri / Chitra-paksha) | *Indian Astronomical Ephemeris 2022*, "AYANAMSA" | — |
+| 2 | Fagan-Bradley | Fagan & Firebrace, *Primer of Sidereal Astrology* | DA-3 |
+| 3 | Krishnamurti (KP) | *Krishnamurti Padhdhati Vol-I* | DA-4, DA-5 |
 | 4 | Raman | *A Manual of Hindu Astrology* (1935), Ch. III Art. 49 | DA-7, DA-8 |
 | 5 | Surya Siddhanta | Surya Siddhanta Ch. 3 vv. 9–12 | DA-2, DA-10 |
 | 6 | Yukteshwar | *The Holy Science* (1894) | DA-6 |
