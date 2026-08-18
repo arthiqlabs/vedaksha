@@ -50,8 +50,13 @@ hip_main-4stars.tsv      2893  656f04027e19c7557e32087b09d9ae434673f771b7eab2bc1
   reduction, same epoch and frame.
 
   Agreement with the primary above:
-    positions      under 0.02 mas on every row
+    positions      within 5.2 mas (worst: zeta Piscium, 5.18 mas in RA)
     proper motions differ by up to 3.3 mas/yr (zeta Piscium: 141.66 vs 145.00)
+
+  An earlier version of this manifest said "under 0.02 mas", which was wrong by a
+  factor of 259 -- a degrees-to-milliarcseconds slip, published in a document whose
+  job is to be a receipt. The figures above are now computed from the recorded rows
+  by `hipparcos_reductions_agree_to_the_published_figure`, not asserted.
 
   That proper-motion spread is not noise to be averaged away — it is the honest
   uncertainty on any star-anchored system far from the catalogue epoch. 3.3

@@ -45,7 +45,7 @@ without telling you.
 | `TrueRevati` | **choose** `RevatiPaksha` or `SuryaSiddhanta` | the old name did not say which longitude Revati was held at, and that is the whole discriminator — the two differ by 10′ |
 | `TruePushya` | `PushyaPaksha` | the old variant's longitude matched no located primary; Rao defines δ Cancri at 106° |
 | `TrueMula` | `ChandraHari` | the old name carried a galactic-alignment reading with no primary; `ChandraHari` is λ Scorpii at 240° per *IJHS* 33(4), 1998 |
-| the other 22 | — | dropped; see below |
+| the other 24 | — | dropped, no successor; see below |
 
 **Dropped with a documented search:** De Luce, Usha-Shashi, Gil Brand,
 Wilhelm's mid-Mula, Sassanian / Aldebaran-15-Taurus, JN Bhasin, Sundara Rajan,

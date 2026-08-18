@@ -450,9 +450,15 @@ def check_catalogue(inputs):
     mirror must never look like agreement. Run it deliberately.
     """
     ok = True
+    skipped = []
+    checked = 0
     for e in inputs["group_b_star_anchored"]:
         cat, ident = e["catalogue"], e["identifier"]
         if not ident.startswith("HIP "):
+            # Counted, not silently passed over. This returned success having
+            # checked four of five stars, which is the "an unrun check is not a
+            # passing check" shape: a green run has to say what it did NOT do.
+            skipped.append(e["system"])
             print(f"SKIP {e['system']}: {cat} is a paper, not a queryable catalogue")
             continue
         hip = ident.split()[1]
@@ -475,13 +481,37 @@ def check_catalogue(inputs):
             ok = False
             continue
         fields = data[0].split("\t")
+        # Compare EVERY field the query asked for. An earlier version fetched
+        # pmRA/pmDE and then compared only position, so proper motion -- the term
+        # that actually drives a star-anchored system's time dependence -- was
+        # checked by nothing anywhere, while the job printed OK. A guard that
+        # fetches data and does not look at it is worse than no guard.
         got_ra, got_de = float(fields[1]), float(fields[2])
+        got_pmra, got_pmde = float(fields[3]), float(fields[4])
         d_ra = abs(got_ra - e["ra_deg"]) * 3600.0 * 1000.0
         d_de = abs(got_de - e["dec_deg"]) * 3600.0 * 1000.0
-        status = "OK" if max(d_ra, d_de) < 1.0 else "DRIFT"
-        if status == "DRIFT":
+        d_pmra = abs(got_pmra - e["pm_ra_cosdec_mas_per_year"])
+        d_pmde = abs(got_pmde - e["pm_dec_mas_per_year"])
+        # Position in mas, proper motion in mas/yr; the catalogue publishes pm to
+        # two decimals, so anything above half an ulp of that is a real mismatch.
+        drift = max(d_ra, d_de) >= 1.0 or max(d_pmra, d_pmde) >= 0.005
+        if drift:
             ok = False
-        print(f"{status} {e['system']} {ident}: dRA {d_ra:.3f} mas, dDec {d_de:.3f} mas")
+        print(
+            f"{'DRIFT' if drift else 'OK'} {e['system']} {ident}: "
+            f"dRA {d_ra:.3f} mas, dDec {d_de:.3f} mas, "
+            f"dpmRA {d_pmra:.3f} mas/yr, dpmDE {d_pmde:.3f} mas/yr"
+        )
+        checked += 1
+
+    total = len(inputs["group_b_star_anchored"])
+    print(f"\ncatalogue check: {checked} of {total} star systems verified against VizieR")
+    if skipped:
+        print(
+            f"  NOT verified by this run: {', '.join(skipped)} — no queryable catalogue "
+            "carries them, so this check can never cover them. Their constants are pinned "
+            "offline instead (see sgr_a_star_decimal_degrees_match_its_published_sexagesimal)."
+        )
     return ok
 
 

@@ -75,9 +75,18 @@ impl CatalogueStar {
     ///
     /// Proper motion is applied as a linear space motion in the tangent plane at
     /// the catalogue epoch, then renormalised. This is exact for a star with no
-    /// radial velocity and, for the stars this engine carries, differs from a
-    /// full space-motion propagation by well under a milliarcsecond even two
-    /// millennia from the catalogue epoch.
+    /// radial velocity; against a rigorous great-circle propagation the residual
+    /// grows as roughly `theta^3 / 3` in the accumulated motion `theta`.
+    ///
+    /// Sizes, for the fastest star this engine carries (delta Cancri, 229 mas/yr):
+    /// **0.8 mas at two millennia** from the catalogue epoch, and **12.6 mas at
+    /// the ~5100-year extreme of the shipped conformance grid**. The earlier
+    /// version of this comment claimed sub-milliarcsecond accuracy and named two
+    /// millennia, while the grid the engine ships reaches five — a stated scope
+    /// narrower than the exercised one, which is its own kind of wrong.
+    ///
+    /// Neither figure is material: at that epoch the catalogue's own proper-motion
+    /// uncertainty already admits ~1.4 arcseconds, a hundred times larger.
     #[must_use]
     pub fn icrs_direction(&self, jd_tt: f64) -> Vector3 {
         let ra = self.ra_deg.to_radians();

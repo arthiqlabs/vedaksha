@@ -68,7 +68,7 @@ proposer's own publication. Plus a tropical identity, which is not a system.
 | 4 | Raman | *A Manual of Hindu Astrology* (1935), Ch. III Art. 49 | DA-7, DA-8 |
 | 5 | Surya Siddhanta | Surya Siddhanta Ch. 3 vv. 9–12 | DA-2, DA-10 |
 | 6 | Yukteshwar | *The Holy Science* (1894) | DA-6 |
-| 7 | Revati-paksha | Surya Siddhanta Ch. 8; ζ Piscium | DA-1 |
+| 7 | Revati-paksha | Revati at the sidereal initial point — majority reading, against SS Ch. 8's own 359°50′; ζ Piscium | DA-1 |
 | 8 | Pushya-paksha | Narasimha Rao, *Introducing Pushya-paksha Ayanamsa* | — |
 | 9 | True Chitra | Self-describing condition; Spica | — |
 | 10 | True Mula (Chandra Hari) | *Indian J. History of Science* 33(4), 1998 | — |
@@ -80,9 +80,15 @@ move a caller's chart without telling them, which is the failure mode of the
 whole episode in miniature. The dispositions are in `sidereal.rs` and are tested
 for reachability.
 
-### Why the other thirty-three went
+### Why the other thirty-six names went
 
-Two categories, and the second is the interesting one.
+Vedaksha 5 had 44 variants. Seven sidereal names plus `Tropical` still parse, so
+**36 names needed a disposition**: 8 collapsed into a system that survives, 4 point
+at a successor answering a different defining condition, and **24 were dropped with
+no successor at all**. Those counts are asserted by a test, because three documents
+previously quoted three different numbers from the same table.
+
+The 24 fall into two categories, and the second is the interesting one.
 
 **No primary located, and the search recorded.** *A drop is only final when the
 spec records what was searched and where; an undocumented negative search is not

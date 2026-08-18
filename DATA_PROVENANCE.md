@@ -105,7 +105,7 @@ machine-readable input manifest are in
 | Raman | B. V. Raman, *A Manual of Hindu Astrology* (1935), Ch. III Art. 49 | Free and unrestricted; archive.org |
 | Surya Siddhanta | Surya Siddhanta Ch. 3 vv. 9–12 | Public domain, cited by chapter |
 | Yukteshwar | Yukteswar, *The Holy Science* (1894) | Public domain; archive.org |
-| Revati-paksha | Surya Siddhanta Ch. 8; ζ Piscium from Hipparcos | Public domain + catalogue |
+| Revati-paksha | Revati at the sidereal initial point — the majority reading, against Surya Siddhanta Ch. 8's own 359°50′; ζ Piscium from Hipparcos | Public domain + catalogue |
 | Pushya-paksha | P.V.R. Narasimha Rao, *Introducing Pushya-paksha Ayanamsa* | Freely published by the proposer |
 | True Chitra | Self-describing condition; Spica from Hipparcos | Catalogue |
 | True Mula (Chandra Hari) | K. Chandra Hari, *Indian Journal of History of Science* 33(4), 1998 | Peer-reviewed, free from INSA |
@@ -114,7 +114,7 @@ machine-readable input manifest are in
 **Astrometric data.** Star positions and proper motions are from van Leeuwen, F. (2007), *A&A*
 474, 653 — the re-reduction of the Hipparcos raw data — via VizieR table `I/311/hip2`, rows
 HIP 5737, 42911, 65474 and 85927. Cross-checked against the original ESA 1997 catalogue
-(`I/239/hip_main`); the positions agree to under 0.02 mas and the proper motions differ by up to
+(`I/239/hip_main`); the positions agree to within 5.2 mas and the proper motions differ by up to
 3.3 mas/yr, which is the honest uncertainty on a star-anchored system far from the catalogue
 epoch. Redistributable with attribution (CDS/VizieR terms).
 

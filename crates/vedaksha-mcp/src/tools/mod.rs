@@ -94,8 +94,11 @@ Tropical for no rotation. Systems: ",
         .iter()
         .enumerate()
     {
+        // Joined on " | ", not "; ": two primary_source() strings legitimately
+        // contain a semicolon, and joining on one silently split those entries
+        // in half for anything parsing this description.
         if i > 0 {
-            s.push_str("; ");
+            s.push_str(" | ");
         }
         let star = if a.is_star_anchored() { " [star]" } else { "" };
         let _ = write!(s, "{}{star} = {}", a.key(), a.primary_source());

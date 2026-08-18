@@ -85,11 +85,16 @@ const FAGAN_SVP_B1950_DEG: f64 = 335.0 + 57.0 / 60.0 + 28.64 / ARCSEC;
 /// Krishnamurti, K. S., *Krishnamurti Padhdhati Vol-I*, p. 140.
 const KP_ANCHOR_DEG: f64 = 22.0 + 22.0 / 60.0;
 
-/// Julian Day (TT) of 1900 April 13, 00:00 — the 1st of Chitra 1900 (DA-5).
+/// Julian Day (TT) of 1900 April 13, 00:00 — the 1st of Chitra 1900 (DA-4, DA-5).
 ///
-/// Rajan's table header, from which KSK's is derived by a flat +2', reads
-/// "Ayanamsa on the 1st of Chitra (i.e. on the 13th or 14th April.)". The
-/// ambiguity is 0.14 arcsecond; the 13th is adopted and the choice recorded.
+/// **DA-4 — the mid-April epoch is inferred, not stated.** KSK's own table header
+/// gives only "English Year". That his figures are dated to the 1st of Chitra is
+/// an inference from the flat +2' by which they track Rajan's table, whose header
+/// does say so. The month is therefore an assumption, not just the day.
+///
+/// **DA-5 — the day within it is ambiguous.** Rajan's header reads "Ayanamsa on
+/// the 1st of Chitra (i.e. on the 13th or 14th April.)". The ambiguity is 0.14
+/// arcsecond; the 13th is adopted, and the choice is recorded rather than hidden.
 const KP_ANCHOR_JD: f64 = 2_415_122.5;
 
 /// Krishnamurti's stated rate, arcseconds per Julian year.
@@ -111,8 +116,16 @@ const YUKTESHWAR_ANCHOR_DEG: f64 = 20.0 + 54.0 / 60.0 + 36.0 / ARCSEC;
 /// *The Holy Science* dates its anchor to "the position of the Vernal Equinox at
 /// spring in the year 1894"; the equinox instant is the literal reading. This
 /// value is **computed by this engine**, not transcribed: the test
-/// `yukteshwar_epoch_is_the_1894_march_equinox` recomputes it from the solar
-/// theory and fails if it drifts. Corresponds to 1894 March 20, 14:58:40 TT.
+/// `yukteshwar_epoch_is_the_1894_march_equinox` root-solves the equinox from the
+/// engine's own solar theory and compares. Corresponds to 1894 March 20,
+/// 14:58:40 TT.
+///
+/// Independently cross-checked against ERFA's solar theory, which places the
+/// same instant about 35 s away. The direction is deliberately not stated: two
+/// independent root-solves against ERFA disagreed on the sign, which is itself
+/// a fair measure of how well solar theories agree 130 years before J2000. It is
+/// immaterial here either way — at Yukteshwar's 54"/yr, 35 s of epoch is 6e-5
+/// arcsecond of ayanamsha.
 const YUKTESHWAR_ANCHOR_JD: f64 = 2_412_908.124_077_082;
 
 /// Yukteshwar's rate, arcseconds per Julian year.
@@ -129,8 +142,11 @@ const YUKTESHWAR_RATE_ARCSEC_PER_YEAR: f64 = 54.0;
 /// "(1) Subtract 397 from the year of birth (a.d.) (2) Multiply the remainder by
 /// 50⅓" and reduce the product into degrees, minutes and seconds."
 ///
-/// Raman lists 361, 394, 498 and 559 CE as alternatives and declines to defend
-/// 397 over them, calling the question one of "considerable doubt".
+/// **DA-8.** Raman lists 361, 394, 498 and 559 CE as alternatives and declines to
+/// defend 397 over them, calling the question one of "considerable doubt"; and he
+/// titles the article itself "Determination of (**Approximate**) Ayanamsa". Ship
+/// it as he characterises it — this system is not more precise than its author
+/// says it is, and presenting it as such would misrepresent the primary.
 const RAMAN_ZERO_YEAR: i32 = 397;
 
 /// Raman's rate: 50⅓ arcseconds per calendar year, exactly.
@@ -342,7 +358,8 @@ pub enum Ayanamsha {
 
     /// Revati-paksha — ζ Piscium held at sidereal 0°00'00", tracked live.
     ///
-    /// The majority position among the authorities: Burgess records that "all
+    /// The majority position among the authorities. The commentary on Ch. 8
+    /// records that "all
     /// authorities agree in placing it upon the ecliptic and all excepting our
     /// treatise and the Cakalya make its position exactly mark the initial point
     /// of the fixed sidereal sphere".
@@ -505,7 +522,17 @@ impl Ayanamsha {
             Self::Raman => "Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49",
             Self::SuryaSiddhanta => "Surya Siddhanta Ch. 3 vv. 9-12",
             Self::Yukteshwar => "Yukteswar, The Holy Science (1894)",
-            Self::RevatiPaksha => "Surya Siddhanta Ch. 8; zeta Piscium per Hipparcos",
+            Self::RevatiPaksha => {
+                // NOT "Surya Siddhanta Ch. 8" alone. Ch. 8's own rule puts Revati
+                // at 359 deg 50 min, which is the *other* system; this one holds
+                // it at 0 deg, the majority-of-authorities reading. Citing the
+                // chapter without that contrast points a reader at the number
+                // this system deliberately does not use. The rejected figure is
+                // stated outright rather than as an offset, so the reader is not
+                // left to infer that this system is defined relative to the SS.
+                "Revati at the sidereal initial point, the majority reading against \
+                 Surya Siddhanta Ch. 8's own 359 deg 50 min, zeta Piscium per Hipparcos"
+            }
             Self::PushyaPaksha => "Narasimha Rao, Introducing Pushya-paksha Ayanamsa",
             Self::TrueChitra => "Self-describing condition; Spica per Hipparcos",
             Self::ChandraHari => "Chandra Hari, Indian J. History of Science 33(4), 1998",
@@ -1128,7 +1155,15 @@ mod tests {
         // rather than silently redefining the system.
         let p03_rate_per_century = general_precession_p03(julian::J2000 + 36_525.0)
             - general_precession_p03(julian::J2000);
-        let kp_rate_per_century = KP_RATE_ARCSEC_PER_YEAR * 36_525.0 / JULIAN_YEAR;
+        // Measured THROUGH `ayanamsha_value`, not recomputed from the constants.
+        // The earlier version evaluated `KP_RATE_ARCSEC_PER_YEAR * 36525 /
+        // JULIAN_YEAR` inline, which never enters `rate_anchored` and therefore
+        // could not see a bug inside it: swapping the Julian year for a tropical
+        // one there left both assertions in this test green.
+        let kp_rate_per_century =
+            (ayanamsha_value(Ayanamsha::Krishnamurti, julian::J2000 + 36_525.0)
+                - ayanamsha_value(Ayanamsha::Krishnamurti, julian::J2000))
+                * 3600.0;
         let divergence = kp_rate_per_century - p03_rate_per_century;
         assert!(
             (-7.0..-5.0).contains(&divergence),
@@ -1152,7 +1187,8 @@ mod tests {
 
     #[test]
     fn revati_paksha_inverts_to_the_commentary_stated_year_for_zeta_piscium() {
-        // Burgess records that zeta Piscium coincided with the vernal equinox in
+        // The commentary on Ch. 8 records that zeta Piscium coincided with the
+        // vernal equinox in
         // A.D. 572, and that the Surya Siddhanta's own zero point (10' east of it)
         // did so about A.D. 560 — twelve years earlier at ~50"/yr. Holding the
         // star at 0 degrees must reproduce the first of those, not the second;
@@ -1168,19 +1204,71 @@ mod tests {
 
     #[test]
     fn yukteshwar_epoch_is_the_1894_march_equinox() {
-        // The one constant in this module that this project computed rather than
-        // read from a primary. It is pinned here so it cannot be a typed number:
-        // if the solar theory moves, this fails rather than silently shifting the
-        // system.
+        // YUKTESHWAR_ANCHOR_JD is the one constant in this module that this
+        // project computed rather than read from a primary, so it is the one
+        // that most needs a guard which is not itself.
         //
-        // 1894-03-20.624077 TT. Cross-checked against the published equinox time
-        // for 1894 (March 20, ~14:56 UT).
-        let (y, m, d) = julian::jd_to_calendar(YUKTESHWAR_ANCHOR_JD);
-        assert_eq!((y, m), (1894, 3));
+        // This test ROOT-SOLVES the March equinox of 1894 from the engine's own
+        // solar theory and compares the result to the constant. An earlier
+        // version of this test decomposed the constant into a calendar date and
+        // compared it against a literal derived from that same constant — it
+        // detected drift but could never have detected a wrong original value,
+        // while its doc comment claimed it recomputed from the solar theory.
+        // That is the failure mode this whole re-derivation exists to remove,
+        // so it is called out rather than quietly fixed.
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::{coordinates, delta_t};
+
+        let provider = AnalyticalProvider::new();
+        // `ecliptic_position` takes UT1 and converts to TT internally, so feed it
+        // the UT1 that corresponds to the TT we are solving in.
+        let solar_longitude = |jd_tt: f64| {
+            let jd_ut1 = delta_t::tt_to_ut1(jd_tt);
+            let lon = coordinates::ecliptic_position(&provider, Body::Sun, jd_ut1)
+                .expect("the analytical provider covers 1894")
+                .longitude
+                .to_degrees();
+            // Signed about the equinox so the sign change is the root.
+            if lon > 180.0 { lon - 360.0 } else { lon }
+        };
+
+        let (mut lo, mut hi) = (YUKTESHWAR_ANCHOR_JD - 5.0, YUKTESHWAR_ANCHOR_JD + 5.0);
         assert!(
-            (d - 20.624_077).abs() < 1e-5,
-            "expected 1894 March 20.624077 TT, got {d}"
+            solar_longitude(lo) * solar_longitude(hi) < 0.0,
+            "the March 1894 equinox must be bracketed by the search window"
         );
+        for _ in 0..200 {
+            let mid = (lo + hi) / 2.0;
+            if solar_longitude(lo) * solar_longitude(mid) <= 0.0 {
+                hi = mid;
+            } else {
+                lo = mid;
+            }
+        }
+        let solved = (lo + hi) / 2.0;
+
+        // Tolerance is one minute of time. The engine's own solar theory places
+        // the instant within ~5 s of the stored constant; an independent check
+        // against ERFA's solar theory (recorded in derivation-inputs.json) puts
+        // the two theories ~35 s apart at this epoch, which is the honest size
+        // of the disagreement between solar models 130 years before J2000.
+        //
+        // None of that matters to the ayanamsha: at Yukteshwar's 54"/yr, a
+        // minute of epoch error is 1e-4 arcsecond. The point of the tolerance is
+        // to catch a constant that is wrong by a day, a month, or a year — not
+        // to pin a solar theory.
+        let residual_seconds = (solved - YUKTESHWAR_ANCHOR_JD) * 86_400.0;
+        assert!(
+            residual_seconds.abs() < 60.0,
+            "the engine root-solves the 1894 March equinox to JD {solved:.9} TT, but \
+             YUKTESHWAR_ANCHOR_JD is {YUKTESHWAR_ANCHOR_JD:.9} — {residual_seconds:+.1} s apart. \
+             If the solar theory moved, re-derive the constant; do not widen this tolerance."
+        );
+
+        // And it really is the March equinox of 1894, not some other crossing.
+        let (year, month, _) = julian::jd_to_calendar(solved);
+        assert_eq!((year, month), (1894, 3));
     }
 
     #[test]
@@ -1362,6 +1450,492 @@ mod tests {
             "deserialization should surface the disposition, got: {msg}"
         );
         assert!(serde_json::from_str::<Ayanamsha>("\"Lahiri\"").is_ok());
+    }
+
+    /// Every declared assumption recorded in the audit manifest must also be
+    /// visible in the *production* source of this module.
+    ///
+    /// §2.6 requires assumptions to be declared "in the source and in the audit
+    /// dir" — a hidden assumption is indistinguishable from a fabricated constant
+    /// to whoever audits it later. Two had drifted out: one tagged nowhere, and
+    /// one described in prose but never tagged, so a tag-based audit missed it.
+    ///
+    /// **This test scans only the code above the test module, and that is
+    /// load-bearing.** The first version scanned the whole file, including its
+    /// own doc comment — which named the very tags it was checking for, so it
+    /// could never fail for them. It was caught by planting the defect it exists
+    /// to catch, which is the only way that kind of self-reference shows up. For
+    /// the same reason, no tag is written literally in this comment.
+    #[test]
+    fn every_declared_assumption_in_the_manifest_appears_in_this_source() {
+        const MANIFEST: &str = include_str!(
+            "../../../docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json"
+        );
+        const WHOLE_FILE: &str = include_str!("sidereal.rs");
+
+        // Production code only: everything before the test module. A tag
+        // mentioned in a test cannot satisfy the requirement that the shipped
+        // source declares it.
+        let source = WHOLE_FILE
+            .split_once("#[cfg(test)]")
+            .map_or(WHOLE_FILE, |(production, _)| production);
+        assert!(
+            source.len() < WHOLE_FILE.len(),
+            "the test module marker was not found, so this would scan its own text"
+        );
+
+        // Collect DA-<n> tags from each side without a regex dependency.
+        fn tags(text: &str) -> std::collections::BTreeSet<u32> {
+            let mut found = std::collections::BTreeSet::new();
+            for (i, _) in text.match_indices("DA-") {
+                let digits: String = text[i + 3..]
+                    .chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect();
+                if let Ok(n) = digits.parse::<u32>() {
+                    found.insert(n);
+                }
+            }
+            found
+        }
+
+        let declared = tags(MANIFEST);
+        let in_source = tags(source);
+        assert!(
+            !declared.is_empty(),
+            "no DA tags found in the manifest — this test would pass vacuously"
+        );
+
+        let missing: Vec<u32> = declared.difference(&in_source).copied().collect();
+        assert!(
+            missing.is_empty(),
+            "declared in derivation-inputs.json but not mentioned anywhere in sidereal.rs: \
+             {missing:?}. An assumption the source does not state reads, to a later maintainer, \
+             as something the primary said."
+        );
+    }
+
+    /// Every catalogue number this module carries must match the committed
+    /// VizieR response it was transcribed from.
+    ///
+    /// Until this existed, nothing in the suite constrained any catalogue datum.
+    /// The star-identity test is an algebraic identity that holds for *any*
+    /// astrometry, and the ERFA pin in `stars.rs` uses a synthetic direction with
+    /// proper motion zeroed — so a wrong digit in a right ascension, a
+    /// declination, or a proper motion would have passed everything. The Python
+    /// generator could not catch it either: it reads the same manifest values.
+    ///
+    /// This test reads the *raw VizieR responses* committed under
+    /// `catalogue/`, whose sha256s the fetch manifest records. That makes the
+    /// star rows committed external inputs rather than typed constants — the same
+    /// shape as the ERFA pins, which is the only structure in this module that
+    /// has ever caught anything.
+    ///
+    /// It is offline and deterministic, so unlike `--check-catalogue` it cannot
+    /// skip. `--check-catalogue` re-queries VizieR live and remains the guard
+    /// against the *catalogue itself* being revised.
+    #[test]
+    fn every_catalogue_number_matches_the_committed_vizier_response() {
+        // van Leeuwen (2007), I/311/hip2. Columns as queried:
+        // HIP, RArad, DErad, Plx, pmRA, pmDE, e_RArad, e_DErad, e_pmRA, e_pmDE
+        const HIP2: &str = include_str!(
+            "../../../docs/audit/2026-08-17-ayanamsha-cleanroom/catalogue/hip2-4stars.tsv"
+        );
+
+        let expected: [(&str, &CatalogueStar); 4] = [
+            ("5737", &ZETA_PISCIUM),
+            ("42911", &DELTA_CANCRI),
+            ("65474", &SPICA),
+            ("85927", &LAMBDA_SCORPII),
+        ];
+
+        let mut matched = 0usize;
+        for line in HIP2.lines() {
+            let trimmed = line.trim_start();
+            let fields: Vec<&str> = line.split('\t').map(str::trim).collect();
+            if fields.len() < 6 {
+                continue;
+            }
+            let Some((_, star)) = expected.iter().find(|(hip, _)| trimmed.starts_with(hip)) else {
+                continue;
+            };
+            let Ok(ra) = fields[1].parse::<f64>() else {
+                continue;
+            };
+            let dec: f64 = fields[2].parse().expect("declination column");
+            let pm_ra: f64 = fields[4].parse().expect("pmRA column");
+            let pm_dec: f64 = fields[5].parse().expect("pmDE column");
+
+            // Position to a microarcsecond; the catalogue publishes 8 decimals of
+            // a degree, so anything looser would not see a transposed digit.
+            let d_ra = (ra - star.ra_deg).abs() * 3_600_000.0;
+            let d_dec = (dec - star.dec_deg).abs() * 3_600_000.0;
+            assert!(
+                d_ra < 0.001 && d_dec < 0.001,
+                "{}: position is {ra}/{dec} in the committed VizieR row but \
+                 {}/{} in this module ({d_ra:.6} / {d_dec:.6} mas apart)",
+                star.identifier,
+                star.ra_deg,
+                star.dec_deg
+            );
+            assert!(
+                (pm_ra - star.pm_ra_cosdec_mas_per_year).abs() < 1e-9
+                    && (pm_dec - star.pm_dec_mas_per_year).abs() < 1e-9,
+                "{}: proper motion is {pm_ra}/{pm_dec} mas/yr in the committed VizieR row \
+                 but {}/{} in this module",
+                star.identifier,
+                star.pm_ra_cosdec_mas_per_year,
+                star.pm_dec_mas_per_year
+            );
+            matched += 1;
+        }
+        assert_eq!(
+            matched, 4,
+            "expected to check all four Hipparcos stars against the committed response, \
+             matched {matched} — a parse that silently matches nothing would pass forever"
+        );
+
+        // The epoch is a property of the catalogue, not a column in the response:
+        // I/311/hip2 positions are ICRS at J1991.25. Derived here rather than
+        // trusted, so a typo in the constant fails.
+        let j1991_25 = julian::J2000 + (1991.25 - 2000.0) * 365.25;
+        assert!(
+            (HIPPARCOS_EPOCH_JD - j1991_25).abs() < 1e-9,
+            "the Hipparcos epoch constant is {HIPPARCOS_EPOCH_JD}, but Julian epoch \
+             J1991.25 is {j1991_25}"
+        );
+    }
+
+    /// Sgr A* has no queryable catalogue, so its two published sexagesimal
+    /// figures are reconciled against the decimal degrees the engine uses.
+    ///
+    /// This is narrow and should not be mistaken for the check above: both
+    /// numbers come from the same reading of the same paper, so it catches a
+    /// sexagesimal-to-decimal conversion slip and nothing else. It cannot catch
+    /// misreading the paper. Extending `--check-catalogue` to Sgr A* would be
+    /// worse than this: the source is absent from ICRF3 entirely, so the only
+    /// thing available to query is a *different determination* sitting ~40 mas
+    /// away — agreement with another source, which the derivation forbids.
+    #[test]
+    fn sgr_a_star_decimal_degrees_match_its_published_sexagesimal() {
+        // Gordon, de Witt & Jacobs (2023): 17h45m40.034047s, -29d00'28".21601
+        let ra_from_hms = (17.0 + 45.0 / 60.0 + 40.034_047 / 3600.0) * 15.0;
+        let dec_from_dms = -(29.0 + 0.0 / 60.0 + 28.216_01 / 3600.0);
+
+        let d_ra = (ra_from_hms - SGR_A_STAR.ra_deg).abs() * 3_600_000.0;
+        let d_dec = (dec_from_dms - SGR_A_STAR.dec_deg).abs() * 3_600_000.0;
+        assert!(
+            d_ra < 0.01,
+            "17h45m40.034047s is {ra_from_hms} deg, module has {} ({d_ra:.4} mas apart)",
+            SGR_A_STAR.ra_deg
+        );
+        assert!(
+            d_dec < 0.01,
+            "-29d00'28.21601\" is {dec_from_dms} deg, module has {} ({d_dec:.4} mas apart)",
+            SGR_A_STAR.dec_deg
+        );
+
+        // J2015.0, the paper's stated reference epoch.
+        let j2015 = julian::J2000 + 15.0 * 365.25;
+        assert!((SGR_A_STAR.epoch_jd_tt - j2015).abs() < 1e-9);
+    }
+
+    /// The disposition table's shape, pinned, because three published documents
+    /// quoted three different counts from it.
+    ///
+    /// Vedaksha 5 had 44 variants. Seven sidereal names plus `Tropical` still
+    /// parse, so 36 names had to be given a disposition. The migration note said
+    /// "22" and the audit README said "thirty-three"; both were wrong, and
+    /// nothing checked them. These numbers appear in user-facing documents, so
+    /// they are asserted here rather than recounted by hand.
+    #[test]
+    fn the_disposition_table_has_the_shape_the_documents_claim() {
+        assert_eq!(
+            DISPOSITIONS.len(),
+            36,
+            "44 Vedaksha 5 variants minus the 8 names that still parse leaves 36 to dispose of"
+        );
+
+        let count = |kw: &str| {
+            DISPOSITIONS
+                .iter()
+                .filter(|(_, why)| why.trim_start().starts_with(kw))
+                .count()
+        };
+        let collapsed = count("collapsed");
+        let renamed = count("renamed");
+        let removed = count("removed");
+        let dropped = count("dropped");
+        assert_eq!(
+            collapsed + renamed + removed + dropped,
+            DISPOSITIONS.len(),
+            "every disposition must open with one of the four recognised verbs"
+        );
+        assert_eq!(collapsed, 8, "names folded into a system that survives");
+        assert_eq!(
+            renamed + removed,
+            4,
+            "names whose successor exists but answers a different defining condition"
+        );
+        assert_eq!(dropped, 24, "names with no successor at all");
+
+        // No duplicates: a name listed twice would mean two dispositions, and the
+        // second would be unreachable.
+        let mut keys: Vec<&str> = DISPOSITIONS.iter().map(|(k, _)| *k).collect();
+        keys.sort_unstable();
+        let before = keys.len();
+        keys.dedup();
+        assert_eq!(before, keys.len(), "a name appears twice in DISPOSITIONS");
+    }
+
+    /// The precession-anchored systems must propagate by `p_A`, not by the
+    /// Fukushima-Williams `psi_bar`.
+    ///
+    /// This is the §11.1 failure mode. A first draft of this comment claimed the
+    /// zero-year inversion could not see it — that was wrong, and the error is
+    /// worth recording because it is the same shape as the defects this test
+    /// exists to catch. Swapping the two *does* shift the Indian official
+    /// system's inversion by only 0.64 yr, but it shifts it to 286.32 CE, and
+    /// the assertion is against the documented 285.0, so 1.32 yr fails a ±1.0
+    /// tolerance. Verified by planting the swap: both tests fail.
+    ///
+    /// This test still earns its place, for two reasons. **Fagan-Bradley has no
+    /// zero-year test at all** — its primary documents none — so before this,
+    /// nothing whatsoever constrained which precession model it used. And when
+    /// the Indian official inversion does fail, it reports a year; this reports
+    /// the model, which is the actual defect.
+    #[test]
+    fn precession_anchored_systems_use_p_a_and_not_psi_bar() {
+        use vedaksha_ephem_core::precession::general_precession_in_longitude;
+
+        let at = julian::J2000 + 36_525.0; // J2100
+        for (system, anchor_deg, anchor_jd) in [
+            (
+                Ayanamsha::IndianOfficial,
+                IAE_J2000_ANCHOR_DEG,
+                julian::J2000,
+            ),
+            (Ayanamsha::FaganBradley, 360.0 - FAGAN_SVP_B1950_DEG, B1950),
+        ] {
+            let accumulated = (ayanamsha_value(system, at) - anchor_deg) * 3600.0;
+
+            let from_p_a = general_precession_p03(at) - general_precession_p03(anchor_jd);
+            assert!(
+                (accumulated - from_p_a).abs() < 1e-6,
+                "{}: accumulated {accumulated} arcsec does not match p_A's {from_p_a}",
+                system.key()
+            );
+
+            let from_psi_bar =
+                general_precession_in_longitude(at) - general_precession_in_longitude(anchor_jd);
+            let gap = (from_p_a - from_psi_bar).abs();
+            assert!(
+                gap > 5.0,
+                "{}: p_A and psi_bar differ by only {gap} arcsec over this span, so this \
+                 test cannot discriminate them — pick a wider span",
+                system.key()
+            );
+            assert!(
+                (accumulated - from_psi_bar).abs() > 5.0,
+                "{}: the accumulated precession matches psi_bar, not p_A. That is the \
+                 Fukushima-Williams angle for building the precession matrix, not general \
+                 precession along the moving ecliptic — see spec section 11.1.",
+                system.key()
+            );
+        }
+    }
+
+    /// Each star system's assigned sidereal longitude must match the audit
+    /// manifest.
+    ///
+    /// Nothing else constrains these. Three of the five (106, 240, 240) have no
+    /// zero-year inversion test, so if `106.0` were typed as `105.0` every other
+    /// test in this module would still pass — the star-identity test would
+    /// happily confirm the star sits at 105 degrees.
+    #[test]
+    fn assigned_sidereal_longitudes_match_the_audit_manifest() {
+        const MANIFEST: &str = include_str!(
+            "../../../docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json"
+        );
+        let doc: serde_json::Value =
+            serde_json::from_str(MANIFEST).expect("the manifest is valid JSON");
+        let rows = doc["group_b_star_anchored"]
+            .as_array()
+            .expect("group_b_star_anchored is an array");
+
+        let mut checked = 0usize;
+        for row in rows {
+            let key = row["system"].as_str().expect("system name");
+            let want = row["assigned_sidereal_longitude_deg"]
+                .as_f64()
+                .expect("assigned longitude");
+            let system = <Ayanamsha as FromStr>::from_str(key)
+                .unwrap_or_else(|e| panic!("manifest names a system the engine lacks: {e}"));
+
+            // Recover the assigned longitude from the engine: the star's own
+            // longitude minus the ayanamsha it reports IS the assigned value.
+            let jd = julian::J2000;
+            let star = match system {
+                Ayanamsha::RevatiPaksha => &ZETA_PISCIUM,
+                Ayanamsha::PushyaPaksha => &DELTA_CANCRI,
+                Ayanamsha::TrueChitra => &SPICA,
+                Ayanamsha::ChandraHari => &LAMBDA_SCORPII,
+                Ayanamsha::GalacticCenter0Sag => &SGR_A_STAR,
+                other => panic!("{} is in group_b but is not star-anchored", other.key()),
+            };
+            let got = normalize_degrees(
+                mean_ecliptic_longitude_of_date(star, jd) - ayanamsha_value(system, jd),
+            );
+            let delta = normalize_degrees_signed(got - want) * 3600.0;
+            assert!(
+                delta.abs() < 1e-6,
+                "{key}: the manifest assigns {want} degrees but the engine places the star \
+                 at sidereal {got} ({delta:+} arcsec apart)"
+            );
+            checked += 1;
+        }
+        assert_eq!(
+            checked,
+            Ayanamsha::SIDEREAL
+                .iter()
+                .filter(|a| a.is_star_anchored())
+                .count(),
+            "the manifest and the engine disagree about how many star systems there are"
+        );
+    }
+
+    /// The two Hipparcos reductions agree to the figure the public documents
+    /// publish.
+    ///
+    /// `DATA_PROVENANCE.md` and the fetch manifest quote how far the ESA 1997
+    /// reduction sits from the van Leeuwen 2007 one. That number is the honest
+    /// uncertainty on every star-anchored system, and it was published wrong by
+    /// a factor of 259 — "under 0.02 mas" against a true 5.18 mas, a
+    /// degrees-to-milliarcseconds slip in the document whose job is to be a
+    /// receipt. Nothing computed it. Now something does.
+    #[test]
+    fn hipparcos_reductions_agree_to_the_published_figure() {
+        const HIP2: &str = include_str!(
+            "../../../docs/audit/2026-08-17-ayanamsha-cleanroom/catalogue/hip2-4stars.tsv"
+        );
+        const HIP_MAIN: &str = include_str!(
+            "../../../docs/audit/2026-08-17-ayanamsha-cleanroom/catalogue/hip_main-4stars.tsv"
+        );
+
+        fn rows(tsv: &str) -> std::collections::BTreeMap<u32, (f64, f64, f64, f64)> {
+            let mut out = std::collections::BTreeMap::new();
+            for line in tsv.lines() {
+                let f: Vec<&str> = line.split('\t').map(str::trim).collect();
+                if f.len() < 6 {
+                    continue;
+                }
+                let (Ok(hip), Ok(ra), Ok(dec), Ok(pmra), Ok(pmde)) = (
+                    f[0].parse::<u32>(),
+                    f[1].parse::<f64>(),
+                    f[2].parse::<f64>(),
+                    f[4].parse::<f64>(),
+                    f[5].parse::<f64>(),
+                ) else {
+                    continue;
+                };
+                out.insert(hip, (ra, dec, pmra, pmde));
+            }
+            out
+        }
+
+        let new = rows(HIP2);
+        let old = rows(HIP_MAIN);
+        assert_eq!(
+            new.len(),
+            4,
+            "expected four stars in the van Leeuwen response"
+        );
+        assert_eq!(old.len(), 4, "expected four stars in the ESA 1997 response");
+
+        let mut worst_pos_mas = 0.0_f64;
+        let mut worst_pm = 0.0_f64;
+        for (hip, (ra, dec, pmra, pmde)) in &new {
+            let (o_ra, o_dec, o_pmra, o_pmde) = old[hip];
+            worst_pos_mas = worst_pos_mas
+                .max((ra - o_ra).abs() * 3_600_000.0)
+                .max((dec - o_dec).abs() * 3_600_000.0);
+            worst_pm = worst_pm
+                .max((pmra - o_pmra).abs())
+                .max((pmde - o_pmde).abs());
+        }
+
+        // Published as "within 5.2 mas" and "up to 3.3 mas/yr".
+        assert!(
+            (5.0..5.3).contains(&worst_pos_mas),
+            "documents publish 'within 5.2 mas'; computed worst is {worst_pos_mas:.3} mas"
+        );
+        assert!(
+            (3.3..3.4).contains(&worst_pm),
+            "documents publish 'up to 3.3 mas/yr'; computed worst is {worst_pm:.3} mas/yr"
+        );
+    }
+
+    /// `is_star_anchored()` must agree with what `ayanamsha_value` actually
+    /// dispatches, and the catalogue identifiers must match the manifest.
+    ///
+    /// `is_star_anchored()` is a hand-maintained `matches!` list that decides the
+    /// `[star]` tags in the MCP schema description, and the `catalogue` /
+    /// `identifier` strings participate in no computation — so nothing would have
+    /// noticed either drifting from reality.
+    #[test]
+    fn star_metadata_matches_what_the_engine_actually_does() {
+        for &system in Ayanamsha::SIDEREAL {
+            // A star-anchored system's value must move when its star moves;
+            // a non-star one must not care about any catalogue at all. The
+            // observable difference: only star systems appear in group_b.
+            let in_group_b = matches!(
+                system,
+                Ayanamsha::RevatiPaksha
+                    | Ayanamsha::PushyaPaksha
+                    | Ayanamsha::TrueChitra
+                    | Ayanamsha::ChandraHari
+                    | Ayanamsha::GalacticCenter0Sag
+            );
+            assert_eq!(
+                system.is_star_anchored(),
+                in_group_b,
+                "{} reports is_star_anchored() = {} but dispatches otherwise",
+                system.key(),
+                system.is_star_anchored()
+            );
+        }
+
+        // Catalogue strings: the Rust must name the same row the manifest does.
+        const MANIFEST: &str = include_str!(
+            "../../../docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json"
+        );
+        let doc: serde_json::Value = serde_json::from_str(MANIFEST).unwrap();
+        for row in doc["group_b_star_anchored"].as_array().unwrap() {
+            let key = row["system"].as_str().unwrap();
+            let system = <Ayanamsha as FromStr>::from_str(key).unwrap();
+            let star = match system {
+                Ayanamsha::RevatiPaksha => &ZETA_PISCIUM,
+                Ayanamsha::PushyaPaksha => &DELTA_CANCRI,
+                Ayanamsha::TrueChitra => &SPICA,
+                Ayanamsha::ChandraHari => &LAMBDA_SCORPII,
+                Ayanamsha::GalacticCenter0Sag => &SGR_A_STAR,
+                other => panic!("{} is in group_b but not star-anchored", other.key()),
+            };
+            assert_eq!(
+                star.identifier,
+                row["identifier"].as_str().unwrap(),
+                "{key}: the module and the manifest name different catalogue rows"
+            );
+            assert_eq!(
+                star.catalogue,
+                row["catalogue"].as_str().unwrap(),
+                "{key}: the module and the manifest name different catalogues"
+            );
+            assert!(
+                (star.epoch_jd_tt - row["epoch_jd_tt"].as_f64().unwrap()).abs() < 1e-9,
+                "{key}: catalogue epoch differs between the module and the manifest"
+            );
+        }
     }
 
     #[test]

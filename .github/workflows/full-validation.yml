@@ -125,3 +125,11 @@ jobs:
       # coefficient jobs pass having checked nothing.
       - name: Ayanamsha — re-derive from primaries, compare sha256 against the committed fixture
         run: python3 scripts/generate_ayanamsha.py --verify
+      # Separate from --verify on purpose. --verify is offline and must never
+      # skip; this one re-queries VizieR and therefore CAN be unreachable. It is
+      # the only check that would notice the CATALOGUE being revised out from
+      # under the committed rows -- the offline test
+      # `every_catalogue_number_matches_the_committed_vizier_response` pins the
+      # engine to those rows, but cannot know if VizieR has since changed them.
+      - name: Ayanamsha — re-query VizieR and compare the committed catalogue rows
+        run: python3 scripts/generate_ayanamsha.py --check-catalogue

@@ -74,7 +74,7 @@
       "anchor_dms": [20, 54, 36.0],
       "epoch_jd_tt": 2412908.124077082,
       "epoch_label": "the March equinox of 1894",
-      "epoch_provenance": "COMPUTED BY THE ENGINE, not read from a source. Root-solved for the Sun's apparent tropical longitude = 0 using vedaksha-ephem-core's AnalyticalProvider. Pinned by the Rust test `yukteshwar_epoch_is_the_1894_march_equinox`, which fails if the solar theory moves it. Corresponds to 1894 March 20, 14:58:40 TT; published almanac value for the 1894 March equinox is 1894 March 20, ~14:56 UT.",
+      "epoch_provenance": "COMPUTED BY THE ENGINE, not read from a source. Root-solved for the Sun's apparent tropical longitude = 0 using vedaksha-ephem-core's AnalyticalProvider. Pinned by the Rust test `yukteshwar_epoch_is_the_1894_march_equinox`, which fails if the solar theory moves it. Corresponds to 1894 March 20, 14:58:40 TT. Cross-checked against ERFA's solar theory, which places the same instant ~35 s apart (two independent root-solves disagreed on the sign, so the direction is deliberately not stated) -- the honest disagreement between two solar models 130 years before J2000, and immaterial at 54 arcsec/yr (6e-5 arcsec of ayanamsha). An earlier version of this field cited an unsourced almanac time of ~14:56 UT; no almanac was consulted, and the figure is withdrawn.",
       "rate_arcsec_per_julian_year": 54.0,
       "source": "Yukteswar, Swami Sri, The Holy Science (1894), public domain. \"The astronomical reference books show the Vernal Equinox now to be 20°54'36\\\" distant from the first point of Aries (the fixed star Revati).\"",
       "documented_zero_year": 500,

@@ -1099,3 +1099,46 @@ own hygiene, not a general leak detector. CI runs it over `spec.md`,
 `migration-note.md`, whose whole job is to state the delta. Anyone adding a new document to
 this directory should decide which side of that line it sits on rather than assuming a green
 gate means the document is target-free.
+
+### 11.10 §6.2's own Krishnamurti example is wrong, and its exemption rule does not cover KP
+
+Found by the 2026-08-18 review. Three separate problems in one short passage.
+
+**The stated exemption rule does not cover the system that needs exempting.** §6.2 ends
+"Systems with no documented zero year are exempt." KP *has* a documented zero year — KSK
+states 291 AD — and is exempted anyway. The actual ground is §1.3.4's: KSK's anchor, rate and
+zero year are mutually inconsistent, and reconciling them by choosing a rate that makes the
+inversion land on 291 would be tuning toward an answer. That ground appears ~650 lines earlier
+and in `derivation-inputs.json`, but not in §6.2, so a reader working from the acceptance
+criteria alone sees an unexplained exemption.
+
+**The supporting example does not reproduce.** §6.2 offers "under Newcomb, KSK's published
+anchor inverts to 291.7 CE against his stated 291 AD" as evidence that the inversion test
+discriminates. Reaching 291.7 CE from the 22°22′ anchor requires ~50.0566″/yr, which is
+neither KSK's stated 50.2388475″/yr nor Newcomb's rate. Under the rate the derivation actually
+uses — KSK's own — the inversion is **297.5 CE**, which is what the shipped test pins.
+
+**Corrected rule, superseding the sentence in §6.2:** a system is exempt from the zero-year
+inversion when its primary documents no zero year, *or* when the primary's own stated
+quantities are mutually inconsistent and reconciling them would require choosing a value the
+primary does not state. KP is the only system exempt under the second clause, and
+`derivation-inputs.json` records the reason on the system itself.
+
+### 11.11 §2.8.2's diagnostic for Pushya-paksha was never performed, and that is now recorded
+
+§2.8.2 permits a proposer's published reference values to be used **once, diagnostically**, to
+establish which convention the author intended, "and the finding recorded in the audit dir".
+Rao is silent on mean versus apparent tropical place, and §2.8.2 itself notes that this
+ambiguity is "larger than every discrepancy that triggered this project".
+
+**The diagnostic was not performed, and on review it was never required.** §2.8.2 says such
+values "**may** be used diagnostically" — a permission, not a step. The convention it would
+have informed is stated normatively in the same paragraph, so the diagnostic could not have
+overridden it in either direction; and §1.3.5's "an undocumented negative search is not a
+finding" is scoped to *drops*, not to optional corroborations. No shipped value depends on it.
+
+Pushya-paksha therefore takes the module-wide mean-geometric-place convention by the same
+rule as every other star system, which is the correct outcome rather than a gap. Recorded
+here only so that a later reader can tell the question was considered and closed, not missed.
+If the corroboration is ever wanted, Rao's article publishes reference values and comparing
+them once against both conventions would settle it; the finding would belong here.
