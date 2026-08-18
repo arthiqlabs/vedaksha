@@ -184,6 +184,13 @@ jobs:
       # two of seven crates that way. Cheap check, expensive failure.
       - name: Check release.yml publishes in dependency order
         run: python3 scripts/check_publish_order.py
+      # Each crate carries its own LICENSE, and that copy -- not the workspace
+      # root -- is what cargo archives into the .crate. The 6.0.1 licence fix
+      # edited the root, passed every check here, and still left eight stale
+      # copies; it was caught by unpacking a built .crate. crates.io publishes
+      # cannot be withdrawn, so this runs before the tag.
+      - name: LICENSE copies match the workspace root
+        run: python3 scripts/check_license_sync.py
 
   spec-hygiene:
     name: Derivation-spec hygiene
