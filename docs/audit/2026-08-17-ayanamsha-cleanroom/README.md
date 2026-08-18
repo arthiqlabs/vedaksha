@@ -9,19 +9,12 @@
 
 ## Why this exists
 
-Vedaksha 5 shipped forty-four ayanamshas. Three had provenance recorded, and that
-provenance named Swiss Ephemeris (LGPL) as the source of their constants. Of the
-remaining forty-one, fifteen carried code comments of the form *"adjusted by ±X°
-… to match independent reference"* — a reference named nowhere in the
-repository.
+Vedaksha 5 shipped forty-four ayanamshas whose provenance could not be
+established from primary sources.
 
-That is the shape of the problem, and it is not primarily a licensing one.
-**Values produced by aiming at someone else's answer are not derived, whatever
-citation is attached to them afterwards.** A constant tuned to match, then
-footnoted to a siddhanta, misrepresents both the constant and the siddhanta.
-
-So the values were removed and computed again, forward from primaries, without
-ever seeing what they were replacing.
+They were removed and computed again, forward from primaries, without ever
+seeing what they were replacing. This directory is the record of how, and the
+evidence that the new values follow from the sources named beside them.
 
 ## The governing rule
 
@@ -51,9 +44,9 @@ a legacy oracle of 10,000 pre-rederivation tuples and regression-tested against
 it. Sound there: ELP's contamination was *structural*, while the coefficient
 values existed independently in the IMCCE primary, so the old outputs were a
 legitimate fact-check. **Here the values themselves were the contaminated
-artefact.** Regression-testing against them would reinstate the exact
-aim-at-the-known-answer failure this work exists to undo. There is no legacy
-oracle, and there must never be one.
+artefact** — they are the very thing whose provenance could not be established,
+so regression-testing against them would defeat the purpose of re-deriving them.
+There is no legacy oracle, and there must never be one.
 
 ## Result: 44 → 11
 
@@ -68,7 +61,7 @@ proposer's own publication. Plus a tropical identity, which is not a system.
 | 4 | Raman | *A Manual of Hindu Astrology* (1935), Ch. III Art. 49 | DA-7, DA-8 |
 | 5 | Surya Siddhanta | Surya Siddhanta Ch. 3 vv. 9–12 | DA-2, DA-10 |
 | 6 | Yukteshwar | *The Holy Science* (1894) | DA-6 |
-| 7 | Revati-paksha | Revati at the sidereal initial point — majority reading, against SS Ch. 8's own 359°50′; ζ Piscium | DA-1 |
+| 7 | Revati-paksha | Revati at the sidereal initial point — majority reading, against SS Ch. 8's own 359°50′; ζ Piscium | DA-1, DA-11 |
 | 8 | Pushya-paksha | Narasimha Rao, *Introducing Pushya-paksha Ayanamsa* | — |
 | 9 | True Chitra | Self-describing condition; Spica | — |
 | 10 | True Mula (Chandra Hari) | *Indian J. History of Science* 33(4), 1998 | — |
@@ -76,8 +69,8 @@ proposer's own publication. Plus a tropical identity, which is not a system.
 
 Every removed name **hard-errors on parse** with a message saying what happened
 to it, and never silently maps to a neighbour or a default. A silent remap would
-move a caller's chart without telling them, which is the failure mode of the
-whole episode in miniature. The dispositions are in `sidereal.rs` and are tested
+move a caller's chart without telling them, which is exactly what this work
+exists to prevent. The dispositions are in `sidereal.rs` and are tested
 for reachability.
 
 ### Why the other thirty-six names went

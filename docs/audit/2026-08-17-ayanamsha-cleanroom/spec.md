@@ -21,9 +21,8 @@ it.** Computing forward from a documented primary and accepting the result is pr
 research. Tuning toward a known output is reverse engineering, and it remains reverse
 engineering however the result is cited afterwards.
 
-The file being replaced already demonstrates the failure mode. Fifteen of its arms carry
-comments of the form *"adjusted by ±X° … to match independent reference"*. Whatever that
-reference was, those values were produced by aiming at an answer.
+This standard is why the values being replaced were removed rather than audited in place:
+their provenance could not be established from primary sources.
 
 Therefore, binding on every phase of this work:
 
@@ -670,8 +669,7 @@ Surya Siddhanta's own three numbers agree with each other.
 they propagate to seven locale files, the MCP tool schema enum, the Python and WASM bindings,
 and serde. A removed v5 variant name **must hard-error on deserialization** with a pointer to
 the disposition table, never silently fall back to a default: a silent remap would move a
-caller's chart without telling them, which is the failure mode of the whole episode in
-miniature. State explicitly what the crate's default ayanamsha is.
+caller's chart without telling them, which is exactly what this spec exists to prevent. State explicitly what the crate's default ayanamsha is.
 
 **2.8.6 The fixture is generated, not hand-written.** `scripts/generate_ayanamsha.py` emits
 it post-freeze; a hand-typed fixture is another unsourced constant table. Pin its tolerance
@@ -919,7 +917,8 @@ independent of any agent, and a constant can no longer enter by being typed.
 gate.** ELP captured `lunar_legacy_oracle.bin` (10,000 pre-rederivation tuples) and used it
 as a Tier-3 regression oracle. That was sound there: ELP's contamination was *structural*,
 while the coefficient values existed independently in the IMCCE primary, so the old outputs
-were a legitimate fact-check. **Here the values themselves are the contaminated artefact.**
+were a legitimate fact-check. **Here the values themselves are the thing whose provenance
+could not be established.**
 Regression-testing against them would reinstate exactly the "aim at the known answer"
 failure this work exists to undo. A snapshot of the current values may be captured for the
 §6.4 migration delta, but it must be quarantined from the implementation agent and must
@@ -1171,3 +1170,33 @@ distinguishes it from the Surya Siddhanta's own 359°50′ stands — the numeri
 which reading belongs to which system, and both readings landed within a few years of a date
 the commentary states independently, so nothing was fitted. What changes is that the inference
 is now visible where the constant is, instead of only in prose.
+
+### 11.13 Prose narrowed 2026-08-18 — recorded, because editing an audit trail is not neutral
+
+At the project owner's direction, the prose in this document, the audit `README.md` and the
+migration note was narrowed to remove **characterisation of the prior implementation** while
+retaining every fact a licensee needs to verify the derivation.
+
+What was removed: descriptions of how the previous constants appeared to have been produced —
+the count of code comments recording an adjustment toward an unnamed reference, and the
+sentences drawing a conclusion from them. Those were self-assessment, not evidence. Nothing
+in the clean-room claim rests on them: the claim rests on what the primaries are, what was
+and was not consulted, and whether each derived value follows from the source named beside
+it.
+
+What was kept, deliberately and in full:
+
+- the governing rule of §0, which is the standard this work was *held to* and is the reason
+  the audit trail exists at all;
+- every citation, chapter, verse, catalogue row and retrieval URL;
+- every declared assumption, and every search record for a dropped system;
+- the acceptance criteria **and their stated limits**, including that §6.1 is algebraically
+  vacuous for the epoch-anchored systems;
+- the firewall controls, including §11.12's correction that one of them was overstated;
+- the reason there is no legacy oracle, restated without the characterisation.
+
+**This entry exists because the edit is visible in the diff and should be explained by the
+document rather than discovered in it.** A record that is quietly softened after the fact is
+worth less than one that says when it was changed and what standard was applied. The facts a
+reader needs to check this work are all still here; what is gone is the commentary on work
+that is no longer shipped.

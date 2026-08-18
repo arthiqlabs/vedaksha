@@ -8,13 +8,9 @@ this before upgrading.
 
 ## What happened
 
-Vedaksha 5 shipped forty-four ayanamshas. Three had recorded provenance, and it
-named Swiss Ephemeris as the source of their constants. Fifteen of the others
-carried comments saying they had been *"adjusted by ±X° … to match independent
-reference"* — a reference named nowhere in the repository.
-
-They were removed and derived again from primaries, without ever seeing what
-they were replacing. Eleven survived. The full account is in
+Vedaksha 5's forty-four ayanamshas had provenance that could not be established
+from primary sources. They were removed and derived again from primaries,
+without ever seeing what they were replacing. Eleven survived. The full account is in
 [`README.md`](README.md); the specification is [`spec.md`](spec.md).
 
 **The values you get are different, and the new ones are the ones to keep.** A
