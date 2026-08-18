@@ -65,7 +65,81 @@ arcminutes. A definition does not have competing values; a measurement does.
 You will get different numbers. If you have stored charts, cached longitudes, or
 tests pinned to a Vedaksha 5 ayanamsha, they will not match.
 
-%DELTA_TABLE%
+**This is an observation, not a gate.** It was computed once, after the values
+were frozen and committed, by a script separate from the generator, and it has no
+pass/fail. Where a derived value lands close to what was shipped, that is a
+welcome result and nothing more.
+
+### Delta against v5.0.2, at J2000.0
+
+| v5 name | v6 name | relation | delta (arcsec) |
+|---|---|---|---|
+| `Lahiri` | `IndianOfficial` | renamed | -0.00 |
+| `FaganBradley` | `FaganBradley` | renamed | +1.58 |
+| `Krishnamurti` | `Krishnamurti` | renamed | -4.71 |
+| `Raman` | `Raman` | renamed | +4.84 |
+| `Yukteshwar` | `Yukteshwar` | renamed | +128.67 |
+| `SuryaSiddhanta` | `SuryaSiddhanta` | renamed | +182.42 |
+| `GalacticCenter0Sag` | `GalacticCenter0Sag` | renamed | -0.96 |
+| `TrueChitrapaksha` | `TrueChitra` | renamed | +1.34 |
+| `TrueRevati` | `RevatiPaksha` | rebased | -811.58 |
+| `TruePushya` | `PushyaPaksha` | rebased | +3.61 |
+| `TrueMula` | `ChandraHari` | rebased | -0.99 |
+
+### Range of the delta across the sampled epochs
+
+| v5 name | v6 name | min (arcsec) | max (arcsec) | worst epoch |
+|---|---|---|---|---|
+| `Lahiri` | `IndianOfficial` | -130.18 | +4.31 | Kali epoch (-130.18) |
+| `FaganBradley` | `FaganBradley` | -329.89 | +32.47 | Kali epoch (-329.89) |
+| `Krishnamurti` | `Krishnamurti` | -2802.97 | -4.05 | Kali epoch (-2802.97) |
+| `Raman` | `Raman` | -3639.77 | +8.35 | Kali epoch (-3639.77) |
+| `Yukteshwar` | `Yukteshwar` | -22217.18 | +3588.40 | Kali epoch (-22217.18) |
+| `SuryaSiddhanta` | `SuryaSiddhanta` | -72031.10 | +172243.18 | Kali epoch (+172243.18) |
+| `GalacticCenter0Sag` | `GalacticCenter0Sag` | -638.80 | +53.71 | Kali epoch (-638.80) |
+| `TrueChitrapaksha` | `TrueChitra` | -471.71 | +108.31 | Kali epoch (-471.71) |
+| `TrueRevati` | `RevatiPaksha` | -2089.11 | -810.24 | Kali epoch (-2089.11) |
+| `TruePushya` | `PushyaPaksha` | -911.99 | +17.99 | Kali epoch (-911.99) |
+| `TrueMula` | `ChandraHari` | -529.42 | +64.35 | Kali epoch (-529.42) |
+
+### How to read that
+
+**In the modern era the well-attested systems barely moved.** The Indian
+official system is within 0.01″ of what v5 shipped at J2000 — unsurprising, since
+its operative definition is a published government anchor and there is only one
+right answer to converge on. Fagan-Bradley, Krishnamurti, Raman, the Galactic
+Centre, True Chitra, Pushya-paksha and Chandra Hari all sit within about 5″.
+
+**Two systems moved by minutes, and those are the two where the derivation
+stopped approximating the text.**
+
+- **Surya Siddhanta, +182″ at J2000.** v5 propagated it as a linear precession.
+  The text specifies a *trepidation* — a bounded zigzag libration of ±27° — and a
+  derivation that linearises it has changed the definition. This is the largest
+  modern-era move and it is the most defensible one.
+- **Yukteshwar, +129″ at J2000.** v5 evidently propagated his anchor with a
+  modern precession model. His anchor is his own model's output — 1394 × 54″ is
+  exactly the figure printed — so his own 54″/yr is the rate that belongs with
+  it. Propagating it with P03 instead inverts to a zero year near 390 CE,
+  missing his documented 500 CE by a century.
+
+**The far-epoch column is not a defect.** Every system's delta blows up at the
+Kali epoch (−3101), because v5's values were flat or linear and this derivation
+propagates each system by the model its own definition implies. The Surya
+Siddhanta's +172,243″ there is a bounded libration being compared against a
+linear model that has run away by 47°; the libration is the one obeying the text.
+
+**`TrueRevati` → `RevatiPaksha` is −811″, and that is why the old name
+hard-errors.** If v5's `TrueRevati` had held ζ Piscium at the Surya Siddhanta's
+359°50′, the gap would have been exactly 600″. It is not, so v5's variant was
+neither of the two readings the primaries support. Aliasing that name to either
+one would have silently moved charts to a system the caller never asked for.
+
+*Note on what this table discloses: a delta plus a new value recovers an old
+value. The v5 constants are already public — they shipped in a published crate
+and remain in git history — so nothing here is newly disclosed. The spec directs
+this comparison into the migration note precisely so that it exists in one place
+with its purpose stated, rather than being reconstructed ad hoc by users.*
 
 Read the `rebased` rows as information, not as regressions: those pairs answer
 *different defining conditions*, so a delta between them is expected and does not

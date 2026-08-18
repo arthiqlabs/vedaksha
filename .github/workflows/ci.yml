@@ -202,6 +202,12 @@ jobs:
       # mechanical gate and not a review note. Patterns live in the script,
       # never in the spec -- an inline list would make the document match its
       # own check.
+      #
+      # migration-note.md is deliberately NOT in this list. Its whole job is to
+      # state the delta against the values that were replaced, per spec section
+      # 6.4, and it is written after the freeze commit so it cannot influence
+      # them. The gate is a check on the spec's own hygiene, not a general leak
+      # detector -- see spec.md section 11.9.
       - name: Derivation specs must not restate previously shipped constants
         run: |
           python3 scripts/check_spec_hygiene.py \

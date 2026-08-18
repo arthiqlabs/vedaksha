@@ -1083,3 +1083,17 @@ exactly the failure mode this whole re-derivation exists to remove, one layer up
 
 If localised ayanamsha names are wanted, they need a source per name per language, which is a
 research task and not part of this derivation.
+
+### 11.9 A limit of the hygiene gate, recorded so nobody over-trusts it
+
+`scripts/check_spec_hygiene.py` catches two things: the previously shipped digit
+strings, and phrasings of the form "reproduces the shipped value to within *d*" that make a
+delta recoverable. It does **not** model a delta *table*. The migration note contains one by
+design — §6.4 requires it — and passes the gate cleanly.
+
+That is the correct outcome for that file, but it means the gate is a check on the spec's
+own hygiene, not a general leak detector. CI runs it over `spec.md`,
+`derivation-inputs.json` and the audit `README.md`, and deliberately not over
+`migration-note.md`, whose whole job is to state the delta. Anyone adding a new document to
+this directory should decide which side of that line it sits on rather than assuming a green
+gate means the document is target-free.
