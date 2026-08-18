@@ -14,9 +14,16 @@
 //! This is what keeps the derivation executable. Sections 6.1–6.3 of the spec
 //! test self-consistency, and a reverse-engineered anchor reproduces itself
 //! perfectly, so they cannot on their own establish that a value was derived.
-//! What they *can* establish is that no constant entered by being typed: if two
-//! implementations that share nothing agree to a nanodegree across six
-//! millennia, neither is a transcription of the other.
+//! What they *can* establish is that no constant entered by being typed into
+//! one side: the Rust hardcodes its constants while Python reads the manifest,
+//! so a divergence between them fails here.
+//!
+//! **They are not fully independent, and the earlier wording ("share nothing")
+//! overstated it.** Both read the same primary values from
+//! `derivation-inputs.json`, so a single transcription error made identically
+//! into both would pass. What closes that for the catalogue rows is the
+//! committed VizieR responses; for the polynomials it is the ERFA pins; for the
+//! book anchors nothing closes it, and the audit dir says so.
 //!
 //! Regenerate with `python3 scripts/generate_ayanamsha.py`; the same script's
 //! `--verify` mode is wired into full validation.

@@ -40,9 +40,9 @@ anything.
 
 | Control | How |
 |---|---|
-| The implementer could not see the target | The forty-four constants were deleted in `4033c6a`, **before** the derivation branch was cut. The working tree contained no ayanamsha value. |
+| The implementer could not see the target | The forty-four constants were deleted from `sidereal.rs` in `4033c6a`, **before** the derivation branch was cut. **Stated exactly, because an earlier version of this row overstated it:** the *module* contained no ayanamsha value, but three superseded constants remained in `DATA_PROVENANCE.md` §§Fixes 3–5 — deliberately preserved (see below) and therefore present in the working tree. They are at different epochs from the new anchors, and the Fagan-Bradley one is the primary identity `360° − SVP` rather than an independent figure. The overstatement is corrected here rather than the file being quietly tidied. |
 | History was not consulted | The git history of `sidereal.rs` was not read at any point. `4033c6a` was inspected with `--stat` only. |
-| The spec could not leak the target | `scripts/check_spec_hygiene.py` greps the spec for the previously shipped digit strings and for comparison phrasings that make a delta recoverable. Patterns live in the script, never in the spec. It now runs in CI on every push. |
+| The spec could not leak the target | `scripts/check_spec_hygiene.py` greps the spec for the previously shipped digit strings and for comparison phrasings that make a delta recoverable. Patterns live in the script, never in the spec. It runs in CI on pushes to `main`/`develop` and on PRs to `main` — so it will gate this work when it is proposed, not on this branch's own pushes. |
 | No forbidden upstream | No Swiss Ephemeris source, header, documentation or output, including `swetest`; no wrapper or service backed by it; no other astrology software. See the fetch manifest. |
 | Post-freeze comparison is not a gate | The delta against the old constants was computed **once, after the freeze commit**, by a separate script, and appears only in the migration note. It has no pass/fail. |
 
@@ -131,8 +131,8 @@ nothing in common landing on a year that one of them documents.
 **A 19th-century commentary's dates are reproduced to three years.** Burgess
 records that ζ Piscium met the vernal equinox in A.D. 572, and that the Surya
 Siddhanta's own zero point (10′ east of it) did so about A.D. 560. Hipparcos
-astrometry plus P03 gives **575 CE** and **563 CE** — and reproduces the
-twelve-year separation, which is what 10′ at ~50.2″/yr must be. This is also what
+astrometry plus P03 gives **575.8 CE** and **563.9 CE** — 3.8 years from the
+stated date, and reproducing the twelve-year separation, which is what 10′ at ~50.2″/yr must be. This is also what
 settled a contradiction inside the spec; see §11.2.
 
 **The Surya Siddhanta's three numbers only agree under one reading.** The text
@@ -148,9 +148,10 @@ the only reading under which the text agrees with itself.**
 Stated plainly, because the alternative is letting a green suite imply more than
 it proves.
 
-- **§6.1 anchor reproduction** (every system returns its own defining value to
-  ≤1e-9°) tests *self-consistency*. A reverse-engineered anchor reproduces itself
-  perfectly. This criterion cannot detect contamination.
+- **§6.1 anchor reproduction** is weaker still than "self-consistency" — for the
+  epoch-anchored systems it is *algebraically vacuous*. `precession_anchored(a, e, e)`
+  is `a + 0` identically, so those four tests cannot fail for any value of the
+  anchor. They catch an argument-order bug and nothing else.
 - **§6.2 zero-year inversion** is the only criterion with discriminating power,
   and it only covers systems whose primary documents a zero year.
 - **§6.3 astronomy cross-check** against ERFA validates precession, obliquity and

@@ -121,7 +121,7 @@
       "star": "zeta Piscium A",
       "assigned_sidereal_longitude_deg": 0.0,
       "assigned_source": "Burgess: \"all authorities agree in placing it upon the ecliptic and all excepting our treatise and the Cakalya make its position exactly mark the initial point of the fixed sidereal sphere\". This is the majority position; the Surya Siddhanta's own zero point sits 10 arcminutes east of it and is a separate system.",
-      "declared_assumptions": ["DA-1"],
+      "declared_assumptions": ["DA-1", "DA-11"],
       "catalogue": "I/311/hip2",
       "catalogue_source": "van Leeuwen, F. (2007), A&A 474, 653 — the re-reduction of the Hipparcos raw data — via VizieR.",
       "identifier": "HIP 5737",

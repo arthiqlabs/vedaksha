@@ -307,7 +307,7 @@ pub enum Ayanamsha {
     /// KSK's three published numbers are mutually inconsistent: his anchor
     /// divided by his rate gives a zero year of 297.5 CE against the 291 AD he
     /// states. The anchor and rate are adopted because together they are the
-    /// operative definition and are what his table reproduces; the discrepancy is
+    /// operative definition he states; the discrepancy is
     /// a documented property of the system, not something to reconcile by
     /// choosing a rate that makes the inversion work.
     Krishnamurti,
@@ -357,6 +357,13 @@ pub enum Ayanamsha {
     Yukteshwar,
 
     /// Revati-paksha — ζ Piscium held at sidereal 0°00'00", tracked live.
+    ///
+    /// **DA-11.** The assigned 0°00'00" is itself an inference. No primary
+    /// stipulating it was located: the only classical text available here,
+    /// Surya Siddhanta Ch. 8, yields 359°50' — which this system rejects. The 0°
+    /// rests on a commentary's report of a consensus among authorities it does
+    /// not individually name. Vedaksha asserts it on that authority, as it does
+    /// DA-1, and the inference is declared here rather than left in prose.
     ///
     /// The majority position among the authorities. The commentary on Ch. 8
     /// records that "all
@@ -536,7 +543,13 @@ impl Ayanamsha {
             Self::PushyaPaksha => "Narasimha Rao, Introducing Pushya-paksha Ayanamsa",
             Self::TrueChitra => "Self-describing condition; Spica per Hipparcos",
             Self::ChandraHari => "Chandra Hari, Indian J. History of Science 33(4), 1998",
-            Self::GalacticCenter0Sag => "Gordon, de Witt & Jacobs (2023), AJ 165, 49",
+            Self::GalacticCenter0Sag => {
+                // The paper supplies the ASTROMETRY, not the definition. Sgr A* at
+                // sidereal 240 degrees is a self-describing condition with no
+                // proposer, exactly as TrueChitra's is; naming the VLBI paper
+                // alone read as though it had defined the system.
+                "Self-describing condition; Sgr A* per Gordon, de Witt & Jacobs (2023), AJ 165, 49"
+            }
             Self::Tropical => "Not a sidereal system; identity by construction",
         }
     }
@@ -992,19 +1005,42 @@ mod tests {
     }
 
     #[test]
-    fn raman_reproduces_both_printed_examples_exactly() {
-        // Art. 49's own worked examples, which are the acceptance surface for the
-        // year-granularity convention (DA-7).
-        for (year, d, m, s) in [(1912, 21, 10, 55.0), (1918, 21, 15, 57.0)] {
+    fn raman_reproduces_his_stated_rule_at_every_year_boundary() {
+        // Art. 49 states a closed-form rule: (year - 397) x 151/3 arcseconds.
+        // This asserts the RULE, across a span, rather than the two worked
+        // examples Raman happens to print.
+        //
+        // That distinction is a clean-room one, not a stylistic one. Asserting a
+        // book's printed values on every CI run turns a one-time corroboration
+        // into a standing conformance oracle sourced from a commercial edition,
+        // which the project's citation gate forbids. And the printed digits add
+        // no discriminating power: they are the cited rule evaluated in closed
+        // form with no rounding, so anything they would catch, the rule catches
+        // at every year instead of at two. The one-time check that they do
+        // reproduce is recorded in the audit dir, which is where a diagnostic
+        // belongs.
+        for year in [398_i32, 500, 1000, 1582, 1912, 1918, 2000, 2100] {
             let jd = julian::calendar_to_jd(year, 1, 1.0);
-            let v = ayanamsha_value(Ayanamsha::Raman, jd);
-            let (gd, gm, gs) = dms(v);
-            assert_eq!((gd, gm), (d, m), "Raman {year}: got {gd}°{gm}'{gs}\"");
+            let got = ayanamsha_value(Ayanamsha::Raman, jd) * 3600.0;
+            let want = f64::from(year - RAMAN_ZERO_YEAR) * RAMAN_RATE_ARCSEC_PER_YEAR;
             assert!(
-                (gs - s).abs() < 1e-6,
-                "Raman {year}: expected {d}°{m}'{s}\", got {gd}°{gm}'{gs}\""
+                (got - want).abs() < 1e-6,
+                "Raman at 1 Jan {year}: {got} arcsec, rule gives {want}"
             );
         }
+
+        // The rule is per CALENDAR year, and this is what pins that: propagating
+        // at 151/3 per JULIAN year instead drifts ~1.9 arcsec by the 20th century.
+        let jd_1912 = julian::calendar_to_jd(1912, 1, 1.0);
+        let julian_year_reading = ((jd_1912 - julian::calendar_to_jd(RAMAN_ZERO_YEAR, 1, 1.0))
+            / JULIAN_YEAR)
+            * RAMAN_RATE_ARCSEC_PER_YEAR;
+        let calendar_year_reading = ayanamsha_value(Ayanamsha::Raman, jd_1912) * 3600.0;
+        assert!(
+            (calendar_year_reading - julian_year_reading).abs() > 1.0,
+            "the calendar-year and Julian-year readings must be distinguishable, else this \
+             test cannot pin the convention"
+        );
     }
 
     #[test]

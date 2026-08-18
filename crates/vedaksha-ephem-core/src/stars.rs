@@ -160,13 +160,25 @@ pub fn mean_ecliptic_of_date(star: &CatalogueStar, jd_tt: f64) -> (f64, f64) {
 mod tests {
     use super::*;
 
-    /// Sgr A*, position only (proper motion zeroed), used as a fixed direction.
+    /// An arbitrary fixed direction, deliberately unrelated to any real star.
+    ///
+    /// It used to be Sgr A*'s position — which was a bad choice twice over. That
+    /// pair is the one the derivation explicitly disavows (it is the arbitrary
+    /// origin Reid & Brunthaler measure offsets from, not a measurement, and it
+    /// sits ~40 mas from the ICRF3 position), so repeating it in shipped source
+    /// undercut the fetch manifest's own "recorded so it is not repeated". And
+    /// its ecliptic longitude minus 240 degrees was one subtraction from a
+    /// Galactic-Centre ayanamsha, which is not a number a clean-room file should
+    /// carry by accident.
+    ///
+    /// Any direction does; this one is arbitrary and lands nowhere near an
+    /// assigned sidereal longitude.
     const FIXED_DIRECTION: CatalogueStar = CatalogueStar {
         catalogue: "test",
-        identifier: "fixed direction",
+        identifier: "arbitrary fixed direction",
         epoch_jd_tt: 2_451_545.0,
-        ra_deg: 266.416_837,
-        dec_deg: -29.007_811,
+        ra_deg: 123.456_789,
+        dec_deg: 45.678_901,
         pm_ra_cosdec_mas_per_year: 0.0,
         pm_dec_mas_per_year: 0.0,
     };
@@ -176,10 +188,10 @@ mod tests {
     /// ERFA is the IAU SOFA board's BSD-3 relicensing of SOFA. Checking our own
     /// astronomy against a permissive reference implementation is what it is for.
     const ERFA_EQEC06: [(f64, f64, f64); 4] = [
-        (588_465.75, 196.365_009_731, -4.932_137_292),
-        (1_903_397.0, 245.957_279_515, -5.409_855_628),
-        (2_451_545.0, 266.851_732_370, -5.607_679_533),
-        (2_816_788.0, 280.851_987_216, -5.736_886_028),
+        (588_465.75, 44.581_951_457, 24.467_648_409),
+        (1_903_397.0, 94.241_225_583, 24.944_140_627),
+        (2_451_545.0, 115.177_689_978, 25.121_014_299),
+        (2_816_788.0, 129.209_891_274, 25.230_029_342),
     ];
 
     #[test]

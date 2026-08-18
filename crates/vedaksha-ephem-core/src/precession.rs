@@ -320,21 +320,23 @@ mod tests {
 
     /// ERFA `eraEqec06` applied to a fixed ICRS direction, at four epochs.
     ///
-    /// The direction is Sgr A* (ICRS alpha 266.416837 deg, delta -29.007811 deg).
-    /// Any fixed direction would do; this one is used elsewhere in the workspace.
+    /// The direction is arbitrary (ICRS alpha 123.456789 deg, delta 45.678901
+    /// deg) and deliberately unrelated to any star this engine carries. It was
+    /// Sgr A*'s position until 2026-08-18; see `stars.rs` for why that was a poor
+    /// choice in a clean-room module.
     const ERFA_ECLIPTIC_LONGITUDES: [(f64, f64); 4] = [
-        (588_465.75, 196.365_009_731),
-        (1_903_397.0, 245.957_279_515),
-        (2_451_545.0, 266.851_732_370),
-        (2_816_788.0, 280.851_987_216),
+        (588_465.75, 44.581_951_457),
+        (1_903_397.0, 94.241_225_583),
+        (2_451_545.0, 115.177_689_978),
+        (2_816_788.0, 129.209_891_274),
     ];
 
     #[test]
     fn precession_matrix_matches_erfa_across_six_millennia() {
         use vedaksha_math::angle::normalize_degrees;
 
-        let ra = 266.416_837_f64.to_radians();
-        let de = (-29.007_811_f64).to_radians();
+        let ra = 123.456_789_f64.to_radians();
+        let de = 45.678_901_f64.to_radians();
         let v = Vector3::new(de.cos() * ra.cos(), de.cos() * ra.sin(), de.sin());
 
         for (jd, expected_deg) in ERFA_ECLIPTIC_LONGITUDES {

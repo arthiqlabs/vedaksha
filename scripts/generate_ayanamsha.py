@@ -17,8 +17,14 @@ has to agree with it.
 
 This is deliberately a separate implementation, not a binding to the Rust one.
 It reads the same published polynomials and the same catalogue rows and does the
-arithmetic again in Python. If the two agree to a nanodegree across six
-millennia, neither is a transcription of the other.
+arithmetic again in Python.
+
+It is NOT fully independent, and saying so matters: both sides read their primary
+values from derivation-inputs.json, so a single transcription error made
+identically into both would pass. This catches divergence between the two, not a
+shared misreading. The committed VizieR responses close that for the catalogue
+rows and the ERFA pins close it for the polynomials; for the book anchors nothing
+does.
 
 Usage:
     python3 scripts/generate_ayanamsha.py                # write the fixture
@@ -376,12 +382,19 @@ def self_check(deriv):
             1e-9,
         )
     for e in ins["group_a_calendar_year_rule"]:
-        for ex in e["printed_examples"]:
-            jd = calendar_to_jd(ex["year"], 1, 1.0)
+        # Assert the STATED RULE across a span, not the worked values the book
+        # prints. A book's printed values wired into a standing gate is a
+        # conformance oracle sourced from a commercial edition; the rule is the
+        # thing actually cited, and it discriminates at every year rather than at
+        # the two the author chose to print. The one-time check that the printed
+        # examples do reproduce is recorded in the audit dir.
+        num, den = e["rate_arcsec_per_calendar_year"]
+        for year in (398, 1000, 1582, 1912, 1918, 2000, 2100):
+            jd = calendar_to_jd(year, 1, 1.0)
             check(
-                f"{e['system']} printed example {ex['year']}",
+                f"{e['system']} rule at 1 Jan {year}",
                 deriv.value(e["system"], jd) * 3600.0,
-                float(ex["arcsec"]),
+                (year - e["zero_year"]) * num / den,
                 1e-6,
                 "arcsec",
             )

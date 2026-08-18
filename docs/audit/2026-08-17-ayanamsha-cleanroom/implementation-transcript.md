@@ -22,7 +22,7 @@ procedural — the target was already gone.
 
 | Control | Status |
 |---|---|
-| Working tree contained no ayanamsha value | Yes. All forty-four were deleted in `4033c6a`, before this work began. |
+| Working tree contained no ayanamsha value | **Qualified.** All forty-four were deleted from `sidereal.rs` in `4033c6a`, before this work began. But three superseded constants remained in `DATA_PROVENANCE.md` §§Fixes 3–5, left deliberately (see "Deliberate omissions"), and the project's own `check_spec_hygiene.py` blocks that file on three lines. An earlier version of this row said simply "Yes", which was false. Recorded rather than corrected silently: a clean-room affidavit that overstates its own controls is worth less than one that states them exactly. |
 | Git history of `sidereal.rs` consulted | No. `4033c6a` was inspected with `git show --stat` only; no `-p`, no `git diff`, no `git show <ref>:<path>`. |
 | Swiss Ephemeris source, headers, docs or output | Not opened. Not at any point, for any purpose. |
 | Any other astrology software or its output | Not consulted. |
@@ -80,13 +80,13 @@ the solar theory, so it cannot survive as a typed constant.
 
 | Check | Result |
 |---|---|
-| §6.1 anchor reproduction, all systems | Exact to ≤1e-9° |
+| §6.1 anchor reproduction, all systems | Exact to ≤1e-9° — but for the four epoch-anchored systems this is **algebraically vacuous** (`f(a, e, e) == a` identically) and cannot fail for any anchor value. Recorded as a limitation, not a result. |
 | §6.1 for star systems — the star lands on its assigned longitude | ≤1e-6″ at four epochs each |
 | §6.2 zero-year inversion, where the primary documents one | Indian official → 285.7 CE (documented 285); Yukteshwar → 500.0 (documented 500); Raman → 397.0 (documented 397); Surya Siddhanta → 499.2 (documented 499) |
 | §6.2 exemption | KP only, for the reason §1.3.4 gives. Recorded in `derivation-inputs.json`, not silently skipped. |
 | §6.3 astronomy vs ERFA | `p_A` to machine precision at six epochs; the star transform to <0.01″ against `eraEqec06` across six millennia |
 | §6.7 regeneration | Rust vs Python: **5.7e-14° worst case over 192 comparisons**, 6000-year span |
-| Cross-corroborations nobody asked for | True Chitra and the Indian official system invert to the same year, 285 CE, from disjoint inputs. Revati-paksha reproduces Burgess's A.D. 572 to three years, and the SS/Revati twelve-year separation exactly. |
+| Cross-corroborations nobody asked for | True Chitra and the Indian official system invert to the same year, 285 CE, from disjoint inputs. Revati-paksha reproduces the commentary's A.D. 572 to 3.8 years, and the SS/Revati twelve-year separation exactly. |
 
 **What none of this establishes.** §6.1 tests self-consistency and a
 reverse-engineered anchor passes it perfectly. §6.3 validates astronomy, not

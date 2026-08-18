@@ -1142,3 +1142,32 @@ rule as every other star system, which is the correct outcome rather than a gap.
 here only so that a later reader can tell the question was considered and closed, not missed.
 If the corroboration is ever wanted, Rao's article publishes reference values and comparing
 them once against both conventions would settle it; the finding would belong here.
+
+
+### 11.12 DA-11 — Revati-paksha's assigned 0° is an inference, and was undeclared
+
+Found by the 2026-08-18 cleanroom audit, and it is the sharpest provenance finding in the
+work. DA-1 declares the *star identity* (Revati is ζ Piscium). Nothing declared the step
+immediately before it: that some authority stipulated Revati at **0°00′00″** at all.
+
+§4.2 requires that for a star-anchored system "the defining longitude **must be located in a
+primary first**." For Revati-paksha it was not. The only classical text §3 permits here —
+Surya Siddhanta Ch. 8, read by the v. 1 encoding rule — yields **359°50′**, which this system
+deliberately rejects. The 0° rests on a modern commentary's *report* about authorities it does
+not individually name.
+
+That is thinner than the treatment other systems got. Wilhelm's mid-Mula was dropped because
+its attribution "came from secondary web sources"; Huber and Kugler were dropped because a
+scholar *estimating* a zero point is not someone *stipulating* one. A commentator reporting
+that unnamed authorities held a zero point sits closer to those than this spec previously
+acknowledged.
+
+**DA-11, declared:** Revati-paksha's assigned 0°00′00″ comes from a commentary's report of a
+consensus among authorities, not from a primary located and quoted as stipulating it. Vedaksha
+asserts it on that authority, exactly as it asserts DA-1, and says so on the shipped surface.
+
+Not a change to the value. The system stays, the number stays, and the §11.2 reasoning that
+distinguishes it from the Surya Siddhanta's own 359°50′ stands — the numerics there identified
+which reading belongs to which system, and both readings landed within a few years of a date
+the commentary states independently, so nothing was fitted. What changes is that the inference
+is now visible where the constant is, instead of only in prose.
