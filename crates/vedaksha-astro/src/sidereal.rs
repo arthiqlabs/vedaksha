@@ -251,7 +251,15 @@ const SGR_A_STAR: CatalogueStar = CatalogueStar {
 /// turned out to *estimate* a historical zero point rather than *stipulate* one.
 /// Their names hard-error on parse rather than silently mapping to a neighbour;
 /// see [`Ayanamsha::from_str`] and the audit directory's disposition table.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
+// Serde routes through `key()` and `FromStr` rather than deriving variant names
+// directly. That is the whole point: a retired name arriving in a config file
+// must hard-error with its disposition, exactly as it does on the wasm and MCP
+// surfaces, instead of failing with serde's "unknown variant" list or — worse —
+// being silently absorbed by a `#[serde(other)]` arm somewhere downstream.
+#[serde(into = "String", try_from = "String")]
 #[non_exhaustive]
 pub enum Ayanamsha {
     /// Indian official ayanamsha — the Chitra-paksha system, widely called
@@ -689,6 +697,21 @@ const DISPOSITIONS: &[(&str, &str)] = &[
     ),
 ];
 
+impl From<Ayanamsha> for String {
+    fn from(a: Ayanamsha) -> Self {
+        a.key().to_string()
+    }
+}
+
+impl TryFrom<String> for Ayanamsha {
+    type Error = UnknownAyanamsha;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        use core::str::FromStr as _;
+        Self::from_str(&s)
+    }
+}
+
 impl core::str::FromStr for Ayanamsha {
     type Err = UnknownAyanamsha;
 
@@ -862,6 +885,10 @@ pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
 /// ```text
 /// sidereal = tropical − ayanamsha
 /// ```
+///
+/// Uses the **mean** ayanamsha; nutation in longitude is not included. See the
+/// module documentation for why that distinction decides which published table
+/// a result should be compared against.
 #[must_use]
 pub fn tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
     normalize_degrees(tropical_longitude_deg - ayanamsha_value(system, jd))
@@ -872,6 +899,10 @@ pub fn tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: 
 /// ```text
 /// tropical = sidereal + ayanamsha
 /// ```
+///
+/// Uses the **mean** ayanamsha; nutation in longitude is not included. See the
+/// module documentation for why that distinction decides which published table
+/// a result should be compared against.
 #[must_use]
 pub fn sidereal_to_tropical(sidereal_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
     normalize_degrees(sidereal_longitude_deg + ayanamsha_value(system, jd))
@@ -1311,6 +1342,26 @@ mod tests {
                 "{name} is listed as removed but still parses"
             );
         }
+    }
+
+    #[test]
+    fn serde_round_trips_and_refuses_retired_names() {
+        for &system in Ayanamsha::ALL {
+            let json = serde_json::to_string(&system).unwrap();
+            assert_eq!(json, format!("\"{}\"", system.key()));
+            let back: Ayanamsha = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, system);
+        }
+        // The clause this exists for: a name from a stored config must not be
+        // absorbed, and the error must carry the disposition rather than serde's
+        // generic unknown-variant message.
+        let err = serde_json::from_str::<Ayanamsha>("\"BabylonianHuber\"").unwrap_err();
+        let msg = err.to_string();
+        assert!(
+            msg.contains("estimated") || msg.contains("dropped"),
+            "deserialization should surface the disposition, got: {msg}"
+        );
+        assert!(serde_json::from_str::<Ayanamsha>("\"Lahiri\"").is_ok());
     }
 
     #[test]

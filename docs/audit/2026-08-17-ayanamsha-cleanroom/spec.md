@@ -1087,8 +1087,10 @@ research task and not part of this derivation.
 ### 11.9 A limit of the hygiene gate, recorded so nobody over-trusts it
 
 `scripts/check_spec_hygiene.py` catches two things: the previously shipped digit
-strings, and phrasings of the form "reproduces the shipped value to within *d*" that make a
-delta recoverable. It does **not** model a delta *table*. The migration note contains one by
+strings, and the comparison phrasings that make a delta recoverable when a derived value
+sits in the same paragraph. (The phrase list stays in the script — writing an example of one
+here made this very paragraph fail the gate on its first run, which is §0's point about a
+document matching its own check, demonstrated.) It does **not** model a delta *table*. The migration note contains one by
 design — §6.4 requires it — and passes the gate cleanly.
 
 That is the correct outcome for that file, but it means the gate is a check on the spec's

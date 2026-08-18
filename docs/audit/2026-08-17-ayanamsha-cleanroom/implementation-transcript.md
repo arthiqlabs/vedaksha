@@ -29,6 +29,21 @@ procedural — the target was already gone.
 | Subagents dispatched | Four, for repository surface-mapping and for Sgr A* literature. Each carried an explicit instruction not to read the quarantined file's history and not to report historical constants. None returned one. |
 | Spec leak check | `scripts/check_spec_hygiene.py` run against `spec.md`, `derivation-inputs.json` and this directory's `README.md`. Clean — 208 value patterns and 7 phrase patterns, zero hits. Now enforced in CI. |
 
+### The firewall instruction given to every subagent, verbatim
+
+Four subagents were dispatched — three to map the repository surface, one for the
+Sgr A* literature. Each carried this, so the constraint is checkable rather than
+asserted:
+
+> IMPORTANT FIREWALL RULE: Do NOT run `git show`, `git log -p`, or `git diff`
+> against commit 4033c6a or any earlier commit touching
+> `crates/vedaksha-astro/src/sidereal.rs`. Do not retrieve any historical
+> ayanamsha numeric constants. Only read the CURRENT working tree.
+
+None returned a historical constant. The one that mapped documentation reported
+*where* the superseded provenance entries live and explicitly declined to quote
+their numbers.
+
 The one number in the engine that this project computed rather than read from a
 primary is Yukteshwar's epoch, the 1894 March equinox instant, which DA-6
 explicitly asks to be computed. It is pinned by a test that recomputes it from
@@ -82,7 +97,7 @@ second does not imply the first.
 
 ## Where the spec was wrong
 
-Six corrections, recorded in full as `spec.md` §11. Two are worth calling out
+Nine corrections, recorded in full as `spec.md` §11. Two are worth calling out
 here because of what they say about the process.
 
 **§11.1 — the precession function.** The spec asserted, twice, that the engine

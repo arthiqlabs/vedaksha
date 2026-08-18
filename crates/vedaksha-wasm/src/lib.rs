@@ -195,6 +195,15 @@ pub fn tropical_to_sidereal(
 }
 
 /// Get the ayanamsha value in degrees for a given date.
+///
+/// Returns the **mean** ayanamsha: nutation in longitude is never included. Add
+/// it yourself for the true ayanamsha, which is what most published daily tables
+/// print and what a comparison will otherwise silently be against — the two
+/// differ by up to ~17 arcseconds.
+///
+/// `ayanamsha` is a system name; pass `"Tropical"` for zero. Names retired in
+/// the primary-source re-derivation are refused with an explanation rather than
+/// falling back to a default.
 #[wasm_bindgen]
 pub fn get_ayanamsha(ayanamsha: &str, jd: f64) -> Result<f64, JsError> {
     let system = parse_ayanamsha(ayanamsha)?;
