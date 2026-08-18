@@ -61,3 +61,10 @@ scripts/setup-hooks.sh
 
 # Internal planning docs — not for public repo
 docs/prompts/
+
+# Downstream handoff notes. These are drafted here for convenience but are
+# INTERNAL: they name other repos, carry migration instructions we have not
+# agreed with those owners, and per the operating model a problem found in
+# another project's codebase becomes a handoff note, never a commit in their
+# tree. They must never reach this public repo.
+HANDOFF-*.md

@@ -37,14 +37,25 @@ added per standard Vedic definition (BPHS).
 > definitions behind a two-agent firewall; see
 > [`docs/audit/2026-08-17-ayanamsha-cleanroom/`](docs/audit/2026-08-17-ayanamsha-cleanroom/) and
 > the "Ayanamsha — primary-source derivation" section below for what ships now. The three entries
-> are left in place unedited because a provenance record is not improved by being tidied after the
-> fact; they document what was true when they were written.
+> are left in place because a provenance record is not improved by being tidied after the fact;
+> they document what was believed when they were written.
+>
+> **Licence correction, 2026-08-18.** Those three entries described the upstream project as
+> LGPL. That was wrong. `aloistr/swisseph` is dual-licensed: the GNU **Affero** General Public
+> License, or a separate Swiss Ephemeris Professional licence — verified against the upstream
+> `LICENSE` file, which states the developer must choose one or the other. AGPL is the stricter
+> of the two readings, so the earlier description understated the obligation rather than
+> overstating it. The licence name is corrected here; the entries are otherwise unchanged.
+>
+> The claim this project makes going forward is procedural, not historical: as of v6.0.0 every
+> ayanamsha is generated from a cited primary, a second implementation re-derives it, and CI
+> checks that continuously. See the section below.
 
 ### Fix 3 — Lahiri Ayanamsha (epoch-anchored IAU 1976)
 Source 1: Lieske, J.H. et al. (1977). "Expressions for the Precession Quantities Based upon the
 IAU (1976) System of Astronomical Constants." A&A 58, 1–16 (eq. A2). Academic publication.
 Source 2: Indian Astronomical Ephemeris 1989, p. 556 (ICRC 1955 epoch definition).
-Source 3: Swiss Ephemeris sweph.h, ayanamsa[1] (LGPL, aloistr/swisseph) — epoch JD 2435553.5
+Source 3: Swiss Ephemeris sweph.h, ayanamsa[1] (aloistr/swisseph — see the licence correction above) — epoch JD 2435553.5
 and value 23.245524743° identified from this file. No source code copied; only the numeric
 constants (uncopyrightable facts) were transcribed and the precession formula was independently
 re-derived from Lieske et al.
@@ -53,7 +64,7 @@ License: Academic formulas are not copyrightable; constants are uncopyrightable 
 ### Fix 4 — KP/Krishnamurti Ayanamsha (epoch-anchored Newcomb)
 Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy", p. 226. Public domain
 (U.S. Naval Observatory publication, pre-1928).
-Source 2: Swiss Ephemeris sweph.h, ayanamsa[5] (LGPL, aloistr/swisseph) — epoch JD 2415020.31352
+Source 2: Swiss Ephemeris sweph.h, ayanamsa[5] (aloistr/swisseph — see the licence correction above) — epoch JD 2415020.31352
 and value 22.363889°. No source code copied; only numeric constants transcribed.
 License: Public domain (Newcomb); numeric constants are uncopyrightable facts.
 
@@ -61,7 +72,7 @@ License: Public domain (Newcomb); numeric constants are uncopyrightable facts.
 Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy", p. 226. Public domain.
 Source 2: Fagan, C. & Bradley, D. "The Synetic Vernal Point." American Astrology, 1967.
 Source 3: American Sidereal Ephemeris (1976), Astro Computing Services — defines SVP at B1950.0.
-Source 4: Swiss Ephemeris sweph.h, ayanamsa[0] (LGPL) — epoch JD 2433282.42346 and value
+Source 4: Swiss Ephemeris sweph.h, ayanamsa[0] (see the licence correction above) — epoch JD 2433282.42346 and value
 24.042044444°. No source code copied; only numeric constants transcribed.
 License: Published definitions are not copyrightable; Newcomb formula is public domain.
 
