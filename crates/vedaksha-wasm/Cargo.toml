@@ -19,11 +19,11 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-vedaksha-math = { version = "5.0.2", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "5.0.2", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "5.0.2", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "5.0.2", path = "../vedaksha-vedic" }
-vedaksha = { version = "5.0.2", path = "../vedaksha", features = ["locale"] }
+vedaksha-math = { version = "6.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "6.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "6.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "6.0.0", path = "../vedaksha-vedic" }
+vedaksha = { version = "6.0.0", path = "../vedaksha", features = ["locale"] }
 wasm-bindgen = "0.2"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -38,7 +38,7 @@ wasm-bindgen-test = "0.3"
 # `vedaksha-mcp`), so it never sees this crate at all, and the two surfaces
 # could silently drift. A dev-dependency does not enter the cdylib the
 # wasm32 target builds.
-vedaksha-mcp = { version = "5.0.2", path = "../vedaksha-mcp" }
+vedaksha-mcp = { version = "6.0.0", path = "../vedaksha-mcp" }
 
 [features]
 default = []

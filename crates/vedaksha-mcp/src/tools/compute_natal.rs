@@ -74,7 +74,8 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "ayanamsha": {
                     "type": "string",
-                    "description": "Ayanamsha system for sidereal: Lahiri, FaganBradley, Tropical, etc.",
+                    "description": crate::tools::ayanamsha_schema_description(),
+                    "enum": crate::tools::ayanamsha_schema_enum(),
                     "default": "Tropical"
                 }
             },

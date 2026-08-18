@@ -1,5 +1,5 @@
 {
-  "engineVersion": "5.0.2",
+  "engineVersion": "6.0.0",
   "tools": [
     {
       "description": "Compute a natal astrological chart for a given time and location. Returns a ChartGraph in JSON format containing planetary positions, house cusps, aspects, nakshatras, and dignities.",
@@ -7,7 +7,21 @@
         "properties": {
           "ayanamsha": {
             "default": "Tropical",
-            "description": "Ayanamsha system for sidereal: Lahiri, FaganBradley, Tropical, etc.",
+            "description": "Sidereal zodiac system. Eleven systems, each derived forward from a primary source and none tuned to match another implementation. Returns the MEAN ayanamsha - add nutation in longitude yourself for the true ayanamsha. Pass Tropical for no rotation. Systems: IndianOfficial = Indian Astronomical Ephemeris 2022, AYANAMSA section: 23 deg 51 min 25.53 sec at J2000.0, propagated by P03 general precession | FaganBradley = Fagan & Firebrace, Primer of Sidereal Astrology: synetic vernal point 335 deg 57 min 28.64 sec at B1950.0, ayanamsha = 360 deg minus SVP | Krishnamurti = Krishnamurti Padhdhati Vol-I: 22 deg 22 min 00 sec on the 1st of Chitra 1900, propagated at KSK's stated 50.2388475 arcsec/yr | Raman = Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49 | SuryaSiddhanta = Surya Siddhanta Ch. 3 vv. 9-12 | Yukteshwar = Yukteswar, The Holy Science (1894) | RevatiPaksha [star] = Revati at the sidereal initial point, the majority reading against Surya Siddhanta Ch. 8's own 359 deg 50 min, zeta Piscium per Hipparcos | PushyaPaksha [star] = Narasimha Rao, Introducing Pushya-paksha Ayanamsa | TrueChitra [star] = Self-describing condition; Spica per Hipparcos | ChandraHari [star] = Chandra Hari, Indian J. History of Science 33(4), 1998 | GalacticCenter0Sag [star] = Self-describing condition; Sgr A* per Gordon, de Witt & Jacobs (2023), AJ 165, 49.",
+            "enum": [
+              "IndianOfficial",
+              "FaganBradley",
+              "Krishnamurti",
+              "Raman",
+              "SuryaSiddhanta",
+              "Yukteshwar",
+              "RevatiPaksha",
+              "PushyaPaksha",
+              "TrueChitra",
+              "ChandraHari",
+              "GalacticCenter0Sag",
+              "Tropical"
+            ],
             "type": "string"
           },
           "house_system": {
@@ -283,11 +297,6 @@
       "description": "Compute Vedic divisional charts (vargas) for a given time and location. Supply a list of division codes (e.g. D1, D9, D10) and receive a ChartGraph JSON for each, including planetary positions and dignities within each varga.",
       "inputSchema": {
         "properties": {
-          "ayanamsha": {
-            "default": "Lahiri",
-            "description": "Ayanamsha system for sidereal: Lahiri, FaganBradley, Tropical, etc.",
-            "type": "string"
-          },
           "divisions": {
             "description": "Varga division codes to compute, e.g. [\"D1\", \"D9\", \"D10\"]",
             "items": {

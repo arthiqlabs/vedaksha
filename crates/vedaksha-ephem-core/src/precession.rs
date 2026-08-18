@@ -36,15 +36,54 @@ pub fn general_precession_in_longitude(jd: f64) -> f64 {
                 + t * (-0.000_185_22 + t * (-0.000_026_452 + t * (-0.000_000_014_8)))))
 }
 
+/// General precession in longitude (`p_A`) from J2000.0, in arcseconds.
+///
+/// IAU 2006 P03 polynomial from Capitaine, Wallace & Chapront (2003),
+/// A&A 412, pp. 567-586, eq. (37). Evaluated using Horner's method.
+///
+/// # This is not [`general_precession_in_longitude`]
+///
+/// The two are different angles and differ by ~9.7 arcseconds per century.
+///
+/// * [`general_precession_in_longitude`] returns the Fukushima-Williams angle
+///   `ψ̄_A`, precession in longitude referred to the **fixed** J2000 ecliptic.
+///   It exists to build the precession matrix and has no other use.
+/// * This function returns `p_A`, general precession in longitude, accumulated
+///   along the **moving** ecliptic of date. It is the angle by which the equinox
+///   regresses against a fixed direction among the stars, and it is therefore the
+///   quantity an epoch-anchored ayanamsha is propagated by.
+///
+/// Picking the wrong one is not detectable from the result — both grow at
+/// roughly 50 arcseconds per year — which is why they are documented together.
+///
+/// # Arguments
+///
+/// * `jd` — Julian Day Number (Terrestrial Time).
+///
+/// # Returns
+///
+/// Accumulated general precession in longitude since J2000.0, in arcseconds.
+/// Exactly zero at J2000.0; approximately +5029.9 at J2100.0.
+#[must_use]
+pub fn general_precession_p03(jd: f64) -> f64 {
+    let t = julian::centuries_from_j2000(jd);
+    t * (5_028.796_195
+        + t * (1.105_434_8 + t * (0.000_079_64 + t * (-0.000_023_857 + t * (-0.000_000_038_3)))))
+}
+
 /// Precession matrix (IAU 2006), transforming coordinates from ICRS (J2000)
 /// to the mean equator and equinox of date.
 ///
 /// Uses the Fukushima-Williams parameterization:
 /// ```text
-/// P = Rz(γ̄) · Rx(−φ̄) · Rz(−ψ̄) · Rx(εA)
+/// P = Rx(−εA) · Rz(−ψ̄) · Rx(φ̄) · Rz(γ̄)
 /// ```
 ///
 /// Source: Capitaine, Wallace & Chapront (2003), eq. 40.
+///
+/// The four F-W angles are referred to the GCRS, so this matrix carries the
+/// ICRS frame bias as well as the precession; no separate bias rotation is
+/// needed before it.
 #[allow(clippy::similar_names)]
 pub fn precession_matrix(jd: f64) -> Matrix3 {
     let t = julian::centuries_from_j2000(jd);
@@ -67,11 +106,16 @@ pub fn precession_matrix(jd: f64) -> Matrix3 {
 
     let eps_a = obliquity::mean_obliquity(jd);
 
-    // P = Rz(gamma_bar) * Rx(-phi_bar) * Rz(-psi_bar) * Rx(eps_A)
-    Matrix3::rotation_z(gamma_bar)
-        .multiply(&Matrix3::rotation_x(-phi_bar))
+    // P = Rx(-eps_A) * Rz(-psi_bar) * Rx(phi_bar) * Rz(gamma_bar)
+    //
+    // The order is the whole content of this expression: the four rotations do
+    // not commute, and an incorrect order stays within a milliarcsecond near
+    // J2000 while growing without bound away from it. See the module tests,
+    // which pin this against ERFA at epochs 1500 years either side.
+    Matrix3::rotation_x(-eps_a)
         .multiply(&Matrix3::rotation_z(-psi_bar))
-        .multiply(&Matrix3::rotation_x(eps_a))
+        .multiply(&Matrix3::rotation_x(phi_bar))
+        .multiply(&Matrix3::rotation_z(gamma_bar))
 }
 
 #[cfg(test)]
@@ -261,5 +305,87 @@ mod tests {
                 );
             }
         }
+    }
+
+    // ── ERFA-pinned regression tests ──────────────────────────────────────────
+    //
+    // The expected values below were produced by ERFA (the IAU SOFA board's
+    // BSD-3 relicensing of SOFA) — `eraP06e` for p_A and `eraEqec06` for the
+    // composite bias-precession-obliquity rotation. Verifying our own astronomy
+    // against a permissive reference implementation is exactly what it is for.
+    //
+    // The epochs deliberately straddle a 6000-year span. A rotation-order error
+    // in `precession_matrix` is invisible at J2000 (0.014 mas) and reaches 0.56
+    // arcsec by 499 CE, so a test that only samples the modern era cannot see it.
+
+    /// ERFA `eraEqec06` applied to a fixed ICRS direction, at four epochs.
+    ///
+    /// The direction is arbitrary (ICRS alpha 123.456789 deg, delta 45.678901
+    /// deg) and deliberately unrelated to any star this engine carries. It was
+    /// Sgr A*'s position until 2026-08-18; see `stars.rs` for why that was a poor
+    /// choice in a clean-room module.
+    const ERFA_ECLIPTIC_LONGITUDES: [(f64, f64); 4] = [
+        (588_465.75, 44.581_951_457),
+        (1_903_397.0, 94.241_225_583),
+        (2_451_545.0, 115.177_689_978),
+        (2_816_788.0, 129.209_891_274),
+    ];
+
+    #[test]
+    fn precession_matrix_matches_erfa_across_six_millennia() {
+        use vedaksha_math::angle::normalize_degrees;
+
+        let ra = 123.456_789_f64.to_radians();
+        let de = 45.678_901_f64.to_radians();
+        let v = Vector3::new(de.cos() * ra.cos(), de.cos() * ra.sin(), de.sin());
+
+        for (jd, expected_deg) in ERFA_ECLIPTIC_LONGITUDES {
+            let equatorial = precession_matrix(jd).apply(&v);
+            let eps = obliquity::mean_obliquity(jd);
+            // Equator of date -> ecliptic of date: rotate about x by +eps.
+            let y = equatorial.y * eps.cos() + equatorial.z * eps.sin();
+            let lon = normalize_degrees(y.atan2(equatorial.x).to_degrees());
+            let residual_arcsec = (lon - expected_deg) * 3600.0;
+            assert!(
+                residual_arcsec.abs() < 0.01,
+                "at jd={jd} the mean ecliptic longitude is {lon:.9} deg, \
+                 ERFA gives {expected_deg:.9} deg — residual {residual_arcsec:+.6} arcsec \
+                 exceeds the 0.01 arcsec astronomy tolerance"
+            );
+        }
+    }
+
+    #[test]
+    fn general_precession_p03_matches_erfa() {
+        // eraP06e's `pa` output, in arcseconds.
+        const ERFA_P_A: [(f64, f64); 6] = [
+            (2_451_545.0, 0.0),
+            (2_488_070.0, 5_029.901_685_545),
+            (2_415_122.5, -5_013.584_762_414),
+            (2_433_282.423_46, -2_514.132_286_027),
+            (1_903_397.0, -75_222.009_257_288),
+            (588_465.75, -253_793.167_256_519),
+        ];
+        for (jd, expected) in ERFA_P_A {
+            let got = general_precession_p03(jd);
+            assert!(
+                (got - expected).abs() < 1e-6,
+                "p_A at jd={jd}: got {got:.9} arcsec, ERFA gives {expected:.9} arcsec"
+            );
+        }
+    }
+
+    #[test]
+    fn p_a_and_psi_bar_are_different_angles() {
+        // The whole reason both exist. If someone ever "simplifies" one into the
+        // other, this fails: they diverge by ~9.7 arcsec per century, which is
+        // ~200x the accuracy this engine claims for a sidereal longitude.
+        let at_j2100 = 2_488_070.0;
+        let p_a = general_precession_p03(at_j2100);
+        let psi_bar = general_precession_in_longitude(at_j2100);
+        assert!(
+            (p_a - psi_bar).abs() > 9.0,
+            "p_A ({p_a:.3}) and psi_bar ({psi_bar:.3}) must not be interchangeable"
+        );
     }
 }

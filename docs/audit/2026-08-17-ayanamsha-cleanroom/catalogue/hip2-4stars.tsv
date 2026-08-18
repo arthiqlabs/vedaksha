@@ -1,0 +1,49 @@
+#
+#   VizieR Astronomical Server vizier.cds.unistra.fr
+#    Date: 2026-08-18T02:47:08 [V7.5.8]
+#   In case of problem, please report to:	cds-question@unistra.fr
+#
+#
+#Coosys	J2000:	eq_FK5 J2000
+#INFO	service_protocol=ASU	  IVOID of the protocol through which the data was retrieved
+#INFO	request_date=2026-08-18T02:47:09	  Query execution date
+#INFO	request=https://vizier.cds.unistra.fr/viz-bin/asu-tsv?-source=I/311/hip2&-out=HIP,RArad,DErad,Plx,pmRA,pmDE,e_RArad,e_DErad,e_pmRA,e_pmDE&HIP=5737,42911,65474,85927	  Full request URL
+#INFO	contact=cds-question@unistra.fr	  Email or URL to contact publisher
+#INFO	server_software=VizieR/7.5.8	  Software version
+#INFO	publisher=CDS	  Data centre that produced the VOTable
+#INFO	MaxTuples=50000	
+
+#RESOURCE=yCat_1311
+#Name: I/311
+#Title: Hipparcos, the New Reduction (van Leeuwen, 2007)
+#INFO	ivoid=ivo://cds.vizier/i/311	    IVOID of underlying data collection
+#INFO	data_ivoid=ivo://cds.vizier/i/311	    IVOID of underlying data collection
+#INFO	creator=van Leeuwen F.	    First author or institution
+#INFO	cites=bibcode:2007A&A...474..653V	    Article or Data origin sources
+#INFO	journal=A&A	    Journal name
+#INFO	original_date=2007	    Year of the article publication
+#INFO	reference_url=https://cdsarc.cds.unistra.fr/viz-bin/cat/I/311	    Dataset landing page
+#INFO	publication_date=2017-12-22	    Date of first publication in the data centre
+#INFO	rights_uri=https://cds.unistra.fr/vizier-org/licences_vizier.html	    Licence URI
+#Coosys	J2000_1991.250:	eq_FK5 J2000
+#Table	I_311_hip2:
+#Name: I/311/hip2
+#Title: The Astrometric Catalogue
+#Column	HIP	(I6)	Hipparcos identifier	[ucd=meta.id;meta.main]
+#Column	RArad	(F12.8)	Right Ascension in ICRS, Ep=1991.25	[ucd=pos.eq.ra;meta.main]
+#Column	DErad	(F12.8)	Declination in ICRS, Ep=1991.25	[ucd=pos.eq.dec;meta.main]
+#Column	Plx	(F7.2)	Parallax	[ucd=pos.parallax]
+#Column	pmRA	(F8.2)	Proper motion in Right Ascension	[ucd=pos.pm;pos.eq.ra]
+#Column	pmDE	(F8.2)	Proper motion in Declination	[ucd=pos.pm;pos.eq.dec]
+#Column	e_RArad	(F6.2)	Formal error on RArad	[ucd=stat.error]
+#Column	e_DErad	(F6.2)	Formal error on DErad	[ucd=stat.error]
+#Column	e_pmRA	(F6.2)	Formal error on pmRA	[ucd=stat.error;pos.pm;pos.eq.ra]
+#Column	e_pmDE	(F6.2)	Formal error on pmDE	[ucd=stat.error;pos.pm;pos.eq.dec]
+HIP	RArad	DErad	Plx	pmRA	pmDE	e_RArad	e_DErad	e_pmRA	e_pmDE
+ 	deg	deg	mas	mas/yr	mas/yr	mas	mas	mas/yr	mas/yr
+------	------------	------------	-------	--------	--------	------	------	------	------
+  5737	018.43250842	+07.57548938	  18.76	  145.00	  -55.69	  2.36	  1.90	  2.75	  2.07
+ 42911	131.17129191	+18.15486373	  24.98	  -17.67	 -229.26	  0.23	  0.12	  0.27	  0.18
+ 65474	201.29835228	-11.16124494	  13.06	  -42.35	  -30.67	  0.59	  0.38	  0.62	  0.37
+ 85927	263.40219318	-37.10374869	   5.71	   -8.53	  -30.80	  0.66	  0.50	  1.08	  0.62
+

@@ -42,7 +42,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_chart = sub.add_parser("chart", help="compute a natal chart")
     _add_location(p_chart)
     p_chart.add_argument("--house-system")
-    p_chart.add_argument("--ayanamsha")
+    p_chart.add_argument(
+        "--ayanamsha",
+        help="sidereal system: IndianOfficial (aka Lahiri), FaganBradley, "
+        "Krishnamurti, Raman, SuryaSiddhanta, Yukteshwar, RevatiPaksha, "
+        "PushyaPaksha, TrueChitra, ChandraHari, GalacticCenter0Sag, or "
+        "Tropical. The engine validates the name and rejects unknown ones; "
+        "names retired in v6 report what replaced them.",
+    )
 
     p_call = sub.add_parser(
         "call",

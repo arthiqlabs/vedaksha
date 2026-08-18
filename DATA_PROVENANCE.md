@@ -32,11 +32,30 @@ Note: Tightened tolerance from 3° to 1.7° based on the amplitude of the domina
 term (1.4979° sin(2(D-F))). No new numerical constants were introduced. Ketu=Rahu+180° test
 added per standard Vedic definition (BPHS).
 
+> **Superseded 2026-08-18 — Fixes 3, 4 and 5 below describe constants that no longer ship.**
+> Every ayanamsha constant they cover was removed in `4033c6a` and re-derived from primary
+> definitions behind a two-agent firewall; see
+> [`docs/audit/2026-08-17-ayanamsha-cleanroom/`](docs/audit/2026-08-17-ayanamsha-cleanroom/) and
+> the "Ayanamsha — primary-source derivation" section below for what ships now. The three entries
+> are left in place because a provenance record is not improved by being tidied after the fact;
+> they document what was believed when they were written.
+>
+> **Licence correction, 2026-08-18.** Those three entries described the upstream project as
+> LGPL. That was wrong. `aloistr/swisseph` is dual-licensed: the GNU **Affero** General Public
+> License, or a separate Swiss Ephemeris Professional licence — verified against the upstream
+> `LICENSE` file, which states the developer must choose one or the other. AGPL is the stricter
+> of the two readings, so the earlier description understated the obligation rather than
+> overstating it. The licence name is corrected here; the entries are otherwise unchanged.
+>
+> The claim this project makes going forward is procedural, not historical: as of v6.0.0 every
+> ayanamsha is generated from a cited primary, a second implementation re-derives it, and CI
+> checks that continuously. See the section below.
+
 ### Fix 3 — Lahiri Ayanamsha (epoch-anchored IAU 1976)
 Source 1: Lieske, J.H. et al. (1977). "Expressions for the Precession Quantities Based upon the
 IAU (1976) System of Astronomical Constants." A&A 58, 1–16 (eq. A2). Academic publication.
 Source 2: Indian Astronomical Ephemeris 1989, p. 556 (ICRC 1955 epoch definition).
-Source 3: Swiss Ephemeris sweph.h, ayanamsa[1] (LGPL, aloistr/swisseph) — epoch JD 2435553.5
+Source 3: Swiss Ephemeris sweph.h, ayanamsa[1] (aloistr/swisseph — see the licence correction above) — epoch JD 2435553.5
 and value 23.245524743° identified from this file. No source code copied; only the numeric
 constants (uncopyrightable facts) were transcribed and the precession formula was independently
 re-derived from Lieske et al.
@@ -45,7 +64,7 @@ License: Academic formulas are not copyrightable; constants are uncopyrightable 
 ### Fix 4 — KP/Krishnamurti Ayanamsha (epoch-anchored Newcomb)
 Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy", p. 226. Public domain
 (U.S. Naval Observatory publication, pre-1928).
-Source 2: Swiss Ephemeris sweph.h, ayanamsa[5] (LGPL, aloistr/swisseph) — epoch JD 2415020.31352
+Source 2: Swiss Ephemeris sweph.h, ayanamsa[5] (aloistr/swisseph — see the licence correction above) — epoch JD 2415020.31352
 and value 22.363889°. No source code copied; only numeric constants transcribed.
 License: Public domain (Newcomb); numeric constants are uncopyrightable facts.
 
@@ -53,7 +72,7 @@ License: Public domain (Newcomb); numeric constants are uncopyrightable facts.
 Source 1: Newcomb, S. (1898). "A Compendium of Spherical Astronomy", p. 226. Public domain.
 Source 2: Fagan, C. & Bradley, D. "The Synetic Vernal Point." American Astrology, 1967.
 Source 3: American Sidereal Ephemeris (1976), Astro Computing Services — defines SVP at B1950.0.
-Source 4: Swiss Ephemeris sweph.h, ayanamsa[0] (LGPL) — epoch JD 2433282.42346 and value
+Source 4: Swiss Ephemeris sweph.h, ayanamsa[0] (see the licence correction above) — epoch JD 2433282.42346 and value
 24.042044444°. No source code copied; only numeric constants transcribed.
 License: Published definitions are not copyrightable; Newcomb formula is public domain.
 
@@ -78,6 +97,57 @@ are traditional Vedic computational rules, not copyrightable expression.
 Note: The bhakoot_score() function implements the logical rule independently; no numerical tables
 or code were copied from any published implementation.
 
+## Ayanamsha — primary-source derivation, 2026-08-18
+
+Eleven sidereal systems, each derived forward from a primary and none checked against, or tuned
+toward, the output of any other implementation. The direction of derivation is what makes this
+clean-room: computing forward from a documented primary and accepting the result is primary
+research; tuning toward a known output is reverse engineering however it is cited afterwards.
+
+Full spec, declared assumptions, search records for every system that was dropped, and the
+machine-readable input manifest are in
+[`docs/audit/2026-08-17-ayanamsha-cleanroom/`](docs/audit/2026-08-17-ayanamsha-cleanroom/).
+
+| System | Primary | Status |
+|---|---|---|
+| Indian official (Lahiri / Chitra-paksha) | *The Indian Astronomical Ephemeris 2022*, Positional Astronomy Centre, Government of India — "AYANAMSA" section | Free, unrestricted; archive.org |
+| Fagan-Bradley | Fagan & Firebrace, *Primer of Sidereal Astrology* — the synetic vernal point at B1950.0, and ayanamsha = 360° − SVP | Published definition; not copyrightable as a fact |
+| Krishnamurti (KP) | Krishnamurti, *Krishnamurti Padhdhati Vol-I* — his anchor at the 1st of Chitra 1900 and his stated rate | archive.org |
+| Raman | B. V. Raman, *A Manual of Hindu Astrology* (1935), Ch. III Art. 49 | Free and unrestricted; archive.org |
+| Surya Siddhanta | Surya Siddhanta Ch. 3 vv. 9–12 | Public domain, cited by chapter |
+| Yukteshwar | Yukteswar, *The Holy Science* (1894) | Public domain; archive.org |
+| Revati-paksha | Revati at the sidereal initial point — the majority reading, against Surya Siddhanta Ch. 8's own 359°50′; ζ Piscium from Hipparcos | Public domain + catalogue |
+| Pushya-paksha | P.V.R. Narasimha Rao, *Introducing Pushya-paksha Ayanamsa* | Freely published by the proposer |
+| True Chitra | Self-describing condition; Spica from Hipparcos | Catalogue |
+| True Mula (Chandra Hari) | K. Chandra Hari, *Indian Journal of History of Science* 33(4), 1998 | Peer-reviewed, free from INSA |
+| Galactic Centre at 0° Sagittarius | Gordon, de Witt & Jacobs (2023), *AJ* 165, 49, doi:10.3847/1538-3881/aca65b | Peer-reviewed; arXiv:2212.00632 |
+
+**Astrometric data.** Star positions and proper motions are from van Leeuwen, F. (2007), *A&A*
+474, 653 — the re-reduction of the Hipparcos raw data — via VizieR table `I/311/hip2`, rows
+HIP 5737, 42911, 65474 and 85927. Cross-checked against the original ESA 1997 catalogue
+(`I/239/hip_main`); the positions agree to within 5.2 mas and the proper motions differ by up to
+3.3 mas/yr, which is the honest uncertainty on a star-anchored system far from the catalogue
+epoch. Redistributable with attribution (CDS/VizieR terms).
+
+**Verification tooling.** Precession, obliquity and the ICRS→ecliptic transform are checked
+against ERFA (BSD-3, the IAU SOFA board's approved relicensing) to better than 0.01″ across a
+six-millennium span. ERFA is used for astronomy only and never for an ayanamsha value; verifying
+our own computation against a permissive implementation taints nothing.
+
+**No implementation was consulted.** No Swiss Ephemeris source, header, documentation or output —
+including `swetest` — and no wrapper or service backed by it, at any point, for any purpose. No
+worked-value table from any commercial edition was used as a conformance oracle. The values
+Vedaksha 5 shipped were removed from the working tree *before* the derivation branch was cut, so
+the derivation could not see its own target.
+
+**How the derivation stays executable.** `scripts/generate_ayanamsha.py` re-derives every system
+in Python from `derivation-inputs.json` and emits
+`crates/vedaksha-astro/tests/fixtures/ayanamsha.json`; the Rust engine is asserted against that
+fixture by `crates/vedaksha-astro/tests/ayanamsha_fixture.rs`. The two implementations share no
+code, and agree to 5.7e-14° over 192 comparisons spanning 6000 years. `--verify` regenerates and
+compares sha256, and needs no network, so unlike the coefficient-blob jobs it cannot pass
+vacuously.
+
 ## Standing rules
 
 - Every PR that adds a new external data source must add a row here.
@@ -88,3 +158,12 @@ or code were copied from any published implementation.
 ## Forbidden upstream
 
 Per [`docs/audit/2026-05-09-elp-mpp02-cleanroom/`](docs/audit/2026-05-09-elp-mpp02-cleanroom/), the lunar implementation must NEVER again derive structurally from `github.com/ytliu0/ElpMpp02` (GPL-3.0). Source code, structural conventions, and constant-table transliterations from that upstream are out of bounds. Numerical comparisons against its outputs (legacy oracle pattern) are permissible only as facts.
+
+Per [`docs/audit/2026-08-17-ayanamsha-cleanroom/`](docs/audit/2026-08-17-ayanamsha-cleanroom/),
+the sidereal surface must NEVER again derive from Swiss Ephemeris in any form — source, headers,
+documentation, `swetest` output, or any wrapper or service backed by it. Note the difference from
+the lunar case: there, the coefficient values existed independently in the IMCCE primary, so the
+old outputs were a legitimate fact-check. **Here the values themselves are the thing with no
+derivation in the record**, so the legacy-oracle pattern is specifically forbidden —
+regression-testing against the old ayanamsha numbers would defeat the purpose of re-deriving
+them.

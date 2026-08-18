@@ -175,7 +175,10 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 ///
 /// # Arguments
 /// * `tropical_longitude` — Tropical longitude in degrees
-/// * `ayanamsha` — Ayanamsha system: "Lahiri", "FaganBradley", "Krishnamurti", etc.
+/// * `ayanamsha` — sidereal system: "IndianOfficial" (alias "Lahiri"),
+/// "FaganBradley", "Krishnamurti", "Raman", "SuryaSiddhanta", "Yukteshwar",
+/// "RevatiPaksha", "PushyaPaksha", "TrueChitra", "ChandraHari",
+/// "GalacticCenter0Sag", or "Tropical". Returns the MEAN ayanamsha.
 /// * `jd` — Julian Day for computation
 #[wasm_bindgen]
 pub fn tropical_to_sidereal(
@@ -192,6 +195,15 @@ pub fn tropical_to_sidereal(
 }
 
 /// Get the ayanamsha value in degrees for a given date.
+///
+/// Returns the **mean** ayanamsha: nutation in longitude is never included. Add
+/// it yourself for the true ayanamsha, which is what most published daily tables
+/// print and what a comparison will otherwise silently be against — the two
+/// differ by up to ~17 arcseconds.
+///
+/// `ayanamsha` is a system name; pass `"Tropical"` for zero. Names retired in
+/// the primary-source re-derivation are refused with an explanation rather than
+/// falling back to a default.
 #[wasm_bindgen]
 pub fn get_ayanamsha(ayanamsha: &str, jd: f64) -> Result<f64, JsError> {
     let system = parse_ayanamsha(ayanamsha)?;
@@ -255,8 +267,11 @@ struct NatalChartInput {
     bodies: Vec<String>,
 }
 
+/// The default ayanamsha for this surface: the Indian official system.
 fn default_ayanamsha() -> String {
-    "Lahiri".to_string()
+    vedaksha_astro::sidereal::Ayanamsha::IndianOfficial
+        .key()
+        .to_string()
 }
 fn default_house_system() -> String {
     "Placidus".to_string()
@@ -302,8 +317,11 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
     use vedaksha_ephem_core::sidereal_time;
 
     // Parse config
-    let ayanamsha_system = ayanamsha_from_str(&input.ayanamsha)
-        .map_err(|_| format!("Unknown ayanamsha: {}", input.ayanamsha))?;
+    let ayanamsha_system = {
+        use core::str::FromStr as _;
+        vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
+            .map_err(|e| e.to_string())?
+    };
     let house_system = house_system_from_str(&input.house_system)
         .map_err(|_| format!("Unknown house system: {}", input.house_system))?;
 
@@ -425,7 +443,7 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
 /// * `config_json` — JSON string with birth data and optional configuration.
 ///
 /// Required: `year`, `month`, `day`, `hour`, `minute`, `latitude`, `longitude`
-/// Optional: `second` (0), `ayanamsha` ("Lahiri"), `house_system` ("Placidus"),
+/// Optional: `second` (0), `ayanamsha` ("IndianOfficial"), `house_system` ("Placidus"),
 ///           `bodies` (default 9 Jyotish graha + nodes)
 ///
 /// Input datetime is **UTC** — a civil clock reading, not TT and not TDB.
@@ -474,19 +492,15 @@ fn parse_house_system(s: &str) -> Result<vedaksha_astro::houses::HouseSystem, Js
     house_system_from_str(s).map_err(|_| JsError::new(&format!("Unknown house system: {s}")))
 }
 
-fn ayanamsha_from_str(s: &str) -> Result<vedaksha_astro::sidereal::Ayanamsha, &'static str> {
-    match s.to_lowercase().as_str() {
-        "lahiri" => Ok(vedaksha_astro::sidereal::Ayanamsha::Lahiri),
-        "faganbradley" | "fagan_bradley" => Ok(vedaksha_astro::sidereal::Ayanamsha::FaganBradley),
-        "krishnamurti" => Ok(vedaksha_astro::sidereal::Ayanamsha::Krishnamurti),
-        "raman" => Ok(vedaksha_astro::sidereal::Ayanamsha::Raman),
-        "tropical" => Ok(vedaksha_astro::sidereal::Ayanamsha::Tropical),
-        _ => Err("unknown ayanamsha"),
-    }
-}
-
+/// Parse an ayanamsha name.
+///
+/// This delegates to the engine's own parser rather than keeping a second list.
+/// A name that Vedaksha 5 accepted but that no longer names a system produces
+/// the engine's disposition message — what happened to it and what to use
+/// instead — rather than a bare "unknown", and never falls back to a default.
 fn parse_ayanamsha(s: &str) -> Result<vedaksha_astro::sidereal::Ayanamsha, JsError> {
-    ayanamsha_from_str(s).map_err(|_| JsError::new(&format!("Unknown ayanamsha: {s}")))
+    use core::str::FromStr as _;
+    vedaksha_astro::sidereal::Ayanamsha::from_str(s).map_err(|e| JsError::new(&e.to_string()))
 }
 
 fn varga_type_from_str(s: &str) -> Result<vedaksha_vedic::varga::VargaType, &'static str> {
@@ -899,12 +913,64 @@ mod tests {
 
     #[test]
     fn parse_ayanamshas() {
-        assert!(ayanamsha_from_str("lahiri").is_ok());
-        assert!(ayanamsha_from_str("faganbradley").is_ok());
-        assert!(ayanamsha_from_str("fagan_bradley").is_ok());
-        assert!(ayanamsha_from_str("krishnamurti").is_ok());
-        assert!(ayanamsha_from_str("raman").is_ok());
-        assert!(ayanamsha_from_str("tropical").is_ok());
+        // Every system the engine has must be reachable from this surface. The
+        // previous version of this test accepted five hand-listed names while
+        // the engine had far more, which is how the two lists drifted apart.
+        for system in vedaksha_astro::sidereal::Ayanamsha::ALL {
+            assert_eq!(
+                parse_ayanamsha(system.key()).ok(),
+                Some(*system),
+                "{} is not reachable from the wasm surface",
+                system.key()
+            );
+        }
+        assert!(
+            parse_ayanamsha("lahiri").is_ok(),
+            "the v5 alias must keep working"
+        );
+        assert!(parse_ayanamsha("fagan_bradley").is_ok());
+    }
+
+    #[test]
+    fn a_removed_ayanamsha_name_is_refused_with_its_disposition() {
+        // The wasm surface must not silently fall back to its serde default when
+        // a caller passes a name Vedaksha 5 had and this engine does not. Driven
+        // through `compute_natal_chart_inner` rather than `parse_ayanamsha`,
+        // because that is where a fallback would actually happen — and because
+        // `JsError` cannot be formatted outside a wasm host, so its Debug
+        // output is not available to assert on here.
+        for removed in [
+            "BabylonianKuglerStar1",
+            "TrueMula",
+            "Aryabhata",
+            "Hipparchos",
+            "LahiriVp285",
+        ] {
+            let input = NatalChartInput {
+                year: 2000,
+                month: 1,
+                day: 1,
+                hour: 12,
+                minute: 0,
+                second: 0,
+                latitude: 28.0,
+                longitude: 77.0,
+                ayanamsha: removed.to_string(),
+                house_system: "Placidus".to_string(),
+                bodies: vec!["Sun".into()],
+            };
+            let err = compute_natal_chart_inner(input)
+                .err()
+                .unwrap_or_else(|| panic!("{removed} must not silently resolve to a system"));
+            assert!(
+                err.contains(removed),
+                "the error for {removed} should name it, got: {err}"
+            );
+            assert!(
+                err.len() > removed.len() + 32,
+                "the error for {removed} should say what happened to it, got: {err}"
+            );
+        }
     }
 
     #[test]
@@ -985,10 +1051,27 @@ mod tests {
         let asc = output["houses"]["asc"].as_f64().unwrap();
         assert!(asc > 0.0 && asc < 360.0, "ASC out of range: {asc}");
 
+        // Compare the served ayanamsha against the engine's own value for the
+        // same system at the same instant, rather than against a hardcoded
+        // number. What this test exists to catch is the plumbing dropping or
+        // mangling the value — not the value being one particular constant,
+        // which is a question for the derivation and its fixture.
+        let jd = output["julian_day"].as_f64().unwrap();
         let ayan = output["ayanamsha_value"].as_f64().unwrap();
+        let reference = vedaksha_astro::sidereal::ayanamsha_value(
+            vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
+            jd,
+        );
         assert!(
-            (ayan - 23.856).abs() < 0.1,
-            "Lahiri should be ~23.856°, got {ayan}"
+            (ayan - reference).abs() < 1e-6,
+            "served ayanamsha {ayan}° != engine reference {reference}° at jd {jd}"
+        );
+        // Degeneracy guard: a near-zero ayanamsha would make the sidereal
+        // assertions elsewhere in this suite vacuous.
+        assert!(
+            reference > 20.0,
+            "reference ayanamsha {reference}° is degenerate — a sidereal chart \
+             could not be distinguished from a tropical one"
         );
     }
 
@@ -1003,7 +1086,7 @@ mod tests {
     /// like it covers this and does not — `ayanamsha_value` is serialised from
     /// `ayanamsha_system` directly, on a separate line from the `ChartConfig`,
     /// so forcing `ayanamsha: Some(Ayanamsha::Tropical)` into the config
-    /// leaves that assertion reading a healthy 23.856° while every longitude
+    /// leaves that assertion reading a healthy sidereal offset while every longitude
     /// in the chart is tropical.
     ///
     /// # The property
@@ -1026,18 +1109,18 @@ mod tests {
     /// this is the same instant and observer as the MCP twin and must produce
     /// the same numbers:
     ///
-    /// - `ayanamsha_value(Lahiri, 2451544.5)` = 23.857073774210527°
+    /// - `ayanamsha_value(Lahiri, 2451544.5)` = <ayanamsha>°
     /// - tropical `asc` = 255.288134034110612°, sidereal `asc` = 231.431060259900079°
-    /// - 255.288134034110612 − 23.857073774210527 = 231.431060259900085
+    /// - tropical − <ayanamsha> = sidereal
     ///
     /// Tolerance 1e-9° is a floating-point allowance: the observed residual is
-    /// below 1e-13°, and the failure it must catch is 23.857°.
+    /// below 1e-13°, and the failure it must catch is the full ayanamsha.
     ///
     /// # Mutation, measured
     ///
     /// Forcing `ayanamsha: Some(vedaksha_astro::sidereal::Ayanamsha::Tropical)`
     /// into the `ChartConfig` collapses the measured offset from
-    /// 23.857073774211° to 0° and fails this test on `asc`, `mc`, all twelve
+    /// <ayanamsha>° to 0° and fails this test on `asc`, `mc`, all twelve
     /// cusps and every planet — while `compute_natal_chart_inner_known_chart`
     /// stays green.
     #[test]
@@ -1078,10 +1161,10 @@ mod tests {
         );
 
         // Guard: a degenerate ayanamsha makes every assertion below vacuous.
-        let ayan = ayanamsha_value(Ayanamsha::Lahiri, jd);
+        let ayan = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
         assert!(
             ayan > 20.0,
-            "ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected ~23.86°. With a \
+            "ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected the full Lahiri offset. With a \
              near-zero ayanamsha this test cannot tell a sidereal chart from a \
              tropical one."
         );
@@ -1161,7 +1244,7 @@ mod tests {
         );
         assert_eq!(
             sid["config_summary"].as_str().unwrap(),
-            "Houses: Placidus, Zodiac: Lahiri, Rulership: Traditional",
+            "Houses: Placidus, Zodiac: IndianOfficial, Rulership: Traditional",
             "the served chart reports a frame other than the one requested"
         );
     }

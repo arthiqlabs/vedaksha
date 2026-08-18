@@ -113,18 +113,26 @@
 
 ## 7. Ayanamsha Values
 
-**What:** Some ayanamsha systems (like Lahiri) have official values that are periodically revised by the Indian government or astronomical bodies.
+**What:** Two things can move an ayanamsha: an issuing authority revising a published definition, or a star catalogue being superseded.
 
-**Why it matters:** The Lahiri ayanamsha, used by the majority of Vedic astrologers, is officially defined by the Indian Astronomical Ephemeris. Minor revisions to its polynomial coefficients occur occasionally.
+**Why it matters:** Five of the eleven systems track a live star, so their values depend on catalogue astrometry rather than on a published constant. The other six rest on an anchor an authority published; the Indian official system is the only one whose authority still issues revisions.
 
-**Impact if neglected:** Revisions are typically < 1 arcsecond. Most practitioners would never notice.
+**Impact if neglected:** An IAE revision would be well under an arcsecond. A catalogue change matters more: the ESA 1997 and van Leeuwen 2007 Hipparcos solutions differ by up to 3.3 mas/yr in proper motion, which is ~0.5 arcsecond of longitude per thousand years from the catalogue epoch. Gaia will eventually supersede Hipparcos for these stars.
 
-**How to update:**
-1. Check the latest Indian Astronomical Ephemeris publication
-2. Update polynomial coefficients in `crates/vedaksha-astro/src/sidereal.rs`
-3. Run Vedic chart tests to verify nakshatra boundary cases
+**How to update — and the one rule that governs it:**
 
-**Frequency:** Only when the Indian government publishes a revision (rare — last major update was decades ago).
+Every value is derived from `docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json`. **Change that file, never the Rust constants**, and never both independently. The derivation spec is normative: any change to an anchor, model, convention or declared assumption is a change to the derivation and belongs in `docs/audit/2026-08-17-ayanamsha-cleanroom/spec.md` first.
+
+1. Record the change and its reasoning in the spec.
+2. Update `derivation-inputs.json`.
+3. Mirror it in `crates/vedaksha-astro/src/sidereal.rs` (the two are deliberately independent implementations; the fixture is what proves they agree).
+4. `python3 scripts/generate_ayanamsha.py` to regenerate the fixture.
+5. `cargo test -p vedaksha-astro` — the anchor, zero-year-inversion and cross-check tests all have to pass.
+6. `python3 scripts/generate_ayanamsha.py --check-catalogue` to confirm the committed catalogue rows still match VizieR.
+
+**Never** validate a change by comparing against another implementation's numbers. That is the reverse engineering the re-derivation exists to undo, and it is not made acceptable by citing a source afterwards.
+
+**Frequency:** Check when a new Indian Astronomical Ephemeris is published, or when a major astrometric catalogue release supersedes Hipparcos for bright stars.
 
 ---
 
@@ -226,6 +234,40 @@ sunrise can otherwise be attributed to the wrong rotation.
   and a 0.4967 d worst gap to 2 and one ULP.
 - **Invalidated by:** a change to the sunrise search algorithm itself.
 
+### The IAU 2006 precession composition — `vedaksha-ephem-core::precession`
+
+`precession_matrix` composes four Fukushima-Williams rotations, and **the order is the whole
+content of the expression**. It is `Rx(−εA) · Rz(−ψ̄) · Rx(φ̄) · Rz(γ̄)`.
+
+- **Established by:** comparison against ERFA's `eraEqec06` at four epochs spanning 6100
+  years, in `precession_matrix_matches_erfa_across_six_millennia`.
+- **Why it needs recording:** a wrong order is **0.014 mas at J2000 and 0.56 arcsecond at
+  499 CE**. It shipped that way through v5 because every existing check sampled 1900–2100,
+  where it hides. If you "simplify" this expression, that test is the only thing that will
+  tell you.
+- **Also:** `general_precession_in_longitude` returns the F-W angle `ψ̄_A`, **not** general
+  precession `p_A`. They differ by ~9.7 arcsec/century and are not interchangeable; use
+  `general_precession_p03` for anything sidereal. A test asserts they stay distinct.
+- **Invalidated by:** adopting a different precession theory. Nothing else.
+
+### Ayanamsha constants — read from primaries, not searched for
+
+No parameter search established these, so there is nothing expensive to re-run — but there is
+a rule, and it is stricter than the ones above.
+
+- **Never validate an ayanamsha against another implementation's numbers.** Not Swiss
+  Ephemeris, not any other engine, not a worked-value table from a published book. That is
+  the reverse engineering the re-derivation exists to undo, and citing a source afterwards
+  does not change what it is.
+- **Change `docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json`, never the Rust
+  constants alone**, and record any change to an anchor, model, convention or declared
+  assumption in that directory's `spec.md` first.
+- **What is already answered** (do not re-search): the search records for all 33 dropped
+  systems, the definition/determination test that excludes every Babylonian system, and the
+  declared assumptions DA-1 through DA-10. All in `spec.md`.
+- **Invalidated by:** a new *Indian Astronomical Ephemeris* revision, or a star catalogue
+  superseding Hipparcos for bright stars. See §7.
+
 ### The two oracles are DISJOINT — check you are using the right one
 
 This has caused a real defect: a dependency upgrade was validated four times against an oracle
@@ -261,7 +303,7 @@ rewriting 90.67% of the lunar theory's output bits once left the SPK digest byte
 [ ] Delta T — compare predicted vs. observed, update if drift > 0.5s
 [ ] JPL ephemeris — check if NASA released a new DE version
 [ ] Asteroid orbits — update if asteroid features are actively used
-[ ] Ayanamsha — check for Indian government revisions (rare)
+[ ] Ayanamsha — check for Indian Astronomical Ephemeris revisions (rare), and run `python3 scripts/generate_ayanamsha.py --check-catalogue`
 [ ] cargo audit — run and resolve any advisories
 [ ] cargo deny check — verify no disallowed licenses crept in
 [ ] Run full test suite — cargo test --workspace

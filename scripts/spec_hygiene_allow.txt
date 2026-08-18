@@ -1,0 +1,28 @@
+# Allowlist for scripts/check_spec_hygiene.py
+#
+# Format:  <regex> | <reason>
+#
+# The gate derives its patterns from the constants a baseline ref shipped. Two
+# classes of hit are legitimate and cannot be distinguished mechanically:
+#
+#   1. A PRIMARY VALUE that coincides with a previously-shipped constant. Where
+#      the shipped value was already correct, quoting its primary source is
+#      byte-identical to leaking it. The Indian Astronomical Ephemeris anchor and
+#      Fagan's Synetic Vernal Point are both in this class.
+#   2. THE RULES THEMSELVES. Text stating "no acceptance test may reference the
+#      values we currently ship" necessarily contains the phrase it forbids.
+#
+# Every entry needs a reason. An allowlist without reasons is a suppression list,
+# and a suppression list is how a gate quietly stops meaning anything.
+
+23°51'25"\.53|IAE 2022 p.380 anchor. A Government of India primary; it coincides with the previously shipped constant because that value was correct, not because it is being leaked.
+23°51′25″\.53|Same anchor, typographic prime variant.
+335°\s?57'\s?28\.64|Fagan & Firebrace 1971 p.13, the published Synetic Vernal Point. Primary quotation.
+335°57′28″\.64|Same SVP, typographic prime variant.
+24°02′31″\.36|360° − SVP, i.e. the Fagan-Bradley anchor restated per his own p.16 rule. Derived from the primary in the line above, not from our code.
+
+# --- rule text ---
+No acceptance test may reference|§0's governing rule; it must name what it forbids.
+the shipped value once the derived value|§0's explanation of why a declaration is not a control.
+both the shipped constants and the|Forbidden-inputs list; an instruction not to read a file.
+Explicitly not criteria|§6.5, the list of things that must never be acceptance criteria.
