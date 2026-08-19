@@ -263,6 +263,25 @@ rewriting 90.67% of the lunar theory's output bits once left the SPK digest byte
 - Accepted deliberately: the 0.7 line is end-of-life, and the difference is far below any
   meaningful precision. The SPK path remains byte-identical.
 
+### Known bit-level drift: the v6 precession rotation-order correction
+
+`ddf6810` corrected the order of the four Fukushima-Williams rotations in `precession_matrix`.
+`apparent_position` composes that matrix, so **every analytical row moved** and
+`analytical_bit_digest` went red at v6.0.0 — it stayed red through v6.0.1, because only the
+scheduled Full Validation job runs it.
+
+- Digest before: `f943337e6dbfe1d7881a001749009e7aa322cbbff2c4aa4e89c4e1db4c266b80`
+- Digest after: `d7f8b5e1cff0f88592de285293f85d52cf6b851265738f8f542e27814ce67dff`
+- Attributed by running the test either side of that single commit: **passes at `ddf6810~1`,
+  fails at `ddf6810`.** Assume nothing here — the same symptom would appear for a real defect.
+- Measured over all 21,915 rows: longitude max **0.00014 arcsec** (21,912 rows), latitude max
+  **0.0010 arcsec** (21,915 rows), distance max 1.4e-14 AU, speed max 3.8e-7 °/day.
+- Accepted: the correction moves results **toward** the IAU 2006 model, and 0.001 arcsec is
+  three orders of magnitude inside VSOP87A's own 2.06 arcsec mean truncation error. The SPK
+  path is untouched.
+- **The values in v6.0.0 and v6.0.1 are the corrected ones.** Re-pinning changed no shipped
+  behaviour; it recorded a change that had already been released.
+
 
 ## Quick Reference: Annual Maintenance Checklist
 

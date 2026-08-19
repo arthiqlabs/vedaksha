@@ -97,17 +97,45 @@ use vedaksha_ephem_core::jpl::EphemerisProvider;
 /// measurement — and one that would otherwise be silently accepted.
 const EXPECTED_ROWS: u32 = 21_915;
 
-/// Digest of all 21,915 rows, pinned at `4999d52`.
-///
-/// Re-derived here from a clean run rather than carried over; identical to the
-/// value recorded beside the `wide` declaration in `Cargo.toml`, which two
-/// earlier sessions reproduced independently.
+/// Digest of all 21,915 rows, re-pinned at the v6 precession correction.
 ///
 /// **If this assertion fails, the analytical path's output bits moved.** That
-/// is not automatically a defect — see [`PRE_WIDE_DIGEST`] for a case where it
-/// was benign — but it is never nothing. Establish what moved and why, decide,
-/// and re-pin in a commit that says so. Do not re-pin to make a red test green.
-const EXPECTED_DIGEST: &str = "f943337e6dbfe1d7881a001749009e7aa322cbbff2c4aa4e89c4e1db4c266b80";
+/// is not automatically a defect — see [`PRE_WIDE_DIGEST`] and the note below
+/// for two cases where it was benign — but it is never nothing. Establish what
+/// moved and why, decide, and re-pin in a commit that says so. Do not re-pin to
+/// make a red test green.
+///
+/// # Why this moved at v6
+///
+/// [`PRE_PRECESSION_FIX_DIGEST`] is the value this held from the `wide` upgrade
+/// until `ddf6810`, which corrected the order of the four Fukushima-Williams
+/// rotations in `precession_matrix`. `apparent_position` composes that matrix,
+/// so every analytical row moved with it.
+///
+/// Attributed by running this test either side of that one commit: it **passes**
+/// at `ddf6810~1` and fails at `ddf6810`. Measured over all 21,915 rows:
+///
+/// | quantity | rows changed | max delta |
+/// |---|---|---|
+/// | ecliptic longitude | 21,912 | 3.9e-8° (**0.00014 arcsec**) |
+/// | ecliptic latitude | 21,915 | 2.8e-7° (**0.0010 arcsec**) |
+/// | distance | 12,227 | 1.4e-14 AU |
+/// | speed | 21,894 | 3.8e-7 °/day |
+///
+/// Accepted: the correction moves results **toward** the IAU 2006 model, and a
+/// worst case of 0.001 arcsec is three orders of magnitude inside VSOP87A's own
+/// 2.06 arcsec mean truncation error against Horizons. The rotation order was
+/// wrong before and is right now; the digest follows the fix, not the reverse.
+const EXPECTED_DIGEST: &str = "d7f8b5e1cff0f88592de285293f85d52cf6b851265738f8f542e27814ce67dff";
+
+/// The digest from the `wide` 0.7.33 -> 1.6.1 upgrade until `ddf6810`.
+///
+/// Kept for the same reason as [`PRE_WIDE_DIGEST`]: a digest that only ever
+/// carries its current value cannot tell you which known change you are looking
+/// at when it moves again.
+#[allow(dead_code)]
+const PRE_PRECESSION_FIX_DIGEST: &str =
+    "f943337e6dbfe1d7881a001749009e7aa322cbbff2c4aa4e89c4e1db4c266b80";
 
 /// The digest before the `wide` upgrade, at `ee85cdf^` (= `391367d`).
 ///
