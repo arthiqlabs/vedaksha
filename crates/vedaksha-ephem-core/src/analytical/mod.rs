@@ -55,6 +55,11 @@ fn ecliptic_to_equatorial(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
 }
 
 /// Convert VSOP87A planet enum from Body enum.
+///
+/// `EarthMoonBarycenter` maps to VSOP87A's `ear` series, which is the **Earth's
+/// centre** and not the barycentre. Callers must lift it — see
+/// [`earth_to_emb`]. Returning it raw is what put the observer 4,671 km out
+/// until 2026-08-20.
 fn body_to_vsop_planet(body: Body) -> Option<Planet> {
     match body {
         Body::Mercury => Some(Planet::Mercury),
@@ -202,6 +207,35 @@ impl Default for AnalyticalProvider {
     }
 }
 
+/// Lift VSOP87A's Earth-centre state to the Earth-Moon barycentre.
+///
+/// VSOP87A's `ear` series gives the Earth's centre. Every consumer of this
+/// trait — `coordinates::earth_state` above all — expects `EarthMoonBarycenter`
+/// to mean the barycentre, which is what the SPK path genuinely stores. The
+/// offset is `Moon_rel_EMB / EMRAT`, about 4,671 km:
+///
+/// ```text
+/// EMB = Earth + r/(1+EMRAT) = Earth + Moon_rel_EMB/EMRAT
+/// ```
+///
+/// `earth_state` divides by the same `EMRAT`, so the two cancel exactly and the
+/// observer returns to the VSOP87A Earth this series actually defines.
+fn earth_to_emb(earth: StateVector, moon_rel_emb: StateVector) -> StateVector {
+    let f = 1.0 / EMRAT;
+    StateVector {
+        position: Position {
+            x: earth.position.x + moon_rel_emb.position.x * f,
+            y: earth.position.y + moon_rel_emb.position.y * f,
+            z: earth.position.z + moon_rel_emb.position.z * f,
+        },
+        velocity: Velocity {
+            x: earth.velocity.x + moon_rel_emb.velocity.x * f,
+            y: earth.velocity.y + moon_rel_emb.velocity.y * f,
+            z: earth.velocity.z + moon_rel_emb.velocity.z * f,
+        },
+    }
+}
+
 impl EphemerisProvider for AnalyticalProvider {
     fn compute_state(&self, body: Body, jd: f64) -> Result<StateVector, ComputeError> {
         // Range check
@@ -225,7 +259,11 @@ impl EphemerisProvider for AnalyticalProvider {
             | Body::Neptune => {
                 let planet = body_to_vsop_planet(body)
                     .expect("body_to_vsop_planet should succeed for planet bodies");
-                Ok(vsop_state(planet, jd))
+                let state = vsop_state(planet, jd);
+                if body == Body::EarthMoonBarycenter {
+                    return Ok(earth_to_emb(state, moon_state(jd)));
+                }
+                Ok(state)
             }
 
             // Sun ≈ SSB origin

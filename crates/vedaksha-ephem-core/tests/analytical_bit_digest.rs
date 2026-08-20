@@ -97,7 +97,31 @@ use vedaksha_ephem_core::jpl::EphemerisProvider;
 /// measurement — and one that would otherwise be silently accepted.
 const EXPECTED_ROWS: u32 = 21_915;
 
-/// Digest of all 21,915 rows, re-pinned at the v6 precession correction.
+/// Digest of all 21,915 rows, re-pinned at the observer-position correction.
+///
+/// # Why this moved on 2026-08-20
+///
+/// [`PRE_OBSERVER_FIX_DIGEST`] is the value this held between the precession
+/// correction and the observer correction. `AnalyticalProvider` was answering
+/// `Body::EarthMoonBarycenter` with VSOP87A's `ear` series, which is the
+/// Earth's CENTRE; `coordinates::earth_state` then subtracted the Moon term
+/// from a position that never contained it, putting the observer ~4,671 km out.
+/// Separately, `earth_state` divided a rel-EMB Moon by `1 + EMRAT` instead of
+/// `EMRAT`, a further 56.8 km on every provider.
+///
+/// Every analytical row moved. The measured effect, mean apparent longitude
+/// against JPL Horizons over the measured-DT era:
+///
+/// | body | before | after |
+/// |---|---|---|
+/// | Sun | 4.091" | **0.180"** |
+/// | Venus | 4.828" | **0.180"** |
+/// | Mercury | 4.267" | **0.180"** |
+/// | Mars | 3.060" | **0.178"** |
+/// | Moon | 0.169" | 0.169" (never used `earth_state`) |
+///
+/// Overall 2.058" -> 0.239", inside VSOP87A's published ~1". The SPK path
+/// improved too, 0.106" -> 0.103", from the EMRAT half alone.
 ///
 /// **If this assertion fails, the analytical path's output bits moved.** That
 /// is not automatically a defect — see [`PRE_WIDE_DIGEST`] and the note below
@@ -126,7 +150,15 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// worst case of 0.001 arcsec is three orders of magnitude inside VSOP87A's own
 /// 2.06 arcsec mean truncation error against Horizons. The rotation order was
 /// wrong before and is right now; the digest follows the fix, not the reverse.
-const EXPECTED_DIGEST: &str = "d7f8b5e1cff0f88592de285293f85d52cf6b851265738f8f542e27814ce67dff";
+const EXPECTED_DIGEST: &str = "2fadd8f4d3e9b8063080b7f2d9cb1b17f803dc2b7b960d24b63ece65d6654fae";
+
+/// The digest from the precession correction until the observer correction.
+///
+/// Kept for the same reason as the others: a pin that only ever holds its
+/// current value cannot tell you which known change you are looking at.
+#[allow(dead_code)]
+const PRE_OBSERVER_FIX_DIGEST: &str =
+    "d7f8b5e1cff0f88592de285293f85d52cf6b851265738f8f542e27814ce67dff";
 
 /// The digest from the `wide` 0.7.33 -> 1.6.1 upgrade until `ddf6810`.
 ///

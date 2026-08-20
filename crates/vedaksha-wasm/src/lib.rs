@@ -2273,19 +2273,19 @@ mod panchanga_drishti_bhava_tests {
         let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
         assert!(close(
             v["vara"]["gulika_kalam"]["start_jd"].as_f64().unwrap(),
-            2_451_544.542_324_732
+            2_451_544.542_329_775
         ));
         assert!(close(
             v["vara"]["gulika_kalam"]["end_jd"].as_f64().unwrap(),
-            2_451_544.601_552_454
+            2_451_544.601_557_458
         ));
         assert!(close(
             v["vara"]["rahu_kalam"]["start_jd"].as_f64().unwrap(),
-            2_451_544.660_780_174_7
+            2_451_544.660_785_140_9
         ));
         assert!(close(
             v["vara"]["rahu_kalam"]["end_jd"].as_f64().unwrap(),
-            2_451_544.720_007_896
+            2_451_544.720_012_823_6
         ));
     }
 

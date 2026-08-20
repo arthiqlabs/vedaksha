@@ -1772,14 +1772,14 @@ mod tests {
              returned an interval ending 0.9001 d BEFORE it"
         );
         assert!(
-            libm::fabs(start - 2_459_112.499_999_42) < 1e-6,
+            libm::fabs(start - 2_459_112.499_996_961_6) < 1e-6,
             "start {start} must be the bisection-derived sunrise \
-             JD 2459112.49999942"
+             JD 2459112.4999969616"
         );
         assert!(
-            libm::fabs(end - 2_459_113.499_583_688_6) < 1e-6,
+            libm::fabs(end - 2_459_113.499_580_550_5) < 1e-6,
             "end {end} must be the bisection-derived next sunrise \
-             JD 2459113.499583689"
+             JD 2459113.4995805505"
         );
     }
 

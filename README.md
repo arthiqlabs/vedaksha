@@ -4,7 +4,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `0.106″ vs JPL Horizons` · `1,053 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+`clean-room` · `0.103″ vs JPL Horizons` · `1,053 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
 
 ---
 
@@ -45,12 +45,14 @@ Every figure is printed by a named test. Reproduce the ephemeris tables with `ba
 
 | Era | Comparisons | Mean | Max |
 |-----|-------------|------|-----|
-| 1900–2025 (ΔT measured) | 15,350 | **0.106″** | 1.184″ (Uranus) |
-| 1900–2100 (all) | 24,350 | 0.880″ | 44.914″ (Moon, 2099) |
+| 1900–2025 (ΔT measured) | 15,350 | **0.103″** | 1.187″ (Uranus) |
+| 1900–2100 (all) | 24,350 | 0.878″ | 44.912″ (Moon, 2099) |
 
 15,349 of 15,350 comparisons before 2026 are sub-arcsecond. **Past 2025 the residual is ΔT prediction, not ephemeris error:** our Espenak–Meeus extrapolation and Horizons' ΔT diverge by ~68 s at 2099, and the error scales with a body's angular rate — the Moon (0.64″/s) picks up ~45″, Pluto essentially none. At 2099-02-06, five bodies spanning 0.03–0.64″/s all imply the same 66–71 s offset, which is the signature of a clock difference, not a position error.
 
-**AnalyticalProvider vs JPL Horizons** — `analytical_oracle.rs`, 1900–2025. VSOP87A is a truncated theory, necessarily looser than the numerical kernel: overall mean **2.06″**, worst case **24.22″** (Venus), Moon 0.17″ mean via ELP/MPP02. Densely sampled at 2,435 dates per body; a sparser 10-date test in the same crate reports a friendlier 13.09″ max because it never lands near Venus's worst case.
+**AnalyticalProvider vs JPL Horizons** — `analytical_oracle.rs`, 1900–2025: overall mean **0.239″**, worst case **1.896″** (Neptune), Moon 0.169″ mean via ELP/MPP02. Densely sampled at 2,435 dates per body.
+
+Until 2026-08-20 those figures were 2.06″ mean and 24.22″ worst, and this README attributed the gap to VSOP87A being a truncated theory. That was wrong, and the wording protected a defect of ours: the analytical provider answered `EarthMoonBarycenter` with VSOP87A's Earth-centre series, so the observer sat 4,671 km off, and `earth_state` divided a barycentre-relative Moon by `1 + EMRAT` instead of `EMRAT` for a further 56.8 km. Both are fixed. The second one moved the SPK path too, 0.106″ → 0.103″.
 
 **ELP/MPP02 Moon** — `lunar_horizons.rs`: **0.015″ at J2000**, 0.020–0.053″ across 1500–2500 CE.
 

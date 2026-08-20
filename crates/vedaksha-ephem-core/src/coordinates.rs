@@ -50,9 +50,21 @@ pub struct ApparentPosition {
 
 /// Compute the barycentric position and velocity of Earth at a given Julian Day.
 ///
-/// `Earth = EMB + Moon_relative_to_EMB * (-1 / (1 + EMRAT))`
+/// `Earth = EMB - Moon_relative_to_EMB / EMRAT`
 ///
-/// The SPK file stores EMB (target=3, center=0) and Moon (target=301, center=3).
+/// The SPK file stores EMB (target=3, center=0) and Moon (target=301, center=3),
+/// so the Moon state arriving here is **relative to the EMB**, not geocentric.
+/// The divisor is therefore `EMRAT`, not `1 + EMRAT`:
+///
+/// ```text
+/// EMB   = Earth + r/(1+EMRAT)              r = geocentric Moon
+/// M_rel = Moon - EMB = r·EMRAT/(1+EMRAT)   =>  r = M_rel·(1+EMRAT)/EMRAT
+/// Earth = EMB - r/(1+EMRAT) = EMB - M_rel/EMRAT
+/// ```
+///
+/// Using `1/(1+EMRAT)` on a rel-EMB Moon — as this did until 2026-08-20 —
+/// leaves the observer 56.8 km off, which is 0.078 arcsec at 1 AU and scales as
+/// 1/distance. It affected every provider, the SPK path included.
 fn earth_state(
     provider: &dyn EphemerisProvider,
     jd: f64,
@@ -60,7 +72,7 @@ fn earth_state(
     let emb = provider.compute_state(Body::EarthMoonBarycenter, jd)?;
     let moon = provider.compute_state(Body::Moon, jd)?;
 
-    let factor = 1.0 / (1.0 + EMRAT);
+    let factor = 1.0 / EMRAT;
 
     let pos = Position {
         x: emb.position.x - moon.position.x * factor,
