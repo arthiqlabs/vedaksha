@@ -9,6 +9,8 @@ license.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
 description = "Numeric primitives for Vedaksha: Chebyshev polynomials, angle arithmetic, interpolation, rotation matrices"
+keywords = ["chebyshev", "interpolation", "matrix", "angles", "numerics"]
+categories = ["mathematics", "science"]
 
 [dependencies]
 libm = "0.2"

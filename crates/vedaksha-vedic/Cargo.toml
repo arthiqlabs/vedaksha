@@ -9,6 +9,8 @@ license.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
 description = "Vedic astrology: nakshatras, dashas, vargas, yogas, shadbala"
+keywords = ["jyotish", "vedic", "nakshatra", "dasha", "panchanga"]
+categories = ["science"]
 
 [dependencies]
 vedaksha-math = { version = "7.0.0", path = "../vedaksha-math" }

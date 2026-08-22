@@ -9,6 +9,8 @@ license.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
 description = "WASM bindings for Vedaksha astronomical computation"
+keywords = ["wasm", "astrology", "jyotish", "ephemeris", "kundali"]
+categories = ["science", "wasm"]
 # Not published to crates.io — distributed via npm as `vedaksha-wasm` only.
 # v3.0.0 stopped publishing this crate to crates.io because the source build
 # is awkward (wasm-bindgen toolchain) and the npm package is the canonical

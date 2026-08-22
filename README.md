@@ -2,9 +2,19 @@
 
 **Clean-room Rust ephemeris and Vedic astrology engine, built for the agentic-AI era.** Sub-arcsecond planetary precision, every algorithm traced to a primary source, any chart queryable as a property graph.
 
+[![crates.io](https://img.shields.io/crates/v/vedaksha.svg?logo=rust)](https://crates.io/crates/vedaksha)
+[![docs.rs](https://img.shields.io/docsrs/vedaksha?logo=docsdotrs)](https://docs.rs/vedaksha)
+[![PyPI](https://img.shields.io/pypi/v/vedaksha?logo=pypi&logoColor=white)](https://pypi.org/project/vedaksha/)
+[![npm](https://img.shields.io/npm/v/vedaksha-wasm?logo=npm)](https://www.npmjs.com/package/vedaksha-wasm)
+[![CI](https://github.com/arthiqlabs/vedaksha/actions/workflows/ci.yml/badge.svg)](https://github.com/arthiqlabs/vedaksha/actions/workflows/ci.yml)
+[![MSRV](https://img.shields.io/badge/MSRV-1.89-orange?logo=rust)](Cargo.toml)
+[![License](https://img.shields.io/badge/license-BSL%201.1-blue)](LICENSE)
+
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `0.103″ vs JPL Horizons` · `1,053 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+`clean-room` · `0.103″ vs JPL Horizons` · `1,064 tests + 24,350 oracle rows` · `MCP-native` · `BSL 1.1 → Apache 2.0`
+
+[Install](#install) · [Quick start](#quick-start) · [Accuracy](#accuracy) · [What's inside](#whats-inside) · [MCP + property graph](#mcp--property-graph) · [Provenance](#clean-room-provenance) · [License](#license)
 
 ---
 
@@ -19,6 +29,19 @@
 | Docker | `docker run -e VEDAKSHA_MCP_TOKEN=… -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp` | multi-arch (amd64 + arm64) |
 
 Compute **janam kundali** (natal charts), **panchanga**, **dashas**, **nakshatras**, **vargas**, **shadbala**, **ashtakavarga**, **muhurta** and **transits/gochara** from a sub-arcsecond ephemeris (VSOP87A, ELP/MPP02, JPL DE440s/DE441).
+
+```mermaid
+flowchart LR
+  K["JPL DE440s / DE441<br/>SPK kernel, ~31 MB"] --> E
+  V["VSOP87A + ELP/MPP02<br/>compiled to constants,<br/>no data files"] --> E
+  E["Ephemeris core<br/>precession · nutation<br/>light-time · ΔT"] --> W["Western<br/>houses · aspects<br/>dignities"]
+  E --> J["Jyotish<br/>nakshatras · dashas · vargas<br/>panchanga · shadbala · muhurta"]
+  W --> C["ComputedChart"]
+  J --> C
+  C --> G["Property graph<br/>Cypher · SurrealQL<br/>JSON-LD · RAG text"]
+  C --> M["MCP server<br/>17 tools · stdio + HTTP"]
+  C --> S["Rust · Python · WASM"]
+```
 
 ## Quick start
 
@@ -66,7 +89,7 @@ Until 2026-08-20 those figures were 2.06″ mean and 24.22″ worst, and this RE
 
 **Two ephemeris providers.** `SpkReader` reads JPL DE440s (~31 MB) for sub-arcsecond work. `AnalyticalProvider` compiles VSOP87A + ELP/MPP02 to constants and needs no data files — for WASM, edge and Cloudflare Workers.
 
-**Jyotish, from primary sources.** 27 nakshatras with padas and lords · 5 dasha systems (Vimshottari, Yogini, Ashtottari, and Jaimini's Chara & Narayana) · all 16 vargas (D-1 → D-60) · six-component shadbala with Ishta/Kashta phala · 11 ayanamshas, each traceable to a chapter, a star or a committee · panchanga's five limbs, with vara reckoned from local sunrise and Rahu/Gulika Kalam as real time windows · graded drishti per BPHS Ch. 26 · mean, true and osculating nodes (0.6″ max vs DE441, KP sub-lord ready).
+**Jyotish, from primary sources.** 27 nakshatras with padas and lords · 5 dasha systems (Vimshottari, Yogini, Ashtottari, and Jaimini's Chara & Narayana) · all 16 vargas (D-1 → D-60) · six-component shadbala with Ishta/Kashta phala · 11 ayanamshas, each traceable to a chapter, a star or a committee · panchanga's five limbs, with vara reckoned from local sunrise and Rahu/Gulika Kalam as real time windows · graded drishti per BPHS Ch. 26 · mean, true and osculating nodes, all referred to the ecliptic of date, with the J2000 variant tracking DE441's `OM` to 0.6″ (KP sub-lord ready).
 
 **Western: calculation, not interpretation.** 10 house systems, major aspects with applying/separating motion, essential dignities, synastry and composite. `ChartConfig` defaults to tropical. There is no Western interpretive layer and no parity with the Jyotish surface.
 

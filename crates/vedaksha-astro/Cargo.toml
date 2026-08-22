@@ -9,6 +9,8 @@ license.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
 description = "Western astrology: house systems, aspects, dignities, chart computation"
+keywords = ["astrology", "horoscope", "houses", "aspects", "natal-chart"]
+categories = ["science", "mathematics"]
 
 [dependencies]
 vedaksha-math = { version = "7.0.0", path = "../vedaksha-math" }

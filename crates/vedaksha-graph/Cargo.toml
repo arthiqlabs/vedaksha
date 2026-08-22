@@ -9,6 +9,8 @@ license.workspace = true
 license-file.workspace = true
 rust-version.workspace = true
 description = "Graph data model and ontology for astronomical/astrological charts"
+keywords = ["graph", "ontology", "cypher", "json-ld", "astrology"]
+categories = ["science", "data-structures"]
 
 [dependencies]
 serde = { workspace = true }
