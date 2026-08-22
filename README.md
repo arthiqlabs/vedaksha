@@ -124,7 +124,7 @@ Every implemented algorithm carries a `// Source:` doc-comment naming its primar
 
 ## License
 
-**Business Source License 1.1** — SPDX `BUSL-1.1`, which is what crates.io, PyPI and npm display. (`BSL-1.0` is the unrelated Boost licence, hence the `BUSL` prefix.)
+**Business Source License 1.1** — SPDX `BUSL-1.1`, which is what crates.io, PyPI and npm display.
 
 - **Non-commercial** — free (personal, research, education, internal tools).
 - **Commercial** — $500, charged once per organization. Unlimited products and seats, perpetual, and it covers the version you license and every version released after it — not charged again per release. [Purchase →](https://vedaksha.net/pricing)
