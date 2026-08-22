@@ -1,6 +1,6 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
 // Vedaksha — Vision from Vedas
-// Licensed under BSL 1.1. See LICENSE file.
+// SPDX-License-Identifier: BUSL-1.1
 
 //! Tier-2 acceptance: hard-coded numerical examples from the IMCCE
 //! explanatory note `elpmpp02.pdf` §6 / Tables 8.a, transcribed via the

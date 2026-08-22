@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
 # Vedaksha — Vision from Vedas
-# Licensed under BSL 1.1. See LICENSE file.
+# SPDX-License-Identifier: BUSL-1.1
 """Generate the JPL Horizons oracle fixture for `oracle_comparison.rs`.
 
 Fetches apparent geocentric ecliptic longitudes from the NASA/JPL Horizons

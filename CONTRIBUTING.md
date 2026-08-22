@@ -10,11 +10,11 @@ By submitting a pull request, you agree to the following:
 
 - You grant ArthIQ Labs LLC a perpetual, worldwide, non-exclusive, royalty-free
   license to use, reproduce, modify, and distribute your contribution under the
-  terms of the BSL 1.1 license (and, after the Change Date, under the Apache
+  terms of the BUSL-1.1 license (and, after the Change Date, under the Apache
   License 2.0).
 - You represent that you have the right to grant this license.
 - You understand that your contribution will be licensed under the same terms
-  as the rest of the project (BSL 1.1).
+  as the rest of the project (BUSL-1.1).
 
 The CLA does NOT transfer copyright ownership of your contribution to ArthIQ
 Labs LLC. You retain copyright of your original work.
@@ -81,7 +81,7 @@ Every source file must include:
 ```rust
 // Copyright (c) 2026 ArthIQ Labs LLC. All rights reserved.
 // Vedaksha -- Vision from Vedas
-// Licensed under BSL 1.1. See LICENSE file.
+// SPDX-License-Identifier: BUSL-1.1
 // Contact: info@arthiq.net | https://vedaksha.net
 ```
 

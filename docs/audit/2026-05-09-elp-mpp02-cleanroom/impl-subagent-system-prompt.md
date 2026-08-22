@@ -33,7 +33,7 @@ If you accidentally encounter a forbidden source, STOP, do not include its conte
 
 # Deliverables (all in the worktree at `/workspace/vedaksha-cleanroom-elpmpp02/`)
 
-1. `crates/vedaksha-ephem-core/src/analytical/elp_mpp02.rs` — full clean implementation. Replace the panicking stubs from the quarantine commit. Standard ArthIQ Labs / BSL 1.1 header. **NO "Based on" attribution.** The module rustdoc cites only Chapront & Francou (2003) and the IMCCE primary distribution at `cyrano-se.obspm.fr`. Public API preserved bit-compatibly:
+1. `crates/vedaksha-ephem-core/src/analytical/elp_mpp02.rs` — full clean implementation. Replace the panicking stubs from the quarantine commit. Standard ArthIQ Labs / BUSL-1.1 header. **NO "Based on" attribution.** The module rustdoc cites only Chapront & Francou (2003) and the IMCCE primary distribution at `cyrano-se.obspm.fr`. Public API preserved bit-compatibly:
    ```rust
    pub struct MoonRectangular { pub x:f64, pub y:f64, pub z:f64, pub vx:f64, pub vy:f64, pub vz:f64 }
    pub fn elp_geocentric_of_date(jd: f64) -> MoonRectangular;

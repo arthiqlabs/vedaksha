@@ -31,7 +31,7 @@ book's worked-value table used as a conformance oracle.
 
 By opening this pull request you agree to the CLA in [CONTRIBUTING.md](../CONTRIBUTING.md):
 you grant ArthIQ Labs LLC a perpetual, worldwide, non-exclusive, royalty-free
-licence to use your contribution under BSL 1.1 and, after the Change Date,
+licence to use your contribution under BUSL-1.1 and, after the Change Date,
 Apache 2.0. You retain copyright of your work.
 
 - [ ] I have read and agree to the CLA

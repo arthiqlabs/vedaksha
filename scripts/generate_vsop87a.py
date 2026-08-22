@@ -212,7 +212,7 @@ def generate_wrapper_rs(planet_name: str) -> str:
     lines = []
     lines.append("// Copyright © 2026 ArthIQ Labs LLC. All rights reserved.")
     lines.append("// Vedaksha — Vision from Vedas")
-    lines.append("// Licensed under BSL 1.1. See LICENSE file.")
+    lines.append("// SPDX-License-Identifier: BUSL-1.1")
     lines.append("//")
     lines.append("// GENERATED FILE — do not edit manually.")
     lines.append("//")

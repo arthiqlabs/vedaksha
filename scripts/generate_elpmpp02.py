@@ -27,7 +27,7 @@ Usage:
         [--output-dir crates/vedaksha-ephem-core/src/analytical/coefficients]
 
 Copyright (c) 2026 ArthIQ Labs LLC. All rights reserved.
-Licensed under BSL 1.1.
+SPDX-License-Identifier: BUSL-1.1
 """
 
 from __future__ import annotations
@@ -318,7 +318,7 @@ def write_wrapper_rs(out_path: str, component: str) -> None:
     lines = [
         "// Copyright © 2026 ArthIQ Labs LLC. All rights reserved.",
         "// Vedaksha — Vision from Vedas",
-        "// Licensed under BSL 1.1. See LICENSE file.",
+        "// SPDX-License-Identifier: BUSL-1.1",
         "//",
         "// GENERATED FILE — do not edit manually.",
         "//",

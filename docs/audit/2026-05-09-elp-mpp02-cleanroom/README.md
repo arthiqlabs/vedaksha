@@ -2,8 +2,8 @@
 
 **Date:** 2026-05-09
 **Module:** `crates/vedaksha-ephem-core/src/analytical/elp_mpp02.rs`
-**License:** BSL 1.1
-**Reason:** the prior implementation of the lunar theory derived structurally from `github.com/ytliu0/ElpMpp02` (GPL-3.0). That derivation was incompatible with the project's BSL 1.1 license and inconsistent with the public clean-room claim. This audit dir documents the replacement of that implementation with a clean-room re-derivation from primary sources.
+**License:** BUSL-1.1
+**Reason:** the prior implementation of the lunar theory derived structurally from `github.com/ytliu0/ElpMpp02` (GPL-3.0). That derivation was incompatible with the project's BUSL-1.1 license and inconsistent with the public clean-room claim. This audit dir documents the replacement of that implementation with a clean-room re-derivation from primary sources.
 
 ## Process
 

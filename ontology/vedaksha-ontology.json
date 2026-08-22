@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "description": "Property graph ontology for astronomical and astrological chart data",
   "copyright": "© 2026 ArthIQ Labs LLC. All rights reserved.",
-  "license": "BSL-1.1",
+  "license": "BUSL-1.1",
   "nodeTypes": [
     {
       "name": "Chart",

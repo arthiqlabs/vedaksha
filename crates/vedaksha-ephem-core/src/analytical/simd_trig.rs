@@ -1,6 +1,6 @@
 // Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
 // Vedaksha — Vision from Vedas
-// Licensed under BSL 1.1. See LICENSE file.
+// SPDX-License-Identifier: BUSL-1.1
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! Vectorized `sin`/`cos` for four `f64` lanes at once.

@@ -3,7 +3,7 @@
 **Module:** `crates/vedaksha-astro/src/sidereal.rs`
 **Started:** 2026-08-17 · **Landed:** 2026-08-18
 **Precedent:** [`docs/audit/2026-05-09-elp-mpp02-cleanroom/`](../2026-05-09-elp-mpp02-cleanroom/)
-**License context:** BSL 1.1. This directory is the evidence a BSL user checks.
+**License context:** BUSL-1.1. This directory is the evidence a BUSL-1.1 user checks.
 
 ---
 

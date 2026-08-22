@@ -27,7 +27,7 @@ and the whole apparent-place pipeline.
 
 ## Why Horizons and not another ephemeris library
 
-Vedaksha's BSL 1.1 position rests on a documented clean-room trail (see
+Vedaksha's BUSL-1.1 position rests on a documented clean-room trail (see
 [`docs/audit/`](../../docs/audit)). Horizons output is a public-domain US
 Government work, so using it as reference data raises no copyleft question.
 Reference values here are astronomical facts, not anyone's code.
