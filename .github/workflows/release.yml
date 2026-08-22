@@ -44,6 +44,10 @@ jobs:
             "$(sed -n 's/^__version__ = "\(.*\)"/\1/p' bindings/python/src/vedaksha/__init__.py)"
           check "MCP tool snapshot engineVersion" \
             "$(sed -n 's/.*"engineVersion": "\(.*\)".*/\1/p' tools/mcp-tools.json)"
+          # server.json is what the official MCP Registry publishes. Asserting it
+          # here keeps the committed file truthful, rather than rewriting it at
+          # publish time and letting the repo copy drift.
+          check "server.json version" "$(jq -r .version server.json)"
           exit $fail
 
   build-mcp:
@@ -231,6 +235,26 @@ jobs:
           tags: |
             ghcr.io/arthiqlabs/vedaksha-mcp:latest
             ghcr.io/arthiqlabs/vedaksha-mcp:${{ github.ref_name }}
+
+  publish-mcp-registry:
+    name: Publish to MCP Registry
+    needs: [version-check]
+    runs-on: ubuntu-latest
+    permissions:
+      # OIDC is what proves we own the io.github.arthiqlabs namespace. No token
+      # to store, rotate, or leak -- unlike the npm secret, which had to be
+      # rotated after being pasted into a chat.
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      - name: Authenticate to the MCP Registry
+        run: ./mcp-publisher login github-oidc
+      - name: Publish
+        run: ./mcp-publisher publish
 
   github-release:
     name: Create GitHub Release
