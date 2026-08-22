@@ -24,6 +24,7 @@
 //!
 //! Usage:
 //!   vedaksha-mcp                       # stdio mode (default)
+//!   vedaksha-mcp --stdio               # stdio mode, stated explicitly
 //!   VEDAKSHA_MCP_TOKEN=… vedaksha-mcp --http          # HTTP on :3100, auth on
 //!   VEDAKSHA_MCP_TOKEN=… vedaksha-mcp --http --port 8080
 //!   vedaksha-mcp --http --insecure-no-auth            # no auth (trusted net only)
@@ -43,10 +44,43 @@
 
 use std::io::{self, BufRead, Write};
 
+/// Which transport the arguments select.
+#[derive(Debug, PartialEq, Eq)]
+enum Transport {
+    Stdio,
+    Http,
+    /// Both were asked for, which cannot be honoured.
+    Conflict,
+}
+
+/// Decide the transport from the argument list.
+///
+/// `--stdio` exists so stdio can be selected by a *positive* argument rather
+/// than by the absence of `--http`. That matters wherever the invocation is
+/// assembled by something else: a container image's `CMD`, an MCP client's
+/// launch config, a registry entry. Overriding a default `CMD` requires an
+/// argument to override it *with*, and before this flag there was none, so
+/// `ghcr.io/arthiqlabs/vedaksha-mcp` could not be run over stdio without also
+/// overriding the entrypoint.
+fn transport_from(args: &[String]) -> Transport {
+    let http = args.iter().any(|a| a == "--http");
+    let stdio = args.iter().any(|a| a == "--stdio");
+    match (http, stdio) {
+        (true, true) => Transport::Conflict,
+        (true, false) => Transport::Http,
+        (false, _) => Transport::Stdio,
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
-    if args.iter().any(|a| a == "--http") {
+    if transport_from(&args) == Transport::Conflict {
+        eprintln!("--http and --stdio are mutually exclusive; pass one or neither");
+        std::process::exit(2);
+    }
+
+    if transport_from(&args) == Transport::Http {
         #[cfg(feature = "http")]
         {
             let port = parse_port(&args);
@@ -413,5 +447,59 @@ mod tests {
         assert!(!auth.authorized(Some("bearer s3cr3t"))); // case-sensitive scheme
         assert!(!auth.authorized(None));
         assert!(!auth.authorized(Some("")));
+    }
+}
+
+// Named apart from the `tests` module above, which is gated on the `http`
+// feature; transport selection is unconditional and must be tested either way.
+#[cfg(test)]
+mod transport_tests {
+    use super::{Transport, transport_from};
+
+    fn args(list: &[&str]) -> Vec<String> {
+        std::iter::once("vedaksha-mcp")
+            .chain(list.iter().copied())
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn no_arguments_is_stdio() {
+        assert_eq!(transport_from(&args(&[])), Transport::Stdio);
+    }
+
+    #[test]
+    fn stdio_can_be_stated_explicitly() {
+        // The whole point of the flag: an argument that *selects* stdio, so a
+        // container CMD or a client launch config has something to pass.
+        assert_eq!(transport_from(&args(&["--stdio"])), Transport::Stdio);
+    }
+
+    #[test]
+    fn http_is_selected_by_its_flag() {
+        assert_eq!(transport_from(&args(&["--http"])), Transport::Http);
+        assert_eq!(
+            transport_from(&args(&["--http", "--port", "8080"])),
+            Transport::Http
+        );
+    }
+
+    #[test]
+    fn asking_for_both_is_a_conflict() {
+        // Silently preferring one would make `docker run … --stdio` on an image
+        // whose CMD is ["--http"] look like it worked while serving HTTP.
+        assert_eq!(
+            transport_from(&args(&["--http", "--stdio"])),
+            Transport::Conflict
+        );
+        assert_eq!(
+            transport_from(&args(&["--stdio", "--http"])),
+            Transport::Conflict
+        );
+    }
+
+    #[test]
+    fn unrelated_arguments_do_not_select_a_transport() {
+        assert_eq!(transport_from(&args(&["--workers", "8"])), Transport::Stdio);
     }
 }
