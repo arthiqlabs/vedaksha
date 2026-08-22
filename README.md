@@ -8,7 +8,7 @@
 [![npm](https://img.shields.io/npm/v/vedaksha-wasm?logo=npm)](https://www.npmjs.com/package/vedaksha-wasm)
 [![CI](https://github.com/arthiqlabs/vedaksha/actions/workflows/ci.yml/badge.svg)](https://github.com/arthiqlabs/vedaksha/actions/workflows/ci.yml)
 [![MSRV](https://img.shields.io/badge/MSRV-1.89-orange?logo=rust)](Cargo.toml)
-[![License](https://img.shields.io/badge/license-BSL%201.1-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-BUSL--1.1-blue)](LICENSE)
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
@@ -124,7 +124,7 @@ Every implemented algorithm carries a `// Source:` doc-comment naming its primar
 
 ## License
 
-**Business Source License 1.1.**
+**Business Source License 1.1** — SPDX `BUSL-1.1`, which is what crates.io, PyPI and npm display. (`BSL-1.0` is the unrelated Boost licence, hence the `BUSL` prefix.)
 
 - **Non-commercial** — free (personal, research, education, internal tools).
 - **Commercial** — $500, charged once per organization. Unlimited products and seats, perpetual, and it covers the version you license and every version released after it — not charged again per release. [Purchase →](https://vedaksha.net/pricing)
