@@ -128,7 +128,9 @@ Every implemented algorithm carries a `// Source:` doc-comment naming its primar
 
 - **Non-commercial** — free (personal, research, education, internal tools).
 - **Commercial** — $500, charged once per organization. Unlimited products and seats, perpetual, and it covers the version you license and every version released after it — not charged again per release. [Purchase →](https://vedaksha.net/pricing)
-- **Converts to Apache 2.0** four years after each version's release.
+- **Converts to Apache 2.0** four years after each version's release. That future licence
+  text is kept at [`CHANGE-LICENSE-APACHE-2.0.txt`](CHANGE-LICENSE-APACHE-2.0.txt) — it is the
+  *Change License* in BUSL terms, **not** a licence you may choose today.
 
 See [LICENSE](LICENSE), [SECURITY.md](SECURITY.md), [CONTRIBUTING.md](CONTRIBUTING.md) and [MAINTENANCE.md](MAINTENANCE.md).
 
