@@ -13,7 +13,7 @@ members = [
 ]
 
 [workspace.package]
-version = "6.1.0"
+version = "7.0.0"
 edition = "2024"
 authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
 homepage = "https://vedaksha.net"
@@ -23,12 +23,12 @@ license-file = "LICENSE"
 rust-version = "1.89"
 
 [workspace.dependencies]
-vedaksha-math = { version = "6.1.0", path = "crates/vedaksha-math" }
-vedaksha-ephem-core = { version = "6.1.0", path = "crates/vedaksha-ephem-core" }
-vedaksha-graph = { version = "6.1.0", path = "crates/vedaksha-graph" }
-vedaksha-astro = { version = "6.1.0", path = "crates/vedaksha-astro" }
-vedaksha-vedic = { version = "6.1.0", path = "crates/vedaksha-vedic" }
-vedaksha-mcp = { version = "6.1.0", path = "crates/vedaksha-mcp" }
+vedaksha-math = { version = "7.0.0", path = "crates/vedaksha-math" }
+vedaksha-ephem-core = { version = "7.0.0", path = "crates/vedaksha-ephem-core" }
+vedaksha-graph = { version = "7.0.0", path = "crates/vedaksha-graph" }
+vedaksha-astro = { version = "7.0.0", path = "crates/vedaksha-astro" }
+vedaksha-vedic = { version = "7.0.0", path = "crates/vedaksha-vedic" }
+vedaksha-mcp = { version = "7.0.0", path = "crates/vedaksha-mcp" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
