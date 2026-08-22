@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/arthiqlabs/vedaksha/security/policy
+    about: Please report vulnerabilities privately, following SECURITY.md. Do not open a public issue.
+  - name: Commercial licence
+    url: https://vedaksha.net/pricing
+    about: Questions about commercial use, or purchasing a licence.
+  - name: Documentation
+    url: https://vedaksha.net/docs
+    about: API reference, accuracy figures, and the clean-room audit directories.

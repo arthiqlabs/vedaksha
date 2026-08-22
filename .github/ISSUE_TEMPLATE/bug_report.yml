@@ -1,0 +1,37 @@
+name: Bug report
+description: Something is broken that is not a wrong number — a panic, a build failure, an API problem.
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "7.0.0"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, and Rust/Python/Node version where relevant.
+      placeholder: "macOS 15, aarch64, rustc 1.89"
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: Include the full error or panic message, not a paraphrase.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The smallest thing that shows it.

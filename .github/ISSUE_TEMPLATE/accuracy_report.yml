@@ -1,0 +1,70 @@
+name: Accuracy report
+description: A computed value looks wrong — a position, a cusp, a dasha boundary, a panchanga limb.
+labels: ["accuracy"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for measuring something. Accuracy reports are the most useful
+        issues this project receives.
+
+        **One request before you write it up.** Vedaksha is a clean-room
+        implementation: every algorithm is derived from a primary source, and
+        the audit directories exist so a licensee can verify that no other
+        implementation's output crossed into the code. So please **do not paste
+        values produced by other astrology or ephemeris software**, and do not
+        ask us to match them. A report we cannot act on without reading someone
+        else's numbers is a report we have to close.
+
+        What we can act on: JPL Horizons, a published paper or treatise, an
+        internal inconsistency in our own output, or a defining equation.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Crate, package or MCP server version. `vedaksha --version`, or the version pinned in your manifest.
+      placeholder: "7.0.0"
+    validations:
+      required: true
+  - type: input
+    id: surface
+    attributes:
+      label: Surface
+      description: Which one — the Rust crate, the Python package, the WASM build, or the MCP server.
+      placeholder: "Rust crate, SpkReader"
+    validations:
+      required: true
+  - type: textarea
+    id: inputs
+    attributes:
+      label: Exact inputs
+      description: |
+        Julian Day, latitude, longitude, ayanamsa, house system — whatever the call took.
+        **Julian Days on the public surfaces are UT1**, except the raw SPK query which takes TDB.
+      placeholder: |
+        jd = 2451545.0 (UT1), lat 28.6139, lon 77.2090, Lahiri, Placidus
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: What it returned, and what you expected
+      description: Give the numbers, and say where the expected value comes from.
+      placeholder: |
+        Returned: Rahu 200.505 deg
+        Expected: ~125.045 deg
+        Source of expectation: the Meeus Ch.47 polynomial evaluated by hand
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: How you measured it
+      description: A snippet we can run, ideally driving the production path rather than a harness around it.
+  - type: checkboxes
+    id: cleanroom
+    attributes:
+      label: Clean-room acknowledgement
+      options:
+        - label: This report contains no values taken from another implementation's output.
+          required: true
