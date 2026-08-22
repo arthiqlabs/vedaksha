@@ -158,25 +158,6 @@ fn moon_state(jd: f64) -> StateVector {
     }
 }
 
-/// Encode a node longitude (degrees) as a unit vector on the equatorial ecliptic.
-fn node_state(longitude_deg: f64) -> StateVector {
-    let lon_rad = longitude_deg * core::f64::consts::PI / 180.0;
-    // Unit vector in ecliptic plane, then rotate to equatorial
-    let (px, py, pz) = ecliptic_to_equatorial(libm::cos(lon_rad), libm::sin(lon_rad), 0.0);
-    StateVector {
-        position: Position {
-            x: px,
-            y: py,
-            z: pz,
-        },
-        velocity: Velocity {
-            x: 0.0,
-            y: 0.0,
-            z: 0.0,
-        },
-    }
-}
-
 /// Analytical ephemeris provider backed by VSOP87A and ELP/MPP02.
 ///
 /// This provider requires no external data files. It covers the range
@@ -283,18 +264,15 @@ impl EphemerisProvider for AnalyticalProvider {
             // Moon: geocentric ELP + Earth position from VSOP87A
             Body::Moon => Ok(moon_state(jd)),
 
-            // Lunar nodes
-            Body::MeanNode => {
-                let lon = crate::nodes::mean_node(jd);
-                Ok(node_state(lon))
-            }
-            Body::TrueNode => {
-                let lon = crate::nodes::true_node(jd);
-                Ok(node_state(lon))
-            }
-            Body::TrueNodeOsculating => {
-                let lon = crate::nodes::true_node_osculating(jd);
-                Ok(node_state(lon))
+            // Lunar nodes have no state vector. They are directions, and
+            // `coordinates` resolves them from `nodes::node_longitude`
+            // before it ever reaches a provider. Returning a synthetic
+            // unit vector here is what let the geocentric pipeline treat a
+            // node as a body one AU away; the error reached 75°.
+            Body::MeanNode | Body::TrueNode | Body::TrueNodeOsculating => {
+                Err(ComputeError::BodyNotAvailable {
+                    body_id: body.naif_id(),
+                })
             }
 
             // Pluto not available in analytical theory
@@ -404,14 +382,22 @@ mod tests {
     }
 
     #[test]
-    fn mean_node_returns_value() {
-        let sv = provider().compute_state(Body::MeanNode, J2000).unwrap();
-        let r = distance(&sv);
-        // Should be a unit vector
-        assert!(
-            (r - 1.0).abs() < 1e-10,
-            "Mean node should be unit vector, distance = {r}"
-        );
+    fn nodes_are_not_state_vector_bodies() {
+        // A node is a direction, not a place. This provider used to answer
+        // with a synthetic unit vector one AU from the barycentre, which the
+        // geocentric pipeline then treated as a body and mangled by up to
+        // 75°. `coordinates` resolves nodes from `nodes::node_longitude`
+        // before any provider is consulted; end-to-end coverage lives in
+        // `tests/node_frame.rs`.
+        for body in [Body::MeanNode, Body::TrueNode, Body::TrueNodeOsculating] {
+            assert!(
+                matches!(
+                    provider().compute_state(body, J2000),
+                    Err(ComputeError::BodyNotAvailable { .. })
+                ),
+                "{body:?} must not produce a state vector"
+            );
+        }
     }
 
     #[test]
@@ -427,9 +413,6 @@ mod tests {
             Body::Saturn,
             Body::Uranus,
             Body::Neptune,
-            Body::MeanNode,
-            Body::TrueNode,
-            Body::TrueNodeOsculating,
         ];
         for body in bodies {
             let result = provider().compute_state(body, J2000);

@@ -117,6 +117,10 @@ pub struct CelestialFrame {
     combined: Matrix3,
     /// True obliquity of date (radians).
     eps_true: f64,
+    /// Nutation in longitude Δψ (radians). The matrix above already carries
+    /// it for state-vector bodies; the lunar nodes never become vectors, so
+    /// they need the scalar to reach the same true-equinox-of-date frame.
+    dpsi: f64,
 }
 
 /// Build the [`CelestialFrame`] for a given TT Julian Day.
@@ -137,6 +141,7 @@ pub fn frame_for(jd_tt: f64) -> CelestialFrame {
     CelestialFrame {
         combined: nut_matrix.multiply(&prec),
         eps_true,
+        dpsi,
     }
 }
 
@@ -147,6 +152,34 @@ fn compute_ecliptic_with_frame(
     frame: &CelestialFrame,
 ) -> Result<EclipticCoords, ComputeError> {
     let jd = delta_t::ut1_to_tt(jd_ut);
+
+    // Step 0: the lunar nodes are directions, not bodies.
+    //
+    // A node has no position, so it has no light-time, no aberration and no
+    // distance, and its longitude is already referred to the ecliptic of
+    // date. Routing it through the steps below — which subtract Earth's
+    // barycentric position from the target's and then precess the result —
+    // treats the direction as a place one AU away and moves the node by tens
+    // of degrees. That is what this branch exists to prevent; see the tests
+    // in `tests/node_frame.rs`.
+    //
+    // The only correction a node does take is nutation in longitude: the node
+    // functions return the *mean* equinox of date and every other longitude
+    // this function returns is referred to the *true* equinox of date.
+    if let Some(mean_of_date_deg) = crate::nodes::node_longitude(body, jd) {
+        let mut longitude = mean_of_date_deg.to_radians() + frame.dpsi;
+        if longitude < 0.0 {
+            longitude += 2.0 * PI;
+        } else if longitude >= 2.0 * PI {
+            longitude -= 2.0 * PI;
+        }
+        return Ok(EclipticCoords {
+            longitude,
+            // A node lies in the ecliptic by definition, and has no distance.
+            latitude: 0.0,
+            distance: 0.0,
+        });
+    }
 
     // Step 1: planetary-aberration-form light-time iteration.
     //

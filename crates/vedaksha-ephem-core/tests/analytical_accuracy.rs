@@ -351,32 +351,21 @@ fn node_delegation() {
     let ana = AnalyticalProvider::new();
     let jd = 2451545.0; // J2000
 
-    // Mean node should return finite values
-    let mean_state = ana
-        .compute_state(Body::MeanNode, jd)
-        .expect("MeanNode should succeed");
-    assert!(
-        mean_state.position.x.is_finite()
-            && mean_state.position.y.is_finite()
-            && mean_state.position.z.is_finite(),
-        "MeanNode position should be finite"
-    );
+    // The nodes are directions and have no state vector: the provider must
+    // refuse rather than synthesise one. This test previously asked the
+    // provider for a node state and asserted only that the numbers coming
+    // back were *finite* — which they were, all the way through a 75° error,
+    // because nothing here ever compared a longitude to anything.
+    for body in [Body::MeanNode, Body::TrueNode, Body::TrueNodeOsculating] {
+        assert!(
+            ana.compute_state(body, jd).is_err(),
+            "{body:?} must not produce a state vector"
+        );
+    }
 
-    // True node should return finite values
-    let true_state = ana
-        .compute_state(Body::TrueNode, jd)
-        .expect("TrueNode should succeed");
-    assert!(
-        true_state.position.x.is_finite()
-            && true_state.position.y.is_finite()
-            && true_state.position.z.is_finite(),
-        "TrueNode position should be finite"
-    );
-
-    // Both are unit vectors encoded as ecliptic position; recover longitude
-    // by converting back: the node_state encodes lon via ecliptic_to_equatorial,
-    // so we do equatorial_to_ecliptic (reverse rotation) to get the longitude.
-    // But we can also just use the nodes module directly to verify they differ.
+    // What the two methods must satisfy is a relationship between their
+    // longitudes. End-to-end coverage of the reported values, their frame and
+    // their motion is in `tests/node_frame.rs`.
     let mean_lon = vedaksha_ephem_core::nodes::mean_node(jd);
     let true_lon = vedaksha_ephem_core::nodes::true_node(jd);
 

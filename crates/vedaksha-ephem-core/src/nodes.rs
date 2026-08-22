@@ -5,8 +5,25 @@
 
 //! Mean and True North Node of the Moon.
 //!
+//! # Frame
+//!
+//! Every public longitude in this module is referred to the **mean ecliptic
+//! and equinox of date**, which is the frame a chart is drawn in and the
+//! frame an ayanamsa is defined against. The three node longitudes reachable
+//! through [`crate::bodies::Body`] are therefore interchangeable: swapping
+//! one for another changes the *method*, never the reference frame.
+//!
+//! The single exception carries the frame in its name.
+//! [`true_node_osculating_j2000`] returns the J2000 mean ecliptic, and exists
+//! only so the osculating node can be compared against JPL Horizons' `OM`,
+//! which is published in that frame. It is not for chart use: subtracting an
+//! ayanamsa from it leaves the accumulated precession in the result, which
+//! reaches 1.5° at 1900.
+//!
 //! Source: Meeus, "Astronomical Algorithms" 2nd ed., Ch. 47.
 
+use crate::analytical::elp_mpp02::{self, MoonRectangular};
+use crate::bodies::Body;
 use crate::julian;
 
 /// Compute the mean longitude of the ascending node of the Moon (Rahu).
@@ -64,12 +81,11 @@ pub fn true_node(jd: f64) -> f64 {
 /// select the ascending (not descending) node. This is exact to the
 /// accuracy of the underlying lunar ephemeris.
 ///
-/// **Frame:** Uses the J2000 mean ecliptic. This matches the convention
-/// used by JPL Horizons `EPHEM_TYPE='ELEMENTS'` for the longitude of the
-/// ascending node `OM`, and by Swiss Ephemeris for `SE_TRUE_NODE`. Sidereal
-/// (Vedic) consumers should subtract their chosen ayanamsa downstream;
-/// tropical-of-date consumers should add the accumulated precession of the
-/// ecliptic (`p_A + Δp·t`) downstream.
+/// **Frame:** mean ecliptic and equinox of date, matching [`mean_node`] and
+/// [`true_node`]. The crossing is computed against the ecliptic *of date*,
+/// which is the same reference plane the Meeus node polynomial uses — not
+/// the J2000 plane rotated into of-date coordinates, which is a different
+/// quantity. For the J2000 value see [`true_node_osculating_j2000`].
 ///
 /// Requires the `analytical` module (ELP/MPP02).
 ///
@@ -77,15 +93,41 @@ pub fn true_node(jd: f64) -> f64 {
 /// Montenbruck & Gill 2000).
 #[must_use]
 pub fn true_node_osculating(jd: f64) -> f64 {
+    osculating_node(elp_mpp02::elp_geocentric_of_date, jd)
+}
+
+/// The osculating ascending node in the **J2000** mean ecliptic.
+///
+/// Identical method to [`true_node_osculating`], evaluated against the J2000
+/// ecliptic plane instead of the ecliptic of date. This is the frame JPL
+/// Horizons publishes `OM` in (`EPHEM_TYPE='ELEMENTS'`,
+/// `REF_SYSTEM='J2000'`), so it is the value the Horizons oracle pins.
+///
+/// **Not for chart use.** It differs from [`true_node_osculating`] by the
+/// accumulated precession — roughly 50.3″ per year from J2000, reaching 1.5°
+/// at 1900 — so subtracting an ayanamsa from it leaves that term in the
+/// result. Sidereal and tropical-of-date consumers want
+/// [`true_node_osculating`].
+///
+/// Requires the `analytical` module (ELP/MPP02).
+#[must_use]
+pub fn true_node_osculating_j2000(jd: f64) -> f64 {
+    osculating_node(elp_mpp02::elp_geocentric, jd)
+}
+
+/// Shared osculating-node evaluation, parameterised by the frame the lunar
+/// state vector is sampled in. The returned longitude is in whatever frame
+/// `sample` produces.
+fn osculating_node(sample: fn(f64) -> MoonRectangular, jd: f64) -> f64 {
     // Use a tight differentiation step for velocity (0.001 day ≈ 86 seconds).
     // The osculating node is sensitive to velocity direction.
     let moon = {
         let dt = 0.001_f64;
-        let m0 = crate::analytical::elp_mpp02::elp_geocentric(jd);
-        let mp = crate::analytical::elp_mpp02::elp_geocentric(jd + dt);
-        let mm = crate::analytical::elp_mpp02::elp_geocentric(jd - dt);
+        let m0 = sample(jd);
+        let mp = sample(jd + dt);
+        let mm = sample(jd - dt);
         let inv_2dt = 1.0 / (2.0 * dt);
-        crate::analytical::elp_mpp02::MoonRectangular {
+        MoonRectangular {
             x: m0.x,
             y: m0.y,
             z: m0.z,
@@ -132,6 +174,22 @@ pub fn south_node_true(jd: f64) -> f64 {
 #[must_use]
 pub fn south_node_osculating(jd: f64) -> f64 {
     vedaksha_math::angle::normalize_degrees(true_node_osculating(jd) + 180.0)
+}
+
+/// Ecliptic longitude of a node body in degrees, mean equinox of date, or
+/// `None` if `body` is not a lunar node.
+///
+/// The nodes are directions, not places: they have no state vector, no
+/// distance and no light-time, so [`crate::coordinates`] resolves them here
+/// rather than through an [`crate::jpl::EphemerisProvider`].
+#[must_use]
+pub fn node_longitude(body: Body, jd_tt: f64) -> Option<f64> {
+    match body {
+        Body::MeanNode => Some(mean_node(jd_tt)),
+        Body::TrueNode => Some(true_node(jd_tt)),
+        Body::TrueNodeOsculating => Some(true_node_osculating(jd_tt)),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
@@ -261,18 +319,34 @@ mod tests {
 
     #[test]
     fn osculating_node_close_to_meeus_true_node() {
-        // The osculating node and Meeus 5-term true node should agree
-        // within ~0.1° (the Meeus approximation error).
-        let tn = true_node(J2000);
-        let osc = true_node_osculating(J2000);
-        let mut diff = (osc - tn).abs();
-        if diff > 180.0 {
-            diff = 360.0 - diff;
+        // The osculating node librates about the Meeus 5-term series by
+        // ≈0.3°, bounded, because one is an instantaneous orbital element and
+        // the other is smoothed.
+        //
+        // This used to assert `< 0.5°` at J2000 alone, which proved nothing:
+        // J2000 is the single epoch where a frame difference between the two
+        // vanishes, and a frame difference is exactly what was there. The
+        // epoch range below spans two centuries, and
+        // `tests/node_frame.rs::every_node_method_shares_one_frame` sweeps it
+        // densely.
+        for (jd, label) in [
+            (2_415_020.5, "1900"),
+            (2_451_545.0, "J2000"),
+            (2_469_807.5, "2050"),
+            (2_488_069.5, "2100"),
+        ] {
+            let tn = true_node(jd);
+            let osc = true_node_osculating(jd);
+            let mut diff = (osc - tn).abs();
+            if diff > 180.0 {
+                diff = 360.0 - diff;
+            }
+            assert!(
+                diff < 0.35,
+                "{label}: osculating and Meeus true nodes should agree within \
+                 0.35°, diff={diff:.4}°"
+            );
         }
-        assert!(
-            diff < 0.5,
-            "Osculating and Meeus true nodes should agree within 0.5°, diff={diff:.4}°"
-        );
     }
 
     #[test]
@@ -292,8 +366,14 @@ mod tests {
         // Oracle: JPL Horizons DE441 osculating node longitude `OM` in the
         // J2000 ecliptic. Query: COMMAND='301', CENTER='500@399',
         // EPHEM_TYPE='ELEMENTS', REF_PLANE='ECLIPTIC', REF_SYSTEM='J2000'.
-        // `jd` here is TDB — `true_node_osculating` feeds `elp_geocentric`
-        // directly and applies no ΔT, matching Horizons' ELEMENTS time scale.
+        // `jd` here is TDB — `true_node_osculating_j2000` feeds
+        // `elp_geocentric` directly and applies no ΔT, matching Horizons'
+        // ELEMENTS time scale.
+        //
+        // This is the one test that wants the J2000 frame, and the reason
+        // `true_node_osculating_j2000` exists at all. Pointing it at the
+        // of-date `true_node_osculating` would fail by the accumulated
+        // precession, which is the whole difference between the two.
         //
         // Re-measured 2026-07-16 against 2,435 Horizons rows spanning
         // 1900-2100: mean 0.00008°, max 0.00017° (≈0.6″), flat across every
@@ -317,7 +397,7 @@ mod tests {
         ];
 
         for (jd, jpl_node, label) in &oracle {
-            let osc = true_node_osculating(*jd);
+            let osc = true_node_osculating_j2000(*jd);
 
             let mut diff = (osc - jpl_node).abs();
             if diff > 180.0 {
@@ -340,22 +420,26 @@ mod tests {
         //   - Meeus smooths perturbations into 5 terms (~0.09° residual)
         //   - Osculating captures the full instantaneous orbital plane
         //
-        // The two methods can differ by up to ~0.5° at any given moment.
-        // This is NOT an error — it's the inherent difference between
-        // a smoothed series and an instantaneous orbital element.
+        // The two librate against each other by ≈0.3°, and that difference is
+        // *bounded*. It is not the same thing as a frame difference, which
+        // grows without limit — the distinction this test previously could
+        // not make, because its epochs stopped at 2026 and its tolerance was
+        // 0.5°. At 26 years from J2000 the frame term was still only 0.36°,
+        // so it fit underneath. The range now runs 1900–2100, where a frame
+        // term reaches 1.5°.
         //
         // For validation, we check:
         // 1. Values are in [0°, 360°)
         // 2. Osculating is within 3° of mean node (sanity bound)
-        // 3. Osculating and Meeus agree within 0.5° (expected divergence)
+        // 3. Osculating and Meeus agree within 0.35° (bounded libration)
         let epochs = [
+            (2415020.5, "1900-01-01"),
+            (2433282.5, "1950-01-01"),
             (2451545.0, "J2000"),
-            (2453006.0, "2004-01-01"),
             (2455197.5, "2010-01-01"),
-            (2457388.5, "2016-01-01"),
             (2459580.5, "2022-01-01"),
-            (2461041.5, "2026-01-01"),
-            (2461142.5, "2026-04-12"),
+            (2469807.5, "2050-01-01"),
+            (2488069.5, "2100-01-01"),
         ];
 
         for (jd, label) in &epochs {
@@ -369,13 +453,13 @@ mod tests {
                 "{label}: osculating out of range: {osc:.4}°"
             );
 
-            // Osculating vs Meeus: within 0.5° (inherent method difference)
+            // Osculating vs Meeus: within 0.35° (bounded libration)
             let mut diff_meeus = (osc - true_m).abs();
             if diff_meeus > 180.0 {
                 diff_meeus = 360.0 - diff_meeus;
             }
             assert!(
-                diff_meeus < 0.5,
+                diff_meeus < 0.35,
                 "{label}: osculating vs Meeus diff too large: {diff_meeus:.4}°"
             );
 
