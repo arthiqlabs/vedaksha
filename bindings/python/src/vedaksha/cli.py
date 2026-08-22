@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """``vedaksha`` command-line interface.
 
 A thin wrapper over :class:`vedaksha.Vedaksha`, mostly useful for confirming an

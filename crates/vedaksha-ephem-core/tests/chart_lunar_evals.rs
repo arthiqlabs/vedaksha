@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 // Regression guard: a full chart must not re-evaluate the (expensive)
 // ELP/MPP02 lunar series many times. With the memoizing batch provider and
 // the light-time Earth-extrapolation, the Moon is evaluated only a handful of

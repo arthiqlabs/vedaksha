@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 //! Regression check: vedaksha apparent ecliptic positions vs JPL Horizons
 //! reference values. Run with `cargo run --example moon_audit --release`.
 

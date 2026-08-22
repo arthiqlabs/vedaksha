@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BUSL-1.1
 """Block previously-shipped constants from re-entering a derivation spec.
 
 A derivation spec is handed to an implementer who must not see the values being

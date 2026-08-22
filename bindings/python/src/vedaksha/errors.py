@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """Exception hierarchy for the Vedaksha Python package."""
 from __future__ import annotations
 

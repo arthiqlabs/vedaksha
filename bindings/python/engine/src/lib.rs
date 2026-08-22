@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 //! C-ABI wasm host shim for the Vedaksha engine.
 //!
 //! This compiles the real `vedaksha-ephem-core` and `vedaksha-mcp` crates to a

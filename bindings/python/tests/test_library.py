@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """Library-surface tests: the wasm engine loads and answers on this platform."""
 from __future__ import annotations
 

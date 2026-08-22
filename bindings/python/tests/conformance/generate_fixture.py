@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """Regenerate the native-parity fixture from the in-repo Rust engine.
 
 Feeds each JSON-RPC request through the native `vedaksha-mcp` binary in stdio

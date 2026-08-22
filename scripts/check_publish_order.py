@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BUSL-1.1
 """Assert release.yml publishes workspace crates in dependency order.
 
 `cargo publish` resolves each dependency against what is already ON crates.io.

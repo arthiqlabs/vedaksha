@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """High-level Vedaksha client.
 
 A thin, typed facade over the wasm engine's JSON-RPC surface. Every astrology

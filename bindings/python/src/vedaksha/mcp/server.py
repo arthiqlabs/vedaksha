@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """MCP server transports over the wasm engine.
 
 The engine already speaks JSON-RPC 2.0 (it *is* an MCP server compiled to wasm),

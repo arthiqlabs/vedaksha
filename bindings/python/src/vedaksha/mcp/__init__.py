@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """Self-hostable MCP server for the Vedaksha engine.
 
 Two transports over the same engine:

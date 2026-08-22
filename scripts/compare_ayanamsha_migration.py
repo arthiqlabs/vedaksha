@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BUSL-1.1
 """
 Post-freeze migration delta for the ayanamsha re-derivation. Section 6.4.
 

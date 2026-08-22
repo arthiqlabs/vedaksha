@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """``python -m vedaksha.mcp`` entry point."""
 from __future__ import annotations
 

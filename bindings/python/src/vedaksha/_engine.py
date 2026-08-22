@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """Low-level wasmtime host for the Vedaksha engine.
 
 Loads ``vedaksha.wasm`` and wraps its C ABI (see ``engine/src/lib.rs``). This is

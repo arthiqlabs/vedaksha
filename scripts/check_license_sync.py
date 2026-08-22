@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: BUSL-1.1
 """Assert every packaged copy of LICENSE matches the workspace root.
 
 Each crate carries its own LICENSE, and that copy -- not the workspace root --

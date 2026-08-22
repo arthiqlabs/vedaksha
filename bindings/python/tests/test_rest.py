@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """REST surface tests. Skipped if the optional `rest` extra isn't installed."""
 from __future__ import annotations
 

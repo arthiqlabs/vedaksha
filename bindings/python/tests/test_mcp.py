@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """MCP transport tests: stdio dispatch, HTTP auth."""
 from __future__ import annotations
 

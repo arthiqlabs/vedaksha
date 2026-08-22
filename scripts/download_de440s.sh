@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright © 2026 ArthIQ Labs LLC. All rights reserved.
 # Vedaksha — Vision from Vedas
+# SPDX-License-Identifier: BUSL-1.1
 #
 # Download the JPL DE440s SPK kernel that SpkReader reads.
 #

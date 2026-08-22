@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """SPK-tier tests. Skipped when the DE440s kernel is unavailable, unless
 VEDAKSHA_REQUIRE_KERNEL is set (CI sets it) — a skipped ephemeris test must not
 be mistaken for a passing one.

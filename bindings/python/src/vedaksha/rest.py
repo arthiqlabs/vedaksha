@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """FastAPI REST projection of the engine's tool surface.
 
 Generated from the engine's own tool list, not hand-authored: each tool becomes

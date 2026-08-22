@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: BUSL-1.1
 """Vedaksha — clean-room Vedic astronomy & Jyotish engine, hosted from Python.
 
 This package runs the real Rust Vedaksha engine (compiled to WebAssembly) via

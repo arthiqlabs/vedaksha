@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: BUSL-1.1
 # Build the Vedaksha engine into the wasm blob the Python package hosts.
 #
 # The blob is NOT committed — the engine source lives in this same repo, so the
