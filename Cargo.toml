@@ -101,6 +101,41 @@ uninlined_format_args = "allow"
 unnecessary_wraps = "allow"
 unreadable_literal = "allow"
 
+# Tests run optimised, and still run every check.
+#
+# `cargo test` uses the `test` profile (which inherits `dev`), and an
+# unoptimised ELP/MPP02 or VSOP87A evaluation is orders of magnitude slower
+# than a release one. The push CI job took 67 to 95 minutes because of it,
+# against a workflow that documents a ~3 minute target. That cost is not ours
+# alone: anyone who forks this repository inherits it on every push.
+#
+# `opt-level` is a separate knob from `debug-assertions` and `overflow-checks`,
+# which are what testing in a debug profile is FOR. Those stay on. Rust does
+# not enable fast-math at any optimisation level, so floating-point results are
+# bit-identical to the unoptimised build — `analytical_bit_digest` would say
+# otherwise, and it is pinned.
+#
+# Scoped to the four numerically hot crates rather than `*`: optimising
+# everything would slow a clean compile down for no benefit, and these are the
+# only ones with inner loops that matter.
+[profile.dev.package.vedaksha-math]
+opt-level = 3
+[profile.dev.package.vedaksha-ephem-core]
+opt-level = 3
+[profile.dev.package.vedaksha-astro]
+opt-level = 3
+[profile.dev.package.vedaksha-vedic]
+opt-level = 3
+
+[profile.test.package.vedaksha-math]
+opt-level = 3
+[profile.test.package.vedaksha-ephem-core]
+opt-level = 3
+[profile.test.package.vedaksha-astro]
+opt-level = 3
+[profile.test.package.vedaksha-vedic]
+opt-level = 3
+
 [profile.release]
 opt-level = 3
 lto = "fat"

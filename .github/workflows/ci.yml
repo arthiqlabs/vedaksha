@@ -73,6 +73,11 @@ jobs:
         # and even there it only regenerates into a temp directory to compare
         # hashes. See the note on those steps.
         #
+        # The evaluation cost is addressed rather than tolerated: the root
+        # Cargo.toml gives the four numerically hot crates `opt-level = 3` under
+        # the dev and test profiles. `debug-assertions` and `overflow-checks`
+        # stay on, so this job still tests what a debug build tests.
+        #
         # A bare `cargo test --workspace` covers lib + bins + tests/ + doctests.
         #
         # `--skip analytical_oracle_regression`: that test walks all 24,350

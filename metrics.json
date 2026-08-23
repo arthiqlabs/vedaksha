@@ -3,7 +3,7 @@
   "engineVersion": "7.2.0",
   "released": "2026-08-23",
   "tests": {
-    "perPush": null,
+    "perPush": 1087,
     "full": 1093,
     "perPushCommand": "cargo test --workspace --locked -- --skip analytical_oracle_regression",
     "fullCommand": "cargo test --workspace --release --locked -- --include-ignored"
