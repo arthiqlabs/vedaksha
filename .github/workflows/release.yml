@@ -54,6 +54,41 @@ jobs:
           check "metrics.json engineVersion" "$(jq -r .engineVersion metrics.json)"
           exit $fail
 
+  # The gate that did not exist until v7.2.0.
+  #
+  # Every publish job below used to depend on version-check alone, which only
+  # compares version strings to the tag. Nothing ran a single test between a
+  # tag push and an IRREVERSIBLE crates.io publish — the tag IS the release,
+  # and a yank withdraws nothing. The only protection was a human remembering
+  # to look at the CI run on that SHA.
+  #
+  # This was not added earlier because it was not affordable: the suite took
+  # 67-95 minutes in a debug profile. It now takes ~3 minutes, because the hot
+  # crates compile at opt-level 3 while keeping debug-assertions and
+  # overflow-checks. Affordable is why this exists.
+  test:
+    name: Test the tagged tree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Guards
+        run: |
+          python3 scripts/check_publish_order.py
+          python3 scripts/check_license_sync.py
+          python3 scripts/check_spdx_headers.py
+      # Same skip as ci.yml: analytical_oracle_regression walks all 24,350
+      # committed oracle rows and belongs to the weekly release-profile tier.
+      - name: Test
+        run: cargo test --workspace --locked -- --skip analytical_oracle_regression
+
   build-mcp:
     name: Build MCP binary (${{ matrix.target }})
     runs-on: ${{ matrix.os }}
@@ -116,7 +151,7 @@ jobs:
 
   publish-crates:
     name: Publish to crates.io
-    needs: [version-check]
+    needs: [version-check, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -165,7 +200,7 @@ jobs:
 
   publish-npm:
     name: Publish to npm
-    needs: [wasm, version-check]
+    needs: [wasm, version-check, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -185,7 +220,7 @@ jobs:
 
   publish-pypi:
     name: Publish to PyPI
-    needs: [version-check]
+    needs: [version-check, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -215,7 +250,7 @@ jobs:
 
   docker:
     name: Push Docker image (multi-arch)
-    needs: [version-check]
+    needs: [version-check, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -242,7 +277,7 @@ jobs:
 
   publish-mcp-registry:
     name: Publish to MCP Registry
-    needs: [version-check]
+    needs: [version-check, test]
     runs-on: ubuntu-latest
     permissions:
       # OIDC is what proves we own the io.github.arthiqlabs namespace. No token
@@ -262,7 +297,7 @@ jobs:
 
   github-release:
     name: Create GitHub Release
-    needs: [build-mcp, wasm]
+    needs: [build-mcp, wasm, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
