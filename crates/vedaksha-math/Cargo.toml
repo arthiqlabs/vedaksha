@@ -6,7 +6,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "Numeric primitives for Vedaksha: Chebyshev polynomials, angle arithmetic, interpolation, rotation matrices"
 keywords = ["chebyshev", "interpolation", "matrix", "angles", "numerics"]
@@ -20,3 +19,6 @@ libm = "0.2"
 [features]
 default = ["std"]
 std = []
+
+[lints]
+workspace = true

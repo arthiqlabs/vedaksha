@@ -150,7 +150,39 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// worst case of 0.001 arcsec is three orders of magnitude inside VSOP87A's own
 /// 2.06 arcsec mean truncation error against Horizons. The rotation order was
 /// wrong before and is right now; the digest follows the fix, not the reverse.
-const EXPECTED_DIGEST: &str = "2fadd8f4d3e9b8063080b7f2d9cb1b17f803dc2b7b960d24b63ece65d6654fae";
+///
+/// # Why this moved at v7.2.0
+///
+/// [`PRE_ORTHONORMAL_EPS_DIGEST`] is the value this held from the v6 precession
+/// correction until `COS_EPS` in `analytical/mod.rs` was corrected. That literal
+/// sat 5.74e-12 — 26,083 ulps — above `cos(OBLIQUITY_J2000)`, leaving
+/// `COS_EPS^2 + SIN_EPS^2` a part in 1e11 from unity, so `ecliptic_to_equatorial`
+/// was not quite a rotation. Every row goes through it, so every row moved.
+///
+/// Measured over all 21,915 rows by running this test either side of the
+/// one-literal change:
+///
+/// | quantity | rows changed | max delta |
+/// |---|---|---|
+/// | any column | 21,915 (100%) | 1.64e-10 |
+/// | worst angular | — | **1.02e-8 arcsec** |
+///
+/// Accepted: the transform is orthogonal now and was not before, and 1e-8
+/// arcsec is eight orders of magnitude inside the analytical path's own
+/// 0.239 arcsec mean error against Horizons.
+///
+/// Note the obliquity itself did **not** change. `COS_EPS`/`SIN_EPS` always
+/// encoded 84381.448 arcsec (IAU 1976), which is the frame VSOP87A and
+/// ELP/MPP02 are defined against; only `OBLIQUITY_J2000`'s own literal and the
+/// comments claimed otherwise, and those were corrected to match the values.
+const EXPECTED_DIGEST: &str = "c3b77a61898779714b3366f5c51d4ca5b7860ad3e6669d12fc238734e754734a";
+
+/// The digest from the v6 precession correction until the `COS_EPS` correction.
+///
+/// Kept for the same reason as the others.
+#[allow(dead_code)]
+const PRE_ORTHONORMAL_EPS_DIGEST: &str =
+    "2fadd8f4d3e9b8063080b7f2d9cb1b17f803dc2b7b960d24b63ece65d6654fae";
 
 /// The digest from the precession correction until the observer correction.
 ///

@@ -23,6 +23,10 @@ use wasm_bindgen::prelude::*;
 ///
 /// # Returns
 /// JSON string with the complete dasha tree.
+///
+/// # Errors
+/// Errors if the dasha tree cannot be serialised to JSON. `levels` is clamped to
+/// 1..=5 rather than rejected.
 #[wasm_bindgen]
 pub fn compute_dasha(moon_longitude: f64, birth_jd: f64, levels: u8) -> Result<String, JsError> {
     let levels = levels.clamp(1, 5);
@@ -38,6 +42,9 @@ pub fn compute_dasha(moon_longitude: f64, birth_jd: f64, levels: u8) -> Result<S
 ///
 /// # Returns
 /// JSON string with nakshatra name, index, pada, dasha lord.
+///
+/// # Errors
+/// Errors if the result cannot be serialised to JSON.
 #[wasm_bindgen]
 pub fn get_nakshatra(sidereal_longitude: f64) -> Result<String, JsError> {
     let nak = vedaksha_vedic::nakshatra::Nakshatra::from_longitude(sidereal_longitude);
@@ -64,6 +71,9 @@ pub fn get_nakshatra(sidereal_longitude: f64) -> Result<String, JsError> {
 ///
 /// # Returns
 /// Sign index (0-11) in the divisional chart.
+///
+/// # Errors
+/// Errors if `varga` is not a recognised division code (`D1`, `D9`, `D60`, ...).
 #[wasm_bindgen]
 pub fn compute_varga(longitude: f64, varga: &str) -> Result<u8, JsError> {
     let varga_type = parse_varga_type(varga)?;
@@ -104,6 +114,10 @@ pub fn compute_varga(longitude: f64, varga: &str) -> Result<u8, JsError> {
 ///
 /// # Returns
 /// JSON string with 12 tropical cusp longitudes, ASC, MC.
+///
+/// # Errors
+/// Errors if `system` is not a recognised house system, or if the cusps cannot be
+/// serialised to JSON.
 #[wasm_bindgen]
 pub fn compute_houses(
     ramc: f64,
@@ -133,6 +147,11 @@ pub fn compute_houses(
 ///
 /// # Returns
 /// JSON string with array of detected aspects.
+///
+/// # Errors
+/// Errors if `positions_json` is not valid JSON, or if the result cannot be
+/// serialised. A position object missing `longitude` or `speed` is read as 0.0
+/// rather than rejected.
 #[wasm_bindgen]
 pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, JsError> {
     let raw_positions: Vec<serde_json::Value> = serde_json::from_str(positions_json)
@@ -180,6 +199,9 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 /// "RevatiPaksha", "PushyaPaksha", "TrueChitra", "ChandraHari",
 /// "GalacticCenter0Sag", or "Tropical". Returns the MEAN ayanamsha.
 /// * `jd` — Julian Day for computation
+///
+/// # Errors
+/// Errors if `ayanamsha` is not a recognised system name.
 #[wasm_bindgen]
 pub fn tropical_to_sidereal(
     tropical_longitude: f64,
@@ -204,6 +226,9 @@ pub fn tropical_to_sidereal(
 /// `ayanamsha` is a system name; pass `"Tropical"` for zero. Names retired in
 /// the primary-source re-derivation are refused with an explanation rather than
 /// falling back to a default.
+///
+/// # Errors
+/// Errors if `ayanamsha` is not a recognised system name.
 #[wasm_bindgen]
 pub fn get_ayanamsha(ayanamsha: &str, jd: f64) -> Result<f64, JsError> {
     let system = parse_ayanamsha(ayanamsha)?;
@@ -225,6 +250,9 @@ pub fn get_sign(longitude: f64) -> String {
 }
 
 /// Get localized name for a planet.
+///
+/// # Errors
+/// Errors if `language` is not a supported locale code.
 #[wasm_bindgen]
 pub fn planet_name(index: usize, language: &str) -> Result<String, JsError> {
     let lang = parse_language(language)?;
@@ -232,6 +260,9 @@ pub fn planet_name(index: usize, language: &str) -> Result<String, JsError> {
 }
 
 /// Get localized name for a zodiac sign.
+///
+/// # Errors
+/// Errors if `language` is not a supported locale code.
 #[wasm_bindgen]
 pub fn sign_name(index: usize, language: &str) -> Result<String, JsError> {
     let lang = parse_language(language)?;
@@ -239,6 +270,9 @@ pub fn sign_name(index: usize, language: &str) -> Result<String, JsError> {
 }
 
 /// Get localized name for a nakshatra.
+///
+/// # Errors
+/// Errors if `language` is not a supported locale code.
 #[wasm_bindgen]
 pub fn nakshatra_name(index: usize, language: &str) -> Result<String, JsError> {
     let lang = parse_language(language)?;
@@ -456,6 +490,11 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
 ///
 /// # Returns
 /// JSON string with planets, houses, aspects, ayanamsha value, Julian Day.
+///
+/// # Errors
+/// Errors if `config_json` is not valid JSON, if it carries a Julian Day, latitude
+/// or longitude outside the supported range, if the ephemeris cannot be
+/// evaluated for the instant, or if the chart cannot be serialised.
 #[wasm_bindgen]
 pub fn compute_natal_chart(config_json: &str) -> Result<String, JsError> {
     let input: NatalChartInput = serde_json::from_str(config_json)
@@ -587,6 +626,10 @@ fn compute_karakas_inner(positions_json: &str, scheme: &str) -> Result<String, S
 ///
 /// # Returns
 /// JSON array of `{ "planet": "...", "karaka": "...", "degrees_in_sign": f64 }`.
+///
+/// # Errors
+/// Errors if `positions_json` is not valid JSON, if `scheme` is neither `"7"` nor
+/// `"8"`, or if the result cannot be serialised.
 #[wasm_bindgen]
 pub fn compute_karakas(positions_json: &str, scheme: &str) -> Result<String, JsError> {
     compute_karakas_inner(positions_json, scheme).map_err(|e| JsError::new(&e))
@@ -667,6 +710,10 @@ fn compute_combustion_inner(positions_json: &str, retro_json: &str) -> Result<St
 ///
 /// # Returns
 /// JSON array of `{ "planet", "state", "degrees_from_sun" }` for the 6 combustible planets.
+///
+/// # Errors
+/// Errors if either JSON argument is malformed, or if the result cannot be
+/// serialised.
 #[wasm_bindgen]
 pub fn compute_combustion(positions_json: &str, retro_json: &str) -> Result<String, JsError> {
     compute_combustion_inner(positions_json, retro_json).map_err(|e| JsError::new(&e))
@@ -750,7 +797,7 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
     serde_json::to_string(&results).map_err(|e| e.to_string())
 }
 
-/// Compute full Shadbala for all supplied planets.
+/// Compute six-fold Shadbala for all supplied planets.
 ///
 /// # Arguments
 /// * `input_json` — JSON object with `"planets"` array plus optional `"is_daytime"` and
@@ -759,7 +806,15 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
 ///   optional `benefic_aspect_count`, `malefic_aspect_count`.
 ///
 /// # Returns
-/// JSON array of Shadbala objects including `uccha_bala`, `ishta_phala`, `kashta_phala`.
+/// JSON array of Shadbala objects: the six components, the four implemented
+/// Sthana sub-components (`uccha_bala`, `ojhayugma_bala`, `kendradi_bala`,
+/// `drekkana_bala`), `total`, `ishta_phala` and `kashta_phala`. Sthana Bala
+/// omits Saptavargaja Bala — see `vedaksha_vedic::shadbala`.
+///
+/// # Errors
+/// Errors if `input_json` is malformed, if a planet name is unrecognised, if a
+/// sign, longitude or bhava is out of range, or if the result cannot be
+/// serialised.
 #[wasm_bindgen]
 pub fn compute_shadbala(input_json: &str) -> Result<String, JsError> {
     compute_shadbala_inner(input_json).map_err(|e| JsError::new(&e))
@@ -813,6 +868,10 @@ fn compute_ashtakavarga_inner(input_json: &str) -> Result<String, String> {
 ///
 /// # Returns
 /// JSON object: `{ "tables": [...], "sarvashtakavarga": [u8; 12] }`.
+///
+/// # Errors
+/// Errors if `input_json` is malformed, if any sign index is outside 0..=11, or if
+/// the result cannot be serialised.
 #[wasm_bindgen]
 pub fn compute_ashtakavarga(input_json: &str) -> Result<String, JsError> {
     compute_ashtakavarga_inner(input_json).map_err(|e| JsError::new(&e))
@@ -884,6 +943,11 @@ fn compute_gochara_inner(input_json: &str) -> Result<String, String> {
 ///
 /// # Returns
 /// JSON object: `{ "entries": [GrahaGochara, …] }` for the seven non-nodal grahas.
+///
+/// # Errors
+/// Errors if `input_json` is malformed, if any sign index is outside 0..=11, if
+/// `school` or `vedha_table` is unrecognised, or if the result cannot be
+/// serialised.
 #[wasm_bindgen]
 pub fn compute_gochara(input_json: &str) -> Result<String, JsError> {
     compute_gochara_inner(input_json).map_err(|e| JsError::new(&e))
@@ -2086,7 +2150,7 @@ mod combustion_tests {
     #[test]
     fn compute_combustion_moon_combust() {
         let pos = r#"{"sun":0.0,"moon":5.0,"mars":100.0,"mercury":200.0,"jupiter":300.0,"venus":50.0,"saturn":150.0}"#;
-        let retro = r#"{}"#;
+        let retro = r"{}";
         let result = compute_combustion_inner(pos, retro).unwrap();
         let arr: serde_json::Value = serde_json::from_str(&result).unwrap();
         let moon = &arr[0];
@@ -2097,7 +2161,7 @@ mod combustion_tests {
     #[test]
     fn compute_combustion_moon_not_combust() {
         let pos = r#"{"sun":0.0,"moon":20.0,"mars":100.0,"mercury":200.0,"jupiter":300.0,"venus":50.0,"saturn":150.0}"#;
-        let retro = r#"{}"#;
+        let retro = r"{}";
         let result = compute_combustion_inner(pos, retro).unwrap();
         let arr: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(arr[0]["state"], "None");
@@ -2106,7 +2170,7 @@ mod combustion_tests {
     #[test]
     fn compute_combustion_missing_field_errors() {
         let pos = r#"{"sun":0.0}"#;
-        let retro = r#"{}"#;
+        let retro = r"{}";
         assert!(compute_combustion_inner(pos, retro).is_err());
     }
 }

@@ -102,7 +102,14 @@ jobs:
         # dependencies, which would invalidate the cache the step above just
         # populated and force a full rebuild. `-- -D warnings` gets the same
         # deny behaviour for the crates being linted without that cost.
-        run: cargo clippy --workspace -- -D warnings
+        #
+        # `--all-targets` since v7.2.0. Without it only the libs were linted:
+        # crate-level `#![allow]` attributes never reached `tests/`, `benches/`
+        # or `examples/`, so 153 warnings accumulated there unseen, and two of
+        # them were real -- a `--release`-only guard that was never called, and
+        # five imports orphaned by a deletion. The lint policy now lives in the
+        # root `[workspace.lints]` table, which does cover every target.
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Format check
         run: cargo fmt --all -- --check
 

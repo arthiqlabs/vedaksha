@@ -5,7 +5,7 @@
 
 //! `emit_graph` — convert a `ChartGraph` JSON to a target output format.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::validation::McpError;
 
@@ -37,16 +37,6 @@ pub struct EmitGraphInput {
     /// Optional classification tag attached to emitted nodes (e.g. a
     /// chart label or session ID).
     pub classification: Option<String>,
-}
-
-/// Output of the `emit_graph` tool.
-#[derive(Debug, Clone, Serialize)]
-pub struct EmitGraphOutput {
-    /// Emitted content in the requested format (string for Cypher/SurrealQL/
-    /// embedding, JSON value for `json`/`jsonld`).
-    pub output: serde_json::Value,
-    /// The format that was used.
-    pub format: String,
 }
 
 /// Tool metadata for MCP tool-listing.
@@ -105,6 +95,16 @@ pub fn validate(input: &EmitGraphInput) -> Result<(), McpError> {
             "format",
             &format!("must be one of: {}", VALID_FORMATS.join(", ")),
         ));
+    }
+    // Through v7.1.1 these were required but never range-checked, so
+    // `latitude: 9999, longitude: -1e9` reached the graph's Chart node
+    // unaltered — in the one tool whose stated reason for demanding them is to
+    // keep a fabricated observer out of the emitted graph.
+    if let Some(lat) = input.latitude {
+        crate::validation::validate_latitude(lat)?;
+    }
+    if let Some(lon) = input.longitude {
+        crate::validation::validate_longitude(lon)?;
     }
     Ok(())
 }

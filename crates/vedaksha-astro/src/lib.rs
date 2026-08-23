@@ -25,13 +25,7 @@
 //! kept — they gate real optional code and are the scaffolding a future
 //! `no_std` effort would build on — but the claim is gone until something
 //! verifies it.
-
 #![deny(unsafe_code)]
-#![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
-#![allow(clippy::similar_names)]
-#![allow(clippy::manual_let_else)]
-#![allow(clippy::question_mark)]
 
 pub mod aspects;
 pub mod chart;

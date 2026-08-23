@@ -888,9 +888,18 @@ fn compute_shadbala_surfaces_agree() {
             (f("total") - six).abs() < 1e-9,
             "total must be the sum of the six components: {row}"
         );
+        // Uchcha Bala is one of four sub-components of Sthana Bala, not a
+        // second name for it. Through v7.1.1 the two carried the same number
+        // and this assertion read `uccha_bala == sthana_bala`.
+        let sthana_parts =
+            f("uccha_bala") + f("ojhayugma_bala") + f("kendradi_bala") + f("drekkana_bala");
         assert!(
-            (f("uccha_bala") - f("sthana_bala")).abs() < 1e-9,
-            "uccha_bala is sthana_bala: {row}"
+            (f("sthana_bala") - sthana_parts).abs() < 1e-9,
+            "sthana_bala must be the sum of its four sub-components: {row}"
+        );
+        assert!(
+            f("uccha_bala") < f("sthana_bala"),
+            "uccha_bala must be a proper part of sthana_bala: {row}"
         );
     }
 }

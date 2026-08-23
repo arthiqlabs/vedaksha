@@ -38,6 +38,13 @@ pub enum Body {
     /// JPL DE441 over 1900–2100; measured 2026-07-16 across 2,435 epochs).
     /// Derived from Moon position/velocity via ELP/MPP02. Suitable for KP sub-lord work.
     TrueNodeOsculating,
+    /// Mean descending lunar node (Ketu) — [`Self::MeanNode`] + 180°.
+    MeanSouthNode,
+    /// True descending lunar node (Ketu) — [`Self::TrueNode`] + 180°.
+    TrueSouthNode,
+    /// Osculating descending lunar node (Ketu) — [`Self::TrueNodeOsculating`]
+    /// + 180°.
+    TrueSouthNodeOsculating,
 }
 
 impl Body {
@@ -60,7 +67,12 @@ impl Body {
             Self::Pluto => Some(8),
             Self::Moon => Some(9),
             Self::Sun => Some(10),
-            Self::MeanNode | Self::TrueNode | Self::TrueNodeOsculating => None,
+            Self::MeanNode
+            | Self::TrueNode
+            | Self::TrueNodeOsculating
+            | Self::MeanSouthNode
+            | Self::TrueSouthNode
+            | Self::TrueSouthNodeOsculating => None,
         }
     }
 
@@ -68,7 +80,8 @@ impl Body {
     ///
     /// Mercury=1, Venus=2, EMB=3, Mars=4, Jupiter=5, Saturn=6,
     /// Uranus=7, Neptune=8, Pluto=9, Moon=301, Sun=10.
-    /// Nodes use conventional IDs: MeanNode=10 (placeholder), TrueNode=11.
+    /// The six lunar nodes are not NAIF bodies and take placeholder IDs
+    /// 10000-10005; nothing resolves them against a kernel.
     #[must_use]
     pub fn naif_id(&self) -> i32 {
         match self {
@@ -86,6 +99,9 @@ impl Body {
             Self::MeanNode => 10000,
             Self::TrueNode => 10001,
             Self::TrueNodeOsculating => 10002,
+            Self::MeanSouthNode => 10003,
+            Self::TrueSouthNode => 10004,
+            Self::TrueSouthNodeOsculating => 10005,
         }
     }
 
@@ -113,6 +129,9 @@ impl Body {
             Self::MeanNode => "Mean Node",
             Self::TrueNode => "True Node",
             Self::TrueNodeOsculating => "True Node (Osculating)",
+            Self::MeanSouthNode => "Mean South Node",
+            Self::TrueSouthNode => "True South Node",
+            Self::TrueSouthNodeOsculating => "True South Node (Osculating)",
         }
     }
 

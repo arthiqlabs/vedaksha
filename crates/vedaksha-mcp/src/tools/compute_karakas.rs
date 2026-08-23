@@ -5,7 +5,7 @@
 
 //! `compute_karakas` — Jaimini Chara Karaka planet-role assignments.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::validation::McpError;
 
@@ -22,12 +22,6 @@ pub struct ComputeKarakasInput {
     pub rahu: Option<f64>,
     /// `"7"` (default) or `"8"`.
     pub scheme: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[allow(dead_code)]
-pub struct ComputeKarakasOutput {
-    pub assignments: serde_json::Value,
 }
 
 #[must_use]

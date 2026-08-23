@@ -3,7 +3,11 @@
 // SPDX-License-Identifier: BUSL-1.1
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! `compute_shadbala` — full six-fold planetary strength with Ishta/Kashta Phala.
+//! `compute_shadbala` — six-fold planetary strength with Ishta/Kashta Phala.
+//!
+//! Two components are partial and the tool description says so; see the
+//! `vedaksha_vedic::shadbala` module documentation for exactly which
+//! sub-components are implemented.
 
 use serde::Deserialize;
 
@@ -30,7 +34,7 @@ pub struct PlanetEntry {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ComputeShidbalaInput {
+pub struct ComputeShadbalaInput {
     pub planets: Vec<PlanetEntry>,
     #[serde(default)]
     pub is_daytime: bool,
@@ -42,9 +46,10 @@ pub struct ComputeShidbalaInput {
 pub fn definition() -> super::ToolDefinition {
     super::ToolDefinition {
         name: "compute_shadbala",
-        description: "Compute full six-fold Shadbala (Sthana, Dig, Kala, Cheshta, Naisargika, \
-            Drik Bala) for each planet, plus uccha_bala, ishta_phala, and kashta_phala per \
-            BPHS Ch.27-28.",
+        description: "Compute six-fold Shadbala (Sthana, Dig, Kala, Cheshta, Naisargika, Drik \
+            Bala) per planet, with the Sthana sub-components (uccha, ojhayugma, kendradi, \
+            drekkana) and ishta/kashta phala, per BPHS Ch.27-28. Sthana Bala omits \
+            Saptavargaja Bala and Kala Bala covers Nathonnatha and Paksha only.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -55,7 +60,7 @@ pub fn definition() -> super::ToolDefinition {
                         "type": "object",
                         "properties": {
                             "planet": { "type": "string", "description": "Planet name: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn" },
-                            "sign":   { "type": "integer", "minimum": 0, "maximum": 11 },
+                            "sign":   { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sidereal sign index, which must agree with longitude (floor(longitude / 30))." },
                             "longitude": { "type": "number", "minimum": 0, "maximum": 360 },
                             "bhava": { "type": "integer", "minimum": 1, "maximum": 12 },
                             "speed": { "type": "number" },
@@ -97,11 +102,11 @@ pub fn parse_planet(name: &str) -> Result<vedaksha_vedic::graha::Graha, McpError
     }
 }
 
-/// Validate a [`ComputeShidbalaInput`].
+/// Validate a [`ComputeShadbalaInput`].
 ///
 /// # Errors
 /// Returns [`McpError`] for unknown planet names, out-of-range values.
-pub fn validate(input: &ComputeShidbalaInput) -> Result<(), McpError> {
+pub fn validate(input: &ComputeShadbalaInput) -> Result<(), McpError> {
     for entry in &input.planets {
         parse_planet(&entry.planet)?;
         if entry.sign > 11 {
@@ -115,6 +120,17 @@ pub fn validate(input: &ComputeShidbalaInput) -> Result<(), McpError> {
         }
         if entry.bhava == 0 || entry.bhava > 12 {
             return Err(McpError::invalid_parameter("bhava", "must be 1–12"));
+        }
+        // `sign` and `longitude` describe the same placement. Through v7.1.1
+        // nothing read `sign`, so a caller could contradict itself and never
+        // learn. Both are now consumed, so disagreement is an input error.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let sign_from_longitude = (entry.longitude / 30.0) as u8;
+        if entry.sign != sign_from_longitude {
+            return Err(McpError::invalid_parameter(
+                "sign",
+                "must agree with longitude (floor(longitude / 30))",
+            ));
         }
     }
     Ok(())
@@ -139,7 +155,7 @@ mod tests {
 
     #[test]
     fn validate_accepts_valid_input() {
-        let input = ComputeShidbalaInput {
+        let input = ComputeShadbalaInput {
             planets: vec![valid_entry()],
             is_daytime: true,
             moon_phase_waxing: true,
@@ -151,7 +167,7 @@ mod tests {
     fn validate_rejects_unknown_planet() {
         let mut entry = valid_entry();
         entry.planet = "Pluto".to_string();
-        let input = ComputeShidbalaInput {
+        let input = ComputeShadbalaInput {
             planets: vec![entry],
             is_daytime: false,
             moon_phase_waxing: false,
@@ -166,7 +182,7 @@ mod tests {
     fn validate_rejects_bad_sign() {
         let mut entry = valid_entry();
         entry.sign = 12;
-        let input = ComputeShidbalaInput {
+        let input = ComputeShadbalaInput {
             planets: vec![entry],
             is_daytime: false,
             moon_phase_waxing: false,

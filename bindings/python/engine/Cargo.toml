@@ -10,7 +10,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "C-ABI wasm32 host shim for the Vedaksha engine (Python binding artifact)"
 publish = false
@@ -22,3 +21,6 @@ crate-type = ["cdylib"]
 vedaksha-ephem-core = { path = "../../../crates/vedaksha-ephem-core" }
 vedaksha-mcp = { path = "../../../crates/vedaksha-mcp", default-features = false, features = ["std"] }
 # Release profile (opt-level 3, fat LTO, strip) is inherited from the workspace root.
+
+[lints]
+workspace = true

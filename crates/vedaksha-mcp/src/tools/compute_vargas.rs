@@ -5,7 +5,7 @@
 
 //! `compute_vargas` — Vedic divisional chart (varga) computation tool.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::validation::{self, McpError};
 
@@ -27,13 +27,6 @@ pub struct ComputeVargasInput {
     pub planet_longitude: Option<f64>,
     /// List of varga division codes to compute, e.g. `["D1", "D9", "D10"]`.
     pub divisions: Vec<String>,
-}
-
-/// Output of the `compute_vargas` tool.
-#[derive(Debug, Clone, Serialize)]
-pub struct ComputeVargasOutput {
-    /// Map from division code to its `ChartGraph` JSON representation.
-    pub vargas_json: serde_json::Value,
 }
 
 /// Tool metadata for MCP tool-listing.

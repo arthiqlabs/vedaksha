@@ -6,7 +6,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "Vedic astrology: nakshatras, dashas, vargas, yogas, shadbala"
 keywords = ["jyotish", "vedic", "nakshatra", "dasha", "panchanga"]
@@ -24,3 +23,6 @@ libm = "0.2"
 [features]
 default = ["std"]
 std = ["vedaksha-ephem-core/std"]
+
+[lints]
+workspace = true

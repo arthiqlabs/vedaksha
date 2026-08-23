@@ -868,7 +868,7 @@ impl McpServer {
         use vedaksha_vedic::graha::GrahaPosition;
         use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
 
-        let input: crate::tools::compute_shadbala::ComputeShidbalaInput =
+        let input: crate::tools::compute_shadbala::ComputeShadbalaInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::compute_shadbala::validate(&input)?;
@@ -1516,11 +1516,24 @@ impl McpServer {
                      graph's Chart node does. Pass the same values used to compute it.",
                 ));
             };
+            // `unwrap_or(f64::NAN)` here through v7.1.1. serde_json renders a
+            // non-finite float as `null`, so a chart_json without a
+            // `julian_day` produced a Chart node with `"julian_day": null` and
+            // no error — the same fabricated-observer problem the latitude and
+            // longitude requirement just above exists to prevent.
             let julian_day = input
                 .chart_json
                 .get("julian_day")
                 .and_then(serde_json::Value::as_f64)
-                .unwrap_or(f64::NAN);
+                .filter(|jd| jd.is_finite())
+                .ok_or_else(|| {
+                    McpError::invalid_parameter(
+                        "chart_json",
+                        "building a graph from a computed chart needs a finite \
+                         `julian_day` in that chart: the graph's Chart node records \
+                         the instant, and it cannot be invented.",
+                    )
+                })?;
             let classification = match input.classification.as_deref() {
                 Some("identified") => vedaksha_graph::DataClassification::Identified,
                 Some("pseudonymized") => vedaksha_graph::DataClassification::Pseudonymized,

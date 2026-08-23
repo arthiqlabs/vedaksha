@@ -62,8 +62,15 @@ pub struct GrahaGochara {
     /// classically defined against favourable transits).
     pub vedha_candidates: Vec<Graha>,
     /// Optional Bhinna Ashtakavarga bindu count for this graha at this
-    /// transit sign (0–8). Caller may attach it from a precomputed
+    /// transit sign (0–8). [`compute_gochara`] never sets it: the bindu tables
+    /// are built from the **natal** chart, which this function is not given.
+    /// A caller holding one attaches it from a precomputed
     /// [`crate::ashtakavarga::AshtakavargaTable`].
+    ///
+    /// Skipped when absent rather than serialised as `null`. Through v7.1.1
+    /// the MCP surface emitted `"ashtakavarga_score": null` on every entry of
+    /// every response, with no input that could ever make it anything else.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ashtakavarga_score: Option<u8>,
 }
 

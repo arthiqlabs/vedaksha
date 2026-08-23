@@ -9,7 +9,7 @@
 //! (Vimshottari, Ashtottari, Yogini) and two Lagna-sign based
 //! (Chara, Narayana).
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::validation::{self, McpError};
 
@@ -76,13 +76,6 @@ pub struct ComputeDashaInput {
     /// Number of nested dasha levels (1–5). Defaults to 3.
     /// Ignored by Chara and Narayana, which return a single level.
     pub levels: Option<u8>,
-}
-
-/// Output of the `compute_dasha` tool.
-#[derive(Debug, Clone, Serialize)]
-pub struct ComputeDashaOutput {
-    /// Hierarchical dasha periods serialised to JSON.
-    pub dasha_json: serde_json::Value,
 }
 
 /// Tool metadata for MCP tool-listing.

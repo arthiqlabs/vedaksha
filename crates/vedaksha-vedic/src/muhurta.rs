@@ -1029,9 +1029,6 @@ fn tithi_name(number: u8) -> &'static str {
 mod tests {
     use super::*;
 
-    #[allow(dead_code)]
-    const EPS: f64 = 1e-9;
-
     // --- compute_tithi ---
 
     #[test]

@@ -379,7 +379,7 @@ fn cors_origin_header() -> tiny_http::Header {
     let origin = std::env::var("VEDAKSHA_MCP_CORS_ORIGIN").unwrap_or_else(|_| "*".to_string());
     format!("Access-Control-Allow-Origin: {origin}")
         .parse::<tiny_http::Header>()
-        .unwrap_or_else(|_| {
+        .unwrap_or_else(|()| {
             "Access-Control-Allow-Origin: *"
                 .parse::<tiny_http::Header>()
                 .unwrap()

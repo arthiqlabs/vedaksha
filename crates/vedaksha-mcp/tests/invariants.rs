@@ -161,13 +161,13 @@ fn polar_house_fallback_triggers_above_66_56() {
         for &lat in &non_polar_lats {
             total += 1;
             let cusps = compute_houses(90.0, lat, 23.44, system);
-            if !cusps.polar_fallback {
-                pass += 1;
-            } else {
+            if cusps.polar_fallback {
                 eprintln!(
                     "FAIL non-polar: system={:?} lat={lat} should NOT fallback but did",
                     system
                 );
+            } else {
+                pass += 1;
             }
         }
     }
@@ -678,4 +678,90 @@ fn served_sidereal_request_yields_a_sidereal_chart() {
         "Houses: Placidus, Zodiac: IndianOfficial, Rulership: Traditional",
         "the served chart reports a frame other than the one requested"
     );
+}
+
+// ─── EMIT_GRAPH: THE OBSERVER AND THE INSTANT ARE NOT INVENTABLE ───
+
+/// Drive one `tools/call` and return the parsed JSON-RPC response.
+fn mcp_call(tool: &str, arguments: serde_json::Value) -> serde_json::Value {
+    let server = vedaksha_mcp::server::McpServer::new();
+    let request = serde_json::json!({
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": tool, "arguments": arguments}
+    });
+    serde_json::from_str(&server.handle_request(&serde_json::to_string(&request).unwrap())).unwrap()
+}
+
+/// A natal chart to feed `emit_graph`, as the tool documents accepting.
+fn a_chart() -> serde_json::Value {
+    let r = mcp_call(
+        "compute_natal_chart",
+        serde_json::json!({"julian_day": 2_451_545.0, "latitude": 28.6, "longitude": 77.2}),
+    );
+    let text = r["result"]["content"][0]["text"].as_str().unwrap();
+    serde_json::from_str(text).unwrap()
+}
+
+/// `emit_graph` is the one tool that demands latitude and longitude *because*
+/// the Chart node records them and a chart result does not. Through v7.1.1 it
+/// demanded them and then range-checked neither, so `latitude: 9999` reached
+/// the emitted graph unaltered.
+#[test]
+fn emit_graph_rejects_an_observer_off_the_globe() {
+    for (lat, lon) in [
+        (9999.0, 77.2),
+        (28.6, -1e9),
+        (f64::NAN, 77.2),
+        (28.6, f64::NAN),
+    ] {
+        let r = mcp_call(
+            "emit_graph",
+            serde_json::json!({"chart_json": a_chart(), "format": "json",
+                               "latitude": lat, "longitude": lon}),
+        );
+        assert!(
+            r.get("error").is_some(),
+            "latitude {lat}, longitude {lon} was accepted: {r}"
+        );
+    }
+}
+
+/// The instant is the other half of the same claim. `julian_day` was read with
+/// `unwrap_or(f64::NAN)`, and serde_json renders a non-finite float as `null`,
+/// so a chart without one produced `"julian_day": null` in the Chart node and
+/// no error at all.
+#[test]
+fn emit_graph_rejects_a_chart_with_no_instant() {
+    let mut chart = a_chart();
+    chart.as_object_mut().unwrap().remove("julian_day");
+    let r = mcp_call(
+        "emit_graph",
+        serde_json::json!({"chart_json": chart, "format": "json",
+                           "latitude": 28.6, "longitude": 77.2}),
+    );
+    assert!(
+        r.get("error").is_some(),
+        "a chart with no instant was accepted: {r}"
+    );
+}
+
+/// The guard must not have closed the door on the valid case.
+#[test]
+fn emit_graph_still_accepts_a_well_formed_request() {
+    let r = mcp_call(
+        "emit_graph",
+        serde_json::json!({"chart_json": a_chart(), "format": "json",
+                           "latitude": 28.6, "longitude": 77.2}),
+    );
+    assert!(r.get("error").is_none(), "valid request rejected: {r}");
+    let text = r["result"]["content"][0]["text"].as_str().unwrap();
+    let graph: serde_json::Value = serde_json::from_str(text).unwrap();
+    let chart_node = graph["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["node_type"] == "Chart")
+        .expect("no Chart node");
+    let jd = &chart_node["properties"]["Chart"]["julian_day"];
+    assert!(jd.is_f64(), "Chart node julian_day is {jd}, not a number");
 }

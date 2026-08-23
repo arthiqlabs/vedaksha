@@ -6,7 +6,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "MCP server for AI-agent Vedic astrology — kundali, panchanga, dashas, and ephemeris via JSON-RPC"
 keywords = ["mcp", "astrology", "ephemeris", "jyotish", "kundali"]
@@ -38,3 +37,6 @@ serde_json = { workspace = true }
 default = ["std", "http"]
 std = ["vedaksha-ephem-core/std"]
 http = ["tiny_http"]
+
+[lints]
+workspace = true

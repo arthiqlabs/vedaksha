@@ -126,7 +126,7 @@ fn planet_longitude_accuracy() {
         }
 
         let max_arcsec = body_max_err * 3600.0;
-        eprintln!("  MAX ERROR: {max_arcsec:.2}\" at JD {body_max_jd:.1}",);
+        eprintln!("  MAX ERROR: {max_arcsec:.2}\" at JD {body_max_jd:.1}");
         max_errors.push((body, max_arcsec, body_max_jd));
     }
 
@@ -189,7 +189,7 @@ fn sun_longitude_accuracy() {
         let diff_deg = angular_diff_deg(spk_lon, ana_lon);
         let diff_arcsec = diff_deg * 3600.0;
 
-        eprintln!("  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"",);
+        eprintln!("  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"");
 
         if diff_deg > max_err {
             max_err = diff_deg;
@@ -244,7 +244,7 @@ fn moon_longitude_accuracy() {
         let diff_deg = angular_diff_deg(spk_lon, ana_lon);
         let diff_arcsec = diff_deg * 3600.0;
 
-        eprintln!("  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"",);
+        eprintln!("  JD {jd:.1}: SPK={spk_lon:10.6}  ANA={ana_lon:10.6}  diff={diff_arcsec:8.2}\"");
 
         if diff_deg > max_err {
             max_err = diff_deg;

@@ -98,10 +98,21 @@ fn edge_type_table(t: EdgeType) -> &'static str {
 }
 
 /// Sanitize a node ID string for use as a `SurrealDB` record ID.
-/// Replaces characters that need escaping; `SurrealDB` allows `⟨...⟩` for complex IDs.
+///
+/// `SurrealDB` spells a complex ID `⟨...⟩`, and the one character that cannot
+/// appear inside is the closing bracket. Through v7.1.1 this function replaced
+/// nothing at all despite its name and its doc comment — an id containing `⟩`
+/// closed the record ID early and the rest of it became statement text.
+/// `emit_graph` accepts a caller-supplied `ChartGraph`, and [`NodeId`] is a
+/// newtype over `String`, so ids are not all ours.
+///
+/// [`NodeId`]: crate::ids::NodeId
 fn sanitize_surreal_id(id: &str) -> String {
-    // Wrap in backtick-style escape using SurrealDB's ⟨⟩ notation for complex IDs
-    format!("⟨{id}⟩")
+    let cleaned: String = id
+        .chars()
+        .filter(|c| *c != '⟨' && *c != '⟩' && (*c as u32) >= 0x20)
+        .collect();
+    format!("⟨{cleaned}⟩")
 }
 
 #[allow(clippy::too_many_lines)]
@@ -229,7 +240,27 @@ fn edge_properties_surreal(props: &EdgeProperties) -> String {
 }
 
 fn escape_surreal_string(s: &str) -> String {
-    s.replace('\'', "\\'")
+    // Backslash FIRST: escaping the quote introduces backslashes, so doing it
+    // the other way round would double-escape them. Through v7.1.1 the
+    // backslash was not escaped at all, which meant an input `\r` reached the
+    // query as a carriage return and a trailing `\` escaped the closing quote
+    // and ran off the end of the literal. `emit_graph` accepts a caller-supplied
+    // ChartGraph, so these strings are not all ours.
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            // Other C0 controls have no literal spelling either; drop them
+            // rather than emit a raw byte into a statement.
+            c if (c as u32) < 0x20 => {}
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -341,5 +372,27 @@ mod tests {
             "should include aspect_type"
         );
         assert!(output.contains("orb = 2.3"), "should include orb value");
+    }
+
+    /// Same reasoning as the Cypher emitter's: caller-supplied strings reach
+    /// here, and escaping only the quote is not enough once backslashes exist.
+    #[test]
+    fn escaping_survives_backslashes_quotes_and_newlines() {
+        assert_eq!(escape_surreal_string("Ma\\"), "Ma\\\\");
+        assert_eq!(escape_surreal_string("Ma'rs"), "Ma\\'rs");
+        assert_eq!(escape_surreal_string("Ma\nrs"), "Ma\\nrs");
+    }
+
+    /// The record ID is wrapped in `⟨...⟩`, and the closing bracket is the one
+    /// character that cannot appear inside. `sanitize_surreal_id` replaced
+    /// nothing at all through v7.1.1.
+    #[test]
+    fn a_record_id_cannot_close_its_own_brackets() {
+        let out = sanitize_surreal_id("chart:x⟩; DELETE planet; --");
+        assert_eq!(out.matches('⟩').count(), 1, "{out}");
+        assert!(out.ends_with('⟩'), "{out}");
+        assert_eq!(out.matches('⟨').count(), 1, "{out}");
+        // The benign case is untouched apart from the wrapper.
+        assert_eq!(sanitize_surreal_id("sign:aries"), "⟨sign:aries⟩");
     }
 }

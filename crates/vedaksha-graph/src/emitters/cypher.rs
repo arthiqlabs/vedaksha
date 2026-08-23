@@ -224,7 +224,27 @@ fn edge_properties_cypher(props: &EdgeProperties) -> String {
 }
 
 fn escape_single_quotes(s: &str) -> String {
-    s.replace('\'', "\\'")
+    // Backslash FIRST: escaping the quote introduces backslashes, so doing it
+    // the other way round would double-escape them. Through v7.1.1 the
+    // backslash was not escaped at all, which meant an input `\r` reached the
+    // query as a carriage return and a trailing `\` escaped the closing quote
+    // and ran off the end of the literal. `emit_graph` accepts a caller-supplied
+    // ChartGraph, so these strings are not all ours.
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        match ch {
+            '\\' => out.push_str("\\\\"),
+            '\'' => out.push_str("\\'"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            // Other C0 controls have no literal spelling either; drop them
+            // rather than emit a raw byte into a statement.
+            c if (c as u32) < 0x20 => {}
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 #[cfg(test)]
@@ -390,5 +410,48 @@ mod tests {
             "should include aspect_type"
         );
         assert!(output.contains("orb: 2.3"), "should include orb");
+    }
+
+    /// `emit_graph` accepts a caller-supplied `ChartGraph`, so the strings that
+    /// reach this emitter are not all ours. Through v7.1.1 only the single
+    /// quote was escaped, which is not enough to be safe: escaping introduces
+    /// backslashes, so an unescaped backslash in the input either changes the
+    /// value (`\r` became a carriage return) or, at the end of a string, ate
+    /// the closing quote and let the rest run on as statement text.
+    #[test]
+    fn escaping_survives_backslashes_quotes_and_newlines() {
+        // A trailing backslash is the dangerous case: it must not be able to
+        // escape the quote the emitter puts after it.
+        assert_eq!(escape_single_quotes("Ma\\"), "Ma\\\\");
+        assert_eq!(escape_single_quotes("Ma\\rs"), "Ma\\\\rs");
+        assert_eq!(escape_single_quotes("Ma'rs"), "Ma\\'rs");
+        assert_eq!(escape_single_quotes("Ma\nrs"), "Ma\\nrs");
+        assert_eq!(escape_single_quotes("Ma\rrs"), "Ma\\rrs");
+        assert_eq!(escape_single_quotes("Ma\trs"), "Ma\\trs");
+        // Other C0 controls have no literal spelling and are dropped.
+        assert_eq!(escape_single_quotes("Ma\u{7}rs"), "Mars");
+    }
+
+    /// The property that actually matters: whatever goes in, the emitted
+    /// literal cannot be closed early. Count unescaped quotes in the result.
+    #[test]
+    fn no_input_can_close_the_literal_early() {
+        for hostile in [
+            "x' }) DETACH DELETE n //",
+            "x\\",
+            "x\\'",
+            "'; MATCH (n) DETACH DELETE n; //",
+            "a\\\\'b",
+        ] {
+            let escaped = escape_single_quotes(hostile);
+            let mut chars = escaped.chars().peekable();
+            while let Some(c) = chars.next() {
+                if c == '\\' {
+                    chars.next(); // the escaped character, whatever it is
+                } else {
+                    assert_ne!(c, '\'', "unescaped quote from {hostile:?} -> {escaped:?}");
+                }
+            }
+        }
     }
 }

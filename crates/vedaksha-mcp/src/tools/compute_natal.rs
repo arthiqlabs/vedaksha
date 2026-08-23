@@ -5,7 +5,7 @@
 
 //! `compute_natal_chart` — natal chart computation tool.
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::validation::{self, McpError};
 
@@ -29,13 +29,6 @@ pub struct ComputeNatalInput {
     pub house_system: Option<String>,
     /// Ayanamsha for sidereal output (e.g. `"Lahiri"`, `"Tropical"`).
     pub ayanamsha: Option<String>,
-}
-
-/// Output of the `compute_natal_chart` tool.
-#[derive(Debug, Clone, Serialize)]
-pub struct ComputeNatalOutput {
-    /// Full `ChartGraph` serialised to JSON.
-    pub chart_json: serde_json::Value,
 }
 
 /// Tool metadata for MCP tool-listing.

@@ -80,6 +80,11 @@ pub unsafe extern "C" fn vk_free(ptr: *mut u8, len: usize) {
 ///
 /// # Safety
 /// `ptr`/`len` must describe an initialised, readable region of linear memory.
+/// # Panics
+/// Panics only if the internal state mutex is poisoned, which requires a
+/// previous call to have panicked while holding it. The host reloads the
+/// module on any panic, so this is not recoverable state.
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vk_mcp_request(ptr: *const u8, len: usize) -> i32 {
     let raw = unsafe { core::slice::from_raw_parts(ptr, len) };
@@ -99,6 +104,11 @@ pub unsafe extern "C" fn vk_mcp_request(ptr: *const u8, len: usize) -> i32 {
 ///
 /// # Safety
 /// `out`/`cap` must describe a writable region of linear memory.
+/// # Panics
+/// Panics only if the internal state mutex is poisoned, which requires a
+/// previous call to have panicked while holding it. The host reloads the
+/// module on any panic, so this is not recoverable state.
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vk_mcp_take(out: *mut u8, cap: usize) -> i32 {
     let mut guard = PENDING.lock().unwrap();
@@ -121,6 +131,11 @@ pub unsafe extern "C" fn vk_mcp_take(out: *mut u8, cap: usize) -> i32 {
 ///
 /// # Safety
 /// `ptr`/`len` must describe an initialised, readable region of linear memory.
+/// # Panics
+/// Panics only if the internal state mutex is poisoned, which requires a
+/// previous call to have panicked while holding it. The host reloads the
+/// module on any panic, so this is not recoverable state.
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vk_spk_load(ptr: *const u8, len: usize) -> i32 {
     let raw = unsafe { core::slice::from_raw_parts(ptr, len) };
@@ -134,6 +149,11 @@ pub unsafe extern "C" fn vk_spk_load(ptr: *const u8, len: usize) -> i32 {
 }
 
 /// True (1) if an SPK kernel is currently loaded, else 0.
+/// # Panics
+/// Panics only if the internal state mutex is poisoned, which requires a
+/// previous call to have panicked while holding it. The host reloads the
+/// module on any panic, so this is not recoverable state.
+///
 #[unsafe(no_mangle)]
 pub extern "C" fn vk_spk_loaded() -> i32 {
     i32::from(SPK.lock().unwrap().is_some())
@@ -170,6 +190,11 @@ fn body_from_naif(id: i32) -> Option<Body> {
 ///
 /// # Safety
 /// `out` must point to space for 6 `f64` values in linear memory.
+/// # Panics
+/// Panics only if the internal state mutex is poisoned, which requires a
+/// previous call to have panicked while holding it. The host reloads the
+/// module on any panic, so this is not recoverable state.
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vk_spk_state(naif_id: i32, jd: f64, out: *mut f64) -> i32 {
     let Some(body) = body_from_naif(naif_id) else {
@@ -199,6 +224,11 @@ pub unsafe extern "C" fn vk_spk_state(naif_id: i32, jd: f64, out: *mut f64) -> i
 ///
 /// # Safety
 /// `out` must point to space for 2 `f64` values in linear memory.
+/// # Panics
+/// Panics only if the internal state mutex is poisoned, which requires a
+/// previous call to have panicked while holding it. The host reloads the
+/// module on any panic, so this is not recoverable state.
+///
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn vk_spk_range(out: *mut f64) -> i32 {
     let guard = SPK.lock().unwrap();

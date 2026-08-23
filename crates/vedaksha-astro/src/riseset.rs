@@ -3122,6 +3122,7 @@ mod tests {
     #[cfg(feature = "derivation-sweeps")]
     #[test]
     fn analytic_rise_agrees_with_the_scan_oracle_dense() {
+        require_release_profile("analytic_rise_agrees_with_the_scan_oracle_dense");
         let jds = sweep_julian_days(12);
         let lons = longitude_grid();
 
@@ -3237,6 +3238,7 @@ mod tests {
     #[cfg(feature = "derivation-sweeps")]
     #[test]
     fn polar_band_disagreement_is_measured_not_asserted() {
+        require_release_profile("polar_band_disagreement_is_measured_not_asserted");
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
         let polar = sweep(
@@ -3936,6 +3938,7 @@ mod tests {
     #[cfg(feature = "derivation-sweeps")]
     #[test]
     fn the_high_latitude_band_agrees_with_the_scan_oracle() {
+        require_release_profile("the_high_latitude_band_agrees_with_the_scan_oracle");
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
         let mut agreement = Agreement::default();
@@ -4409,6 +4412,9 @@ mod tests {
     #[cfg(feature = "derivation-sweeps")]
     #[test]
     fn the_latitude_limit_is_derived_from_where_the_walk_first_disagrees() {
+        require_release_profile(
+            "the_latitude_limit_is_derived_from_where_the_walk_first_disagrees",
+        );
         let provider = real_sun_provider();
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
 

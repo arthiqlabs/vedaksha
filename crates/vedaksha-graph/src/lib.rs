@@ -21,10 +21,7 @@
 //! kept — they gate real optional code and are the scaffolding a future
 //! `no_std` effort would build on — but the claim is gone until something
 //! verifies it.
-
 #![deny(unsafe_code)]
-#![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;

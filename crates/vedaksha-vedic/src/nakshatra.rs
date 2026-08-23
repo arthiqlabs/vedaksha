@@ -290,7 +290,20 @@ impl Nakshatra {
 
     /// Guna (primary quality) of this nakshatra.
     ///
-    /// Source: BPHS standard assignment.
+    /// # Provenance
+    ///
+    /// This one table is **not** traced to a chapter, unlike [`Self::gana`]
+    /// and [`Self::nadi`] beside it, which carry BPHS Ch. 20. It is the
+    /// traditional threefold assignment as it is commonly given, and through
+    /// v7.1.1 it was attributed to "BPHS standard assignment" — a citation
+    /// naming neither a chapter nor a defining rule, which is what this
+    /// project's citation rule forbids. Saying so is better than implying a
+    /// chapter that has not been checked.
+    ///
+    /// The partition it forms is verified — nine nakshatras to each guna, all
+    /// 27 covered exactly once — but that is a structural check, not a check
+    /// that any individual assignment is right. Treat this accessor as the
+    /// least-supported thing in the module.
     #[must_use]
     pub fn guna(&self) -> Guna {
         match self {
@@ -644,5 +657,28 @@ mod tests {
         assert_eq!(Nakshatra::Bharani.nadi(), Nadi::Madhya);
         assert_eq!(Nakshatra::Krittika.nadi(), Nadi::Antya);
         assert_eq!(Nakshatra::Rohini.nadi(), Nadi::Aadi);
+    }
+
+    /// `guna` was the only accessor in this module with no reference anywhere
+    /// in the tree — no caller, no test. A partition is the one property worth
+    /// asserting without a source for the individual rows: an edit that drops
+    /// a nakshatra from one arm and into another still balances, but an edit
+    /// that loses or duplicates one does not.
+    #[test]
+    fn guna_partitions_all_27_nakshatras_nine_ways_each() {
+        let mut counts = [0_usize; 3];
+        for i in 0..27_u8 {
+            let n = Nakshatra::from_index(i);
+            match n.guna() {
+                Guna::Sattva => counts[0] += 1,
+                Guna::Rajas => counts[1] += 1,
+                Guna::Tamas => counts[2] += 1,
+            }
+        }
+        assert_eq!(
+            counts,
+            [9, 9, 9],
+            "guna must split the 27 nakshatras evenly; got sattva/rajas/tamas = {counts:?}"
+        );
     }
 }

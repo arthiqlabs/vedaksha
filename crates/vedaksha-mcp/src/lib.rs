@@ -11,11 +11,7 @@
 //! synastry and composites, and to emit graph data. The catalog is
 //! [`tools::tool_definitions`]; agents discover it with one `tools/list` call,
 //! so no count is repeated in prose that would have to be kept in step.
-
 #![deny(unsafe_code)]
-#![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::module_name_repetitions)]
-#![allow(clippy::too_many_lines)]
 
 pub mod server;
 pub mod tools;

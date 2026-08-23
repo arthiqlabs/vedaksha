@@ -9,6 +9,18 @@
 //! by iterating to find the retarded position (where the body was when the
 //! observed light was emitted).
 //!
+//! # This is not the pipeline's light-time correction
+//!
+//! [`crate::coordinates`] iterates light-time itself, in
+//! `light_time_geocentric`, because it needs the planetary-aberration form
+//! that holds the Earth anchor fixed while retarding the target. Nothing in
+//! this crate calls [`light_time_correction`]: it is a standalone utility for
+//! a caller holding a provider, and changing it changes no served value.
+//!
+//! Two implementations of one correction can drift apart, and only one of them
+//! is covered by the Horizons oracle. Treat a change here as unvalidated by
+//! anything except this module's own tests.
+//!
 //! Source: Meeus, *Astronomical Algorithms*, 2nd ed., Chapter 33.
 
 use crate::aberration::C_AU_PER_DAY;

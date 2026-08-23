@@ -6,7 +6,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "Graph data model and ontology for astronomical/astrological charts"
 keywords = ["graph", "ontology", "cypher", "json-ld", "astrology"]
@@ -32,3 +31,6 @@ emitters = []
 # Build a ChartGraph from a ComputedChart. Kept out of `default` because it
 # pulls in vedaksha-astro; enabled by vedaksha-mcp and the umbrella crate.
 from-chart = ["dep:vedaksha-astro"]
+
+[lints]
+workspace = true

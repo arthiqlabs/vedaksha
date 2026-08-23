@@ -25,10 +25,30 @@ use crate::jpl::{AU_KM, EphemerisProvider, Position, StateVector, Velocity};
 
 use self::vsop87a::Planet;
 
-/// J2000.0 obliquity in radians: 84381.406 arcsec.
-/// Used to derive COS_EPS and SIN_EPS; kept for documentation.
-#[allow(dead_code)]
-const OBLIQUITY_J2000: f64 = 84_381.406 * core::f64::consts::PI / (180.0 * 3600.0);
+/// Precomputed cosine of the J2000 obliquity, **84381.448 arcsec**, the
+/// IAU 1976 value.
+///
+/// That is deliberately *not* the IAU 2006 value of 84381.406 arcsec that
+/// [`crate::obliquity::mean_obliquity`] evaluates. VSOP87A and ELP/MPP02 are
+/// referred to the dynamical equinox and ecliptic of J2000 as their authors
+/// defined it, and 84381.448 is the obliquity that frame is built on; rotating
+/// their output with the IAU 2006 value would introduce a 0.042 arcsec frame
+/// error against the very theory being evaluated.
+///
+/// Through v7.1.1 a module-level `OBLIQUITY_J2000` constant carried 84381.406,
+/// was dead code behind an `#[allow]`, and the comment beside this literal and
+/// [`SIN_EPS`] claimed to be its cosine and sine. Neither was — both encode
+/// 84381.448. The values were right and the documentation was wrong, so the
+/// documentation moved.
+///
+/// The literal itself was also 5.74e-12 (26083 ulps) above the true cosine,
+/// which left `COS_EPS^2 + SIN_EPS^2` a part in 1e11 from unity, so
+/// [`ecliptic_to_equatorial`] was not quite a rotation. Corrected in v7.2.0;
+/// the change is bounded by 1.2e-6 arcsec and moved the analytical bit digest.
+const COS_EPS: f64 = 0.917_482_062_069_181_8;
+
+/// Precomputed sine of the same obliquity. This one was already exact.
+const SIN_EPS: f64 = 0.397_777_155_931_913_7;
 
 /// Earth-Moon mass ratio (DE440/441 value).
 const EMRAT: f64 = 81.300_568_94;
@@ -41,12 +61,6 @@ const JD_MIN: f64 = 990_575.0;
 
 /// Maximum supported Julian Day (~+3000 CE).
 const JD_MAX: f64 = 2_816_788.0;
-
-/// Precomputed cosine of J2000 obliquity.
-const COS_EPS: f64 = 0.917_482_062_074_920_2; // libm::cos(OBLIQUITY_J2000)
-
-/// Precomputed sine of J2000 obliquity.
-const SIN_EPS: f64 = 0.397_777_155_931_913_7; // libm::sin(OBLIQUITY_J2000)
 
 /// Rotate a vector from ecliptic (J2000) to equatorial (ICRS approximation).
 #[inline]
@@ -228,6 +242,11 @@ impl EphemerisProvider for AnalyticalProvider {
             });
         }
 
+        // The node arms and the Pluto arm return the same error and are kept
+        // apart on purpose: a node has no state vector by nature, Pluto merely
+        // has no analytical theory here, and the comment on each says which.
+        // Merging them would leave one comment attached to both meanings.
+        #[allow(clippy::match_same_arms)]
         match body {
             // Planets: Mercury through Neptune (and EMB)
             Body::Mercury
@@ -269,11 +288,14 @@ impl EphemerisProvider for AnalyticalProvider {
             // before it ever reaches a provider. Returning a synthetic
             // unit vector here is what let the geocentric pipeline treat a
             // node as a body one AU away; the error reached 75°.
-            Body::MeanNode | Body::TrueNode | Body::TrueNodeOsculating => {
-                Err(ComputeError::BodyNotAvailable {
-                    body_id: body.naif_id(),
-                })
-            }
+            Body::MeanNode
+            | Body::TrueNode
+            | Body::TrueNodeOsculating
+            | Body::MeanSouthNode
+            | Body::TrueSouthNode
+            | Body::TrueSouthNodeOsculating => Err(ComputeError::BodyNotAvailable {
+                body_id: body.naif_id(),
+            }),
 
             // Pluto not available in analytical theory
             Body::Pluto => Err(ComputeError::BodyNotAvailable {
@@ -432,6 +454,58 @@ mod tests {
                 sv.velocity.x.is_finite() && sv.velocity.y.is_finite() && sv.velocity.z.is_finite(),
                 "{:?} velocity has non-finite values",
                 body
+            );
+        }
+    }
+
+    /// The two hardcoded rotation constants must be the cosine and sine of the
+    /// obliquity they claim to come from, and together must form a rotation.
+    ///
+    /// Nothing checked either through v7.1.1. `OBLIQUITY_J2000` named a
+    /// different obliquity from the one the constants encode, and `COS_EPS`
+    /// was 26083 ulps off, so `ecliptic_to_equatorial` was very slightly
+    /// non-orthogonal.
+    /// The obliquity [`COS_EPS`] and [`SIN_EPS`] must reproduce. Defined here
+    /// rather than beside them because nothing outside this check needs it —
+    /// through v7.1.1 it sat at module level as dead code behind an `#[allow]`,
+    /// carrying a different value from the one the constants encode.
+    const OBLIQUITY_J2000: f64 = 84_381.448 * core::f64::consts::PI / (180.0 * 3600.0);
+
+    #[test]
+    fn cos_eps_and_sin_eps_are_the_obliquity_they_claim() {
+        // One ulp of tolerance: the literals are transcribed, and libm's
+        // rounding need not match whatever produced them to the last bit.
+        let ulp = f64::EPSILON;
+        assert!(
+            (COS_EPS - libm::cos(OBLIQUITY_J2000)).abs() <= ulp,
+            "COS_EPS {COS_EPS} vs cos(OBLIQUITY_J2000) {}",
+            libm::cos(OBLIQUITY_J2000)
+        );
+        assert!(
+            (SIN_EPS - libm::sin(OBLIQUITY_J2000)).abs() <= ulp,
+            "SIN_EPS {SIN_EPS} vs sin(OBLIQUITY_J2000) {}",
+            libm::sin(OBLIQUITY_J2000)
+        );
+    }
+
+    /// `ecliptic_to_equatorial` must preserve length — it is a rotation about
+    /// the x axis and nothing else.
+    #[test]
+    fn ecliptic_to_equatorial_preserves_length() {
+        for (x, y, z) in [
+            (1.0, 0.0, 0.0),
+            (0.0, 1.0, 0.0),
+            (0.0, 0.0, 1.0),
+            (0.3, -0.7, 0.65),
+            (-5.2, 1.1, -0.4),
+        ] {
+            let before = libm::sqrt(x * x + y * y + z * z);
+            let (rx, ry, rz) = ecliptic_to_equatorial(x, y, z);
+            let after = libm::sqrt(rx * rx + ry * ry + rz * rz);
+            assert!(
+                (after / before - 1.0).abs() < 1e-15,
+                "length changed by {} for ({x}, {y}, {z})",
+                after / before - 1.0
             );
         }
     }

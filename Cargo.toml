@@ -13,22 +13,21 @@ members = [
 ]
 
 [workspace.package]
-version = "7.1.1"
+version = "7.2.0"
 edition = "2024"
 authors = ["ArthIQ Labs LLC <info@arthiq.net>"]
 homepage = "https://vedaksha.net"
 repository = "https://github.com/arthiqlabs/vedaksha"
 license = "BUSL-1.1"
-license-file = "LICENSE"
 rust-version = "1.89"
 
 [workspace.dependencies]
-vedaksha-math = { version = "7.1.1", path = "crates/vedaksha-math" }
-vedaksha-ephem-core = { version = "7.1.1", path = "crates/vedaksha-ephem-core" }
-vedaksha-graph = { version = "7.1.1", path = "crates/vedaksha-graph" }
-vedaksha-astro = { version = "7.1.1", path = "crates/vedaksha-astro" }
-vedaksha-vedic = { version = "7.1.1", path = "crates/vedaksha-vedic" }
-vedaksha-mcp = { version = "7.1.1", path = "crates/vedaksha-mcp" }
+vedaksha-math = { version = "7.2.0", path = "crates/vedaksha-math" }
+vedaksha-ephem-core = { version = "7.2.0", path = "crates/vedaksha-ephem-core" }
+vedaksha-graph = { version = "7.2.0", path = "crates/vedaksha-graph" }
+vedaksha-astro = { version = "7.2.0", path = "crates/vedaksha-astro" }
+vedaksha-vedic = { version = "7.2.0", path = "crates/vedaksha-vedic" }
+vedaksha-mcp = { version = "7.2.0", path = "crates/vedaksha-mcp" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -41,6 +40,67 @@ thiserror = "2"
 # auto-contract FMA or reassociate FP without fast-math (not enabled), so the
 # clean-room bit-determinism is preserved. Cargo forces panic=unwind for test
 # and bench targets regardless of the setting below.
+# One lint policy for every target in the workspace.
+#
+# Crate-level `#![allow]` attributes do not reach `tests/`, `benches/` or
+# `examples/`, so `cargo clippy --all-targets` carried 153 warnings while
+# `cargo clippy --workspace` — what CI gated — was clean. Two of those 153 were
+# real (a dead release-profile guard and five orphaned imports) and were
+# invisible in the noise. The gate is now `--all-targets`, so this table has to
+# cover every target rather than just the libs.
+[workspace.lints.clippy]
+# `priority = -1` so the individual allows below override these two groups.
+# A crate-level `#![warn(clippy::pedantic)]` attribute would instead override
+# the manifest, which is why those attributes were removed rather than kept.
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+approx_constant = "allow"
+assertions_on_constants = "allow"
+cast_lossless = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_precision_loss = "allow"
+cast_sign_loss = "allow"
+collapsible_if = "allow"
+doc_lazy_continuation = "allow"
+doc_markdown = "allow"
+double_must_use = "allow"
+enum_glob_use = "allow"
+excessive_precision = "allow"
+explicit_iter_loop = "allow"
+field_reassign_with_default = "allow"
+float_cmp = "allow"
+# Both fire only in test helpers, where the suggested rewrites (a `write!` loop
+# to build eight hex words, and by-reference `serde_json::Value` arguments) cost
+# legibility for no measurable gain.
+format_collect = "allow"
+inconsistent_digit_grouping = "allow"
+inline_always = "allow"
+items_after_statements = "allow"
+items_after_test_module = "allow"
+manual_let_else = "allow"
+manual_midpoint = "allow"
+# `a, b, c, d` in the SHA-256 round function and the x/y/z/vx/vy/vz of a state
+# vector are the names the algorithms are written in; renaming them for the
+# lint would make the code harder to check against its source.
+many_single_char_names = "allow"
+manual_range_contains = "allow"
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+needless_pass_by_value = "allow"
+no_effect_underscore_binding = "allow"
+println_empty_string = "allow"
+question_mark = "allow"
+redundant_closure_for_method_calls = "allow"
+similar_names = "allow"
+single_match = "allow"
+too_many_arguments = "allow"
+too_many_lines = "allow"
+type_complexity = "allow"
+uninlined_format_args = "allow"
+unnecessary_wraps = "allow"
+unreadable_literal = "allow"
+
 [profile.release]
 opt-level = 3
 lto = "fat"

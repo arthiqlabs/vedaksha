@@ -12,8 +12,26 @@
 //! Bala (aspectual).
 //!
 //! Source: BPHS Ch. 27.
+//!
+//! # Sub-component coverage
+//!
+//! Four of the six components are complete. Two are partial, and the gap is
+//! named here rather than left for a caller to discover from a wrong number:
+//!
+//! * **Sthana Bala** is the sum of five sub-components. Four are implemented —
+//!   Uchcha, Ojhayugma, Kendradi and Drekkana Bala. **Saptavargaja Bala, the
+//!   planet's dignity across the seven vargas, is not**, because it requires a
+//!   Moolatrikona degree table and a panchadha maitri (five-fold friendship)
+//!   derivation that this crate does not yet carry from a primary source. A
+//!   planet's Sthana Bala is therefore its true value less its Saptavargaja
+//!   term, and is bounded by 165 virupas rather than the classical maximum.
+//! * **Kala Bala** implements Nathonnatha and Paksha Bala. Tribhaga, the
+//!   Varsha/Masa/Vara/Hora set, Ayana and Yuddha Bala are absent.
+//!
+//! Every other component — Dig, Cheshta, Naisargika and Drik Bala — is whole.
 
 use crate::graha::{Graha, GrahaPosition};
+use crate::varga::{VargaType, varga_sign};
 use serde::Serialize;
 
 /// Shadbala (six-fold strength) for a planet.
@@ -23,7 +41,9 @@ use serde::Serialize;
 pub struct Shadbala {
     /// The planet this strength applies to.
     pub planet: Graha,
-    /// Positional strength (own/exalted/friend sign).
+    /// Positional strength: the sum of `uccha_bala`, `ojhayugma_bala`,
+    /// `kendradi_bala` and `drekkana_bala`. Saptavargaja Bala is not
+    /// included — see the module documentation.
     pub sthana_bala: f64,
     /// Directional strength (planets strong in certain houses).
     pub dig_bala: f64,
@@ -35,17 +55,28 @@ pub struct Shadbala {
     pub naisargika_bala: f64,
     /// Aspectual strength (benefic/malefic aspects).
     pub drik_bala: f64,
-    /// Total Shadbala (sum of all six components).
+    /// Sum of the six components above.
     pub total: f64,
-    /// Exaltation strength component (0–60 virupas). Source: BPHS Ch.27.
+    /// Uchcha Bala — exaltation sub-component of Sthana Bala (0–60
+    /// virupas). Source: BPHS Ch.27.
     pub uccha_bala: f64,
+    /// Ojhayugma Bala — odd/even rasi and navamsa sub-component of Sthana
+    /// Bala (0–30 virupas). Source: BPHS Ch.27.
+    pub ojhayugma_bala: f64,
+    /// Kendradi Bala — angular/succedent/cadent sub-component of Sthana
+    /// Bala (15–60 virupas). Source: BPHS Ch.27.
+    pub kendradi_bala: f64,
+    /// Drekkana Bala — decanate sub-component of Sthana Bala (0 or 15
+    /// virupas). Source: BPHS Ch.27.
+    pub drekkana_bala: f64,
     /// Benefit strength per Rasmi scale (0–60 virupas). Source: BPHS Ch.28 vv.5-6.
     pub ishta_phala: f64,
     /// Affliction strength per Rasmi scale (0–60 virupas). Source: BPHS Ch.28 v.6.
     pub kashta_phala: f64,
 }
 
-/// Additional temporal/motional parameters needed for full Shadbala computation.
+/// Additional temporal/motional parameters the six-fold computation needs
+/// beyond a bare [`GrahaPosition`].
 #[derive(Debug, Clone, Copy)]
 pub struct ShadbalaPlanetData {
     /// The planet position.
@@ -139,15 +170,24 @@ fn exaltation_longitude(planet: Graha) -> f64 {
     }
 }
 
-/// Degree-precise Uccha Bala (exaltation strength) in virupas (0-60).
+/// Uchcha Bala — degree-precise exaltation strength in virupas (0-60).
 ///
-/// Formula (BPHS Ch. 27 Sl. 3-6):
-///   uccha_bala = (180 - arc) / 3
-/// where arc = min(|longitude - exaltation_longitude|, 360 - |longitude - exaltation_longitude|).
+/// Defining rule (BPHS Ch. 27 Sl. 3-6): a planet at its exaltation degree has
+/// 60 virupas, at its debilitation degree 0, and the value falls linearly with
+/// the arc between:
 ///
-/// Yields 60 virupas at exact exaltation, 0 at exact debilitation (180° away).
+/// ```text
+/// uccha_bala = (180 - arc) / 3
+/// arc        = min(|longitude - exaltation_longitude|,
+///                  360 - |longitude - exaltation_longitude|)
+/// ```
+///
+/// This is one of the five sub-components of Sthana Bala, not Sthana Bala
+/// itself. Through v7.1.1 it was exported under the name `sthana_bala` and
+/// took a `sign` argument it discarded; see [`sthana_bala_full`] for the
+/// composite, and [`sthana_bala`] for the retained v7 spelling.
 #[must_use]
-pub fn sthana_bala(planet: Graha, _sign: u8, longitude: f64) -> f64 {
+pub fn uccha_bala(planet: Graha, longitude: f64) -> f64 {
     let exalt_lon = exaltation_longitude(planet);
     let raw_diff = (longitude - exalt_lon).abs();
     let arc = if raw_diff > 180.0 {
@@ -156,6 +196,124 @@ pub fn sthana_bala(planet: Graha, _sign: u8, longitude: f64) -> f64 {
         raw_diff
     };
     ((180.0 - arc) / 3.0).max(0.0)
+}
+
+/// Ojhayugma Bala — odd/even strength in virupas (0-30).
+///
+/// Defining rule (BPHS Ch. 27): the Moon and Venus are strengthened by even
+/// (yugma) signs; the other five grahas by odd (oja) signs. The test is
+/// applied twice — once to the rasi (D-1) and once to the navamsa (D-9) — and
+/// each agreement is worth 15 virupas.
+///
+/// Sign indices are 0-based, so an *odd* sign in the classical 1-based
+/// reckoning (Aries, Gemini, …) is an *even* index here.
+///
+/// Rahu and Ketu are outside the classical rule and score 0.
+#[must_use]
+pub fn ojhayugma_bala(planet: Graha, longitude: f64) -> f64 {
+    if matches!(planet, Graha::Rahu | Graha::Ketu) {
+        return 0.0;
+    }
+    // Classical "odd sign" == 0-based index even.
+    let wants_even_sign = matches!(planet, Graha::Moon | Graha::Venus);
+
+    let rasi = varga_sign(longitude, VargaType::Rashi);
+    let navamsa = varga_sign(longitude, VargaType::Navamsha);
+
+    let mut bala = 0.0;
+    for sign in [rasi, navamsa] {
+        let sign_is_classically_even = sign % 2 == 1;
+        if sign_is_classically_even == wants_even_sign {
+            bala += 15.0;
+        }
+    }
+    bala
+}
+
+/// Kendradi Bala — quadrant strength in virupas (15, 30 or 60).
+///
+/// Defining rule (BPHS Ch. 27): a planet in a kendra (houses 1, 4, 7, 10)
+/// scores 60 virupas; in a panapara (2, 5, 8, 11) 30; in an apoklima
+/// (3, 6, 9, 12) 15. The rule depends only on the house, not on the planet.
+///
+/// A `bhava` outside 1-12 scores 0.
+#[must_use]
+pub fn kendradi_bala(bhava: u8) -> f64 {
+    match bhava {
+        1 | 4 | 7 | 10 => 60.0,
+        2 | 5 | 8 | 11 => 30.0,
+        3 | 6 | 9 | 12 => 15.0,
+        _ => 0.0,
+    }
+}
+
+/// Drekkana Bala — decanate strength in virupas (0 or 15).
+///
+/// Defining rule (BPHS Ch. 27): the male grahas (Sun, Mars, Jupiter) gain 15
+/// virupas in the first drekkana of whatever sign they occupy, the neuter
+/// grahas (Mercury, Saturn) in the second, and the female grahas (Moon,
+/// Venus) in the third. There is no partial credit.
+///
+/// The drekkana here is the third of the *occupied sign* — degrees 0-10,
+/// 10-20 and 20-30 within it — which is what the rule is stated over, not the
+/// D-3 varga sign that [`crate::varga::varga_sign`] returns.
+///
+/// Rahu and Ketu are outside the classical rule and score 0.
+#[must_use]
+pub fn drekkana_bala(planet: Graha, longitude: f64) -> f64 {
+    let wanted = match planet {
+        Graha::Sun | Graha::Mars | Graha::Jupiter => 0u8,
+        Graha::Mercury | Graha::Saturn => 1,
+        Graha::Moon | Graha::Venus => 2,
+        Graha::Rahu | Graha::Ketu => return 0.0,
+    };
+    let within_sign = longitude.rem_euclid(360.0) % 30.0;
+    // 0-10 deg -> 0, 10-20 -> 1, 20-30 -> 2. `min` guards the 30.0 boundary
+    // that floating-point rounding can produce.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let index = ((within_sign / 10.0) as u8).min(2);
+    if index == wanted { 15.0 } else { 0.0 }
+}
+
+/// Sthana Bala — positional strength in virupas (0-165).
+///
+/// Named `_full` for the same reason [`compute_shadbala_full`] is: the plain
+/// spelling is taken by the v7 function this replaces.
+///
+/// The sum of the four implemented sub-components: [`uccha_bala`],
+/// [`ojhayugma_bala`], [`kendradi_bala`] and [`drekkana_bala`].
+///
+/// **Saptavargaja Bala is not included.** BPHS Ch. 27 makes it the fifth
+/// sub-component — the planet's dignity in each of the seven vargas, graded
+/// by the five-fold friendship — and computing it needs a Moolatrikona degree
+/// table and a panchadha maitri derivation this crate does not yet carry from
+/// a primary source. Inventing either would be worse than the documented gap,
+/// so the value returned here is the true Sthana Bala less that term.
+///
+/// Source: BPHS Ch. 27.
+#[must_use]
+pub fn sthana_bala_full(planet: Graha, longitude: f64, bhava: u8) -> f64 {
+    uccha_bala(planet, longitude)
+        + ojhayugma_bala(planet, longitude)
+        + kendradi_bala(bhava)
+        + drekkana_bala(planet, longitude)
+}
+
+/// Uchcha Bala under its historical name.
+///
+/// This is what `sthana_bala` returned through v7.1.1: the Uchcha
+/// sub-component alone, with `sign` accepted and discarded. It is kept at that
+/// exact behaviour so a v7 dependent keeps compiling and keeps getting the
+/// number it got before, and is deprecated in favour of the two functions that
+/// say what they are — [`uccha_bala`] for this value, [`sthana_bala_full`] for
+/// the composite Sthana Bala.
+#[must_use]
+#[deprecated(
+    since = "7.2.0",
+    note = "returns Uchcha Bala only, not Sthana Bala: call uccha_bala for this value, or sthana_bala_full for the composite"
+)]
+pub fn sthana_bala(planet: Graha, _sign: u8, longitude: f64) -> f64 {
+    uccha_bala(planet, longitude)
 }
 
 // ── Kala Bala (temporal strength) ───────────────────────────────────
@@ -278,115 +436,35 @@ pub fn ishta_kashta_phala(uccha_bala: f64, cheshta_bala: f64) -> (f64, f64) {
     (ishta, 60.0 - ishta)
 }
 
-// ── Planet-sign helpers (reuse from yoga.rs logic) ──────────────────
-
-#[allow(dead_code)]
-fn own_signs(planet: Graha) -> &'static [u8] {
-    match planet {
-        Graha::Sun => &[4],
-        Graha::Moon => &[3],
-        Graha::Mars => &[0, 7],
-        Graha::Mercury => &[2, 5],
-        Graha::Jupiter => &[8, 11],
-        Graha::Venus => &[1, 6],
-        Graha::Saturn => &[9, 10],
-        Graha::Rahu | Graha::Ketu => &[],
-    }
-}
-
-#[allow(dead_code)]
-fn exaltation_sign(planet: Graha) -> Option<u8> {
-    match planet {
-        Graha::Sun => Some(0),
-        Graha::Moon => Some(1),
-        Graha::Mars => Some(9),
-        Graha::Mercury => Some(5),
-        Graha::Jupiter => Some(3),
-        Graha::Venus => Some(11),
-        Graha::Saturn => Some(6),
-        Graha::Rahu | Graha::Ketu => None,
-    }
-}
-
-#[allow(dead_code)]
-fn debilitation_sign(planet: Graha) -> Option<u8> {
-    exaltation_sign(planet).map(|s| (s + 6) % 12)
-}
-
-#[allow(dead_code)]
-fn is_in_own_sign(planet: Graha, sign: u8) -> bool {
-    own_signs(planet).contains(&sign)
-}
-
-#[allow(dead_code)]
-fn is_exalted(planet: Graha, sign: u8) -> bool {
-    exaltation_sign(planet) == Some(sign)
-}
-
-#[allow(dead_code)]
-fn is_debilitated(planet: Graha, sign: u8) -> bool {
-    debilitation_sign(planet) == Some(sign)
-}
-
-/// Sign lord (ruler).
-#[allow(dead_code)]
-fn sign_lord(sign: u8) -> Graha {
-    match sign {
-        0 | 7 => Graha::Mars,
-        1 | 6 => Graha::Venus,
-        2 | 5 => Graha::Mercury,
-        3 => Graha::Moon,
-        8 | 11 => Graha::Jupiter,
-        9 | 10 => Graha::Saturn,
-        _ => Graha::Sun, // fallback, should not happen
-    }
-}
-
-/// Simplified friendly sign check based on traditional friendships.
-///
-/// Uses the natural friendship table (naisargika maitri).
-#[allow(dead_code)]
-fn is_friendly_sign(planet: Graha, sign: u8) -> bool {
-    let lord = sign_lord(sign);
-    if lord == planet {
-        return true; // own sign counts as friendly
-    }
-    matches!(
-        (planet, lord),
-        (Graha::Sun | Graha::Mars | Graha::Jupiter, Graha::Moon)
-            | (Graha::Sun | Graha::Jupiter, Graha::Mars)
-            | (Graha::Sun | Graha::Mars, Graha::Jupiter)
-            | (
-                Graha::Moon | Graha::Mars | Graha::Mercury | Graha::Jupiter,
-                Graha::Sun,
-            )
-            | (Graha::Moon | Graha::Venus | Graha::Saturn, Graha::Mercury)
-            | (Graha::Mercury | Graha::Saturn, Graha::Venus)
-            | (Graha::Venus, Graha::Saturn)
-    )
-}
-
 // ── Compute Shadbala ────────────────────────────────────────────────
 
-/// Compute Shadbala for all given planet positions (basic — 3 components).
+/// Compute Shadbala from bare positions — Sthana, Dig and Naisargika Bala only.
 ///
-/// Uses Sthana Bala, Dig Bala, and Naisargika Bala. Kala, Cheshta, and Drik
-/// Bala are set to 0.0. For full 6-component Shadbala, use
-/// [`compute_shadbala_full`].
+/// Kala, Cheshta and Drik Bala need data a [`GrahaPosition`] does not carry, so
+/// they are zero and `total` is the sum of the three that are computed, not of
+/// six. That was true before v7.2.0 too, where the struct documented `total` as
+/// a six-component sum regardless. Use [`compute_shadbala_full`].
 ///
-/// # Arguments
-/// * `positions` — slice of planet positions with sign and bhava
-/// * `_lagna_sign` — lagna sign (reserved for compatibility)
+/// `lagna_sign` is accepted for signature compatibility and not read.
 #[must_use]
+#[deprecated(
+    since = "7.2.0",
+    note = "computes three of the six components; use compute_shadbala_full"
+)]
 pub fn compute_shadbala(positions: &[GrahaPosition], _lagna_sign: u8) -> Vec<Shadbala> {
     positions
         .iter()
         .map(|pos| {
             let naisargika = naisargika_bala(pos.planet);
             let dig = dig_bala(pos.planet, pos.bhava);
-            let sthana = sthana_bala(pos.planet, pos.sign, pos.longitude);
-            let total = naisargika + dig + sthana;
-            let (ishta, kashta) = ishta_kashta_phala(sthana, 0.0);
+
+            let uccha = uccha_bala(pos.planet, pos.longitude);
+            let ojhayugma = ojhayugma_bala(pos.planet, pos.longitude);
+            let kendradi = kendradi_bala(pos.bhava);
+            let drekkana = drekkana_bala(pos.planet, pos.longitude);
+            let sthana = uccha + ojhayugma + kendradi + drekkana;
+
+            let (ishta, kashta) = ishta_kashta_phala(uccha, 0.0);
             Shadbala {
                 planet: pos.planet,
                 sthana_bala: sthana,
@@ -395,8 +473,11 @@ pub fn compute_shadbala(positions: &[GrahaPosition], _lagna_sign: u8) -> Vec<Sha
                 cheshta_bala: 0.0,
                 naisargika_bala: naisargika,
                 drik_bala: 0.0,
-                total,
-                uccha_bala: sthana,
+                total: naisargika + dig + sthana,
+                uccha_bala: uccha,
+                ojhayugma_bala: ojhayugma,
+                kendradi_bala: kendradi,
+                drekkana_bala: drekkana,
                 ishta_phala: ishta,
                 kashta_phala: kashta,
             }
@@ -404,7 +485,10 @@ pub fn compute_shadbala(positions: &[GrahaPosition], _lagna_sign: u8) -> Vec<Sha
         .collect()
 }
 
-/// Compute full Shadbala (all 6 components) for planets with extended data.
+/// Compute Shadbala — all six components — for planets with extended data.
+///
+/// Sthana Bala omits Saptavargaja Bala and Kala Bala covers Nathonnatha and
+/// Paksha only; see the module documentation for the full accounting.
 ///
 /// # Arguments
 /// * `planets` — slice of extended planet data (position, speed, aspects)
@@ -422,13 +506,21 @@ pub fn compute_shadbala_full(
             let pos = &data.position;
             let naisargika = naisargika_bala(pos.planet);
             let dig = dig_bala(pos.planet, pos.bhava);
-            let sthana = sthana_bala(pos.planet, pos.sign, pos.longitude);
+
+            let uccha = uccha_bala(pos.planet, pos.longitude);
+            let ojhayugma = ojhayugma_bala(pos.planet, pos.longitude);
+            let kendradi = kendradi_bala(pos.bhava);
+            let drekkana = drekkana_bala(pos.planet, pos.longitude);
+            let sthana = uccha + ojhayugma + kendradi + drekkana;
+
             let kala = kala_bala(pos.planet, is_daytime, moon_phase_waxing);
             let cheshta = cheshta_bala(pos.planet, data.speed, data.average_speed);
             let drik = drik_bala(data.benefic_aspect_count, data.malefic_aspect_count);
             let total = naisargika + dig + sthana + kala + cheshta + drik;
 
-            let (ishta, kashta) = ishta_kashta_phala(sthana, cheshta);
+            // BPHS Ch.28 v.5 builds the Rasmis from Uchcha Bala, not from the
+            // Sthana Bala composite that contains it.
+            let (ishta, kashta) = ishta_kashta_phala(uccha, cheshta);
             Shadbala {
                 planet: pos.planet,
                 sthana_bala: sthana,
@@ -438,7 +530,10 @@ pub fn compute_shadbala_full(
                 naisargika_bala: naisargika,
                 drik_bala: drik,
                 total,
-                uccha_bala: sthana,
+                uccha_bala: uccha,
+                ojhayugma_bala: ojhayugma,
+                kendradi_bala: kendradi,
+                drekkana_bala: drekkana,
                 ishta_phala: ishta,
                 kashta_phala: kashta,
             }
@@ -523,35 +618,180 @@ mod tests {
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
-    // ── Sthana Bala (Uccha Bala) tests ───────────────────────────────
+    // ── Uccha Bala tests ────────────────────────────────────────────
 
     #[test]
-    fn sthana_bala_exact_exaltation_is_60() {
+    fn uccha_bala_exact_exaltation_is_60() {
         // Sun exalted at 10° Aries → 60 virupas
-        let bala = sthana_bala(Graha::Sun, 0, 10.0);
+        let bala = uccha_bala(Graha::Sun, 10.0);
         assert!((bala - 60.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn sthana_bala_exact_debilitation_is_0() {
+    fn uccha_bala_exact_debilitation_is_0() {
         // Sun debilitated at 190° (10+180) → 0 virupas
-        let bala = sthana_bala(Graha::Sun, 6, 190.0);
+        let bala = uccha_bala(Graha::Sun, 190.0);
         assert!((bala - 0.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn sthana_bala_midpoint_is_30() {
+    fn uccha_bala_midpoint_is_30() {
         // Sun at 100° → 90° from exaltation (10°) → (180-90)/3 = 30 virupas
-        let bala = sthana_bala(Graha::Sun, 3, 100.0);
+        let bala = uccha_bala(Graha::Sun, 100.0);
         assert!((bala - 30.0).abs() < f64::EPSILON);
     }
 
     #[test]
-    fn sthana_bala_gradient_is_continuous() {
+    fn uccha_bala_gradient_is_continuous() {
         // Jupiter at exact exaltation (95°) should be stronger than at 100°
-        let at_exalt = sthana_bala(Graha::Jupiter, 3, 95.0);
-        let near_exalt = sthana_bala(Graha::Jupiter, 3, 100.0);
+        let at_exalt = uccha_bala(Graha::Jupiter, 95.0);
+        let near_exalt = uccha_bala(Graha::Jupiter, 100.0);
         assert!(at_exalt > near_exalt);
+    }
+
+    // ── Ojhayugma Bala tests ────────────────────────────────────────
+
+    #[test]
+    fn ojhayugma_rewards_odd_signs_for_the_sun() {
+        // 5° Aries: rasi index 0 (classically odd), navamsa of 5° Aries is
+        // index 1 (classically even). The Sun wants odd, so it scores the
+        // rasi half only.
+        assert!((ojhayugma_bala(Graha::Sun, 5.0) - 15.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn ojhayugma_is_inverted_for_moon_and_venus() {
+        // Same longitude, opposite preference: the Moon takes the navamsa
+        // half where the Sun took the rasi half. The two must therefore sum
+        // to the full 30 virupas at every longitude.
+        for step in 0..360 {
+            let lon = f64::from(step);
+            let sun = ojhayugma_bala(Graha::Sun, lon);
+            let moon = ojhayugma_bala(Graha::Moon, lon);
+            assert!(
+                (sun + moon - 30.0).abs() < f64::EPSILON,
+                "at {lon}°: sun {sun} + moon {moon} != 30"
+            );
+        }
+    }
+
+    #[test]
+    fn ojhayugma_is_zero_for_the_nodes() {
+        assert!(ojhayugma_bala(Graha::Rahu, 5.0).abs() < f64::EPSILON);
+        assert!(ojhayugma_bala(Graha::Ketu, 5.0).abs() < f64::EPSILON);
+    }
+
+    // ── Kendradi Bala tests ─────────────────────────────────────────
+
+    #[test]
+    fn kendradi_grades_the_three_house_classes() {
+        for kendra in [1, 4, 7, 10] {
+            assert!((kendradi_bala(kendra) - 60.0).abs() < f64::EPSILON);
+        }
+        for panapara in [2, 5, 8, 11] {
+            assert!((kendradi_bala(panapara) - 30.0).abs() < f64::EPSILON);
+        }
+        for apoklima in [3, 6, 9, 12] {
+            assert!((kendradi_bala(apoklima) - 15.0).abs() < f64::EPSILON);
+        }
+    }
+
+    #[test]
+    fn kendradi_covers_every_house_and_rejects_others() {
+        for bhava in 1..=12u8 {
+            assert!(kendradi_bala(bhava) > 0.0, "house {bhava} scored nothing");
+        }
+        assert!(kendradi_bala(0).abs() < f64::EPSILON);
+        assert!(kendradi_bala(13).abs() < f64::EPSILON);
+    }
+
+    // ── Drekkana Bala tests ─────────────────────────────────────────
+
+    #[test]
+    fn drekkana_rewards_each_sex_in_its_own_third() {
+        // Third of the occupied sign, not the D-3 varga sign.
+        let first = 5.0; // 5° Aries
+        let second = 15.0;
+        let third = 25.0;
+
+        for male in [Graha::Sun, Graha::Mars, Graha::Jupiter] {
+            assert!((drekkana_bala(male, first) - 15.0).abs() < f64::EPSILON);
+            assert!(drekkana_bala(male, second).abs() < f64::EPSILON);
+            assert!(drekkana_bala(male, third).abs() < f64::EPSILON);
+        }
+        for neuter in [Graha::Mercury, Graha::Saturn] {
+            assert!(drekkana_bala(neuter, first).abs() < f64::EPSILON);
+            assert!((drekkana_bala(neuter, second) - 15.0).abs() < f64::EPSILON);
+        }
+        for female in [Graha::Moon, Graha::Venus] {
+            assert!(drekkana_bala(female, first).abs() < f64::EPSILON);
+            assert!((drekkana_bala(female, third) - 15.0).abs() < f64::EPSILON);
+        }
+    }
+
+    #[test]
+    fn drekkana_index_never_escapes_the_sign() {
+        // Every longitude, including the sign boundaries and a negative one,
+        // must land in exactly one of the three thirds — so across the three
+        // sexes precisely 15 virupas is awarded at every degree.
+        for step in 0..3600 {
+            let lon = f64::from(step) / 10.0 - 180.0;
+            let awarded = drekkana_bala(Graha::Sun, lon)
+                + drekkana_bala(Graha::Mercury, lon)
+                + drekkana_bala(Graha::Moon, lon);
+            assert!(
+                (awarded - 15.0).abs() < f64::EPSILON,
+                "at {lon}°: {awarded} virupas awarded across the three thirds"
+            );
+        }
+    }
+
+    // ── Sthana Bala composite tests ─────────────────────────────────
+
+    #[test]
+    fn sthana_bala_is_the_sum_of_its_four_sub_components() {
+        for planet in [Graha::Sun, Graha::Moon, Graha::Saturn, Graha::Rahu] {
+            for bhava in 1..=12u8 {
+                let lon = f64::from(bhava) * 27.3;
+                let parts = uccha_bala(planet, lon)
+                    + ojhayugma_bala(planet, lon)
+                    + kendradi_bala(bhava)
+                    + drekkana_bala(planet, lon);
+                let composite = sthana_bala_full(planet, lon, bhava);
+                assert!(
+                    (composite - parts).abs() < f64::EPSILON,
+                    "{planet:?} at {lon}° house {bhava}: {composite} != {parts}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sthana_bala_depends_on_the_house_it_used_to_ignore() {
+        // The defect this replaced: sthana_bala returned Uccha Bala alone, so
+        // two placements differing only in house scored identically.
+        let angular = sthana_bala_full(Graha::Sun, 10.0, 1);
+        let cadent = sthana_bala_full(Graha::Sun, 10.0, 3);
+        assert!(
+            (angular - cadent - 45.0).abs() < f64::EPSILON,
+            "kendra {angular} vs apoklima {cadent}"
+        );
+    }
+
+    #[test]
+    fn sthana_bala_stays_within_its_documented_bound() {
+        for step in 0..720 {
+            let lon = f64::from(step) / 2.0;
+            for bhava in 1..=12u8 {
+                for planet in [Graha::Sun, Graha::Moon, Graha::Venus, Graha::Saturn] {
+                    let bala = sthana_bala_full(planet, lon, bhava);
+                    assert!(
+                        (0.0..=165.0).contains(&bala),
+                        "{planet:?} at {lon}° house {bhava}: {bala} outside 0..=165"
+                    );
+                }
+            }
+        }
     }
 
     // ── Kala Bala tests ─────────────────────────────────────────────
@@ -675,23 +915,6 @@ mod tests {
         assert!((bala - (-30.0)).abs() < f64::EPSILON);
     }
 
-    // ── Legacy compute_shadbala tests ───────────────────────────────
-
-    #[test]
-    fn total_shadbala_is_sum_of_components() {
-        let positions = [pos(Graha::Sun, 0, 10)];
-        let results = compute_shadbala(&positions, 0);
-        assert_eq!(results.len(), 1);
-        let sb = &results[0];
-        let expected = sb.sthana_bala
-            + sb.dig_bala
-            + sb.kala_bala
-            + sb.cheshta_bala
-            + sb.naisargika_bala
-            + sb.drik_bala;
-        assert!((sb.total - expected).abs() < f64::EPSILON);
-    }
-
     // ── Full Shadbala tests ─────────────────────────────────────────
 
     #[test]
@@ -701,10 +924,25 @@ mod tests {
         assert_eq!(results.len(), 1);
         let sb = &results[0];
 
-        // Sthana: Uccha Bala for Jupiter at 105° (sign 3, lon 3*30+15),
-        // exaltation at 95°. arc=10, (180-10)/3 ≈ 56.67 virupas.
-        let expected_sthana = (180.0 - 10.0) / 3.0;
-        assert!((sb.sthana_bala - expected_sthana).abs() < 0.01);
+        // Sthana for Jupiter at 105° (15° Cancer) in the 4th, worked by hand:
+        //   uccha     — exaltation 95°, arc 10° -> (180-10)/3 = 56.667
+        //   ojhayugma — rasi Cancer (index 3, classically even) and navamsa
+        //               Scorpio (index 7, classically even); Jupiter wants
+        //               odd, so neither half scores -> 0
+        //   kendradi  — 4th house is a kendra -> 60
+        //   drekkana  — 15° into the sign is the second third; Jupiter is
+        //               male and wants the first -> 0
+        let expected_uccha = (180.0 - 10.0) / 3.0;
+        let expected_sthana = expected_uccha + 0.0 + 60.0 + 0.0;
+        assert!(
+            (sb.sthana_bala - expected_sthana).abs() < 0.01,
+            "sthana {} != {expected_sthana}",
+            sb.sthana_bala
+        );
+        assert!((sb.uccha_bala - expected_uccha).abs() < 0.01);
+        assert!(sb.ojhayugma_bala.abs() < f64::EPSILON);
+        assert!((sb.kendradi_bala - 60.0).abs() < f64::EPSILON);
+        assert!(sb.drekkana_bala.abs() < f64::EPSILON);
         // Dig: house 4, strong house 1, dist 3 -> 60 - 30 = 30
         assert!((sb.dig_bala - 30.0).abs() < f64::EPSILON);
         // Naisargika: Jupiter = 34.29
@@ -735,8 +973,12 @@ mod tests {
                 + sb.cheshta_bala
                 + sb.naisargika_bala
                 + sb.drik_bala;
+            // Not f64::EPSILON: `sthana_bala` is itself a sum, so `total`
+            // and this re-addition associate the same terms differently and
+            // differ by an ulp of ~250, not of 1. Any real omission is at
+            // least a whole virupa.
             assert!(
-                (sb.total - sum).abs() < f64::EPSILON,
+                (sb.total - sum).abs() < 1e-9,
                 "Total {} != sum {} for {:?}",
                 sb.total,
                 sum,
@@ -787,11 +1029,66 @@ mod tests {
     }
 
     #[test]
-    fn full_shadbala_has_uccha_bala_matching_sthana() {
+    fn the_pipeline_and_the_standalone_sthana_bala_agree() {
+        // `compute_shadbala_full` computes the four sub-components inline so
+        // it can report each one, which means it does not go through
+        // `sthana_bala`. The two must not be allowed to drift apart.
+        for planet in [Graha::Sun, Graha::Moon, Graha::Mercury, Graha::Venus] {
+            for bhava in 1..=12u8 {
+                let sign = (bhava - 1) % 12;
+                let data = [planet_data(planet, sign, bhava, 0.5, 0.5, 0, 0)];
+                let sb = &compute_shadbala_full(&data, true, true)[0];
+                let standalone = sthana_bala_full(planet, data[0].position.longitude, bhava);
+                assert!(
+                    (sb.sthana_bala - standalone).abs() < 1e-9,
+                    "{planet:?} house {bhava}: pipeline {} vs standalone {standalone}",
+                    sb.sthana_bala
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn the_v7_spellings_still_behave_as_they_did() {
+        // These two exist only so a `vedaksha-vedic = "7"` dependent keeps
+        // compiling across this minor release. `sthana_bala` must still be
+        // Uchcha Bala with the sign discarded, and `compute_shadbala` must
+        // still total the three components it can reach.
+        for lon in [0.0, 10.0, 95.0, 190.0, 285.0, 359.9] {
+            for sign in 0..12u8 {
+                assert!(
+                    (sthana_bala(Graha::Sun, sign, lon) - uccha_bala(Graha::Sun, lon)).abs()
+                        < f64::EPSILON,
+                    "sign {sign} changed the answer at {lon}°"
+                );
+            }
+        }
+
+        let positions = [pos(Graha::Sun, 0, 10)];
+        let sb = &compute_shadbala(&positions, 0)[0];
+        assert!(sb.kala_bala.abs() < f64::EPSILON);
+        assert!(sb.cheshta_bala.abs() < f64::EPSILON);
+        assert!(sb.drik_bala.abs() < f64::EPSILON);
+        let three = sb.sthana_bala + sb.dig_bala + sb.naisargika_bala;
+        assert!((sb.total - three).abs() < 1e-9, "{} != {three}", sb.total);
+    }
+
+    #[test]
+    fn uccha_bala_is_a_part_of_sthana_bala_not_a_copy_of_it() {
+        // Through v7.1.1 these two fields carried the same number, because
+        // `sthana_bala` was Uccha Bala under another name. They must now
+        // differ by exactly the other three sub-components.
         let data = [planet_data(Graha::Jupiter, 3, 4, -0.05, 0.08, 2, 1)];
         let results = compute_shadbala_full(&data, true, true);
         let sb = &results[0];
-        assert!((sb.uccha_bala - sb.sthana_bala).abs() < f64::EPSILON);
+        let rest = sb.ojhayugma_bala + sb.kendradi_bala + sb.drekkana_bala;
+        assert!(
+            rest > 0.0,
+            "sub-components all zero — nothing is being tested"
+        );
+        assert!((sb.sthana_bala - sb.uccha_bala - rest).abs() < 1e-9);
+        assert!(sb.uccha_bala < sb.sthana_bala);
     }
 
     #[test]
@@ -806,7 +1103,7 @@ mod tests {
             + sb.cheshta_bala
             + sb.naisargika_bala
             + sb.drik_bala;
-        assert!((sb.total - sum).abs() < f64::EPSILON);
+        assert!((sb.total - sum).abs() < 1e-9);
     }
 
     #[test]
@@ -823,10 +1120,21 @@ mod tests {
         let results = compute_shadbala_full(&data, false, false);
         let sb = &results[0];
 
-        // Sthana: Uccha Bala for Saturn at 285° (sign 9, lon 9*30+15),
-        // exaltation at 200°. arc=85, (180-85)/3 ≈ 31.67 virupas.
-        let expected_sthana = (180.0 - 85.0) / 3.0;
-        assert!((sb.sthana_bala - expected_sthana).abs() < 0.01);
+        // Sthana for Saturn at 285° (15° Capricorn) in the 7th, by hand:
+        //   uccha     — exaltation 200°, arc 85° -> (180-85)/3 = 31.667
+        //   ojhayugma — rasi Capricorn (index 9) and navamsa Taurus (index 1)
+        //               are both classically even; Saturn wants odd -> 0
+        //   kendradi  — 7th house is a kendra -> 60
+        //   drekkana  — second third of the sign, which is what the neuter
+        //               grahas want -> 15
+        let expected_uccha = (180.0 - 85.0) / 3.0;
+        let expected_sthana = expected_uccha + 0.0 + 60.0 + 15.0;
+        assert!(
+            (sb.sthana_bala - expected_sthana).abs() < 0.01,
+            "sthana {} != {expected_sthana}",
+            sb.sthana_bala
+        );
+        assert!((sb.drekkana_bala - 15.0).abs() < f64::EPSILON);
         // Dig: house 7 = max = 60
         assert!((sb.dig_bala - 60.0).abs() < f64::EPSILON);
         // Kala: night + waning non-benefic = 30 + 30 = 60
@@ -837,5 +1145,19 @@ mod tests {
         assert!((sb.naisargika_bala - 8.57).abs() < 0.01);
         // Drik: 0 - 0 = 0
         assert!((sb.drik_bala - 0.0).abs() < f64::EPSILON);
+
+        // BPHS Ch.28 v.5 builds the Rasmis from Uchcha Bala. Feeding it the
+        // Sthana composite instead — which is what the code did while the two
+        // were the same number — drives uchcha_rasmi to 12.4 and clamps ishta
+        // to its 60 ceiling, so the error hides unless it is asserted here.
+        //   uchcha_rasmi  = 31.667 * 7/60 = 3.6944
+        //   cheshta_rasmi = 15     * 7/60 = 1.75
+        //   ishta = 5 * (3.6944 + 1.75 - 2) = 17.222
+        assert!(
+            (sb.ishta_phala - 17.2222).abs() < 0.001,
+            "ishta {} — is it being fed Sthana Bala rather than Uccha Bala?",
+            sb.ishta_phala
+        );
+        assert!((sb.kashta_phala - 42.7778).abs() < 0.001);
     }
 }

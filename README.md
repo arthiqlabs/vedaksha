@@ -12,7 +12,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `0.103″ vs JPL Horizons` · `1,069 tests + 24,350 oracle rows` · `MCP-native` · `BUSL-1.1 → Apache 2.0`
+`clean-room` · `0.103″ vs JPL Horizons` · `1,093 tests + 24,350 oracle rows` · `MCP-native` · `BUSL-1.1 → Apache 2.0`
 
 [Install](#install) · [Quick start](#quick-start) · [Accuracy](#accuracy) · [What's inside](#whats-inside) · [MCP + property graph](#mcp--property-graph) · [Provenance](#clean-room-provenance) · [License](#license)
 
@@ -75,6 +75,29 @@ Every figure is printed by a named test. Reproduce the ephemeris tables with `ba
 
 **AnalyticalProvider vs JPL Horizons** — `analytical_oracle.rs`, 1900–2025: overall mean **0.239″**, worst case **1.896″** (Neptune), Moon 0.169″ mean via ELP/MPP02. Densely sampled at 2,435 dates per body.
 
+Per body, because the mean hides a pattern worth knowing before you pick this provider:
+
+| body | mean″ | body | mean″ |
+|---|---|---|---|
+| Sun | 0.180 | **Jupiter** | **0.239** |
+| Moon | 0.169 | **Saturn** | **0.251** |
+| Mercury | 0.180 | **Uranus** | **0.267** |
+| Venus | 0.180 | **Neptune** | **0.503** |
+| Mars | 0.178 | | |
+
+The inner bodies sit in a tight band at ~0.18″ and the error then grows monotonically outward.
+That is the truncation, and it is a property of *how* the series is cut rather than of any one
+planet: `scripts/generate_vsop87a.py` drops terms below a **uniform absolute amplitude of
+1e-7 AU**, applied identically to all eight. Saturn is not cut harder than Mercury — it retains
+the most terms of any planet, 7,530 of 30,046. But an absolute cut leaves a residual whose size
+scales with the orbit, so converting each body's angular error back into a position error gives
+9× the threshold at 1 AU, 60× at Jupiter, 116× at Saturn, 249× at Uranus and 734× at Neptune.
+
+Tightening the threshold would shrink this at the cost of the coefficient set, which is what
+makes this provider viable in WASM and at the edge. **If you need the outer planets to
+sub-0.1″, use `SpkReader`**, where they are the *best* bodies rather than the worst: Jupiter
+0.083″ and Saturn 0.061″ against the same oracle, versus ~0.13″ for the inner planets.
+
 Until 2026-08-20 those figures were 2.06″ mean and 24.22″ worst, and this README attributed the gap to VSOP87A being a truncated theory. That was wrong, and the wording protected a defect of ours: the analytical provider answered `EarthMoonBarycenter` with VSOP87A's Earth-centre series, so the observer sat 4,671 km off, and `earth_state` divided a barycentre-relative Moon by `1 + EMRAT` instead of `EMRAT` for a further 56.8 km. Both are fixed. The second one moved the SPK path too, 0.106″ → 0.103″.
 
 **ELP/MPP02 Moon** — `lunar_horizons.rs`: **0.015″ at J2000**, 0.020–0.053″ across 1500–2500 CE.
@@ -84,12 +107,13 @@ Until 2026-08-20 those figures were 2.06″ mean and 24.22″ worst, and this RE
 - **House cusps are not validated against any external reference.**
 - **No ayanamsha is validated against another implementation, and that is deliberate.** All eleven are derived forward from a primary — a chapter, a committee, a proposer's own paper, or a star catalogue — and each reproduces its own anchor to 1e-9° and, where its primary documents one, its own zero year. What is *not* claimed is agreement with anyone else's numbers: comparing against them would be the reverse-engineering this re-derivation exists to undo. See [`docs/audit/2026-08-17-ayanamsha-cleanroom/`](docs/audit/2026-08-17-ayanamsha-cleanroom/).
 - **Dasha and nakshatra tests are invariant tests**, not external comparisons: they verify that BPHS constants sum to 120 years and that boundaries tile the circle.
+- **Two Shadbala components are partial, and the gap is in the tool description, not just here.** Sthana Bala carries four of its five sub-components — Uchcha, Ojhayugma, Kendradi and Drekkana — but not Saptavargaja Bala, which needs a Moolatrikona degree table and a panchadha maitri derivation we do not yet hold from a primary. Kala Bala covers Nathonnatha and Paksha only. Dig, Cheshta, Naisargika and Drik Bala are whole.
 
 ## What's inside
 
 **Two ephemeris providers.** `SpkReader` reads JPL DE440s (~31 MB) for sub-arcsecond work. `AnalyticalProvider` compiles VSOP87A + ELP/MPP02 to constants and needs no data files — for WASM, edge and Cloudflare Workers.
 
-**Jyotish, from primary sources.** 27 nakshatras with padas and lords · 5 dasha systems (Vimshottari, Yogini, Ashtottari, and Jaimini's Chara & Narayana) · all 16 vargas (D-1 → D-60) · six-component shadbala with Ishta/Kashta phala · 11 ayanamshas, each traceable to a chapter, a star or a committee · panchanga's five limbs, with vara reckoned from local sunrise and Rahu/Gulika Kalam as real time windows · graded drishti per BPHS Ch. 26 · mean, true and osculating nodes, all referred to the ecliptic of date, with the J2000 variant tracking DE441's `OM` to 0.6″ (KP sub-lord ready).
+**Jyotish, from primary sources.** 27 nakshatras with padas and lords · 5 dasha systems (Vimshottari, Yogini, Ashtottari, and Jaimini's Chara & Narayana) · all 16 vargas (D-1 → D-60) · six-component shadbala with Ishta/Kashta phala (two components partial — see above) · 11 ayanamshas, each traceable to a chapter, a star or a committee · panchanga's five limbs, with vara reckoned from local sunrise and Rahu/Gulika Kalam as real time windows · graded drishti per BPHS Ch. 26 · mean, true and osculating nodes, all referred to the ecliptic of date, with the J2000 variant tracking DE441's `OM` to 0.6″ (KP sub-lord ready).
 
 **Western: calculation, not interpretation.** 10 house systems, major aspects with applying/separating motion, essential dignities, synastry and composite. `ChartConfig` defaults to tropical. There is no Western interpretive layer and no parity with the Jyotish surface.
 

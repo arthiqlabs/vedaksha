@@ -6,7 +6,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "Western astrology: house systems, aspects, dignities, chart computation"
 keywords = ["astrology", "horoscope", "houses", "aspects", "natal-chart"]
@@ -51,3 +50,6 @@ std = ["vedaksha-ephem-core/std"]
 # Each gated sweep keeps a coarse SAMPLED counterpart in the plain `#[ignore]`d
 # tier, so the regimes stay covered on every full validation.
 derivation-sweeps = []
+
+[lints]
+workspace = true

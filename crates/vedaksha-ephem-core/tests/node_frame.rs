@@ -49,6 +49,19 @@ fn wrap180(mut d: f64) -> f64 {
     d
 }
 
+/// Apparent ecliptic longitude in degrees, through the production pipeline.
+///
+/// Takes the provider by reference to read like every other call site here,
+/// even though `AnalyticalProvider` is zero-sized.
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn ecliptic_longitude_deg(provider: &AnalyticalProvider, body: Body, jd_ut: f64) -> f64 {
+    apparent_position(provider, body, jd_ut)
+        .unwrap_or_else(|e| panic!("{body:?} should compute: {e}"))
+        .ecliptic
+        .longitude
+        .to_degrees()
+}
+
 /// The reported longitude must be the node's own longitude.
 ///
 /// This is the test whose absence let a 75° error ship: the previous guard
@@ -251,5 +264,97 @@ fn nodes_have_no_state_vector() {
                  is what the geocentric pipeline mistook for a body. Got {other:?}"
             ),
         }
+    }
+}
+
+/// Ketu is Rahu's opposite point, and the pipeline must preserve that.
+///
+/// Through v7.1.1 there was no south-node variant of [`Body`] at all, so the
+/// only Ketu available was `nodes::south_node_*`, which is the theory layer and
+/// carries no nutation. A caller pairing that with a `Body`-routed Rahu got two
+/// values up to 17.2 arcsec off 180 degrees apart. Both ends now go through the
+/// same pipeline, so the separation is exact.
+#[test]
+fn every_ketu_is_exactly_opposite_its_rahu_through_the_pipeline() {
+    let provider = AnalyticalProvider::new();
+
+    // The osculating pair costs three ELP/MPP02 series evaluations per call
+    // for its finite difference, which is why it gets one epoch and the two
+    // cheap methods get four. One epoch is enough for what this test is
+    // actually guarding: that the dispatch arm exists and points at the right
+    // function. The value itself is `north + 180` by construction.
+    let cheap = [
+        (Body::MeanNode, Body::MeanSouthNode, "mean"),
+        (Body::TrueNode, Body::TrueSouthNode, "true"),
+    ];
+    let pricey = [(
+        Body::TrueNodeOsculating,
+        Body::TrueSouthNodeOsculating,
+        "osculating",
+    )];
+
+    let check = |north, south, label: &str, jd: f64| {
+        let n = ecliptic_longitude_deg(&provider, north, jd);
+        let s = ecliptic_longitude_deg(&provider, south, jd);
+        let sep = (s - n + 360.0) % 360.0;
+        assert!(
+            (sep - 180.0).abs() < 1e-9,
+            "{label} at jd {jd}: rahu {n}, ketu {s}, separation {sep}"
+        );
+    };
+
+    for jd in [2_415_020.5, 2_451_545.0, 2_460_000.5, 2_488_070.0] {
+        for (north, south, label) in cheap {
+            check(north, south, label, jd);
+        }
+    }
+    for (north, south, label) in pricey {
+        check(north, south, label, 2_451_545.0);
+    }
+}
+
+/// The south nodes must land in the same frame as the north ones — that is the
+/// whole point of putting them behind the enum. If Ketu were resolved anywhere
+/// but `nodes::node_longitude`, it would drift from Rahu at the precession
+/// rate, which is what v7.0.0 fixed for the north nodes.
+#[test]
+fn the_south_nodes_regress_with_the_north_ones() {
+    let provider = AnalyticalProvider::new();
+    let jd0 = 2_451_545.0;
+    let jd1 = jd0 + 1000.0;
+    for (north, south, label) in [
+        (Body::MeanNode, Body::MeanSouthNode, "mean"),
+        (Body::TrueNode, Body::TrueSouthNode, "true"),
+    ] {
+        let dn = ecliptic_longitude_deg(&provider, north, jd1)
+            - ecliptic_longitude_deg(&provider, north, jd0);
+        let ds = ecliptic_longitude_deg(&provider, south, jd1)
+            - ecliptic_longitude_deg(&provider, south, jd0);
+        let dn = (dn + 540.0) % 360.0 - 180.0;
+        let ds = (ds + 540.0) % 360.0 - 180.0;
+        assert!(
+            (dn - ds).abs() < 1e-9,
+            "{label}: rahu moved {dn}deg over 1000d, ketu moved {ds}deg"
+        );
+    }
+}
+
+/// Ketu is a direction like Rahu: no state vector, from any provider.
+#[test]
+fn the_south_nodes_have_no_state_vector() {
+    let provider = AnalyticalProvider::new();
+    for body in [
+        Body::MeanSouthNode,
+        Body::TrueSouthNode,
+        Body::TrueSouthNodeOsculating,
+    ] {
+        assert!(
+            provider.compute_state(body, 2_451_545.0).is_err(),
+            "{body:?} returned a state vector"
+        );
+        assert!(
+            body.de441_component_index().is_none(),
+            "{body:?} claims DE441 data"
+        );
     }
 }

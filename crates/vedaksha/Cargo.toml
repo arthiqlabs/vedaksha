@@ -6,7 +6,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "Vedic and Western astrology engine — ephemeris, kundali/natal charts, panchanga, dashas, nakshatras, vargas, and more"
 keywords = ["astrology", "ephemeris", "vedic", "jyotish", "kundali"]
@@ -25,3 +24,6 @@ std = ["vedaksha-ephem-core/std"]
 # Localization lookup tables (planet/sign/nakshatra names in 7 languages).
 # Folded in from the standalone `vedaksha-locale` crate (v2.x) in v3.0.0.
 locale = []
+
+[lints]
+workspace = true

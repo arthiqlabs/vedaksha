@@ -972,15 +972,6 @@ mod tests {
     /// Degrees corresponding to one nanodegree — the §6.1 anchor tolerance.
     const ANCHOR_TOL: f64 = 1e-9;
 
-    fn dms(deg: f64) -> (i32, u32, f64) {
-        let sign = if deg < 0.0 { -1 } else { 1 };
-        let a = deg.abs();
-        let d = a.trunc();
-        let m = ((a - d) * 60.0).trunc();
-        let s = (a - d - m / 60.0) * 3600.0;
-        (sign * d as i32, m as u32, s)
-    }
-
     // ── §6.1 Anchor reproduction ──────────────────────────────────────────────
 
     #[test]

@@ -6,7 +6,6 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
-license-file.workspace = true
 rust-version.workspace = true
 description = "Astronomy/ephemeris engine: JPL DE440s/DE441 SPK reader, VSOP87A, ELP/MPP02, precession, nutation"
 keywords = ["ephemeris", "astronomy", "jpl", "vsop87", "orbital"]
@@ -77,3 +76,6 @@ std = []
 [[bench]]
 name = "ephemeris"
 harness = false
+
+[lints]
+workspace = true

@@ -117,8 +117,7 @@ fn mcp_compute_dasha_matches_direct() {
             let mcp_count = mcp_result
                 .get("maha_dashas")
                 .and_then(|v| v.as_array())
-                .map(|a| a.len())
-                .unwrap_or(0);
+                .map_or(0, |a| a.len());
 
             if direct_count != mcp_count {
                 fail += 1;
@@ -217,8 +216,7 @@ fn mcp_compute_vargas_matches_direct() {
             let mcp_sign = mcp_result
                 .get(varga_name)
                 .and_then(|v| v.as_u64())
-                .map(|v| v as u8)
-                .unwrap_or(255);
+                .map_or(255, |v| v as u8);
 
             if direct_sign == mcp_sign {
                 pass += 1;

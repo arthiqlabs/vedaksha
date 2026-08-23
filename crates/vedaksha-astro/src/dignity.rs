@@ -421,7 +421,6 @@ mod tests {
 
     // ── sign_of ───────────────────────────────────────────────────────────────
 
-    #[test]
     /// The five call sites this helper replaced used two spellings. Sweep the
     /// whole circle at 0.1° and assert the helper reproduces BOTH of them
     /// wherever they agreed, so the dedup is provably behaviour-preserving for

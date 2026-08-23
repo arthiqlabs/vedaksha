@@ -3,15 +3,16 @@
 // SPDX-License-Identifier: BUSL-1.1
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Mean and True North Node of the Moon.
+//! Lunar nodes: Rahu and Ketu, mean, true and osculating.
 //!
 //! # Frame
 //!
 //! Every public longitude in this module is referred to the **mean ecliptic
 //! and equinox of date**, which is the frame a chart is drawn in and the
-//! frame an ayanamsa is defined against. The three node longitudes reachable
+//! frame an ayanamsa is defined against. The six node longitudes reachable
 //! through [`crate::bodies::Body`] are therefore interchangeable: swapping
-//! one for another changes the *method*, never the reference frame.
+//! one for another changes the *method* or the *end*, never the reference
+//! frame.
 //!
 //! The single exception carries the frame in its name.
 //! [`true_node_osculating_j2000`] returns the J2000 mean ecliptic, and exists
@@ -159,6 +160,14 @@ fn osculating_node(sample: fn(f64) -> MoonRectangular, jd: f64) -> f64 {
 }
 
 /// South Node (Ketu) = North Node + 180° (mean).
+///
+/// This is the theory-layer value: mean ecliptic and equinox of date, without
+/// nutation, exactly like [`mean_node`]. [`Body::MeanSouthNode`] routes through
+/// [`crate::coordinates`] and picks up nutation in longitude on the way, as
+/// [`Body::MeanNode`] does — so pair like with like, theory with theory and
+/// body with body. Through v7.1.1 there was no `Body` variant for Ketu at all,
+/// so mixing the layers was the only option available and left the pair up to
+/// 17.2 arcsec off 180 degrees.
 #[must_use]
 pub fn south_node_mean(jd: f64) -> f64 {
     vedaksha_math::angle::normalize_degrees(mean_node(jd) + 180.0)
@@ -188,6 +197,9 @@ pub fn node_longitude(body: Body, jd_tt: f64) -> Option<f64> {
         Body::MeanNode => Some(mean_node(jd_tt)),
         Body::TrueNode => Some(true_node(jd_tt)),
         Body::TrueNodeOsculating => Some(true_node_osculating(jd_tt)),
+        Body::MeanSouthNode => Some(south_node_mean(jd_tt)),
+        Body::TrueSouthNode => Some(south_node_true(jd_tt)),
+        Body::TrueSouthNodeOsculating => Some(south_node_osculating(jd_tt)),
         _ => None,
     }
 }
@@ -484,5 +496,29 @@ mod tests {
             (south - expected).abs() < 1e-10,
             "Osculating south node should be north + 180°"
         );
+    }
+
+    /// Ketu is Rahu's opposite point by definition, in whichever frame Rahu
+    /// was computed. Nothing in the crate calls the `south_node_*` functions,
+    /// so without this nothing would notice one of the three drifting.
+    #[test]
+    fn every_south_node_is_exactly_opposite_its_north_node() {
+        for jd in [2_415_020.5, 2_451_545.0, 2_460_000.5, 2_488_070.0] {
+            for (north, south, label) in [
+                (mean_node(jd), south_node_mean(jd), "mean"),
+                (true_node(jd), south_node_true(jd), "true"),
+                (
+                    true_node_osculating(jd),
+                    south_node_osculating(jd),
+                    "osculating",
+                ),
+            ] {
+                let sep = (south - north + 360.0) % 360.0;
+                assert!(
+                    (sep - 180.0).abs() < 1e-9,
+                    "{label} node at jd {jd}: north {north}, south {south}, separation {sep}"
+                );
+            }
+        }
     }
 }

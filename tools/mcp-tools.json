@@ -1,5 +1,5 @@
 {
-  "engineVersion": "7.1.1",
+  "engineVersion": "7.2.0",
   "tools": [
     {
       "description": "Compute a natal astrological chart for a given time and location. Returns a ChartGraph in JSON format containing planetary positions, house cusps, aspects, nakshatras, and dignities.",
@@ -224,7 +224,7 @@
       "name": "compute_combustion"
     },
     {
-      "description": "Compute full six-fold Shadbala (Sthana, Dig, Kala, Cheshta, Naisargika, Drik Bala) for each planet, plus uccha_bala, ishta_phala, and kashta_phala per BPHS Ch.27-28.",
+      "description": "Compute six-fold Shadbala (Sthana, Dig, Kala, Cheshta, Naisargika, Drik Bala) per planet, with the Sthana sub-components (uccha, ojhayugma, kendradi, drekkana) and ishta/kashta phala, per BPHS Ch.27-28. Sthana Bala omits Saptavargaja Bala and Kala Bala covers Nathonnatha and Paksha only.",
       "inputSchema": {
         "properties": {
           "is_daytime": {
@@ -265,6 +265,7 @@
                   "type": "string"
                 },
                 "sign": {
+                  "description": "Sidereal sign index, which must agree with longitude (floor(longitude / 30)).",
                   "maximum": 11,
                   "minimum": 0,
                   "type": "integer"
