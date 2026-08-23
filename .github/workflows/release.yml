@@ -48,6 +48,10 @@ jobs:
           # here keeps the committed file truthful, rather than rewriting it at
           # publish time and letting the repo copy drift.
           check "server.json version" "$(jq -r .version server.json)"
+          # metrics.json is what vedaksha.net reads to stay current without a
+          # deploy. Asserting it here is what stops the site silently
+          # advertising the previous release forever.
+          check "metrics.json engineVersion" "$(jq -r .engineVersion metrics.json)"
           exit $fail
 
   build-mcp:
