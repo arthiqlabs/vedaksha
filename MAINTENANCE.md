@@ -177,6 +177,31 @@ have been run. Their conclusions are recorded here and beside the constants them
 Re-running them costs hours and tells you nothing new — do it only when the stated
 invalidating condition is met.
 
+### CI does not derive coefficients. Ever.
+
+Stated first because it has been misread twice, both times from the same evidence: a CI job
+that takes over an hour, and a stack full of `elp_mpp02::eval_pert_series`.
+
+**Push CI invokes no generator at all.** `ci.yml` runs no script in `scripts/`. The VSOP87A and
+ELP/MPP02 coefficients are committed binaries under
+`crates/vedaksha-ephem-core/src/analytical/coefficients/` — 331 files, ~30,000 retained terms —
+and they change only when a human runs a generator without `--verify` and commits the result.
+
+What is slow is **evaluating** those constants, which is what computing a position means. In a
+debug build, with no optimisation and no SIMD, one ELP/MPP02 evaluation is orders of magnitude
+slower than in `--release`, and every osculating-node call pays three of them for its finite
+difference. `analytical_bit_digest` is `#[ignore]`d and release-only for exactly this reason.
+
+**The weekly job is the only place a generator runs, and it is read-only.**
+`full-validation.yml` calls each generator with `--verify`, which re-fetches the primary,
+regenerates into a *temp directory*, and compares SHA256s against the committed `.bin.sha256`
+sidecars. It never writes to the working tree. Green means the committed coefficients still
+match the primary; red means the primary moved or a sidecar was edited.
+
+So: a slow CI run is not a derivation, a green weekly run is not a regeneration, and neither
+one can change a shipped value. If a coefficient moved, it moved in a commit with a human's
+name on it, and `analytical_bit_digest` will say so.
+
 ### `AGREEMENT_TOL_DAYS` — `vedaksha-astro::riseset`
 
 The tolerance at which the analytic sunrise path is held to agree with the brute-force scan.

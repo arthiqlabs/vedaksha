@@ -52,6 +52,27 @@ jobs:
         # conformance harness compares one crate compiled twice rather than
         # two surfaces — could not fail a push.
         #
+        # NOTHING IN THIS JOB DERIVES ANY COEFFICIENT.
+        #
+        # This job is slow — 67 to 95 minutes — and that has twice been read as
+        # the VSOP87A or ELP/MPP02 coefficients being recomputed. They are not.
+        # No workflow triggered by a push invokes any script in scripts/, and
+        # the coefficients are committed binaries under
+        # crates/vedaksha-ephem-core/src/analytical/coefficients/ that change
+        # only when someone deliberately regenerates and commits them.
+        #
+        # What is slow is series EVALUATION, which is what computing a position
+        # means. ELP/MPP02 carries tens of thousands of perturbation terms, and
+        # in a debug build with no optimisation and no SIMD each evaluation is
+        # orders of magnitude slower than in --release. Anything touching the
+        # osculating node pays three evaluations per call for its finite
+        # difference. That is the cost, and it is inherent to testing an
+        # analytical ephemeris unoptimised.
+        #
+        # Derivation happens in exactly one place: full-validation.yml, weekly,
+        # and even there it only regenerates into a temp directory to compare
+        # hashes. See the note on those steps.
+        #
         # A bare `cargo test --workspace` covers lib + bins + tests/ + doctests.
         #
         # `--skip analytical_oracle_regression`: that test walks all 24,350

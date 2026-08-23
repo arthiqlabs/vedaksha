@@ -112,6 +112,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      # THESE STEPS DO NOT CHANGE WHAT SHIPS.
+      #
+      # `--verify` regenerates into a TEMP DIRECTORY and compares SHA256s
+      # against the committed sidecars. It never writes to the working tree, so
+      # a green run means "the committed coefficients still match the primary",
+      # and a red one means the primary moved or a sidecar was edited. The
+      # shipped constants are only ever rewritten by a human running these
+      # scripts without `--verify` and committing the result.
+      #
+      # This is the ONLY place in CI that runs a generator at all. Push CI
+      # (ci.yml) never does; if a push job is slow, it is evaluating the series,
+      # not deriving it.
+      #
       # Each generator re-fetches IMCCE primary, regenerates the VDKBLOB1
       # blobs into a temp directory, and exits non-zero if any sha256 has
       # drifted from the committed .bin.sha256 sidecar.
