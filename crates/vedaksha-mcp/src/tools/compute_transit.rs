@@ -61,6 +61,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["natal_jd", "natal_lat", "natal_lon", "transit_jd"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

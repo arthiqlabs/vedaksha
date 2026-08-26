@@ -116,6 +116,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["start_jd", "end_jd", "latitude", "longitude"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

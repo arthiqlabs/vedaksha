@@ -99,6 +99,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["jd", "sun", "moon", "latitude", "longitude"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

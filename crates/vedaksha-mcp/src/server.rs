@@ -181,13 +181,7 @@ impl McpServer {
     fn handle_tools_list(&self, request: &JsonRpcRequest) -> JsonRpcResponse {
         let tools: Vec<serde_json::Value> = crate::tools::tool_definitions()
             .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": t.input_schema,
-                })
-            })
+            .map(crate::tools::ToolDefinition::to_wire)
             .collect();
 
         JsonRpcResponse {

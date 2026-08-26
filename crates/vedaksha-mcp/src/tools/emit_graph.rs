@@ -79,6 +79,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["chart_json", "format"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

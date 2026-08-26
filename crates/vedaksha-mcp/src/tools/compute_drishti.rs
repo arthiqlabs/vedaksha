@@ -49,6 +49,7 @@ pub fn definition() -> super::ToolDefinition {
                 "venus", "saturn", "rahu", "ketu"
             ]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

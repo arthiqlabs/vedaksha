@@ -50,6 +50,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "lagna"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

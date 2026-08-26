@@ -73,6 +73,7 @@ pub fn definition() -> super::ToolDefinition {
                 "natal_reference_sign"
             ]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

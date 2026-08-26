@@ -76,6 +76,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["planets"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

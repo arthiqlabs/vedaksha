@@ -69,6 +69,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["julian_day", "latitude", "longitude", "divisions"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

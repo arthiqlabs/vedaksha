@@ -43,6 +43,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["ascendant"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

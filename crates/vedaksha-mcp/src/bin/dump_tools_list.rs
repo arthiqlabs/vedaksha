@@ -21,13 +21,7 @@ use vedaksha_mcp::tools::tool_definitions;
 fn main() {
     let tools: Vec<serde_json::Value> = tool_definitions()
         .iter()
-        .map(|t| {
-            serde_json::json!({
-                "name": t.name,
-                "description": t.description,
-                "inputSchema": t.input_schema,
-            })
-        })
+        .map(vedaksha_mcp::tools::ToolDefinition::to_wire)
         .collect();
 
     let body = serde_json::json!({

@@ -112,6 +112,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["chart_a", "chart_b"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

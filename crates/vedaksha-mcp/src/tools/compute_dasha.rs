@@ -127,6 +127,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["birth_jd"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 

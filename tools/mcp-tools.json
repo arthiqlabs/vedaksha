@@ -2,6 +2,10 @@
   "engineVersion": "7.2.0",
   "tools": [
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute a natal astrological chart for a given time and location. Returns a ChartGraph in JSON format containing planetary positions, house cusps, aspects, nakshatras, and dignities.",
       "inputSchema": {
         "properties": {
@@ -52,6 +56,10 @@
       "name": "compute_natal_chart"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute Vedic dasha (planetary period) sequences. Supports five classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (Lagna-sign based, require `lagna_sign`). Returns a JSON dasha tree with start/end Julian Days.",
       "inputSchema": {
         "properties": {
@@ -99,6 +107,10 @@
       "name": "compute_dasha"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute Jaimini Chara Karaka assignments from sidereal planet longitudes. Ranks planets by degrees within their current sign: highest = Atmakaraka (soul significator), lowest = Darakaraka (spouse significator). Supports 7-karaka (Sun–Saturn) and 8-karaka (adds Rahu) schemes.",
       "inputSchema": {
         "properties": {
@@ -158,6 +170,10 @@
       "name": "compute_karakas"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute combustion state for each planet relative to the Sun per BPHS Ch.7 vv.28-29. Returns Combust, DeeplyCombust, or None for Moon, Mars, Mercury, Jupiter, Venus, Saturn with degrees of separation.",
       "inputSchema": {
         "properties": {
@@ -229,6 +245,10 @@
       "name": "compute_combustion"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute six-fold Shadbala (Sthana, Dig, Kala, Cheshta, Naisargika, Drik Bala) per planet, with the Sthana sub-components (uccha, ojhayugma, kendradi, drekkana) and ishta/kashta phala, per BPHS Ch.27-28. Sthana Bala omits Saptavargaja Bala and Kala Bala covers Nathonnatha and Paksha only.",
       "inputSchema": {
         "properties": {
@@ -308,6 +328,10 @@
       "name": "compute_shadbala"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute Vedic divisional charts (vargas) for a given time and location. Supply a list of division codes (e.g. D1, D9, D10) and receive a ChartGraph JSON for each, including planetary positions and dignities within each varga.",
       "inputSchema": {
         "properties": {
@@ -347,6 +371,10 @@
       "name": "compute_vargas"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Turn a chart into a queryable property graph. Accepts the output of compute_natal_chart directly (pass latitude and longitude alongside it), or an existing ChartGraph. Emits Neo4j Cypher, SurrealDB SurrealQL, JSON-LD, plain JSON, or RAG embedding text.",
       "inputSchema": {
         "properties": {
@@ -391,6 +419,10 @@
       "name": "emit_graph"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute transiting planet positions relative to a natal chart at a specific moment. Returns planet longitudes for the transit time alongside natal positions, enabling aspect calculation between transit and natal placements.",
       "inputSchema": {
         "properties": {
@@ -422,6 +454,10 @@
       "name": "compute_transit"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Search for transiting planet–natal planet aspects within a time window. Supply natal positions and a Julian Day range; receive a list of exact transit moments with aspect type, orb, and applying/separating status.",
       "inputSchema": {
         "properties": {
@@ -485,6 +521,10 @@
       "name": "search_transits"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Search for auspicious time windows (muhurta) within a given period for a geographic location. Returns ranked muhurta candidates with quality scores based on tithi, nakshatra, yoga, karana, and planetary positions. The search window is capped at 30 days (see MUHURTA_SEARCH_RANGE_TOO_LARGE) — the per-candidate vara and tithi/nakshatra refinement make this tool far more expensive per day of range than a transit search, so a wider span would make a single call take minutes.",
       "inputSchema": {
         "properties": {
@@ -537,6 +577,10 @@
       "name": "search_muhurta"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute Bhinna Ashtakavarga (raw bindu tables) and Sarvashtakavarga for all 7 planets from sign positions. Source: BPHS Ch.66 vv.13-68. Trikona/Ekadhipatya Shodhana and Pinda Sadhana are not included.",
       "inputSchema": {
         "properties": {
@@ -604,6 +648,10 @@
       "name": "compute_ashtakavarga"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute Gochara (transit interpretation) for the seven grahas against a natal reference sign per BPHS Ch.29. Returns favourable/unfavourable verdict, house from natal, and raw vedha (obstruction) candidates per planet. The natal reference sign is the caller's choice — typically the natal Moon's sign (Chandra Gochara) or the natal Lagna's sign. Rahu and Ketu are not included.",
       "inputSchema": {
         "properties": {
@@ -688,6 +736,10 @@
       "name": "compute_gochara"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute the panchanga — the five limbs of the Vedic almanac — for an instant: tithi (lunar day, with paksha and lord), vara (weekday reckoned from local sunrise, with its lord and the Rahu and Gulika Kalam windows as Julian Days), nakshatra (with pada), yoga (one of the 27 nithya yogas, with degrees remaining), and karana (half-tithi). Takes sidereal longitudes; all returned instants are Julian Days (UT). vara.from_sunrise reports HOW the weekday was reckoned: true means it was taken from an actual local sunrise (the Vedic definition); false means no sunrise exists to reckon from — the polar day or polar night, above about ±66.5° latitude — and the value is the observer's local CIVIL weekday as a documented fallback, which is a different quantity. Check it before presenting the vara at high latitude. vara.rahu_kalam being null is NOT the same signal: the Kalam windows can also be null while from_sunrise is true.",
       "inputSchema": {
         "properties": {
@@ -742,6 +794,10 @@
       "name": "compute_panchanga"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute graha drishti — Vedic sign aspects — for all nine grahas. Unlike Western aspects, drishti is cast from sign to sign and is asymmetric: every graha aspects the 7th from itself, and Mars additionally aspects the 4th and 8th, Jupiter the 5th and 9th, Saturn the 3rd and 10th. Returns each aspect with its graded strength (Full, ThreeQuarter, Half, Quarter) and the house distance.",
       "inputSchema": {
         "properties": {
@@ -798,6 +854,10 @@
       "name": "compute_drishti"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute the whole-sign bhava (house) chart from an ascendant. In the Vedic whole-sign system the entire sign containing the ascendant is the 1st bhava, the next sign the 2nd, and so on — houses do not have cusps within signs. Returns the sign of each of the twelve bhavas with its kendra / trikona / dusthana / upachaya classification, and optionally places supplied grahas into their bhavas.",
       "inputSchema": {
         "properties": {
@@ -821,6 +881,10 @@
       "name": "compute_bhavas"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute synastry — the aspects each graha in one chart makes to each graha in another chart. Every graha in chart A is tested against every graha in chart B (the two charts do not need the same graha names), and each hit is returned with its aspect type, orb in degrees and strength (1.0 at exact, falling linearly to 0.0 at the orb boundary). Orbs are the traditional Lilly values — conjunction, trine and opposition 8°, square 7°, sextile 6°, minors 2° — scaled by orb_factor. Longitudes only: this tool needs no birth time, place or ephemeris.",
       "inputSchema": {
         "properties": {
@@ -862,6 +926,10 @@
       "name": "compute_synastry"
     },
     {
+      "annotations": {
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
       "description": "Compute the midpoint composite chart of two charts: for each graha, the shorter-arc midpoint of its longitude in the two charts, and the arithmetic mean of its two speeds. The two charts must carry the SAME graha names — each graha is paired with its namesake, not with whatever happens to sit at the same position in a list — and a name present in one chart but not the other is an error naming that graha. Longitudes only: this tool needs no birth time, place or ephemeris.",
       "inputSchema": {
         "properties": {

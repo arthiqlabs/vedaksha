@@ -25,12 +25,65 @@ pub mod emit_graph;
 pub mod search_muhurta;
 pub mod search_transits;
 
+/// Behaviour hints an agent can act on before it calls a tool.
+///
+/// Only the two hints that carry meaning here are modelled. The MCP
+/// specification defines `destructiveHint` and `idempotentHint` as meaningful
+/// **only when `readOnlyHint` is false**, and every tool on this surface is
+/// read-only, so emitting them would be noise dressed as information.
+///
+/// That every tool is read-only is not an accident of the current set: the
+/// engine is stateless by construction, because determinism is what makes the
+/// oracles, the bit-identity claims and the exact-equality Python fixture mean
+/// anything. A tool that mutated state would break that invariant long before
+/// it reached this annotation.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    /// The tool computes and returns; it changes nothing an agent can observe.
+    pub read_only_hint: bool,
+    /// The tool touches no external entity — no network, no third-party API.
+    /// The only inputs are its arguments and the committed ephemeris data.
+    pub open_world_hint: bool,
+}
+
+impl ToolAnnotations {
+    /// A pure computation over its arguments: no writes, no outside world.
+    pub const READ_ONLY: Self = Self {
+        read_only_hint: true,
+        open_world_hint: false,
+    };
+}
+
 /// Metadata that describes a single MCP tool to an AI agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ToolDefinition {
     pub name: &'static str,
     pub description: &'static str,
     pub input_schema: serde_json::Value,
+    /// Declared per tool rather than defaulted centrally, so that adding a
+    /// tool that is *not* read-only is a compile error the author must answer
+    /// rather than a wrong hint they inherit in silence.
+    pub annotations: ToolAnnotations,
+}
+
+impl ToolDefinition {
+    /// The tool as MCP `tools/list` serialises it, camelCased for the wire.
+    ///
+    /// This projection existed in three places — the server handler, the
+    /// `dump-tools-list` binary and the snapshot drift guard — so adding
+    /// `annotations` desynchronised them and the guard failed on a snapshot
+    /// that was correctly regenerated. One function now, so a new field
+    /// reaches every consumer or none.
+    #[must_use]
+    pub fn to_wire(&self) -> serde_json::Value {
+        serde_json::json!({
+            "name": self.name,
+            "description": self.description,
+            "inputSchema": self.input_schema,
+            "annotations": self.annotations,
+        })
+    }
 }
 
 /// Return the registry of all currently available tools.
@@ -149,6 +202,30 @@ mod tests {
     // another, all of which that assertion catches. It only added a second
     // number to keep in step by hand.
 
+    /// The wire projection is what three consumers serialise — the server's
+    /// `tools/list`, the snapshot binary and the drift guard. A field added to
+    /// `ToolDefinition` but forgotten here would reach none of them, and the
+    /// snapshot guard could not tell, because it uses this same projection.
+    #[test]
+    fn wire_projection_carries_every_field() {
+        for tool in tool_definitions() {
+            let wire = tool.to_wire();
+            for key in ["name", "description", "inputSchema", "annotations"] {
+                assert!(
+                    wire.get(key).is_some(),
+                    "'{}' is missing '{key}' on the wire",
+                    tool.name
+                );
+            }
+            assert_eq!(
+                wire["annotations"]["readOnlyHint"], true,
+                "'{}' is advertised as read-only; a tool that writes must not \
+                 carry ToolAnnotations::READ_ONLY",
+                tool.name
+            );
+        }
+    }
+
     #[test]
     fn tool_names_are_unique() {
         let defs = tool_definitions();
@@ -177,13 +254,7 @@ mod tests {
 
         let live_tools: Vec<serde_json::Value> = tool_definitions()
             .iter()
-            .map(|t| {
-                serde_json::json!({
-                    "name": t.name,
-                    "description": t.description,
-                    "inputSchema": t.input_schema,
-                })
-            })
+            .map(ToolDefinition::to_wire)
             .collect();
         let live = serde_json::json!({
             "engineVersion": env!("CARGO_PKG_VERSION"),

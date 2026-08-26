@@ -102,6 +102,7 @@ pub fn definition() -> super::ToolDefinition {
             },
             "required": ["natal_positions", "start_jd", "end_jd"]
         }),
+        annotations: super::ToolAnnotations::READ_ONLY,
     }
 }
 
