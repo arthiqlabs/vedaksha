@@ -113,6 +113,50 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["chart_a", "chart_b"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "aspects": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "chart_a_planet": {
+                                "type": "string",
+                                "description": "Graha from the first chart."
+                            },
+                            "chart_b_planet": {
+                                "type": "string",
+                                "description": "Graha from the second chart."
+                            },
+                            "aspect_type": {
+                                "type": "string",
+                                "description": "Aspect name."
+                            },
+                            "orb": {
+                                "type": "number",
+                                "description": "Departure from exact, in degrees."
+                            },
+                            "strength": {
+                                "type": "number",
+                                "description": "Normalised strength in [0, 1], 1 at exact."
+                            }
+                        },
+                        "required": [
+                            "chart_a_planet",
+                            "chart_b_planet",
+                            "aspect_type",
+                            "orb",
+                            "strength"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "aspects"
+            ]
+        })),
+        structured_key: Some("aspects"),
     }
 }
 

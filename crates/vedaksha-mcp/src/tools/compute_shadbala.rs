@@ -77,6 +77,90 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["planets"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "planets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "sthana_bala": {
+                                "type": "number",
+                                "description": "Positional strength: the sum of the four sub-components below."
+                            },
+                            "uccha_bala": {
+                                "type": "number",
+                                "description": "Exaltation strength, 0-60."
+                            },
+                            "ojhayugma_bala": {
+                                "type": "number",
+                                "description": "Odd/even sign strength, 0-30."
+                            },
+                            "kendradi_bala": {
+                                "type": "number",
+                                "description": "Angularity strength, 15-60."
+                            },
+                            "drekkana_bala": {
+                                "type": "number",
+                                "description": "Decanate strength, 0 or 15."
+                            },
+                            "dig_bala": {
+                                "type": "number",
+                                "description": "Directional strength."
+                            },
+                            "kala_bala": {
+                                "type": "number",
+                                "description": "Temporal strength. Nathonnatha and Paksha only; see the tool description."
+                            },
+                            "cheshta_bala": {
+                                "type": "number",
+                                "description": "Motional strength, from speed against average speed."
+                            },
+                            "naisargika_bala": {
+                                "type": "number",
+                                "description": "Natural strength, fixed per graha."
+                            },
+                            "drik_bala": {
+                                "type": "number",
+                                "description": "Aspectual strength, benefic aspects minus malefic."
+                            },
+                            "total": {
+                                "type": "number",
+                                "description": "Sum of the six balas, in virupas."
+                            },
+                            "ishta_phala": {
+                                "type": "number",
+                                "description": "Benefic potential, 0-60."
+                            },
+                            "kashta_phala": {
+                                "type": "number",
+                                "description": "Malefic potential, 0-60."
+                            },
+                            "planet": {
+                                "type": "string",
+                                "description": "Graha assessed."
+                            }
+                        },
+                        "required": [
+                            "planet",
+                            "sthana_bala",
+                            "dig_bala",
+                            "kala_bala",
+                            "cheshta_bala",
+                            "naisargika_bala",
+                            "drik_bala",
+                            "total"
+                        ]
+                    },
+                    "description": "One entry per graha supplied, in input order."
+                }
+            },
+            "required": [
+                "planets"
+            ]
+        })),
+        structured_key: Some("planets"),
     }
 }
 

@@ -128,6 +128,67 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["birth_jd"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "moon_nakshatra": {
+                    "type": "string",
+                    "description": "Birth nakshatra of the Moon, which sets the starting mahadasha."
+                },
+                "initial_balance": {
+                    "type": "number",
+                    "description": "Fraction of the first mahadasha already elapsed at birth, in [0, 1)."
+                },
+                "maha_dashas": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "lord": {
+                                "type": "string",
+                                "description": "Ruling graha of the period."
+                            },
+                            "level": {
+                                "type": "integer",
+                                "description": "Nesting depth: 1 = mahadasha, 2 = antardasha, 3 = pratyantardasha."
+                            },
+                            "start_jd": {
+                                "type": "number",
+                                "description": "Start of the period as a Julian Day."
+                            },
+                            "end_jd": {
+                                "type": "number",
+                                "description": "End of the period as a Julian Day."
+                            },
+                            "duration_days": {
+                                "type": "number",
+                                "description": "Length of the period in days."
+                            },
+                            "sub_periods": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object"
+                                },
+                                "description": "Nested periods one level down; empty at the deepest level requested."
+                            }
+                        },
+                        "required": [
+                            "lord",
+                            "level",
+                            "start_jd",
+                            "end_jd",
+                            "duration_days"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "moon_nakshatra",
+                "initial_balance",
+                "maha_dashas"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

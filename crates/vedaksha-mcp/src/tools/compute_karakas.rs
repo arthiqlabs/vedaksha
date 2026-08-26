@@ -53,6 +53,41 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "karakas": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "planet": {
+                                "type": "string",
+                                "description": "Graha holding this karaka."
+                            },
+                            "karaka": {
+                                "type": "string",
+                                "description": "Chara karaka title, Atmakaraka through Darakaraka."
+                            },
+                            "degrees_in_sign": {
+                                "type": "number",
+                                "description": "Degrees within the occupied sign, which is what ranks the grahas."
+                            }
+                        },
+                        "required": [
+                            "planet",
+                            "karaka",
+                            "degrees_in_sign"
+                        ]
+                    },
+                    "description": "One entry per graha, ordered by rank."
+                }
+            },
+            "required": [
+                "karakas"
+            ]
+        })),
+        structured_key: Some("karakas"),
     }
 }
 

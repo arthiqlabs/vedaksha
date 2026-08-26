@@ -103,6 +103,72 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["natal_positions", "start_jd", "end_jd"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "start_jd": {
+                    "type": "number",
+                    "description": "Start of the searched window, echoed back."
+                },
+                "end_jd": {
+                    "type": "number",
+                    "description": "End of the searched window, echoed back."
+                },
+                "max_orb": {
+                    "type": "number",
+                    "description": "Orb the search used, in degrees."
+                },
+                "event_count": {
+                    "type": "integer",
+                    "description": "Number of entries in events."
+                },
+                "events": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "transiting_body": {
+                                "type": "string",
+                                "description": "Transiting graha."
+                            },
+                            "natal_body": {
+                                "type": "string",
+                                "description": "Natal point aspected."
+                            },
+                            "aspect_type": {
+                                "type": "string",
+                                "description": "Aspect name."
+                            },
+                            "exact_jd": {
+                                "type": "number",
+                                "description": "Julian Day at which the aspect is closest to exact."
+                            },
+                            "exact_orb": {
+                                "type": "number",
+                                "description": "Orb at that moment, in degrees."
+                            },
+                            "applying": {
+                                "type": "boolean",
+                                "description": "True when the aspect is closing at that moment."
+                            }
+                        },
+                        "required": [
+                            "transiting_body",
+                            "natal_body",
+                            "aspect_type",
+                            "exact_jd"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "start_jd",
+                "end_jd",
+                "event_count",
+                "events"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

@@ -74,6 +74,56 @@ pub fn definition() -> super::ToolDefinition {
             ]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "entries": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "graha": {
+                                "type": "string",
+                                "description": "Transiting graha."
+                            },
+                            "transit_rashi": {
+                                "type": "integer",
+                                "description": "Rashi the graha transits, 0=Aries … 11=Pisces."
+                            },
+                            "natal_reference_rashi": {
+                                "type": "integer",
+                                "description": "Rashi the count is taken from."
+                            },
+                            "house_from_natal": {
+                                "type": "integer",
+                                "description": "Count from the reference rashi, 1-12."
+                            },
+                            "classical_effect": {
+                                "type": "string",
+                                "description": "Classical result attributed to this placement."
+                            },
+                            "vedha_candidates": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "description": "Graha whose placement would obstruct this effect."
+                                }
+                            }
+                        },
+                        "required": [
+                            "graha",
+                            "transit_rashi",
+                            "house_from_natal",
+                            "classical_effect"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "entries"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

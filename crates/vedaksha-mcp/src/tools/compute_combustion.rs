@@ -57,6 +57,41 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "states": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "planet": {
+                                "type": "string",
+                                "description": "Graha assessed."
+                            },
+                            "state": {
+                                "type": "string",
+                                "description": "Combust, DeeplyCombust, or None."
+                            },
+                            "degrees_from_sun": {
+                                "type": "number",
+                                "description": "Angular separation from the Sun in degrees."
+                            }
+                        },
+                        "required": [
+                            "planet",
+                            "state",
+                            "degrees_from_sun"
+                        ]
+                    },
+                    "description": "One entry per graha other than the Sun."
+                }
+            },
+            "required": [
+                "states"
+            ]
+        })),
+        structured_key: Some("states"),
     }
 }
 

@@ -65,6 +65,22 @@ pub struct ToolDefinition {
     /// tool that is *not* read-only is a compile error the author must answer
     /// rather than a wrong hint they inherit in silence.
     pub annotations: ToolAnnotations,
+    /// JSON Schema for `structuredContent`, or `None` where the tool has no
+    /// settled output contract.
+    ///
+    /// MCP requires a tool that declares an output schema to return structured
+    /// content conforming to it, so declaring one for a response shape that is
+    /// not yet honest would make the server non-conformant rather than better
+    /// documented. `None` is the truthful answer there.
+    pub output_schema: Option<serde_json::Value>,
+    /// Key to nest the result under in `structuredContent` when the tool
+    /// answers with a JSON array.
+    ///
+    /// `structuredContent` must be an object, and six tools here return an
+    /// array. Wrapping happens at the boundary rather than in the handlers, so
+    /// `content[].text` keeps the exact shape callers already parse —
+    /// KundaliMCP among them.
+    pub structured_key: Option<&'static str>,
 }
 
 impl ToolDefinition {
@@ -77,12 +93,36 @@ impl ToolDefinition {
     /// reaches every consumer or none.
     #[must_use]
     pub fn to_wire(&self) -> serde_json::Value {
-        serde_json::json!({
+        let mut v = serde_json::json!({
             "name": self.name,
             "description": self.description,
             "inputSchema": self.input_schema,
             "annotations": self.annotations,
-        })
+        });
+        // Omitted rather than sent as null: a client that sees the key will
+        // expect to validate against it.
+        if let Some(schema) = &self.output_schema {
+            v["outputSchema"] = schema.clone();
+        }
+        v
+    }
+
+    /// Shape a tool result for `structuredContent`, which MCP requires to be
+    /// an object. Array results are nested under [`Self::structured_key`].
+    ///
+    /// Returns `None` when the tool declares no output schema, so the two
+    /// always travel together: structured content with no schema to check it
+    /// against is a promise nothing verifies.
+    #[must_use]
+    pub fn structured_content(&self, value: &serde_json::Value) -> Option<serde_json::Value> {
+        self.output_schema.as_ref()?;
+        match (value, self.structured_key) {
+            (serde_json::Value::Object(_), _) => Some(value.clone()),
+            (serde_json::Value::Array(_), Some(key)) => {
+                Some(serde_json::json!({ key: value.clone() }))
+            }
+            _ => None,
+        }
     }
 }
 

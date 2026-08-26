@@ -51,6 +51,54 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "lagna"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "tables": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "planet": {
+                                "type": "string",
+                                "description": "Graha whose Bhinna Ashtakavarga this is."
+                            },
+                            "bindus": {
+                                "type": "array",
+                                "items": {
+                                    "type": "integer",
+                                    "description": "Bindus in one rashi, 0-8."
+                                },
+                                "description": "Twelve entries, Aries first."
+                            },
+                            "total": {
+                                "type": "integer",
+                                "description": "Sum of this graha's bindus."
+                            }
+                        },
+                        "required": [
+                            "planet",
+                            "bindus",
+                            "total"
+                        ]
+                    },
+                    "description": "One Bhinna Ashtakavarga per graha."
+                },
+                "sarvashtakavarga": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer",
+                        "description": "Summed bindus in one rashi."
+                    },
+                    "description": "Twelve entries, Aries first."
+                }
+            },
+            "required": [
+                "tables",
+                "sarvashtakavarga"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

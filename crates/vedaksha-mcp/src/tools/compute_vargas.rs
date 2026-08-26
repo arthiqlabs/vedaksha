@@ -70,6 +70,14 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["julian_day", "latitude", "longitude", "divisions"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        // No output schema: the tool's response does not match its description: called with its four \
+        // required parameters it returns a `status`/`message` stub, and the only \
+        // computing path needs the optional `planet_longitude`.
+        // MCP requires structuredContent to conform to a declared schema, so
+        // declaring one here would make the server non-conformant rather than
+        // better documented.
+        output_schema: None,
+        structured_key: None,
     }
 }
 

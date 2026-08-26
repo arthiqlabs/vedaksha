@@ -235,19 +235,32 @@ impl McpServer {
                 // MCP requires content[].text to be a plain string.
                 // If the tool returned a JSON string, use it directly.
                 // If it returned an object/array, serialise to a JSON string.
+                // structuredContent is added alongside, never instead of, the
+                // text block: it is what a schema-aware client validates,
+                // while existing callers keep parsing exactly the string they
+                // parse today.
+                let structured = crate::tools::tool_definitions()
+                    .iter()
+                    .find(|t| t.name == tool_name)
+                    .and_then(|t| t.structured_content(&value));
+
                 let text = match value {
                     serde_json::Value::String(s) => s,
                     other => serde_json::to_string(&other).unwrap_or_default(),
                 };
+                let mut result = serde_json::json!({
+                    "content": [{
+                        "type": "text",
+                        "text": text
+                    }]
+                });
+                if let Some(structured) = structured {
+                    result["structuredContent"] = structured;
+                }
                 JsonRpcResponse {
                     jsonrpc: "2.0".into(),
                     id: request.id.clone(),
-                    result: Some(serde_json::json!({
-                        "content": [{
-                            "type": "text",
-                            "text": text
-                        }]
-                    })),
+                    result: Some(result),
                     error: None,
                 }
             }

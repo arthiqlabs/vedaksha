@@ -80,6 +80,14 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["chart_json", "format"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        // No output schema: output shape depends on `format`: cypher, surreal and embedding \
+        // return plain text, jsonld returns @context/@graph and json returns \
+        // nodes/edges, so no single schema is true.
+        // MCP requires structuredContent to conform to a declared schema, so
+        // declaring one here would make the server non-conformant rather than
+        // better documented.
+        output_schema: None,
+        structured_key: None,
     }
 }
 

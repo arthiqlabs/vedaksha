@@ -100,6 +100,164 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["jd", "sun", "moon", "latitude", "longitude"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "tithi": {
+                    "type": "object",
+                    "properties": {
+                        "number": {
+                            "type": "integer",
+                            "description": "Tithi number, 1-30."
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Tithi name."
+                        },
+                        "paksha": {
+                            "type": "string",
+                            "description": "Shukla or Krishna."
+                        },
+                        "lord": {
+                            "type": "string",
+                            "description": "Ruling graha."
+                        }
+                    },
+                    "required": [
+                        "number",
+                        "name",
+                        "paksha"
+                    ]
+                },
+                "vara": {
+                    "type": "object",
+                    "properties": {
+                        "weekday": {
+                            "type": "string",
+                            "description": "Vara name."
+                        },
+                        "lord": {
+                            "type": "string",
+                            "description": "Ruling graha."
+                        },
+                        "from_sunrise": {
+                            "type": "boolean",
+                            "description": "True when the vara was reckoned from sunrise rather than midnight."
+                        },
+                        "rahu_kalam": {
+                            "type": "object",
+                            "properties": {
+                                "start_jd": {
+                                    "type": "number",
+                                    "description": "Start as a Julian Day."
+                                },
+                                "end_jd": {
+                                    "type": "number",
+                                    "description": "End as a Julian Day."
+                                }
+                            }
+                        },
+                        "rahu_kalam_slot": {
+                            "type": "integer",
+                            "description": "Which eighth of the day Rahu Kalam falls in, 1-8."
+                        },
+                        "gulika_kalam": {
+                            "type": "object",
+                            "properties": {
+                                "start_jd": {
+                                    "type": "number",
+                                    "description": "Start as a Julian Day."
+                                },
+                                "end_jd": {
+                                    "type": "number",
+                                    "description": "End as a Julian Day."
+                                }
+                            }
+                        },
+                        "gulika_kalam_slot": {
+                            "type": "integer",
+                            "description": "Which eighth of the day Gulika Kalam falls in, 1-8."
+                        }
+                    },
+                    "required": [
+                        "weekday",
+                        "lord"
+                    ]
+                },
+                "nakshatra": {
+                    "type": "object",
+                    "properties": {
+                        "index": {
+                            "type": "integer",
+                            "description": "Nakshatra index, 0-26."
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Nakshatra name."
+                        },
+                        "pada": {
+                            "type": "integer",
+                            "description": "Pada within the nakshatra, 1-4."
+                        }
+                    },
+                    "required": [
+                        "index",
+                        "name",
+                        "pada"
+                    ]
+                },
+                "yoga": {
+                    "type": "object",
+                    "properties": {
+                        "index": {
+                            "type": "integer",
+                            "description": "Yoga index, 0-26."
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Yoga name."
+                        },
+                        "remaining_degrees": {
+                            "type": "number",
+                            "description": "Degrees left before the yoga changes."
+                        }
+                    },
+                    "required": [
+                        "index",
+                        "name"
+                    ]
+                },
+                "karana": {
+                    "type": "object",
+                    "properties": {
+                        "index": {
+                            "type": "integer",
+                            "description": "Karana index."
+                        },
+                        "name": {
+                            "type": "string",
+                            "description": "Karana name."
+                        },
+                        "is_fixed": {
+                            "type": "boolean",
+                            "description": "True for the four fixed karanas."
+                        }
+                    },
+                    "required": [
+                        "index",
+                        "name"
+                    ]
+                }
+            },
+            "required": [
+                "tithi",
+                "vara",
+                "nakshatra",
+                "yoga",
+                "karana"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

@@ -117,6 +117,100 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["start_jd", "end_jd", "latitude", "longitude"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "start_jd": {
+                    "type": "number",
+                    "description": "Start of the searched window, echoed back."
+                },
+                "end_jd": {
+                    "type": "number",
+                    "description": "End of the searched window, echoed back."
+                },
+                "latitude": {
+                    "type": "number",
+                    "description": "Latitude used, in degrees."
+                },
+                "longitude": {
+                    "type": "number",
+                    "description": "Longitude used, in degrees."
+                },
+                "elevation_m": {
+                    "type": "number",
+                    "description": "Elevation used, in metres."
+                },
+                "min_quality": {
+                    "type": "number",
+                    "description": "Quality floor the search applied."
+                },
+                "result_count": {
+                    "type": "integer",
+                    "description": "Number of entries in results."
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "jd": {
+                                "type": "number",
+                                "description": "Julian Day of the candidate moment."
+                            },
+                            "quality_score": {
+                                "type": "number",
+                                "description": "Composite score; higher is better."
+                            },
+                            "weekday": {
+                                "type": "string",
+                                "description": "Vara at that moment."
+                            },
+                            "tithi_name": {
+                                "type": "string",
+                                "description": "Tithi name."
+                            },
+                            "tithi_number": {
+                                "type": "integer",
+                                "description": "Tithi number, 1-30."
+                            },
+                            "tithi_end_jd": {
+                                "type": "number",
+                                "description": "Julian Day at which the tithi ends."
+                            },
+                            "nakshatra": {
+                                "type": "string",
+                                "description": "Nakshatra name."
+                            },
+                            "nakshatra_end_jd": {
+                                "type": "number",
+                                "description": "Julian Day at which the nakshatra ends."
+                            },
+                            "factors": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "description": "Named factor contributing to the score."
+                                }
+                            }
+                        },
+                        "required": [
+                            "jd",
+                            "quality_score",
+                            "weekday",
+                            "tithi_name",
+                            "nakshatra"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "start_jd",
+                "end_jd",
+                "result_count",
+                "results"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

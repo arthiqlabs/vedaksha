@@ -50,6 +50,50 @@ pub fn definition() -> super::ToolDefinition {
             ]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "aspects": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "aspecting_planet": {
+                                "type": "string",
+                                "description": "Graha casting the drishti."
+                            },
+                            "aspecting_sign": {
+                                "type": "integer",
+                                "description": "Rashi it occupies, 0=Aries … 11=Pisces."
+                            },
+                            "aspected_sign": {
+                                "type": "integer",
+                                "description": "Rashi receiving the drishti."
+                            },
+                            "houses_away": {
+                                "type": "integer",
+                                "description": "Count from the aspecting rashi, 1-12."
+                            },
+                            "strength": {
+                                "type": "string",
+                                "description": "Classical share cast: Full, ThreeQuarter, Half or Quarter."
+                            }
+                        },
+                        "required": [
+                            "aspecting_planet",
+                            "aspecting_sign",
+                            "aspected_sign",
+                            "houses_away",
+                            "strength"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "aspects"
+            ]
+        })),
+        structured_key: Some("aspects"),
     }
 }
 

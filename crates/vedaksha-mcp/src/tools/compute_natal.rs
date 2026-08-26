@@ -75,6 +75,158 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["julian_day", "latitude", "longitude"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "julian_day": {
+                    "type": "number",
+                    "description": "The Julian Day the chart was cast for, echoed back."
+                },
+                "ayanamsha_value": {
+                    "type": "number",
+                    "description": "Mean ayanamsha applied, in degrees. Zero for a tropical chart."
+                },
+                "config_summary": {
+                    "type": "string",
+                    "description": "One-line record of the ephemeris, house system and ayanamsha used."
+                },
+                "planets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Graha name."
+                            },
+                            "longitude": {
+                                "type": "number",
+                                "description": "Sidereal longitude in degrees [0, 360)."
+                            },
+                            "latitude": {
+                                "type": "number",
+                                "description": "Ecliptic latitude in degrees."
+                            },
+                            "distance": {
+                                "type": "number",
+                                "description": "Distance from the observer in AU."
+                            },
+                            "speed": {
+                                "type": "number",
+                                "description": "Daily motion in degrees per day, negative when retrograde."
+                            },
+                            "sign": {
+                                "type": "string",
+                                "description": "Rashi name."
+                            },
+                            "sign_index": {
+                                "type": "integer",
+                                "description": "Rashi index, 0=Aries … 11=Pisces."
+                            },
+                            "house": {
+                                "type": "integer",
+                                "description": "Bhava occupied, 1-12."
+                            },
+                            "dignity": {
+                                "type": "string",
+                                "description": "Dignity in the occupied sign, e.g. Exalted, Own, Debilitated, Neutral."
+                            },
+                            "retrograde": {
+                                "type": "boolean",
+                                "description": "True when speed is negative."
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "longitude",
+                            "sign_index",
+                            "house"
+                        ]
+                    },
+                    "description": "One entry per computed body."
+                },
+                "houses": {
+                    "type": "object",
+                    "properties": {
+                        "system": {
+                            "type": "string",
+                            "description": "House system used."
+                        },
+                        "asc": {
+                            "type": "number",
+                            "description": "Ascendant longitude in degrees."
+                        },
+                        "mc": {
+                            "type": "number",
+                            "description": "Midheaven longitude in degrees."
+                        },
+                        "cusps": {
+                            "type": "array",
+                            "items": {
+                                "type": "number",
+                                "description": "Cusp longitude in degrees."
+                            },
+                            "description": "Twelve cusp longitudes."
+                        },
+                        "polar_fallback": {
+                            "type": "boolean",
+                            "description": "True when the requested system was undefined at this latitude and a fallback was used."
+                        }
+                    },
+                    "required": [
+                        "system",
+                        "asc",
+                        "mc",
+                        "cusps"
+                    ]
+                },
+                "aspects": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "body1": {
+                                "type": "integer",
+                                "description": "Index of the first body in the planets array."
+                            },
+                            "body2": {
+                                "type": "integer",
+                                "description": "Index of the second body."
+                            },
+                            "type": {
+                                "type": "string",
+                                "description": "Aspect name."
+                            },
+                            "orb": {
+                                "type": "number",
+                                "description": "Orb in degrees."
+                            },
+                            "strength": {
+                                "type": "number",
+                                "description": "Normalised strength in [0, 1], 1 at exact."
+                            },
+                            "applying": {
+                                "type": "boolean",
+                                "description": "True when the aspect is closing rather than separating."
+                            }
+                        },
+                        "required": [
+                            "body1",
+                            "body2",
+                            "type",
+                            "orb"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "julian_day",
+                "planets",
+                "houses",
+                "aspects"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

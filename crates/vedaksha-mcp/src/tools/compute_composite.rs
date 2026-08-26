@@ -100,6 +100,41 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["chart_a", "chart_b"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "planets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "planet": {
+                                "type": "string",
+                                "description": "Graha name."
+                            },
+                            "longitude": {
+                                "type": "number",
+                                "description": "Midpoint longitude in degrees [0, 360)."
+                            },
+                            "speed": {
+                                "type": "number",
+                                "description": "Mean of the two supplied speeds, in degrees per day."
+                            }
+                        },
+                        "required": [
+                            "planet",
+                            "longitude",
+                            "speed"
+                        ]
+                    },
+                    "description": "One entry per graha present in both charts."
+                }
+            },
+            "required": [
+                "planets"
+            ]
+        })),
+        structured_key: Some("planets"),
     }
 }
 

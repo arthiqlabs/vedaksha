@@ -53,7 +53,158 @@
         ],
         "type": "object"
       },
-      "name": "compute_natal_chart"
+      "name": "compute_natal_chart",
+      "outputSchema": {
+        "properties": {
+          "aspects": {
+            "items": {
+              "properties": {
+                "applying": {
+                  "description": "True when the aspect is closing rather than separating.",
+                  "type": "boolean"
+                },
+                "body1": {
+                  "description": "Index of the first body in the planets array.",
+                  "type": "integer"
+                },
+                "body2": {
+                  "description": "Index of the second body.",
+                  "type": "integer"
+                },
+                "orb": {
+                  "description": "Orb in degrees.",
+                  "type": "number"
+                },
+                "strength": {
+                  "description": "Normalised strength in [0, 1], 1 at exact.",
+                  "type": "number"
+                },
+                "type": {
+                  "description": "Aspect name.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "body1",
+                "body2",
+                "type",
+                "orb"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ayanamsha_value": {
+            "description": "Mean ayanamsha applied, in degrees. Zero for a tropical chart.",
+            "type": "number"
+          },
+          "config_summary": {
+            "description": "One-line record of the ephemeris, house system and ayanamsha used.",
+            "type": "string"
+          },
+          "houses": {
+            "properties": {
+              "asc": {
+                "description": "Ascendant longitude in degrees.",
+                "type": "number"
+              },
+              "cusps": {
+                "description": "Twelve cusp longitudes.",
+                "items": {
+                  "description": "Cusp longitude in degrees.",
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "mc": {
+                "description": "Midheaven longitude in degrees.",
+                "type": "number"
+              },
+              "polar_fallback": {
+                "description": "True when the requested system was undefined at this latitude and a fallback was used.",
+                "type": "boolean"
+              },
+              "system": {
+                "description": "House system used.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "system",
+              "asc",
+              "mc",
+              "cusps"
+            ],
+            "type": "object"
+          },
+          "julian_day": {
+            "description": "The Julian Day the chart was cast for, echoed back.",
+            "type": "number"
+          },
+          "planets": {
+            "description": "One entry per computed body.",
+            "items": {
+              "properties": {
+                "dignity": {
+                  "description": "Dignity in the occupied sign, e.g. Exalted, Own, Debilitated, Neutral.",
+                  "type": "string"
+                },
+                "distance": {
+                  "description": "Distance from the observer in AU.",
+                  "type": "number"
+                },
+                "house": {
+                  "description": "Bhava occupied, 1-12.",
+                  "type": "integer"
+                },
+                "latitude": {
+                  "description": "Ecliptic latitude in degrees.",
+                  "type": "number"
+                },
+                "longitude": {
+                  "description": "Sidereal longitude in degrees [0, 360).",
+                  "type": "number"
+                },
+                "name": {
+                  "description": "Graha name.",
+                  "type": "string"
+                },
+                "retrograde": {
+                  "description": "True when speed is negative.",
+                  "type": "boolean"
+                },
+                "sign": {
+                  "description": "Rashi name.",
+                  "type": "string"
+                },
+                "sign_index": {
+                  "description": "Rashi index, 0=Aries … 11=Pisces.",
+                  "type": "integer"
+                },
+                "speed": {
+                  "description": "Daily motion in degrees per day, negative when retrograde.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "longitude",
+                "sign_index",
+                "house"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "julian_day",
+          "planets",
+          "houses",
+          "aspects"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -104,7 +255,67 @@
         ],
         "type": "object"
       },
-      "name": "compute_dasha"
+      "name": "compute_dasha",
+      "outputSchema": {
+        "properties": {
+          "initial_balance": {
+            "description": "Fraction of the first mahadasha already elapsed at birth, in [0, 1).",
+            "type": "number"
+          },
+          "maha_dashas": {
+            "items": {
+              "properties": {
+                "duration_days": {
+                  "description": "Length of the period in days.",
+                  "type": "number"
+                },
+                "end_jd": {
+                  "description": "End of the period as a Julian Day.",
+                  "type": "number"
+                },
+                "level": {
+                  "description": "Nesting depth: 1 = mahadasha, 2 = antardasha, 3 = pratyantardasha.",
+                  "type": "integer"
+                },
+                "lord": {
+                  "description": "Ruling graha of the period.",
+                  "type": "string"
+                },
+                "start_jd": {
+                  "description": "Start of the period as a Julian Day.",
+                  "type": "number"
+                },
+                "sub_periods": {
+                  "description": "Nested periods one level down; empty at the deepest level requested.",
+                  "items": {
+                    "type": "object"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "lord",
+                "level",
+                "start_jd",
+                "end_jd",
+                "duration_days"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "moon_nakshatra": {
+            "description": "Birth nakshatra of the Moon, which sets the starting mahadasha.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "moon_nakshatra",
+          "initial_balance",
+          "maha_dashas"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -167,7 +378,41 @@
         ],
         "type": "object"
       },
-      "name": "compute_karakas"
+      "name": "compute_karakas",
+      "outputSchema": {
+        "properties": {
+          "karakas": {
+            "description": "One entry per graha, ordered by rank.",
+            "items": {
+              "properties": {
+                "degrees_in_sign": {
+                  "description": "Degrees within the occupied sign, which is what ranks the grahas.",
+                  "type": "number"
+                },
+                "karaka": {
+                  "description": "Chara karaka title, Atmakaraka through Darakaraka.",
+                  "type": "string"
+                },
+                "planet": {
+                  "description": "Graha holding this karaka.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "planet",
+                "karaka",
+                "degrees_in_sign"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "karakas"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -242,7 +487,41 @@
         ],
         "type": "object"
       },
-      "name": "compute_combustion"
+      "name": "compute_combustion",
+      "outputSchema": {
+        "properties": {
+          "states": {
+            "description": "One entry per graha other than the Sun.",
+            "items": {
+              "properties": {
+                "degrees_from_sun": {
+                  "description": "Angular separation from the Sun in degrees.",
+                  "type": "number"
+                },
+                "planet": {
+                  "description": "Graha assessed.",
+                  "type": "string"
+                },
+                "state": {
+                  "description": "Combust, DeeplyCombust, or None.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "planet",
+                "state",
+                "degrees_from_sun"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "states"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -325,7 +604,90 @@
         ],
         "type": "object"
       },
-      "name": "compute_shadbala"
+      "name": "compute_shadbala",
+      "outputSchema": {
+        "properties": {
+          "planets": {
+            "description": "One entry per graha supplied, in input order.",
+            "items": {
+              "properties": {
+                "cheshta_bala": {
+                  "description": "Motional strength, from speed against average speed.",
+                  "type": "number"
+                },
+                "dig_bala": {
+                  "description": "Directional strength.",
+                  "type": "number"
+                },
+                "drekkana_bala": {
+                  "description": "Decanate strength, 0 or 15.",
+                  "type": "number"
+                },
+                "drik_bala": {
+                  "description": "Aspectual strength, benefic aspects minus malefic.",
+                  "type": "number"
+                },
+                "ishta_phala": {
+                  "description": "Benefic potential, 0-60.",
+                  "type": "number"
+                },
+                "kala_bala": {
+                  "description": "Temporal strength. Nathonnatha and Paksha only; see the tool description.",
+                  "type": "number"
+                },
+                "kashta_phala": {
+                  "description": "Malefic potential, 0-60.",
+                  "type": "number"
+                },
+                "kendradi_bala": {
+                  "description": "Angularity strength, 15-60.",
+                  "type": "number"
+                },
+                "naisargika_bala": {
+                  "description": "Natural strength, fixed per graha.",
+                  "type": "number"
+                },
+                "ojhayugma_bala": {
+                  "description": "Odd/even sign strength, 0-30.",
+                  "type": "number"
+                },
+                "planet": {
+                  "description": "Graha assessed.",
+                  "type": "string"
+                },
+                "sthana_bala": {
+                  "description": "Positional strength: the sum of the four sub-components below.",
+                  "type": "number"
+                },
+                "total": {
+                  "description": "Sum of the six balas, in virupas.",
+                  "type": "number"
+                },
+                "uccha_bala": {
+                  "description": "Exaltation strength, 0-60.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "planet",
+                "sthana_bala",
+                "dig_bala",
+                "kala_bala",
+                "cheshta_bala",
+                "naisargika_bala",
+                "drik_bala",
+                "total"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "planets"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -451,7 +813,145 @@
         ],
         "type": "object"
       },
-      "name": "compute_transit"
+      "name": "compute_transit",
+      "outputSchema": {
+        "properties": {
+          "natal_jd": {
+            "description": "Julian Day of the natal chart, echoed back.",
+            "type": "number"
+          },
+          "natal_positions": {
+            "description": "Natal positions used for the comparison.",
+            "items": {
+              "properties": {
+                "distance": {
+                  "description": "Distance from the observer in AU.",
+                  "type": "number"
+                },
+                "latitude": {
+                  "description": "Ecliptic latitude in degrees.",
+                  "type": "number"
+                },
+                "longitude": {
+                  "description": "Longitude in degrees [0, 360), sidereal when an ayanamsha was applied.",
+                  "type": "number"
+                },
+                "name": {
+                  "description": "Body name.",
+                  "type": "string"
+                },
+                "speed": {
+                  "description": "Daily motion in degrees per day, negative when retrograde.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "longitude",
+                "latitude",
+                "distance",
+                "speed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "transit_jd": {
+            "description": "Julian Day of the transit moment, echoed back.",
+            "type": "number"
+          },
+          "transit_natal_aspects": {
+            "items": {
+              "properties": {
+                "applying": {
+                  "description": "True when the aspect is closing.",
+                  "type": "boolean"
+                },
+                "aspect_angle": {
+                  "description": "Exact angle of the aspect in degrees.",
+                  "type": "number"
+                },
+                "aspect_type": {
+                  "description": "Aspect name.",
+                  "type": "string"
+                },
+                "natal_body": {
+                  "description": "Natal graha aspected.",
+                  "type": "string"
+                },
+                "natal_body_index": {
+                  "description": "Index into natal_positions.",
+                  "type": "integer"
+                },
+                "orb": {
+                  "description": "Departure from exact, in degrees.",
+                  "type": "number"
+                },
+                "transit_body": {
+                  "description": "Transiting graha.",
+                  "type": "string"
+                },
+                "transit_body_index": {
+                  "description": "Index into transit_positions.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "transit_body",
+                "natal_body",
+                "aspect_type",
+                "orb"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "transit_positions": {
+            "description": "Positions at the transit moment.",
+            "items": {
+              "properties": {
+                "distance": {
+                  "description": "Distance from the observer in AU.",
+                  "type": "number"
+                },
+                "latitude": {
+                  "description": "Ecliptic latitude in degrees.",
+                  "type": "number"
+                },
+                "longitude": {
+                  "description": "Longitude in degrees [0, 360), sidereal when an ayanamsha was applied.",
+                  "type": "number"
+                },
+                "name": {
+                  "description": "Body name.",
+                  "type": "string"
+                },
+                "speed": {
+                  "description": "Daily motion in degrees per day, negative when retrograde.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "name",
+                "longitude",
+                "latitude",
+                "distance",
+                "speed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "natal_jd",
+          "transit_jd",
+          "natal_positions",
+          "transit_positions",
+          "transit_natal_aspects"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -518,7 +1018,72 @@
         ],
         "type": "object"
       },
-      "name": "search_transits"
+      "name": "search_transits",
+      "outputSchema": {
+        "properties": {
+          "end_jd": {
+            "description": "End of the searched window, echoed back.",
+            "type": "number"
+          },
+          "event_count": {
+            "description": "Number of entries in events.",
+            "type": "integer"
+          },
+          "events": {
+            "items": {
+              "properties": {
+                "applying": {
+                  "description": "True when the aspect is closing at that moment.",
+                  "type": "boolean"
+                },
+                "aspect_type": {
+                  "description": "Aspect name.",
+                  "type": "string"
+                },
+                "exact_jd": {
+                  "description": "Julian Day at which the aspect is closest to exact.",
+                  "type": "number"
+                },
+                "exact_orb": {
+                  "description": "Orb at that moment, in degrees.",
+                  "type": "number"
+                },
+                "natal_body": {
+                  "description": "Natal point aspected.",
+                  "type": "string"
+                },
+                "transiting_body": {
+                  "description": "Transiting graha.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "transiting_body",
+                "natal_body",
+                "aspect_type",
+                "exact_jd"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "max_orb": {
+            "description": "Orb the search used, in degrees.",
+            "type": "number"
+          },
+          "start_jd": {
+            "description": "Start of the searched window, echoed back.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "start_jd",
+          "end_jd",
+          "event_count",
+          "events"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -574,7 +1139,100 @@
         ],
         "type": "object"
       },
-      "name": "search_muhurta"
+      "name": "search_muhurta",
+      "outputSchema": {
+        "properties": {
+          "elevation_m": {
+            "description": "Elevation used, in metres.",
+            "type": "number"
+          },
+          "end_jd": {
+            "description": "End of the searched window, echoed back.",
+            "type": "number"
+          },
+          "latitude": {
+            "description": "Latitude used, in degrees.",
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Longitude used, in degrees.",
+            "type": "number"
+          },
+          "min_quality": {
+            "description": "Quality floor the search applied.",
+            "type": "number"
+          },
+          "result_count": {
+            "description": "Number of entries in results.",
+            "type": "integer"
+          },
+          "results": {
+            "items": {
+              "properties": {
+                "factors": {
+                  "items": {
+                    "description": "Named factor contributing to the score.",
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "jd": {
+                  "description": "Julian Day of the candidate moment.",
+                  "type": "number"
+                },
+                "nakshatra": {
+                  "description": "Nakshatra name.",
+                  "type": "string"
+                },
+                "nakshatra_end_jd": {
+                  "description": "Julian Day at which the nakshatra ends.",
+                  "type": "number"
+                },
+                "quality_score": {
+                  "description": "Composite score; higher is better.",
+                  "type": "number"
+                },
+                "tithi_end_jd": {
+                  "description": "Julian Day at which the tithi ends.",
+                  "type": "number"
+                },
+                "tithi_name": {
+                  "description": "Tithi name.",
+                  "type": "string"
+                },
+                "tithi_number": {
+                  "description": "Tithi number, 1-30.",
+                  "type": "integer"
+                },
+                "weekday": {
+                  "description": "Vara at that moment.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "jd",
+                "quality_score",
+                "weekday",
+                "tithi_name",
+                "nakshatra"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "start_jd": {
+            "description": "Start of the searched window, echoed back.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "start_jd",
+          "end_jd",
+          "result_count",
+          "results"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -645,7 +1303,54 @@
         ],
         "type": "object"
       },
-      "name": "compute_ashtakavarga"
+      "name": "compute_ashtakavarga",
+      "outputSchema": {
+        "properties": {
+          "sarvashtakavarga": {
+            "description": "Twelve entries, Aries first.",
+            "items": {
+              "description": "Summed bindus in one rashi.",
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "tables": {
+            "description": "One Bhinna Ashtakavarga per graha.",
+            "items": {
+              "properties": {
+                "bindus": {
+                  "description": "Twelve entries, Aries first.",
+                  "items": {
+                    "description": "Bindus in one rashi, 0-8.",
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "planet": {
+                  "description": "Graha whose Bhinna Ashtakavarga this is.",
+                  "type": "string"
+                },
+                "total": {
+                  "description": "Sum of this graha's bindus.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "planet",
+                "bindus",
+                "total"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tables",
+          "sarvashtakavarga"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -733,7 +1438,56 @@
         ],
         "type": "object"
       },
-      "name": "compute_gochara"
+      "name": "compute_gochara",
+      "outputSchema": {
+        "properties": {
+          "entries": {
+            "items": {
+              "properties": {
+                "classical_effect": {
+                  "description": "Classical result attributed to this placement.",
+                  "type": "string"
+                },
+                "graha": {
+                  "description": "Transiting graha.",
+                  "type": "string"
+                },
+                "house_from_natal": {
+                  "description": "Count from the reference rashi, 1-12.",
+                  "type": "integer"
+                },
+                "natal_reference_rashi": {
+                  "description": "Rashi the count is taken from.",
+                  "type": "integer"
+                },
+                "transit_rashi": {
+                  "description": "Rashi the graha transits, 0=Aries … 11=Pisces.",
+                  "type": "integer"
+                },
+                "vedha_candidates": {
+                  "items": {
+                    "description": "Graha whose placement would obstruct this effect.",
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "graha",
+                "transit_rashi",
+                "house_from_natal",
+                "classical_effect"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -791,7 +1545,164 @@
         ],
         "type": "object"
       },
-      "name": "compute_panchanga"
+      "name": "compute_panchanga",
+      "outputSchema": {
+        "properties": {
+          "karana": {
+            "properties": {
+              "index": {
+                "description": "Karana index.",
+                "type": "integer"
+              },
+              "is_fixed": {
+                "description": "True for the four fixed karanas.",
+                "type": "boolean"
+              },
+              "name": {
+                "description": "Karana name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "index",
+              "name"
+            ],
+            "type": "object"
+          },
+          "nakshatra": {
+            "properties": {
+              "index": {
+                "description": "Nakshatra index, 0-26.",
+                "type": "integer"
+              },
+              "name": {
+                "description": "Nakshatra name.",
+                "type": "string"
+              },
+              "pada": {
+                "description": "Pada within the nakshatra, 1-4.",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "index",
+              "name",
+              "pada"
+            ],
+            "type": "object"
+          },
+          "tithi": {
+            "properties": {
+              "lord": {
+                "description": "Ruling graha.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Tithi name.",
+                "type": "string"
+              },
+              "number": {
+                "description": "Tithi number, 1-30.",
+                "type": "integer"
+              },
+              "paksha": {
+                "description": "Shukla or Krishna.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "number",
+              "name",
+              "paksha"
+            ],
+            "type": "object"
+          },
+          "vara": {
+            "properties": {
+              "from_sunrise": {
+                "description": "True when the vara was reckoned from sunrise rather than midnight.",
+                "type": "boolean"
+              },
+              "gulika_kalam": {
+                "properties": {
+                  "end_jd": {
+                    "description": "End as a Julian Day.",
+                    "type": "number"
+                  },
+                  "start_jd": {
+                    "description": "Start as a Julian Day.",
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "gulika_kalam_slot": {
+                "description": "Which eighth of the day Gulika Kalam falls in, 1-8.",
+                "type": "integer"
+              },
+              "lord": {
+                "description": "Ruling graha.",
+                "type": "string"
+              },
+              "rahu_kalam": {
+                "properties": {
+                  "end_jd": {
+                    "description": "End as a Julian Day.",
+                    "type": "number"
+                  },
+                  "start_jd": {
+                    "description": "Start as a Julian Day.",
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              },
+              "rahu_kalam_slot": {
+                "description": "Which eighth of the day Rahu Kalam falls in, 1-8.",
+                "type": "integer"
+              },
+              "weekday": {
+                "description": "Vara name.",
+                "type": "string"
+              }
+            },
+            "required": [
+              "weekday",
+              "lord"
+            ],
+            "type": "object"
+          },
+          "yoga": {
+            "properties": {
+              "index": {
+                "description": "Yoga index, 0-26.",
+                "type": "integer"
+              },
+              "name": {
+                "description": "Yoga name.",
+                "type": "string"
+              },
+              "remaining_degrees": {
+                "description": "Degrees left before the yoga changes.",
+                "type": "number"
+              }
+            },
+            "required": [
+              "index",
+              "name"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "tithi",
+          "vara",
+          "nakshatra",
+          "yoga",
+          "karana"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -851,7 +1762,50 @@
         ],
         "type": "object"
       },
-      "name": "compute_drishti"
+      "name": "compute_drishti",
+      "outputSchema": {
+        "properties": {
+          "aspects": {
+            "items": {
+              "properties": {
+                "aspected_sign": {
+                  "description": "Rashi receiving the drishti.",
+                  "type": "integer"
+                },
+                "aspecting_planet": {
+                  "description": "Graha casting the drishti.",
+                  "type": "string"
+                },
+                "aspecting_sign": {
+                  "description": "Rashi it occupies, 0=Aries … 11=Pisces.",
+                  "type": "integer"
+                },
+                "houses_away": {
+                  "description": "Count from the aspecting rashi, 1-12.",
+                  "type": "integer"
+                },
+                "strength": {
+                  "description": "Classical share cast: Full, ThreeQuarter, Half or Quarter.",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "aspecting_planet",
+                "aspecting_sign",
+                "aspected_sign",
+                "houses_away",
+                "strength"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "aspects"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -878,7 +1832,86 @@
         ],
         "type": "object"
       },
-      "name": "compute_bhavas"
+      "name": "compute_bhavas",
+      "outputSchema": {
+        "properties": {
+          "houses": {
+            "description": "Twelve entries in order.",
+            "items": {
+              "properties": {
+                "bhava": {
+                  "description": "House number, 1-12.",
+                  "type": "integer"
+                },
+                "is_dusthana": {
+                  "description": "True for houses 6, 8, 12.",
+                  "type": "boolean"
+                },
+                "is_kendra": {
+                  "description": "True for houses 1, 4, 7, 10.",
+                  "type": "boolean"
+                },
+                "is_trikona": {
+                  "description": "True for houses 1, 5, 9.",
+                  "type": "boolean"
+                },
+                "is_upachaya": {
+                  "description": "True for houses 3, 6, 10, 11.",
+                  "type": "boolean"
+                },
+                "sign": {
+                  "description": "Rashi occupying it, 0=Aries … 11=Pisces.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "bhava",
+                "sign"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "lagna_sign": {
+            "description": "Rashi of the ascendant, 0=Aries … 11=Pisces.",
+            "type": "integer"
+          },
+          "planets": {
+            "description": "Empty unless grahas were supplied.",
+            "items": {
+              "properties": {
+                "bhava": {
+                  "description": "House the graha falls in, 1-12.",
+                  "type": "integer"
+                },
+                "longitude": {
+                  "description": "Sidereal longitude in degrees [0, 360).",
+                  "type": "number"
+                },
+                "planet": {
+                  "description": "Graha name as supplied.",
+                  "type": "string"
+                },
+                "sign": {
+                  "description": "Rashi it occupies, 0=Aries … 11=Pisces.",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "planet",
+                "bhava"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "lagna_sign",
+          "houses"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -923,7 +1956,50 @@
         ],
         "type": "object"
       },
-      "name": "compute_synastry"
+      "name": "compute_synastry",
+      "outputSchema": {
+        "properties": {
+          "aspects": {
+            "items": {
+              "properties": {
+                "aspect_type": {
+                  "description": "Aspect name.",
+                  "type": "string"
+                },
+                "chart_a_planet": {
+                  "description": "Graha from the first chart.",
+                  "type": "string"
+                },
+                "chart_b_planet": {
+                  "description": "Graha from the second chart.",
+                  "type": "string"
+                },
+                "orb": {
+                  "description": "Departure from exact, in degrees.",
+                  "type": "number"
+                },
+                "strength": {
+                  "description": "Normalised strength in [0, 1], 1 at exact.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "chart_a_planet",
+                "chart_b_planet",
+                "aspect_type",
+                "orb",
+                "strength"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "aspects"
+        ],
+        "type": "object"
+      }
     },
     {
       "annotations": {
@@ -980,7 +2056,41 @@
         ],
         "type": "object"
       },
-      "name": "compute_composite"
+      "name": "compute_composite",
+      "outputSchema": {
+        "properties": {
+          "planets": {
+            "description": "One entry per graha present in both charts.",
+            "items": {
+              "properties": {
+                "longitude": {
+                  "description": "Midpoint longitude in degrees [0, 360).",
+                  "type": "number"
+                },
+                "planet": {
+                  "description": "Graha name.",
+                  "type": "string"
+                },
+                "speed": {
+                  "description": "Mean of the two supplied speeds, in degrees per day.",
+                  "type": "number"
+                }
+              },
+              "required": [
+                "planet",
+                "longitude",
+                "speed"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "planets"
+        ],
+        "type": "object"
+      }
     }
   ]
 }

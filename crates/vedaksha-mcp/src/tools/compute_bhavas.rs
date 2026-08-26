@@ -44,6 +44,86 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["ascendant"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "lagna_sign": {
+                    "type": "integer",
+                    "description": "Rashi of the ascendant, 0=Aries … 11=Pisces."
+                },
+                "houses": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "bhava": {
+                                "type": "integer",
+                                "description": "House number, 1-12."
+                            },
+                            "sign": {
+                                "type": "integer",
+                                "description": "Rashi occupying it, 0=Aries … 11=Pisces."
+                            },
+                            "is_kendra": {
+                                "type": "boolean",
+                                "description": "True for houses 1, 4, 7, 10."
+                            },
+                            "is_trikona": {
+                                "type": "boolean",
+                                "description": "True for houses 1, 5, 9."
+                            },
+                            "is_dusthana": {
+                                "type": "boolean",
+                                "description": "True for houses 6, 8, 12."
+                            },
+                            "is_upachaya": {
+                                "type": "boolean",
+                                "description": "True for houses 3, 6, 10, 11."
+                            }
+                        },
+                        "required": [
+                            "bhava",
+                            "sign"
+                        ]
+                    },
+                    "description": "Twelve entries in order."
+                },
+                "planets": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "planet": {
+                                "type": "string",
+                                "description": "Graha name as supplied."
+                            },
+                            "longitude": {
+                                "type": "number",
+                                "description": "Sidereal longitude in degrees [0, 360)."
+                            },
+                            "bhava": {
+                                "type": "integer",
+                                "description": "House the graha falls in, 1-12."
+                            },
+                            "sign": {
+                                "type": "integer",
+                                "description": "Rashi it occupies, 0=Aries … 11=Pisces."
+                            }
+                        },
+                        "required": [
+                            "planet",
+                            "bhava"
+                        ]
+                    },
+                    "description": "Empty unless grahas were supplied."
+                }
+            },
+            "required": [
+                "lagna_sign",
+                "houses"
+            ]
+        })),
+        structured_key: None,
     }
 }
 

@@ -62,6 +62,145 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["natal_jd", "natal_lat", "natal_lon", "transit_jd"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "natal_jd": {
+                    "type": "number",
+                    "description": "Julian Day of the natal chart, echoed back."
+                },
+                "transit_jd": {
+                    "type": "number",
+                    "description": "Julian Day of the transit moment, echoed back."
+                },
+                "natal_positions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Body name."
+                            },
+                            "longitude": {
+                                "type": "number",
+                                "description": "Longitude in degrees [0, 360), sidereal when an ayanamsha was applied."
+                            },
+                            "latitude": {
+                                "type": "number",
+                                "description": "Ecliptic latitude in degrees."
+                            },
+                            "distance": {
+                                "type": "number",
+                                "description": "Distance from the observer in AU."
+                            },
+                            "speed": {
+                                "type": "number",
+                                "description": "Daily motion in degrees per day, negative when retrograde."
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "longitude",
+                            "latitude",
+                            "distance",
+                            "speed"
+                        ]
+                    },
+                    "description": "Natal positions used for the comparison."
+                },
+                "transit_positions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "Body name."
+                            },
+                            "longitude": {
+                                "type": "number",
+                                "description": "Longitude in degrees [0, 360), sidereal when an ayanamsha was applied."
+                            },
+                            "latitude": {
+                                "type": "number",
+                                "description": "Ecliptic latitude in degrees."
+                            },
+                            "distance": {
+                                "type": "number",
+                                "description": "Distance from the observer in AU."
+                            },
+                            "speed": {
+                                "type": "number",
+                                "description": "Daily motion in degrees per day, negative when retrograde."
+                            }
+                        },
+                        "required": [
+                            "name",
+                            "longitude",
+                            "latitude",
+                            "distance",
+                            "speed"
+                        ]
+                    },
+                    "description": "Positions at the transit moment."
+                },
+                "transit_natal_aspects": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "transit_body": {
+                                "type": "string",
+                                "description": "Transiting graha."
+                            },
+                            "transit_body_index": {
+                                "type": "integer",
+                                "description": "Index into transit_positions."
+                            },
+                            "natal_body": {
+                                "type": "string",
+                                "description": "Natal graha aspected."
+                            },
+                            "natal_body_index": {
+                                "type": "integer",
+                                "description": "Index into natal_positions."
+                            },
+                            "aspect_type": {
+                                "type": "string",
+                                "description": "Aspect name."
+                            },
+                            "aspect_angle": {
+                                "type": "number",
+                                "description": "Exact angle of the aspect in degrees."
+                            },
+                            "orb": {
+                                "type": "number",
+                                "description": "Departure from exact, in degrees."
+                            },
+                            "applying": {
+                                "type": "boolean",
+                                "description": "True when the aspect is closing."
+                            }
+                        },
+                        "required": [
+                            "transit_body",
+                            "natal_body",
+                            "aspect_type",
+                            "orb"
+                        ]
+                    }
+                }
+            },
+            "required": [
+                "natal_jd",
+                "transit_jd",
+                "natal_positions",
+                "transit_positions",
+                "transit_natal_aspects"
+            ]
+        })),
+        structured_key: None,
     }
 }
 
