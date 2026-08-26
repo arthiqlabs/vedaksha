@@ -285,7 +285,21 @@ impl McpServer {
     // Each function validates inputs via the tool's own `validate()` function
     // and dispatches to the underlying computation crates.
 
-    fn call_compute_natal(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+    /// Positions, ascendant and dignities for one moment and place.
+    ///
+    /// Extracted so `compute_vargas` divides the very chart
+    /// `compute_natal_chart` returns. A varga computed by a second
+    /// implementation could disagree with the D-1 it is derived from, and
+    /// nothing would catch it — the two surfaces have no oracle in common.
+    ///
+    /// Returns the chart and the ayanamsha actually applied, in degrees.
+    fn compute_sidereal_chart(
+        julian_day: f64,
+        latitude: f64,
+        geo_longitude: f64,
+        ayanamsha_name: Option<&str>,
+        house_system: vedaksha_astro::houses::HouseSystem,
+    ) -> Result<(vedaksha_astro::chart::ComputedChart, f64), McpError> {
         use vedaksha_ephem_core::analytical::AnalyticalProvider;
         use vedaksha_ephem_core::bodies::Body;
         use vedaksha_ephem_core::coordinates;
@@ -293,13 +307,8 @@ impl McpServer {
         use vedaksha_ephem_core::obliquity;
         use vedaksha_ephem_core::sidereal_time;
 
-        let input: crate::tools::compute_natal::ComputeNatalInput =
-            serde_json::from_value(args.clone())
-                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
-        crate::tools::compute_natal::validate(&input)?;
-
         let provider = AnalyticalProvider;
-        let jd = input.julian_day;
+        let jd = julian_day;
 
         // Compute positions for the 9 standard Jyotish bodies
         let bodies = [
@@ -349,41 +358,18 @@ impl McpServer {
         let jd_tt = vedaksha_ephem_core::delta_t::ut1_to_tt(jd);
         let (dpsi, deps) = nutation::nutation(jd_tt);
         let eps_true = obliquity::true_obliquity(jd_tt, deps);
-        let geo_lon_rad = input.longitude * core::f64::consts::PI / 180.0;
+        let geo_lon_rad = geo_longitude * core::f64::consts::PI / 180.0;
         let last = sidereal_time::local_sidereal_time(jd, geo_lon_rad, dpsi, eps_true);
         let ramc_deg = last * 180.0 / core::f64::consts::PI;
 
         // Obliquity in degrees
         let obliquity_deg = obliquity::mean_obliquity(jd_tt) * 180.0 / core::f64::consts::PI;
 
-        // Parse house system and ayanamsha
-        let house_system = match input.house_system.as_deref() {
-            Some(s) => match s.to_lowercase().as_str() {
-                "placidus" => vedaksha_astro::houses::HouseSystem::Placidus,
-                "koch" => vedaksha_astro::houses::HouseSystem::Koch,
-                "equal" => vedaksha_astro::houses::HouseSystem::Equal,
-                "wholesign" | "whole_sign" => vedaksha_astro::houses::HouseSystem::WholeSign,
-                "campanus" => vedaksha_astro::houses::HouseSystem::Campanus,
-                "regiomontanus" => vedaksha_astro::houses::HouseSystem::Regiomontanus,
-                "porphyry" => vedaksha_astro::houses::HouseSystem::Porphyry,
-                "morinus" => vedaksha_astro::houses::HouseSystem::Morinus,
-                "alcabitius" => vedaksha_astro::houses::HouseSystem::Alcabitius,
-                "sripathi" => vedaksha_astro::houses::HouseSystem::Sripathi,
-                _ => {
-                    return Err(McpError::invalid_parameter(
-                        "house_system",
-                        &format!("Unknown: {s}"),
-                    ));
-                }
-            },
-            None => vedaksha_astro::houses::HouseSystem::Placidus,
-        };
-
         // Delegates to the engine's own parser so this surface cannot drift from
         // the systems the engine actually has. A name that Vedaksha 5 accepted
         // but that no longer names a system is refused with the engine's
         // disposition message, never silently remapped.
-        let ayanamsha = match input.ayanamsha.as_deref() {
+        let ayanamsha = match ayanamsha_name {
             Some(s) => {
                 use std::str::FromStr as _;
                 match vedaksha_astro::sidereal::Ayanamsha::from_str(s) {
@@ -408,7 +394,7 @@ impl McpServer {
         let chart = vedaksha_astro::chart::compute_chart(
             &planet_data,
             ramc_deg,
-            input.latitude,
+            latitude,
             obliquity_deg,
             jd,
             &config,
@@ -424,6 +410,47 @@ impl McpServer {
         // `mcp_surface_parity` enforces it.
         let ayanamsha_value =
             ayanamsha.map_or(0.0, |a| vedaksha_astro::sidereal::ayanamsha_value(a, jd));
+
+        Ok((chart, ayanamsha_value))
+    }
+
+    fn call_compute_natal(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
+        let input: crate::tools::compute_natal::ComputeNatalInput =
+            serde_json::from_value(args.clone())
+                .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
+        crate::tools::compute_natal::validate(&input)?;
+
+        // Parse house system and ayanamsha
+        let house_system = match input.house_system.as_deref() {
+            Some(s) => match s.to_lowercase().as_str() {
+                "placidus" => vedaksha_astro::houses::HouseSystem::Placidus,
+                "koch" => vedaksha_astro::houses::HouseSystem::Koch,
+                "equal" => vedaksha_astro::houses::HouseSystem::Equal,
+                "wholesign" | "whole_sign" => vedaksha_astro::houses::HouseSystem::WholeSign,
+                "campanus" => vedaksha_astro::houses::HouseSystem::Campanus,
+                "regiomontanus" => vedaksha_astro::houses::HouseSystem::Regiomontanus,
+                "porphyry" => vedaksha_astro::houses::HouseSystem::Porphyry,
+                "morinus" => vedaksha_astro::houses::HouseSystem::Morinus,
+                "alcabitius" => vedaksha_astro::houses::HouseSystem::Alcabitius,
+                "sripathi" => vedaksha_astro::houses::HouseSystem::Sripathi,
+                _ => {
+                    return Err(McpError::invalid_parameter(
+                        "house_system",
+                        &format!("Unknown: {s}"),
+                    ));
+                }
+            },
+            None => vedaksha_astro::houses::HouseSystem::Placidus,
+        };
+
+        let jd = input.julian_day;
+        let (chart, ayanamsha_value) = Self::compute_sidereal_chart(
+            jd,
+            input.latitude,
+            input.longitude,
+            input.ayanamsha.as_deref(),
+            house_system,
+        )?;
 
         // Build output JSON
         let output = serde_json::json!({
@@ -992,26 +1019,121 @@ impl McpServer {
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::compute_vargas::validate(&input)?;
 
+        use vedaksha_vedic::varga::{VargaTradition, varga_sign_with_tradition};
+
+        let tradition = match input.tradition.as_deref() {
+            Some("element") => VargaTradition::Element,
+            _ => VargaTradition::Modality,
+        };
+        let tradition_name = match tradition {
+            VargaTradition::Element => "element",
+            VargaTradition::Modality => "modality",
+        };
+
+        // Resolve the division codes once, before any ephemeris work: an
+        // unknown code should cost the caller an error, not a chart.
+        let divisions: Vec<(String, vedaksha_vedic::varga::VargaType)> = input
+            .divisions
+            .iter()
+            .map(|name| {
+                parse_varga_type(name)
+                    .map(|t| (name.clone(), t))
+                    .map_err(|e| McpError::invalid_parameter("divisions", &e))
+            })
+            .collect::<Result<_, _>>()?;
+
+        // A bare longitude names no graha, so it has no dignity, and there is
+        // no lagna to count a bhava from. It gets the same envelope with those
+        // three absent rather than a different shape.
         if let Some(planet_lon) = input.planet_longitude {
-            // Compute varga sign for each requested division from the supplied
-            // sidereal longitude — no EphemerisProvider required.
-            let mut results = serde_json::Map::new();
-            for division_name in &input.divisions {
-                let varga_type = parse_varga_type(division_name)
-                    .map_err(|e| McpError::invalid_parameter("divisions", &e))?;
-                let sign = vedaksha_vedic::varga::varga_sign(planet_lon, varga_type);
-                results.insert(division_name.clone(), serde_json::json!(sign));
-            }
-            Ok(serde_json::Value::Object(results))
-        } else {
-            // Without `planet_longitude`, return a validation-only response
-            // listing the requested divisions. Direct varga computation
-            // requires the planet's sidereal longitude.
-            Ok(serde_json::json!({
-                "status": "validated",
-                "message": "Input validated. Provide planet_longitude for direct varga computation."
-            }))
+            let vargas: Vec<serde_json::Value> = divisions
+                .iter()
+                .map(|(name, varga)| {
+                    serde_json::json!({
+                        "division": name,
+                        "placements": [{
+                            "rashi_longitude": planet_lon,
+                            "varga_sign": varga_sign_with_tradition(planet_lon, *varga, tradition),
+                        }],
+                    })
+                })
+                .collect();
+            return Ok(serde_json::json!({
+                "julian_day": input.julian_day,
+                "ayanamsha_value": 0.0,
+                "tradition": tradition_name,
+                "vargas": vargas,
+            }));
         }
+
+        // The documented path, which returned a stub through v7.3.1.
+        //
+        // Positions and the ascendant come from the same chart routine
+        // compute_natal_chart uses, not a second implementation of it, so a
+        // varga can never disagree with the D-1 it is derived from.
+        // Whole-sign: a varga needs the ascendant's longitude, and nothing
+        // about the D-1 cusps. Whole-sign is also the system the bhava counting
+        // below assumes.
+        let (chart, ayanamsha_value) = Self::compute_sidereal_chart(
+            input.julian_day,
+            input.latitude,
+            input.longitude,
+            input.ayanamsha.as_deref(),
+            vedaksha_astro::houses::HouseSystem::WholeSign,
+        )?;
+
+        let vargas: Vec<serde_json::Value> = divisions
+            .iter()
+            .map(|(name, varga)| {
+                let lagna_sign = varga_sign_with_tradition(chart.houses.asc, *varga, tradition);
+                let placements: Vec<serde_json::Value> = chart
+                    .planets
+                    .iter()
+                    .map(|planet| {
+                        let varga_sign =
+                            varga_sign_with_tradition(planet.longitude, *varga, tradition);
+                        // Whole-sign bhavas counted from the varga lagna: the
+                        // sign holding the lagna is the 1st, the next the 2nd.
+                        let bhava = (varga_sign + 12 - lagna_sign) % 12 + 1;
+                        let dignity = vedaksha_astro::chart::name_to_dignity_planet(&planet.name)
+                            .map(|p| {
+                                format!(
+                                    "{:?}",
+                                    vedaksha_astro::dignity::dignity_of(
+                                        p,
+                                        vedaksha_astro::dignity::Sign::from_index(varga_sign),
+                                        vedaksha_astro::dignity::RulershipScheme::Traditional,
+                                    )
+                                )
+                            });
+                        let mut out = serde_json::json!({
+                            "planet": planet.name,
+                            "rashi_longitude": planet.longitude,
+                            "varga_sign": varga_sign,
+                            "bhava": bhava,
+                        });
+                        // Absent, not null: Rahu and Ketu have no essential
+                        // dignity, and saying "none" would read as a value.
+                        if let Some(dignity) = dignity {
+                            out["dignity"] = serde_json::Value::String(dignity);
+                        }
+                        out
+                    })
+                    .collect();
+                serde_json::json!({
+                    "division": name,
+                    "lagna_sign": lagna_sign,
+                    "placements": placements,
+                })
+            })
+            .collect();
+
+        Ok(serde_json::json!({
+            "julian_day": input.julian_day,
+            "ayanamsha_value": ayanamsha_value,
+            "tradition": tradition_name,
+            "vargas": vargas,
+        }))
     }
 
     fn call_compute_transit(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -2109,8 +2231,12 @@ mod tests {
         assert!(val["result"].is_object(), "expected a result, got: {val}");
         let text = val["result"]["content"][0]["text"].as_str().unwrap();
         let result: serde_json::Value = serde_json::from_str(text).unwrap();
+        // One envelope for both input shapes as of v7.4.0; the
+        // single-longitude path yields exactly one placement.
         assert_eq!(
-            result["D9"].as_u64().unwrap(),
+            result["vargas"][0]["placements"][0]["varga_sign"]
+                .as_u64()
+                .unwrap(),
             0,
             "0° Aries navamsha should be sign 0 (Aries)"
         );
@@ -2136,12 +2262,26 @@ mod tests {
         assert!(val["result"].is_object(), "expected a result, got: {val}");
         let text = val["result"]["content"][0]["text"].as_str().unwrap();
         let result: serde_json::Value = serde_json::from_str(text).unwrap();
+        let by_division = |code: &str| {
+            result["vargas"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| v["division"] == code)
+                .unwrap_or_else(|| panic!("no {code} in {result}"))
+                .clone()
+        };
         assert_eq!(
-            result["D1"].as_u64().unwrap(),
+            by_division("D1")["placements"][0]["varga_sign"]
+                .as_u64()
+                .unwrap(),
             1,
             "45° should be Taurus (D1 sign 1)"
         );
-        assert!(result["D9"].is_number(), "D9 result should be a number");
+        assert!(
+            by_division("D9")["placements"][0]["varga_sign"].is_number(),
+            "D9 result should be a number"
+        );
     }
 
     // ── search_transits validation ────────────────────────────────────────────

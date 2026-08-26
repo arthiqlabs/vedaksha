@@ -213,9 +213,12 @@ fn mcp_compute_vargas_matches_direct() {
                 continue;
             }
 
+            // v7.4.0 replaced the flat {division: sign} map with one envelope
+            // shared by both input shapes. The single-longitude path yields
+            // exactly one placement, and it names no graha.
             let mcp_sign = mcp_result
-                .get(varga_name)
-                .and_then(|v| v.as_u64())
+                .pointer("/vargas/0/placements/0/varga_sign")
+                .and_then(serde_json::Value::as_u64)
                 .map_or(255, |v| v as u8);
 
             if direct_sign == mcp_sign {
@@ -505,4 +508,162 @@ fn mcp_validation_rejects_bad_inputs() {
         pass as f64 / total as f64 > 0.90,
         "MCP validation rejection rate below 90%: {pass}/{total}"
     );
+}
+
+/// The documented path must compute, not describe itself.
+///
+/// Through v7.3.1 `compute_vargas` answered its own four required parameters
+/// with `{"status":"validated","message":"Provide planet_longitude ..."}` while
+/// its description promised a chart per division. This is the test that would
+/// have caught that: it asserts what the description claims, so a regression to
+/// any stub fails here rather than being discovered by a caller.
+#[test]
+fn mcp_compute_vargas_documented_path_returns_charts() {
+    let server = McpServer::new();
+
+    let result = call_tool(
+        &server,
+        "compute_vargas",
+        serde_json::json!({
+            "julian_day": 2451545.0,
+            "latitude": 28.6139,
+            "longitude": 77.2090,
+            "divisions": ["D1", "D9"],
+            "ayanamsha": "IndianOfficial"
+        }),
+    );
+
+    assert!(
+        result.get("status").is_none() && result.get("message").is_none(),
+        "the documented path returned a status/message stub: {result}"
+    );
+
+    let vargas = result["vargas"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no vargas array: {result}"));
+    assert_eq!(vargas.len(), 2, "one entry per requested division");
+
+    for varga in vargas {
+        assert!(
+            varga["lagna_sign"].as_u64().is_some_and(|s| s < 12),
+            "every varga carries its lagna: {varga}"
+        );
+        let placements = varga["placements"].as_array().unwrap();
+        assert_eq!(
+            placements.len(),
+            10,
+            "the same ten bodies compute_natal_chart returns"
+        );
+        for placement in placements {
+            assert!(placement["planet"].is_string(), "named graha: {placement}");
+            assert!(placement["varga_sign"].as_u64().is_some_and(|s| s < 12));
+            assert!(
+                placement["bhava"]
+                    .as_u64()
+                    .is_some_and(|b| (1..=12).contains(&b))
+            );
+            // Dignity is present for the seven grahas and absent for the three
+            // node variants, which have none. Stated rather than assumed.
+            let is_node = placement["planet"].as_str().unwrap().contains("Node");
+            assert_eq!(
+                placement.get("dignity").is_none(),
+                is_node,
+                "dignity presence must track whether the body has one: {placement}"
+            );
+        }
+    }
+
+    // The ayanamsha was applied before dividing, not ignored.
+    assert!(
+        result["ayanamsha_value"]
+            .as_f64()
+            .is_some_and(|a| a > 23.0 && a < 24.5),
+        "IndianOfficial at J2000 is ~23.86 deg, got {}",
+        result["ayanamsha_value"]
+    );
+}
+
+/// D-1 *is* the rashi chart, so `compute_vargas` must agree with
+/// `compute_natal_chart` body for body. This is what makes "the varga is
+/// derived from the D-1" a checked claim rather than a comment: the two
+/// surfaces would otherwise have no oracle in common.
+#[test]
+fn mcp_compute_vargas_d1_agrees_with_the_natal_chart() {
+    let server = McpServer::new();
+    let args = serde_json::json!({
+        "julian_day": 2451545.0,
+        "latitude": 28.6139,
+        "longitude": 77.2090,
+        "ayanamsha": "IndianOfficial"
+    });
+
+    let natal = call_tool(&server, "compute_natal_chart", args.clone());
+    let mut varga_args = args;
+    varga_args["divisions"] = serde_json::json!(["D1"]);
+    let vargas = call_tool(&server, "compute_vargas", varga_args);
+
+    let natal_planets = natal["planets"].as_array().unwrap();
+    let placements = vargas["vargas"][0]["placements"].as_array().unwrap();
+    assert_eq!(natal_planets.len(), placements.len());
+
+    for (natal_planet, placement) in natal_planets.iter().zip(placements) {
+        assert_eq!(natal_planet["name"], placement["planet"]);
+        assert_eq!(
+            natal_planet["sign_index"], placement["varga_sign"],
+            "D1 sign must equal the natal sign for {}",
+            natal_planet["name"]
+        );
+        assert_eq!(
+            natal_planet["longitude"], placement["rashi_longitude"],
+            "the same longitude must be divided as was reported"
+        );
+    }
+}
+
+/// The `element` tradition must actually change something, and only the four
+/// vargas where the texts diverge. A parameter that silently does nothing is
+/// worse than no parameter.
+#[test]
+fn mcp_compute_vargas_tradition_changes_only_the_four_divergent_vargas() {
+    let server = McpServer::new();
+    let base = serde_json::json!({
+        "julian_day": 2451545.0, "latitude": 28.6139, "longitude": 77.2090,
+        "divisions": ["D9", "D10", "D16", "D20", "D30", "D45"],
+        "ayanamsha": "IndianOfficial"
+    });
+
+    let modality = call_tool(&server, "compute_vargas", base.clone());
+    let mut element_args = base;
+    element_args["tradition"] = serde_json::json!("element");
+    let element = call_tool(&server, "compute_vargas", element_args);
+
+    let divergent = ["D16", "D20", "D30", "D45"];
+    let mut differed = Vec::new();
+    for (m, e) in modality["vargas"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(element["vargas"].as_array().unwrap())
+    {
+        let division = m["division"].as_str().unwrap();
+        if m["placements"] != e["placements"] || m["lagna_sign"] != e["lagna_sign"] {
+            differed.push(division.to_string());
+        }
+        if !divergent.contains(&division) {
+            assert_eq!(
+                m["placements"], e["placements"],
+                "{division} must be identical under both traditions"
+            );
+        }
+    }
+    assert!(
+        !differed.is_empty(),
+        "the element tradition changed nothing at all — the parameter is inert"
+    );
+    for division in &differed {
+        assert!(
+            divergent.contains(&division.as_str()),
+            "{division} changed, but only D16, D20, D30 and D45 should"
+        );
+    }
 }

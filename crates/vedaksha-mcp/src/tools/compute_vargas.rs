@@ -22,21 +22,41 @@ pub struct ComputeVargasInput {
     pub latitude: f64,
     /// Geographic longitude in degrees \[-180, +180\], east positive.
     pub longitude: f64,
-    /// Sidereal longitude of the planet in degrees \[0, 360\) for direct
-    /// varga computation without a full ephemeris lookup.
+    /// Sidereal longitude of a single body in degrees \[0, 360\).
+    ///
+    /// When supplied, only that longitude is divided and no ephemeris is
+    /// consulted; the result carries no graha name, no dignity and no bhava,
+    /// because none of the three is defined without knowing which body it is.
     pub planet_longitude: Option<f64>,
     /// List of varga division codes to compute, e.g. `["D1", "D9", "D10"]`.
     pub divisions: Vec<String>,
+    /// Sidereal system to rotate by before dividing. Defaults to `Tropical`,
+    /// matching `compute_natal_chart`.
+    pub ayanamsha: Option<String>,
+    /// Which Parashari reading to use where the texts diverge: `modality`
+    /// (default) or `element`. Affects D16, D20, D30 and D45 only.
+    pub tradition: Option<String>,
 }
+
+/// The varga traditions this tool accepts.
+pub const TRADITIONS: [&str; 2] = ["modality", "element"];
 
 /// Tool metadata for MCP tool-listing.
 #[must_use]
 pub fn definition() -> super::ToolDefinition {
     super::ToolDefinition {
         name: "compute_vargas",
-        description: "Compute Vedic divisional charts (vargas) for a given time and location. \
-            Supply a list of division codes (e.g. D1, D9, D10) and receive a ChartGraph JSON \
-            for each, including planetary positions and dignities within each varga.",
+        description: "Compute Vedic divisional charts (vargas). Given a time and place, \
+            returns one chart per requested division: the varga lagna, and for each of the ten \
+            bodies compute_natal_chart returns — the seven grahas plus the mean, true and \
+            osculating lunar node — its rashi longitude, the sign it occupies within that varga, \
+            its dignity in that sign, and its whole-sign bhava counted from the varga lagna. Ketu \
+            is not listed separately: it is the node's opposite point, 180 degrees away. The \
+            nodes carry no dignity, so that field is absent for them. Supply \
+            planet_longitude instead to divide a single longitude without an ephemeris lookup, \
+            in which case no graha name, dignity or bhava is returned because none is defined. \
+            Vargas are classically read on a sidereal zodiac: pass an ayanamsha, or accept the \
+            Tropical default this surface uses everywhere. Source: BPHS Ch. 6-7.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -64,19 +84,103 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "planet_longitude": {
                     "type": "number",
-                    "description": "Sidereal longitude of the planet in degrees [0, 360) for direct varga computation"
+                    "description": "Sidereal longitude of a single body in degrees [0, 360). \
+                        When supplied, only this longitude is divided and no ephemeris is \
+                        consulted; the result carries no graha name, dignity or bhava."
+                },
+                "ayanamsha": {
+                    "type": "string",
+                    "description": crate::tools::ayanamsha_schema_description(),
+                    "enum": crate::tools::ayanamsha_schema_enum()
+                },
+                "tradition": {
+                    "type": "string",
+                    "enum": TRADITIONS,
+                    "default": "modality",
+                    "description": "Which Parashari reading to use where the texts diverge. \
+                        'modality' (default) starts the division from a movable/fixed/dual \
+                        sign; 'element' starts it from a fire/earth/air/water sign. This \
+                        changes D16, D20, D30 and D45 only; every other varga is identical \
+                        under both. Source: BPHS Ch. 6; Phala Deepika Ch. 2."
                 }
             },
             "required": ["julian_day", "latitude", "longitude", "divisions"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
-        // No output schema: the tool's response does not match its description: called with its four \
-        // required parameters it returns a `status`/`message` stub, and the only \
-        // computing path needs the optional `planet_longitude`.
-        // MCP requires structuredContent to conform to a declared schema, so
-        // declaring one here would make the server non-conformant rather than
-        // better documented.
-        output_schema: None,
+        // Declarable at last. Through v7.3.1 this tool answered its own
+        // documented call with a `status`/`message` stub, and no schema can be
+        // honest about a contract that is not kept.
+        //
+        // `lagna_sign` and the per-placement `planet`, `dignity` and `bhava`
+        // are absent on the planet_longitude path and required on neither, for
+        // the reason the description gives: a bare longitude names no graha, so
+        // it has no dignity, and there is no lagna to count a bhava from.
+        output_schema: Some(serde_json::json!({
+            "type": "object",
+            "properties": {
+                "julian_day": {
+                    "type": "number",
+                    "description": "The Julian Day the vargas were computed for, echoed back."
+                },
+                "ayanamsha_value": {
+                    "type": "number",
+                    "description": "Mean ayanamsha applied before dividing, in degrees. Zero when Tropical."
+                },
+                "tradition": {
+                    "type": "string",
+                    "description": "The tradition actually used: 'modality' or 'element'."
+                },
+                "vargas": {
+                    "type": "array",
+                    "description": "One entry per requested division, in the order requested.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "division": {
+                                "type": "string",
+                                "description": "The division code as requested, e.g. D9."
+                            },
+                            "lagna_sign": {
+                                "type": "integer",
+                                "description": "Sign the ascendant occupies in this varga (0=Aries…11=Pisces). Absent when planet_longitude was supplied."
+                            },
+                            "placements": {
+                                "type": "array",
+                                "description": "One entry per graha, or a single entry for a supplied longitude.",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "planet": {
+                                            "type": "string",
+                                            "description": "Graha name. Absent for a supplied longitude."
+                                        },
+                                        "rashi_longitude": {
+                                            "type": "number",
+                                            "description": "The sidereal longitude that was divided, in degrees [0, 360)."
+                                        },
+                                        "varga_sign": {
+                                            "type": "integer",
+                                            "description": "Sign occupied within this varga (0=Aries…11=Pisces)."
+                                        },
+                                        "dignity": {
+                                            "type": "string",
+                                            "description": "Essential dignity in the varga sign. Absent for a supplied longitude, and for Rahu and Ketu, which have none."
+                                        },
+                                        "bhava": {
+                                            "type": "integer",
+                                            "description": "Whole-sign house counted from the varga lagna, 1-12. Absent when planet_longitude was supplied."
+                                        }
+                                    },
+                                    "required": ["rashi_longitude", "varga_sign"]
+                                }
+                            }
+                        },
+                        "required": ["division", "placements"]
+                    }
+                }
+            },
+            "required": ["julian_day", "tradition", "vargas"]
+        })),
         structured_key: None,
     }
 }
@@ -107,6 +211,15 @@ pub fn validate(input: &ComputeVargasInput) -> Result<(), McpError> {
         }
     }
 
+    if let Some(tradition) = &input.tradition {
+        if !TRADITIONS.contains(&tradition.as_str()) {
+            return Err(McpError::invalid_parameter(
+                "tradition",
+                &format!("must be one of: {}", TRADITIONS.join(", ")),
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -122,6 +235,8 @@ mod tests {
             longitude: 80.27,
             planet_longitude: None,
             divisions: vec!["D1".into(), "D9".into()],
+            ayanamsha: None,
+            tradition: None,
         }
     }
 

@@ -255,7 +255,16 @@ fn determine_house(longitude: f64, houses: &HouseCusps) -> u8 {
 }
 
 /// Map a planet name string to its [`DignityPlanet`] variant.
-fn name_to_dignity_planet(name: &str) -> Option<DignityPlanet> {
+///
+/// Public because dignity is asked for outside a D-1 chart too: `compute_vargas`
+/// needs it to state a graha's dignity in the sign it occupies *within* a varga.
+/// Exported rather than copied — the same projection written twice is how the
+/// MCP wire shape drifted from its own drift guard.
+///
+/// Returns `None` for anything without essential dignity, the lunar nodes
+/// included: Rahu and Ketu have no domicile or exaltation in this scheme.
+#[must_use]
+pub fn name_to_dignity_planet(name: &str) -> Option<DignityPlanet> {
     match name.to_lowercase().as_str() {
         "sun" => Some(DignityPlanet::Sun),
         "moon" => Some(DignityPlanet::Moon),

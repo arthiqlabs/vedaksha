@@ -176,6 +176,22 @@ fn sample_arguments() -> Vec<(&'static str, Value)> {
         ),
         ("compute_drishti", with_nodes),
         ("compute_bhavas", json!({ "ascendant": 15.0 })),
+        // Both paths, because they return the same envelope with different
+        // fields present — the single-longitude one names no graha.
+        (
+            "compute_vargas",
+            json!({
+                "julian_day": JD, "latitude": LAT, "longitude": LON,
+                "divisions": ["D1", "D9", "D30"], "ayanamsha": "IndianOfficial"
+            }),
+        ),
+        (
+            "compute_vargas",
+            json!({
+                "julian_day": JD, "latitude": LAT, "longitude": LON,
+                "divisions": ["D9"], "planet_longitude": 105.3
+            }),
+        ),
         (
             "compute_synastry",
             json!({ "chart_a": chart_a, "chart_b": chart_b }),
@@ -244,30 +260,29 @@ fn tools_without_a_schema_emit_no_structured_content() {
     let chart_json: Value =
         serde_json::from_str(chart["content"][0]["text"].as_str().unwrap()).unwrap();
 
-    for (tool, args) in [
-        (
-            "emit_graph",
-            json!({ "chart_json": chart_json, "format": "jsonld", "latitude": LAT, "longitude": LON }),
-        ),
-        (
-            "compute_vargas",
-            json!({ "julian_day": JD, "latitude": LAT, "longitude": LON, "divisions": ["D9"], "planet_longitude": 105.3 }),
-        ),
-    ] {
-        let definition = tool_definitions()
-            .into_iter()
-            .find(|t| t.name == tool)
-            .unwrap();
-        assert!(
-            definition.output_schema.is_none(),
-            "{tool} now declares an output schema — add it to the sample set above"
-        );
-        let result = call(&server, tool, args);
-        assert!(
-            result.get("structuredContent").is_none(),
-            "{tool} emitted structuredContent with no schema to validate it against"
-        );
-    }
+    // Every tool that declares no schema, which is now emit_graph alone —
+    // compute_vargas left this list at v7.4.0, when its documented path
+    // started computing something a schema could describe.
+    let unschemad: Vec<&str> = tool_definitions()
+        .iter()
+        .filter(|t| t.output_schema.is_none())
+        .map(|t| t.name)
+        .collect();
+    assert_eq!(
+        unschemad,
+        vec!["emit_graph"],
+        "the set of schema-less tools changed; give the new one a sample call or explain it here"
+    );
+
+    let result = call(
+        &server,
+        "emit_graph",
+        json!({ "chart_json": chart_json, "format": "jsonld", "latitude": LAT, "longitude": LON }),
+    );
+    assert!(
+        result.get("structuredContent").is_none(),
+        "emit_graph emitted structuredContent with no schema to validate it against"
+    );
 }
 
 /// The validator must be able to fail, or every assertion above is vacuous.
