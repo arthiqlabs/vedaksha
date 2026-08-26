@@ -13,7 +13,6 @@
     {
       "registryType": "oci",
       "identifier": "ghcr.io/arthiqlabs/vedaksha-mcp:v7.3.0",
-      "version": "7.3.0",
       "runtimeHint": "docker",
       "runtimeArguments": [
         {
