@@ -1,0 +1,38 @@
+# Publish server.json to the official MCP Registry, on demand.
+#
+# release.yml already does this on a tag. This exists for the case that
+# actually happened at v7.3.0: every irreversible publish succeeded and the
+# registry step alone failed, on a validation rule that is enforced by the
+# registry but absent from the published JSON Schema (OCI packages must not
+# carry `registryBaseUrl`).
+#
+# Re-running the failed job would not have helped — it checks out the tag,
+# which still carries the rejected file — and moving a published tag is not
+# something this project does. So the fix lands on the default branch and is
+# published from there.
+#
+# It only ever publishes the committed server.json, and only for the namespace
+# GitHub OIDC proves we own.
+name: Publish MCP Registry entry
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish server.json
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Show what will be published
+        run: cat server.json
+      - name: Install mcp-publisher
+        run: |
+          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+      - name: Authenticate to the MCP Registry
+        run: ./mcp-publisher login github-oidc
+      - name: Publish
+        run: ./mcp-publisher publish

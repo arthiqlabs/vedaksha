@@ -12,9 +12,8 @@
   "packages": [
     {
       "registryType": "oci",
-      "registryBaseUrl": "https://ghcr.io",
-      "identifier": "ghcr.io/arthiqlabs/vedaksha-mcp",
-      "version": "v7.3.0",
+      "identifier": "ghcr.io/arthiqlabs/vedaksha-mcp:v7.3.0",
+      "version": "7.3.0",
       "runtimeHint": "docker",
       "runtimeArguments": [
         {
