@@ -21,6 +21,14 @@ RUN case "$TARGETARCH" in \
 
 FROM debian:bookworm-slim
 
+# Ownership proof for the official MCP Registry. It refuses to list an OCI
+# package unless the image itself carries this label matching server.json's
+# `name` — the image is the claim, so the image has to make it. The v7.3.0
+# image predates this and is therefore not listable; the registry entry
+# regains its package block at the next release, when the image built from
+# that tag carries the label. `check_mcp_image_label.py` keeps the two in step.
+LABEL io.modelcontextprotocol.server.name="io.github.arthiqlabs/vedaksha"
+
 COPY --from=builder /app/target/release/vedaksha-mcp /usr/local/bin/vedaksha-mcp
 
 EXPOSE 3100

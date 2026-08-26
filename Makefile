@@ -38,6 +38,7 @@ gate:
 	$(PY) scripts/check_publish_order.py
 	$(PY) scripts/check_license_sync.py
 	$(PY) scripts/check_spdx_headers.py
+	$(PY) scripts/check_mcp_image_label.py
 	@echo "── tests ──"
 	$(CARGO) test --workspace --locked -- --skip analytical_oracle_regression
 	@echo ""
@@ -56,6 +57,7 @@ guards:
 	$(PY) scripts/check_publish_order.py
 	$(PY) scripts/check_license_sync.py
 	$(PY) scripts/check_spdx_headers.py
+	$(PY) scripts/check_mcp_image_label.py
 
 portability:
 	$(CARGO) check -p vedaksha-math --no-default-features --locked

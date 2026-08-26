@@ -84,6 +84,7 @@ jobs:
           python3 scripts/check_publish_order.py
           python3 scripts/check_license_sync.py
           python3 scripts/check_spdx_headers.py
+          python3 scripts/check_mcp_image_label.py
       # Same skip as ci.yml: analytical_oracle_regression walks all 24,350
       # committed oracle rows and belongs to the weekly release-profile tier.
       - name: Test

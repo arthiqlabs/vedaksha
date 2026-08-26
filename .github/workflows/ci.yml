@@ -235,6 +235,12 @@ jobs:
       - name: Every source file carries an SPDX identifier
         run: python3 scripts/check_spdx_headers.py
 
+      # The MCP Registry checks this only at publish time, which is AFTER
+      # crates.io, npm, PyPI, GHCR and the GitHub Release have gone out
+      # irreversibly. That is how v7.3.0 shipped with a red registry job.
+      - name: MCP image label matches server.json
+        run: python3 scripts/check_mcp_image_label.py
+
   spec-hygiene:
     name: Derivation-spec hygiene
     runs-on: ubuntu-latest
