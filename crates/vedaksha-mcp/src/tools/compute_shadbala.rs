@@ -61,18 +61,18 @@ pub fn definition() -> super::ToolDefinition {
                         "properties": {
                             "planet": { "type": "string", "description": "Planet name: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn" },
                             "sign":   { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sidereal sign index, which must agree with longitude (floor(longitude / 30))." },
-                            "longitude": { "type": "number", "minimum": 0, "maximum": 360 },
-                            "bhava": { "type": "integer", "minimum": 1, "maximum": 12 },
-                            "speed": { "type": "number" },
-                            "average_speed": { "type": "number" },
-                            "benefic_aspect_count": { "type": "integer", "default": 0 },
-                            "malefic_aspect_count": { "type": "integer", "default": 0 }
+                            "longitude": { "type": "number", "minimum": 0, "maximum": 360, "description": "Sidereal longitude in degrees [0, 360). Drives Uchcha, Ojhayugma and Drekkana Bala." },
+                            "bhava": { "type": "integer", "minimum": 1, "maximum": 12, "description": "House occupied, 1-12. Drives Dig Bala and Kendradi Bala." },
+                            "speed": { "type": "number", "description": "Current apparent speed in degrees per day, negative when retrograde. Drives Cheshta Bala." },
+                            "average_speed": { "type": "number", "description": "Mean daily motion in degrees per day, compared against speed for Cheshta Bala." },
+                            "benefic_aspect_count": { "type": "integer", "default": 0, "description": "Number of benefic aspects received. Drives Drik Bala." },
+                            "malefic_aspect_count": { "type": "integer", "default": 0, "description": "Number of malefic aspects received, subtracted in Drik Bala." }
                         },
                         "required": ["planet", "sign", "longitude", "bhava", "speed", "average_speed"]
                     }
                 },
-                "is_daytime": { "type": "boolean", "default": false },
-                "moon_phase_waxing": { "type": "boolean", "default": false }
+                "is_daytime": { "type": "boolean", "default": false, "description": "True if the birth moment falls between sunrise and sunset. Feeds Nathonnatha Bala within Kala Bala." },
+                "moon_phase_waxing": { "type": "boolean", "default": false, "description": "True during shukla paksha (waxing Moon). Feeds Paksha Bala within Kala Bala." }
             },
             "required": ["planets"]
         }),

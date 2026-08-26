@@ -167,6 +167,7 @@
           },
           "jupiter_retrograde": {
             "default": false,
+            "description": "True if Jupiter is retrograde. Accepted for symmetry; Jupiter's orb is 11 deg either way, so this does not change the result",
             "type": "boolean"
           },
           "mars": {
@@ -175,6 +176,7 @@
           },
           "mars_retrograde": {
             "default": false,
+            "description": "True if Mars is retrograde, which narrows its combustion orb from 17 deg to 8 deg",
             "type": "boolean"
           },
           "mercury": {
@@ -183,6 +185,7 @@
           },
           "mercury_retrograde": {
             "default": false,
+            "description": "True if Mercury is retrograde, which narrows its combustion orb from 14 deg to 12 deg (BPHS Ch. 7 vv. 28-29)",
             "type": "boolean"
           },
           "moon": {
@@ -195,6 +198,7 @@
           },
           "saturn_retrograde": {
             "default": false,
+            "description": "True if Saturn is retrograde. Accepted for symmetry; Saturn's orb is 16 deg either way, so this does not change the result",
             "type": "boolean"
           },
           "sun": {
@@ -207,6 +211,7 @@
           },
           "venus_retrograde": {
             "default": false,
+            "description": "True if Venus is retrograde, which narrows its combustion orb from 10 deg to 8 deg",
             "type": "boolean"
           }
         },
@@ -229,10 +234,12 @@
         "properties": {
           "is_daytime": {
             "default": false,
+            "description": "True if the birth moment falls between sunrise and sunset. Feeds Nathonnatha Bala within Kala Bala.",
             "type": "boolean"
           },
           "moon_phase_waxing": {
             "default": false,
+            "description": "True during shukla paksha (waxing Moon). Feeds Paksha Bala within Kala Bala.",
             "type": "boolean"
           },
           "planets": {
@@ -240,24 +247,29 @@
             "items": {
               "properties": {
                 "average_speed": {
+                  "description": "Mean daily motion in degrees per day, compared against speed for Cheshta Bala.",
                   "type": "number"
                 },
                 "benefic_aspect_count": {
                   "default": 0,
+                  "description": "Number of benefic aspects received. Drives Drik Bala.",
                   "type": "integer"
                 },
                 "bhava": {
+                  "description": "House occupied, 1-12. Drives Dig Bala and Kendradi Bala.",
                   "maximum": 12,
                   "minimum": 1,
                   "type": "integer"
                 },
                 "longitude": {
+                  "description": "Sidereal longitude in degrees [0, 360). Drives Uchcha, Ojhayugma and Drekkana Bala.",
                   "maximum": 360,
                   "minimum": 0,
                   "type": "number"
                 },
                 "malefic_aspect_count": {
                   "default": 0,
+                  "description": "Number of malefic aspects received, subtracted in Drik Bala.",
                   "type": "integer"
                 },
                 "planet": {
@@ -271,6 +283,7 @@
                   "type": "integer"
                 },
                 "speed": {
+                  "description": "Current apparent speed in degrees per day, negative when retrograde. Drives Cheshta Bala.",
                   "type": "number"
                 }
               },
@@ -528,6 +541,7 @@
       "inputSchema": {
         "properties": {
           "jupiter": {
+            "description": "Sign index of Jupiter (0=Aries…11=Pisces)",
             "maximum": 11,
             "minimum": 0,
             "type": "integer"
@@ -539,21 +553,25 @@
             "type": "integer"
           },
           "mars": {
+            "description": "Sign index of Mars (0=Aries…11=Pisces)",
             "maximum": 11,
             "minimum": 0,
             "type": "integer"
           },
           "mercury": {
+            "description": "Sign index of Mercury (0=Aries…11=Pisces)",
             "maximum": 11,
             "minimum": 0,
             "type": "integer"
           },
           "moon": {
+            "description": "Sign index of Moon (0=Aries…11=Pisces)",
             "maximum": 11,
             "minimum": 0,
             "type": "integer"
           },
           "saturn": {
+            "description": "Sign index of Saturn (0=Aries…11=Pisces)",
             "maximum": 11,
             "minimum": 0,
             "type": "integer"
@@ -565,6 +583,7 @@
             "type": "integer"
           },
           "venus": {
+            "description": "Sign index of Venus (0=Aries…11=Pisces)",
             "maximum": 11,
             "minimum": 0,
             "type": "integer"

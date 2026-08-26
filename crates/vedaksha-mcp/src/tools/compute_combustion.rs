@@ -48,11 +48,11 @@ pub fn definition() -> super::ToolDefinition {
                 "jupiter": { "type": "number", "description": "Sidereal longitude of Jupiter [0, 360)" },
                 "venus":   { "type": "number", "description": "Sidereal longitude of Venus [0, 360)" },
                 "saturn":  { "type": "number", "description": "Sidereal longitude of Saturn [0, 360)" },
-                "mercury_retrograde": { "type": "boolean", "default": false },
-                "venus_retrograde":   { "type": "boolean", "default": false },
-                "mars_retrograde":    { "type": "boolean", "default": false },
-                "jupiter_retrograde": { "type": "boolean", "default": false },
-                "saturn_retrograde":  { "type": "boolean", "default": false }
+                "mercury_retrograde": { "type": "boolean", "default": false, "description": "True if Mercury is retrograde, which narrows its combustion orb from 14 deg to 12 deg (BPHS Ch. 7 vv. 28-29)" },
+                "venus_retrograde":   { "type": "boolean", "default": false, "description": "True if Venus is retrograde, which narrows its combustion orb from 10 deg to 8 deg" },
+                "mars_retrograde":    { "type": "boolean", "default": false, "description": "True if Mars is retrograde, which narrows its combustion orb from 17 deg to 8 deg" },
+                "jupiter_retrograde": { "type": "boolean", "default": false, "description": "True if Jupiter is retrograde. Accepted for symmetry; Jupiter's orb is 11 deg either way, so this does not change the result" },
+                "saturn_retrograde":  { "type": "boolean", "default": false, "description": "True if Saturn is retrograde. Accepted for symmetry; Saturn's orb is 16 deg either way, so this does not change the result" }
             },
             "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn"]
         }),

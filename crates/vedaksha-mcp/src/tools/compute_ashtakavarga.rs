@@ -40,12 +40,12 @@ pub fn definition() -> super::ToolDefinition {
             "type": "object",
             "properties": {
                 "sun":     { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Sun (0=Aries…11=Pisces)" },
-                "moon":    { "type": "integer", "minimum": 0, "maximum": 11 },
-                "mars":    { "type": "integer", "minimum": 0, "maximum": 11 },
-                "mercury": { "type": "integer", "minimum": 0, "maximum": 11 },
-                "jupiter": { "type": "integer", "minimum": 0, "maximum": 11 },
-                "venus":   { "type": "integer", "minimum": 0, "maximum": 11 },
-                "saturn":  { "type": "integer", "minimum": 0, "maximum": 11 },
+                "moon":    { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Moon (0=Aries…11=Pisces)" },
+                "mars":    { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Mars (0=Aries…11=Pisces)" },
+                "mercury": { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Mercury (0=Aries…11=Pisces)" },
+                "jupiter": { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Jupiter (0=Aries…11=Pisces)" },
+                "venus":   { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Venus (0=Aries…11=Pisces)" },
+                "saturn":  { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Saturn (0=Aries…11=Pisces)" },
                 "lagna":   { "type": "integer", "minimum": 0, "maximum": 11, "description": "Sign index of Lagna (Ascendant)" }
             },
             "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "lagna"]
