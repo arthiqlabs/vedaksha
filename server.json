@@ -8,5 +8,33 @@
     "url": "https://github.com/arthiqlabs/vedaksha",
     "source": "github",
     "id": "1208354593"
-  }
+  },
+  "packages": [
+    {
+      "registryType": "oci",
+      "registryBaseUrl": "https://ghcr.io",
+      "identifier": "ghcr.io/arthiqlabs/vedaksha-mcp",
+      "version": "v7.2.0",
+      "runtimeHint": "docker",
+      "runtimeArguments": [
+        {
+          "type": "positional",
+          "value": "--rm"
+        },
+        {
+          "type": "positional",
+          "value": "-i"
+        }
+      ],
+      "packageArguments": [
+        {
+          "type": "positional",
+          "value": "--stdio"
+        }
+      ],
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
 }
