@@ -277,7 +277,12 @@ jobs:
 
   publish-mcp-registry:
     name: Publish to MCP Registry
-    needs: [version-check, test]
+    # Depends on `docker` because server.json declares the published image as
+    # an installable OCI package from v7.3.0. Publishing the registry entry
+    # first would advertise ghcr.io/arthiqlabs/vedaksha-mcp:<tag> to every MCP
+    # client while that tag did not yet exist — a pull failure for anyone who
+    # resolved it in the window between the two jobs.
+    needs: [version-check, test, docker]
     runs-on: ubuntu-latest
     permissions:
       # OIDC is what proves we own the io.github.arthiqlabs namespace. No token
