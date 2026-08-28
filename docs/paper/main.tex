@@ -80,7 +80,97 @@ independent numerical validation against a public ephemeris oracle; Section~4 de
 software's distribution channels, interfaces, and licensing; and Section~5 concludes.
 
 \section{Methods}
-PLACEHOLDER -- replaced in Task 4.
+
+\subsection{Analytical ephemeris pipeline}
+
+Vedaksha computes planetary positions for Mercury through Neptune from the VSOP87A analytical
+theory \citep{bretagnon1988vsop87} and lunar positions from the ELP/MPP02 lunar theory
+\citep{chapront2003elpmpp02}. Both are evaluated as truncated trigonometric series against
+coefficient tables generated once from the IMCCE primary distributions and committed to the
+repository as generated Rust source, so this analytical pipeline needs no external data file at
+runtime. As measured directly (\texttt{find crates/vedaksha-ephem-core/src/analytical/
+coefficients/ -type f | wc -l}), the committed coefficient tree currently holds 331 files,
+consistent with the 331-file, roughly 30,000-retained-term count recorded in
+\texttt{MAINTENANCE.md} \S10. VSOP87A and ELP/MPP02 are evaluated in the dynamical equinox and
+ecliptic of J2000.0 as their respective authors defined it, using the corresponding IAU 1976
+obliquity value of 84381.448 arcseconds rather than the IAU 2006 value used elsewhere in the
+engine, because rotating either series's output by the IAU 2006 value instead would introduce a
+0.042 arcsecond frame error against the theory being evaluated.
+
+\subsection{Numerical ephemeris pipeline}
+
+As a second, independently implemented path behind the same \texttt{EphemerisProvider} trait,
+Vedaksha reads the JPL DE440s SPK kernel distributed by NASA's Navigation and Ancillary
+Information Facility \citep{naif2021de440s} through its own NAIF DAF/SPK binary-format parser
+and evaluates the kernel's Chebyshev polynomial position segments (SPK data type 2) directly,
+without depending on an existing SPICE toolkit implementation. Read from the kernel's own
+segment headers, DE440s covers 1850-01-01 to 2150-01-01; requests outside that span are rejected
+rather than extrapolated. The analytical pipeline above requires no data file and is used where
+one cannot be shipped, such as WebAssembly and edge/Cloudflare Workers deployments, while the
+SPK pipeline is offered as an installable sub-arcsecond ephemeris tier in the Python binding.
+The two pipelines are cross-checked against each other and, independently of both, against
+apparent geocentric ecliptic positions served by the NASA/JPL Horizons system, which serves the
+DE441 ephemeris rather than DE440s and is therefore a genuinely separate numerical source: a
+public web oracle used only to validate the two shipped pipelines' output, never a kernel
+Vedaksha reads locally.
+
+\subsection{Reference frame handling}
+
+Positions are converted from the J2000.0 mean equatorial frame to the mean equatorial frame of
+date by precession, then to the true equatorial frame of date by nutation, before rotation into
+the ecliptic of date. Precession uses the IAU 2006 model in its P03 four-angle
+Fukushima--Williams parameterization of Capitaine, Wallace \& Chapront
+\citep{capitaine2003precession}, composed as the rotation product
+$R_x(-\epsilon_A)\,R_z(-\bar\psi)\,R_x(\bar\phi)\,R_z(\bar\gamma)$, in which -- per
+\texttt{MAINTENANCE.md} \S10 -- the rotation order is the entire content of the expression:
+reversing it changes the result by a negligible 0.014 milliarcsecond at J2000.0 but by 0.56
+arcsecond at 499~CE, an error invisible to any test that samples only the 1900--2100 window.
+This composition is checked, in the test \texttt{precession\_matrix\_matches\_erfa\_across\_
+six\_millennia}, against the IAU SOFA board's ERFA library (BSD-3; used here only as a numerical
+verification oracle, never as a source of shipped position data) via its \texttt{eraEqec06}
+routine at four epochs spanning 6100 years. Nutation in longitude and obliquity is evaluated
+from the IAU 2000B truncated 77-term series.
+
+\subsection{Sidereal (ayanamsha) conversion}
+
+Vedic astrology charts are cast against the sidereal zodiac, which requires subtracting an
+ayanamsha -- the angular offset between the tropical and sidereal zero points -- from a tropical
+longitude. Vedaksha implements eleven ayanamsha systems, each derived forward from a named
+primary source rather than reverse-engineered from another implementation's output. The
+normative derivation record is \texttt{docs/audit/2026-08-17-ayanamsha-cleanroom/spec.md}, with
+its machine-readable inputs in the same directory's \texttt{derivation-inputs.json}: the Indian
+official (Lahiri / Chitra-paksha) ayanamsha from \emph{The Indian Astronomical Ephemeris 2022};
+Fagan--Bradley from Fagan \& Firebrace's \emph{Primer of Sidereal Astrology}; Krishnamurti (KP)
+from Krishnamurti's \emph{Krishnamurti Padhdhati Vol-I}; Raman from B.\,V.\,Raman's \emph{A
+Manual of Hindu Astrology} (1935); Surya Siddhanta from the Surya Siddhanta itself (Ch.~3,
+vv.~9--12); Yukteshwar from Yukteswar's \emph{The Holy Science} (1894); the star-anchored
+Revati-paksha and True Chitra ayanamshas, fixed respectively to $\zeta$~Piscium and Spica;
+Pushya-paksha from Narasimha Rao's published proposal; True Mula (Chandra Hari) from Chandra
+Hari's paper in the \emph{Indian Journal of History of Science} 33(4), 1998; and a Galactic
+Centre ayanamsha anchored at 0$^\circ$ Sagittarius. Star positions for the star-anchored systems
+are taken from the van Leeuwen (2007) re-reduction of the Hipparcos catalogue via VizieR,
+cross-checked against the original 1997 Hipparcos catalogue. Each ayanamsha is independently
+implemented twice -- once in the Rust engine and once in a Python reference script that
+regenerates a committed fixture from the same input file -- and the two agree to
+$5.7\times10^{-14}$ degrees over 192 comparisons spanning 6000 years.
+
+\subsection{Clean-room methodology}
+
+Every source consulted for the pipelines above was fetched directly from its issuing scientific
+agency, with no intermediate copyleft-licensed codebase in the provenance chain: the VSOP87A and
+ELP/MPP02 coefficient data were fetched from IMCCE's and IMCCE/SYRTE's own FTP distributions
+respectively, and the DE440s SPK kernel was fetched from NAIF's own distribution server.
+\texttt{DATA\_PROVENANCE.md}, committed at the repository root, records for each of these the
+fetch date, license status, and, where established, a content hash verified by the fetch script
+itself: the DE440s kernel and the JPL Horizons oracle each carry a pinned and verified SHA256,
+while the VSOP87A ledger entry instead records that a SHA256 ledger for that source is an open
+follow-up, since its IMCCE FTP primary is currently treated as byte-stable rather than
+independently hash-pinned. No Swiss Ephemeris source code, header file, or documentation was
+consulted at any point in deriving the VSOP87A, ELP/MPP02, or DE440s pipelines described in this
+section. The project's one documented instance of consulting a Swiss Ephemeris header --- to
+identify three early ayanamsha numeric constants, all three of which were subsequently
+independently re-derived from the primary sources listed above --- is confined to the
+sidereal-conversion layer and is discussed in Section~1 and in \texttt{DATA\_PROVENANCE.md}.
 
 \section{Validation}
 PLACEHOLDER -- replaced in Task 5.
