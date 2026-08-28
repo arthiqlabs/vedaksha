@@ -204,8 +204,8 @@ Table~\ref{tab:oracle} reports the residuals it measured and printed, split at 2
 the date past which \texttt{delta\_t.rs} stops interpolating measured IERS $\Delta T$ values and
 starts extrapolating them. The 2026--2100 mean is not printed by the test itself (which asserts
 only a per-point ceiling for that era); it was computed for this paper directly from the same run's
-24,350-row per-comparison output, and the resulting $n$ and max independently reproduce the values
-the test itself printed for that era, which serves as a cross-check on the computation.
+24,350-row per-comparison output, and the resulting max independently reproduces the value
+the test itself printed for that era ($n$ follows by construction: 24,350 total minus 15,350 measured-era comparisons, with zero skipped).
 
 \begin{table}[h]
 \centering
