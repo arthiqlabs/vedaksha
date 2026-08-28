@@ -13,11 +13,57 @@
 \maketitle
 
 \begin{abstract}
-PLACEHOLDER -- replaced in Task 3.
+Vedaksha is a clean-room ephemeris and Vedic astrology (jyotish) computation engine written
+in Rust. It computes planetary positions from the analytical VSOP87A and ELP/MPP02 series and
+from JPL DE440s/DE441 SPK numerical kernels, and derives from them the constructs used in
+Vedic astrology --- nakshatras, dashas, vargas (divisional charts), panchanga, shadbala, and
+muhurta --- exposed through native Rust, Python, WebAssembly, and Model Context Protocol (MCP)
+interfaces.
+% TODO(Task 5): insert re-measured mean/max residual figure here once Validation section is written
+Every algorithm is derived directly from a cited primary source rather than from an existing
+implementation: no source code, header, or documentation of the GNU Affero General Public
+Licensed (AGPL) Swiss Ephemeris library, on which prior Vedic astrology software has commonly
+relied, was consulted at any point in the engine's construction. This clean-room provenance is
+not merely asserted: it is documented per data source, with fetch dates and content hashes, in a
+public provenance ledger, and specific re-derivations carry dated, auditable clean-room evidence
+trails. Vedaksha is released under the Business Source License 1.1 (converting to Apache License
+2.0 four years after each version's release) and is distributed via crates.io, PyPI, npm, and
+GitHub.
 \end{abstract}
 
 \section{Introduction}
-PLACEHOLDER -- replaced in Task 3.
+
+Software for computing Vedic astrology (jyotish) charts requires, as its foundation, a
+planetary ephemeris of at least sub-arcsecond precision. In practice, the dominant ephemeris
+used by existing Vedic astrology software --- commercial and open source alike --- is the Swiss
+Ephemeris library, which is dual-licensed under the GNU Affero General Public License or a
+separate commercial Swiss Ephemeris Professional license. A
+developer who wants to build or redistribute a Vedic astrology tool under a different license,
+or who wants to independently audit where a returned planetary position actually comes from,
+is left with two options: adopt Swiss Ephemeris's AGPL obligations (or pay for its commercial
+license), or hand-verify numerical tables against published references without any systematic
+provenance trail. Neither option gives a permissively-licensable, provenance-auditable
+alternative. Vedaksha was built to close that gap.
+
+By ``clean-room'' we mean specifically this: every algorithm and constant in Vedaksha is derived
+from a primary source --- a peer-reviewed analytical theory such as VSOP87A for the major
+planets or ELP/MPP02 for the Moon \citep{chapront2003elpmpp02}, or a numerical kernel
+distributed by a national agency, such as the JPL DE440s/DE441 SPK ephemerides --- and no source
+code, header file, or documentation belonging to an existing proprietary or copyleft-licensed
+ephemeris implementation was consulted at any stage. This claim is deliberately made verifiable
+rather than asserted on trust: \texttt{DATA\_PROVENANCE.md}, committed at the root of the
+repository, lists every external data source the project ingests, together with its primary
+URL, license status, fetch date, and a content hash where one applies; and the \texttt{docs/audit/}
+directory carries dated, per-derivation clean-room records --- including a firewall-enforcement
+transcript for the 2026-08-17 re-derivation of the ayanamsha (sidereal-zodiac offset) constants
+--- that document what was and was not consulted at the time each derivation was made public.
+These records are public alongside the code, not retrospective summaries, so a downstream user
+can check the provenance claim against the same evidence this paper cites.
+
+The remainder of this paper is organized as follows: Section~2 describes the engine's
+architecture and the ephemeris and jyotish computation methods it implements; Section~3 reports
+independent numerical validation against a public ephemeris oracle; Section~4 describes the
+software's distribution channels, interfaces, and licensing; and Section~5 concludes.
 
 \section{Methods}
 PLACEHOLDER -- replaced in Task 4.
