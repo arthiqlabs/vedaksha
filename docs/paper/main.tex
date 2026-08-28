@@ -15,7 +15,8 @@
 \begin{abstract}
 Vedaksha is a clean-room ephemeris and Vedic astrology (jyotish) computation engine written
 in Rust. It computes planetary positions from the analytical VSOP87A and ELP/MPP02 series and
-from JPL DE440s/DE441 SPK numerical kernels, and derives from them the constructs used in
+from the JPL DE440s SPK numerical kernel --- validated against an independent JPL DE441
+ephemeris served by the NASA/JPL Horizons system --- and derives from them the constructs used in
 Vedic astrology --- nakshatras, dashas, vargas (divisional charts), panchanga, shadbala, and
 muhurta --- exposed through native Rust, Python, WebAssembly, and Model Context Protocol (MCP)
 interfaces.
@@ -52,7 +53,9 @@ alternative. Vedaksha was built to close that gap.
 By ``clean-room'' we mean specifically this: every algorithm and constant in Vedaksha is derived
 from a primary source --- a peer-reviewed analytical theory such as VSOP87A for the major
 planets or ELP/MPP02 for the Moon \citep{chapront2003elpmpp02}, or a numerical kernel
-distributed by a national agency, such as the JPL DE440s/DE441 SPK ephemerides --- and the
+distributed by a national agency, such as the JPL DE440s SPK ephemeris --- independently
+validated against a JPL DE441 ephemeris served by the NASA/JPL Horizons web service, which is
+never itself ingested as a local kernel --- and the
 algorithms and constants shipped in the current release contain no source code, header file, or
 documentation belonging to an existing proprietary or copyleft-licensed ephemeris implementation.
 The project's history is more instructive than a blanket denial: three early ayanamsha
