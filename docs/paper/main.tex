@@ -2,6 +2,7 @@
 \usepackage[margin=1in]{geometry}
 \usepackage{natbib}
 \usepackage{booktabs}
+\usepackage{array}
 \usepackage{hyperref}
 \usepackage{amsmath}
 
@@ -296,7 +297,7 @@ at engine version 7.4.0:
 \begin{table}[h]
 \centering
 \small
-\begin{tabular}{@{}lp{4.4cm}p{5.8cm}@{}}
+\begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{5.6cm}@{}}
 \toprule
 Surface & Install & Notes \\
 \midrule
