@@ -24,8 +24,8 @@ Every algorithm is derived directly from a cited primary source rather than from
 implementation: the ephemeris and sidereal-conversion algorithms as shipped in the current
 release contain no source code, header, or documentation from the GNU Affero General Public
 Licensed (AGPL) Swiss Ephemeris library, on which prior Vedic astrology software has commonly
-relied. (Two early sidereal-offset constants were briefly cross-referenced against a published
-Swiss Ephemeris header solely to identify a numeric value; both were independently re-derived
+relied. (Three early sidereal-offset constants were briefly cross-referenced against a published
+Swiss Ephemeris header solely to identify a numeric value; all three were independently re-derived
 from cited primary sources in a subsequent clean-room pass, documented below.) This clean-room
 provenance is not merely asserted: it is documented per data source, with fetch dates and,
 where established, content hashes, in a public provenance ledger, and specific re-derivations
@@ -55,10 +55,10 @@ planets or ELP/MPP02 for the Moon \citep{chapront2003elpmpp02}, or a numerical k
 distributed by a national agency, such as the JPL DE440s/DE441 SPK ephemerides --- and the
 algorithms and constants shipped in the current release contain no source code, header file, or
 documentation belonging to an existing proprietary or copyleft-licensed ephemeris implementation.
-The project's history is more instructive than a blanket denial: two early ayanamsha
+The project's history is more instructive than a blanket denial: three early ayanamsha
 (sidereal-zodiac offset) constants were originally identified by reading a published header file
 of the AGPL-licensed Swiss Ephemeris library to find a numeric value --- no source code was
-copied, and the numeric constants themselves are uncopyrightable facts --- and both were
+copied, and the numeric constants themselves are uncopyrightable facts --- and all three were
 subsequently re-derived from independently cited primary sources in a 2026-08 clean-room pass
 that first removed the original values from the working tree, so the re-derivation could not see
 its own target. This claim is deliberately made verifiable
