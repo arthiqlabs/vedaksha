@@ -69,3 +69,6 @@ docs/plans/
 # another project's codebase becomes a handoff note, never a commit in their
 # tree. They must never reach this public repo.
 HANDOFF-*.md
+
+# arXiv preprint build output
+docs/paper/build/
