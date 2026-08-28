@@ -35,6 +35,25 @@
   note    = {Table 1. Verified verbatim against DATA\_PROVENANCE.md lines 85--86, 2026-08-28}
 }
 
+% NOTE: DATA_PROVENANCE.md line 132 gives only "AJ 165, 49" plus the DOI for this
+% paper -- no title, and its page field is a single locator ("49"), not a range.
+% Per this project's no-fabrication rule, the title is not filled in here even
+% though crates/vedaksha-astro/src/sidereal.rs's SGR_A_STAR doc comment states one
+% (that file is not DATA_PROVENANCE.md, which is the source this entry is checked
+% against). "AJ" is expanded to its standard full journal name, matching how
+% DATA_PROVENANCE.md's own "A&A" abbreviation is expanded for the other entries
+% in this file; that is a naming-convention expansion, not an invented fact.
+@article{gordon2023sgra,
+  author  = {Gordon, D. and de Witt, A. and Jacobs, C. S.},
+  journal = {The Astronomical Journal},
+  year    = {2023},
+  volume  = {165},
+  pages   = {49},
+  doi     = {10.3847/1538-3881/aca65b},
+  note    = {Verified against DATA\_PROVENANCE.md line 132, 2026-08-28. Title omitted --
+             not stated in that source.}
+}
+
 @misc{naif2021de440s,
   author       = {{NAIF/JPL}},
   title        = {{JPL DE440s SPK} kernel (numerical planetary and lunar ephemeris)},
