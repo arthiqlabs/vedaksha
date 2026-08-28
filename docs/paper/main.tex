@@ -18,16 +18,15 @@ Vedaksha is a clean-room ephemeris and Vedic astrology (jyotish) computation eng
 in Rust. It computes planetary positions from the analytical VSOP87A and ELP/MPP02 series and
 from the JPL DE440s SPK numerical kernel --- validated against an independent JPL DE441
 ephemeris served by the NASA/JPL Horizons system to a mean residual of 0.103 arcseconds (maximum
-1.187 arcseconds) over 15,350 comparisons spanning 1900--2025, re-measured for this paper -- and
+1.187 arcseconds) over 15,350 comparisons spanning 1900--2025, re-measured for this paper --- and
 derives from them the constructs used in
 Vedic astrology --- nakshatras, dashas, vargas (divisional charts), panchanga, shadbala, and
 muhurta --- exposed through native Rust, Python, WebAssembly, and Model Context Protocol (MCP)
 interfaces.
 Every algorithm is derived directly from a cited primary source rather than from an existing
 implementation: the ephemeris and sidereal-conversion algorithms as shipped in the current
-release contain no source code, header, or documentation from the GNU Affero General Public
-Licensed (AGPL) Swiss Ephemeris library, on which prior Vedic astrology software has commonly
-relied. (Three early sidereal-offset constants were briefly cross-referenced against a published
+release contain no source code, header, or documentation from the AGPL-licensed Swiss Ephemeris
+library, on which prior Vedic astrology software has commonly relied. (Three early sidereal-offset constants were briefly cross-referenced against a published
 Swiss Ephemeris header solely to identify a numeric value; all three were independently re-derived
 from cited primary sources in a subsequent clean-room pass, documented below.) This clean-room
 provenance is not merely asserted: it is documented per data source, with fetch dates and,
@@ -56,7 +55,7 @@ By ``clean-room'' we mean specifically this: every algorithm and constant in Ved
 from a primary source --- a peer-reviewed analytical theory such as VSOP87A for the major
 planets or ELP/MPP02 for the Moon \citep{chapront2003elpmpp02}, or a numerical kernel
 distributed by a national agency, such as the JPL DE440s SPK ephemeris --- independently
-validated against a JPL DE441 ephemeris served by the NASA/JPL Horizons web service, which is
+validated against a JPL DE441 ephemeris served by the NASA/JPL Horizons system, which is
 never itself ingested as a local kernel --- and the
 algorithms and constants shipped in the current release contain no source code, header file, or
 documentation belonging to an existing proprietary or copyleft-licensed ephemeris implementation.
@@ -76,10 +75,15 @@ transcript for the 2026-08-17 re-derivation of the ayanamsha (sidereal-zodiac of
 These records are public alongside the code, not retrospective summaries, so a downstream user
 can check the provenance claim against the same evidence this paper cites.
 
-The remainder of this paper is organized as follows: Section~2 describes the engine's
-architecture and the ephemeris and jyotish computation methods it implements; Section~3 reports
-independent numerical validation against a public ephemeris oracle; Section~4 describes the
-software's distribution channels, interfaces, and licensing; and Section~5 concludes.
+The remainder of this paper is organized as follows: Section~2 describes the ephemeris pipeline
+--- the analytical and numerical position computations, reference-frame handling, ayanamsha
+derivation, and clean-room methodology; Section~3 reports independent numerical validation
+against a public ephemeris oracle; Section~4 describes the software's distribution channels,
+interfaces, and licensing; and Section~5 concludes. This paper treats the ephemeris foundation
+in depth; the derived jyotish (Vedic astrology) computation layer built on top of it ---
+nakshatras, dashas, vargas, panchanga, shadbala, muhurta, and the rest --- is described only at
+the interface level, as the set of MCP tools it exposes in Section~4, and is not given a separate
+methods treatment here.
 
 \section{Methods}
 
@@ -90,8 +94,7 @@ theory \citep{bretagnon1988vsop87} and lunar positions from the ELP/MPP02 lunar 
 \citep{chapront2003elpmpp02}. Both are evaluated as truncated trigonometric series against
 coefficient tables generated once from the IMCCE primary distributions and committed to the
 repository as generated Rust source, so this analytical pipeline needs no external data file at
-runtime. As measured directly (\texttt{find crates/vedaksha-ephem-core/src/analytical/
-coefficients/ -type f | wc -l}), the committed coefficient tree currently holds 331 files,
+runtime. As measured directly (\texttt{find crates/vedaksha-ephem-core/\allowbreak{}src/analytical/\allowbreak{}coefficients/ -type f | wc -l}), the committed coefficient tree currently holds 331 files,
 consistent with the 331-file, roughly 30,000-retained-term count recorded in
 \texttt{MAINTENANCE.md} \S10. VSOP87A and ELP/MPP02 are evaluated in the dynamical equinox and
 ecliptic of J2000.0 as their respective authors defined it, using the corresponding IAU 1976
@@ -123,12 +126,11 @@ date by precession, then to the true equatorial frame of date by nutation, befor
 the ecliptic of date. Precession uses the IAU 2006 model in its P03 four-angle
 Fukushima--Williams parameterization of Capitaine, Wallace \& Chapront
 \citep{capitaine2003precession}, composed as the rotation product
-$R_x(-\epsilon_A)\,R_z(-\bar\psi)\,R_x(\bar\phi)\,R_z(\bar\gamma)$, in which -- per
-\texttt{MAINTENANCE.md} \S10 -- the rotation order is the entire content of the expression:
+$R_x(-\epsilon_A)\,R_z(-\bar\psi)\,R_x(\bar\phi)\,R_z(\bar\gamma)$, in which --- per
+\texttt{MAINTENANCE.md} \S10 --- the rotation order is the entire content of the expression:
 reversing it changes the result by a negligible 0.014 milliarcsecond at J2000.0 but by 0.56
 arcsecond at 499~CE, an error invisible to any test that samples only the 1900--2100 window.
-This composition is checked, in the test \texttt{precession\_matrix\_matches\_erfa\_across\_
-six\_millennia}, against the IAU SOFA board's ERFA library (BSD-3; used here only as a numerical
+This composition is checked, in the test \texttt{precession\_matrix\_matches\_erfa\_across\_six\_millennia}, against the IAU SOFA board's ERFA library (BSD-3; used here only as a numerical
 verification oracle, never as a source of shipped position data) via its \texttt{eraEqec06}
 routine at four epochs spanning 6100 years. Nutation in longitude and obliquity is evaluated
 from the IAU 2000B truncated 77-term series.
@@ -136,7 +138,7 @@ from the IAU 2000B truncated 77-term series.
 \subsection{Sidereal (ayanamsha) conversion}
 
 Vedic astrology charts are cast against the sidereal zodiac, which requires subtracting an
-ayanamsha -- the angular offset between the tropical and sidereal zero points -- from a tropical
+ayanamsha --- the angular offset between the tropical and sidereal zero points --- from a tropical
 longitude. Vedaksha implements eleven ayanamsha systems, each derived forward from a named
 primary source rather than reverse-engineered from another implementation's output. The
 normative derivation record is \texttt{docs/audit/2026-08-17-ayanamsha-cleanroom/spec.md}, with
@@ -145,19 +147,21 @@ official (Lahiri / Chitra-paksha) ayanamsha from \emph{The Indian Astronomical E
 Fagan--Bradley from Fagan \& Firebrace's \emph{Primer of Sidereal Astrology}; Krishnamurti (KP)
 from Krishnamurti's \emph{Krishnamurti Padhdhati Vol-I}; Raman from B.\,V.\,Raman's \emph{A
 Manual of Hindu Astrology} (1935); Surya Siddhanta from the Surya Siddhanta itself (Ch.~3,
-vv.~9--12); Yukteshwar from Yukteswar's \emph{The Holy Science} (1894); the star-anchored
+vv.~9--12); Yukteshwar (also spelled Yukteswar) from Swami Sri Yukteswar's \emph{The Holy
+Science} (1894); the star-anchored
 Revati-paksha and True Chitra ayanamshas, fixed respectively to $\zeta$~Piscium and Spica;
 Pushya-paksha from Narasimha Rao's published proposal; True Mula (Chandra Hari) from Chandra
 Hari's paper in the \emph{Indian Journal of History of Science} 33(4), 1998; and a Galactic
 Centre ayanamsha anchored at 0$^\circ$ Sagittarius, whose primary is the VLBI absolute-astrometry
 determination of Sagittarius~A*'s position and proper motion in the ICRF3 frame by Gordon, de
-Witt \& Jacobs \citep{gordon2023sgra} -- a separate, more recent radio measurement of Sgr~A*
+Witt \& Jacobs \citep{gordon2023sgra} --- a separate, more recent radio measurement of Sgr~A*
 itself, and not part of the van Leeuwen/Hipparcos re-reduction used below for the star-anchored
 systems, since Sgr~A* is not a Hipparcos catalogue star. Star positions for the star-anchored
-systems are taken from the van Leeuwen (2007) re-reduction of the Hipparcos catalogue via VizieR,
-cross-checked against the original 1997 Hipparcos catalogue. Each ayanamsha is independently
-implemented twice -- once in the Rust engine and once in a Python reference script that
-regenerates a committed fixture from the same input file -- and the two agree to
+systems are taken from the van Leeuwen (2007) re-reduction of the Hipparcos catalogue
+\citep{vanleeuwen2007hipparcos} via VizieR, cross-checked against the original 1997 Hipparcos
+catalogue. Each ayanamsha is independently
+implemented twice --- once in the Rust engine and once in a Python reference script that
+regenerates a committed fixture from the same input file --- and the two agree to
 $5.7\times10^{-14}$ degrees over 192 comparisons spanning 6000 years.
 
 \subsection{Clean-room methodology}
@@ -201,7 +205,7 @@ than trusting a stale copy.
 The test \texttt{compare\_against\_reference} in
 \texttt{crates/vedaksha-ephem-core/tests/oracle\_comparison.rs} was re-run for this paper on
 2026-08-28 (\texttt{cargo test -p vedaksha-ephem-core --test oracle\_comparison -- --nocapture});
-Table~\ref{tab:oracle} reports the residuals it measured and printed, split at 2026-01-01 --
+Table~\ref{tab:oracle} reports the residuals it measured and printed, split at 2026-01-01 ---
 the date past which \texttt{delta\_t.rs} stops interpolating measured IERS $\Delta T$ values and
 starts extrapolating them. The 2026--2100 mean is not printed by the test itself (which asserts
 only a per-point ceiling for that era); it was computed for this paper directly from the same run's
@@ -219,11 +223,14 @@ Era & $n$ & Mean residual (arcsec) & Max residual (arcsec) \\
 \bottomrule
 \end{tabular}
 \caption{Residuals between Vedaksha's \texttt{SpkReader} (DE440s) and JPL Horizons (DE441),
-24,350 comparisons total, re-measured 2026-08-28.}
+24,350 comparisons total, re-measured 2026-08-28. The same test run also prints an unsplit,
+whole-fixture mean of 0.878 arcseconds across all 24,350 comparisons, which a reader can verify
+against the two per-era figures above by the comparison-weighted arithmetic
+$(15{,}350\times0.103 + 9{,}000\times2.200)/24{,}350 \approx 0.878$.}
 \label{tab:oracle}
 \end{table}
 
-The 1900--2025 figures -- mean 0.103 arcseconds, max 1.187 arcseconds over 15,350 comparisons --
+The 1900--2025 figures --- mean 0.103 arcseconds, max 1.187 arcseconds over 15,350 comparisons ---
 are what the sub-arcsecond accuracy claim in this paper's abstract rests on, since $\Delta T$ over
 that span is the measured IERS record rather than a prediction. These figures differ marginally
 from the mean 0.106 / max 1.184 arcseconds recorded when the fixture's README was first written on
@@ -242,17 +249,17 @@ largest-error comparison, Moon at 2099-02-06 (44.912 arcseconds), the reference 
 longitude values were used to compute each body's angular rate near that date directly (a
 finite-difference of the committed \texttt{ref\_longitude} values on either side of the date), and
 dividing the measured residual by that rate gives the implied time offset. For the Sun, Venus, and
-Mars -- bodies slow enough that this 60-day-span finite difference resolves an unambiguous rate --
+Mars --- bodies slow enough that this 60-day-span finite difference resolves an unambiguous rate ---
 the implied offsets are 67.0\,s, 67.9\,s, and 65.1\,s respectively: a tight, freshly-computed
 cluster around $\sim$66--68 seconds, consistent with the $\sim$68-second $\Delta T$ divergence by
 2099 already documented in \texttt{delta\_t.rs} and \texttt{tests/oracle\_jpl/README.md}. (The
-Moon and Mercury move too far within a single 30-day fixture step -- the Moon by more than a full
-revolution, Mercury through a retrograde loop at this particular date -- for the same
+Moon and Mercury move too far within a single 30-day fixture step --- the Moon by more than a full
+revolution, Mercury through a retrograde loop at this particular date --- for the same
 finite-difference method to give a reliable instantaneous rate, so no implied-offset figure is
 reported for them individually here; the Moon's 44.912-arcsecond residual is nonetheless the
-dataset's largest precisely because its own angular rate -- documented in
+dataset's largest precisely because its own angular rate --- documented in
 \texttt{oracle\_comparison.rs} as $\sim$0.64 arcseconds per second, by far the fastest of the ten
-bodies -- converts the same few tens of seconds of $\Delta T$ disagreement into the largest
+bodies --- converts the same few tens of seconds of $\Delta T$ disagreement into the largest
 longitude error of any body in the fixture.) $\Delta T$ prediction past the measured record is unpredictable
 in principle, so this divergence is expected to persist and is not treated as a defect; it is why
 \texttt{oracle\_comparison.rs} asserts the two eras against separate error budgets rather than one
@@ -267,7 +274,7 @@ ground, but read fixtures generated from Swiss Ephemeris that had never existed 
 repository's git history; both had therefore never executed a single assertion while reporting
 green, and were removed on 2026-07-16 rather than revived. Horizons does not serve house cusps,
 ayanamshas, nutation, or tithis, so reviving that coverage would have meant taking on a Swiss
-Ephemeris dependency -- precisely what this project's clean-room position exists to avoid.
+Ephemeris dependency --- precisely what this project's clean-room position exists to avoid.
 Covering house cusps in the future would require a reference that is itself public-domain or
 derivable from first principles; that work has not been done, and this paper makes no accuracy
 claim about house-cusp computation as a result.
@@ -306,7 +313,7 @@ crates.io & \texttt{cargo add vedaksha} & 7 published crates (workspace also con
 PyPI & \texttt{pip install vedaksha} & Engine via WebAssembly, \texttt{py3-none-any}, Python
   $\geq$ 3.9, no Rust toolchain \\
 npm & \texttt{npm install vedaksha-wasm} & Browser and edge, no data files \\
-GHCR & \texttt{docker run ghcr.io/} \texttt{arthiqlabs/vedaksha-mcp} & Multi-arch (amd64 +
+GHCR & \texttt{docker run ghcr.io/\allowbreak{}arthiqlabs/\allowbreak{}vedaksha-mcp} & Multi-arch (amd64 +
   arm64) MCP server image \\
 GitHub & \url{https://github.com/arthiqlabs/vedaksha} & Source, issue tracker,
   \texttt{docs/audit/} clean-room evidence \\
@@ -336,8 +343,8 @@ divergence rather than ephemeris error, and house-cusp accuracy remains explicit
 for this validation. Every ephemeris and sidereal-conversion algorithm in the current release was
 derived from a cited primary source with no code, header, or documentation carried over from the
 AGPL-licensed Swiss Ephemeris library on which prior Vedic astrology software has commonly
-relied, and this clean-room provenance is documented per data source -- with fetch dates and,
-where established, content hashes -- rather than merely asserted. A reader wishing to verify the
+relied, and this clean-room provenance is documented per data source --- with fetch dates and,
+where established, content hashes --- rather than merely asserted. A reader wishing to verify the
 provenance claim independently, rather than take it on the authority of this paper, can do so from
 the public repository at \url{https://github.com/arthiqlabs/vedaksha}, which carries
 \texttt{DATA\_PROVENANCE.md} and the dated clean-room evidence trails under \texttt{docs/audit/}
