@@ -16,11 +16,12 @@
 Vedaksha is a clean-room ephemeris and Vedic astrology (jyotish) computation engine written
 in Rust. It computes planetary positions from the analytical VSOP87A and ELP/MPP02 series and
 from the JPL DE440s SPK numerical kernel --- validated against an independent JPL DE441
-ephemeris served by the NASA/JPL Horizons system --- and derives from them the constructs used in
+ephemeris served by the NASA/JPL Horizons system to a mean residual of 0.103 arcseconds (maximum
+1.187 arcseconds) over 15,350 comparisons spanning 1900--2025, re-measured for this paper -- and
+derives from them the constructs used in
 Vedic astrology --- nakshatras, dashas, vargas (divisional charts), panchanga, shadbala, and
 muhurta --- exposed through native Rust, Python, WebAssembly, and Model Context Protocol (MCP)
 interfaces.
-% TODO(Task 5): insert re-measured mean/max residual figure here once Validation section is written
 Every algorithm is derived directly from a cited primary source rather than from an existing
 implementation: the ephemeris and sidereal-conversion algorithms as shipped in the current
 release contain no source code, header, or documentation from the GNU Affero General Public
@@ -177,7 +178,95 @@ independently re-derived from the primary sources listed above --- is confined t
 sidereal-conversion layer and is discussed in Section~1 and in \texttt{DATA\_PROVENANCE.md}.
 
 \section{Validation}
-PLACEHOLDER -- replaced in Task 5.
+
+\subsection{Oracle construction}
+
+Vedaksha's numerical pipeline (\texttt{SpkReader}, reading the locally-shipped DE440s kernel) is
+validated against a committed oracle of 24,350 apparent geocentric ecliptic longitudes: 10 bodies
+(Sun, Moon, Mercury through Pluto) at 30-day steps from 1900-01-01 to 2100-01-01, fetched from the
+NASA/JPL Horizons system \citep{giorgini2015horizons}. Horizons serves the DE441 ephemeris, a
+kernel Vedaksha never reads locally, so the comparison is against a genuinely independent
+numerical integration of solar-system dynamics rather than a restatement of Vedaksha's own input;
+it exercises the DAF/SPK Chebyshev evaluation and the whole apparent-place pipeline (light-time,
+aberration, precession, nutation) against an external source. Reference values are astronomical
+facts served by a public-domain US Government work, so using them as the project's independent
+reference raises no copyleft question against the Business Source License 1.1 position. The
+fixture, \texttt{tests/oracle\_jpl/reference\_positions.json}, was fetched 2026-07-16 and is
+committed and SHA256-pinned; regenerating it re-fetches from Horizons and compares hashes rather
+than trusting a stale copy.
+
+\subsection{Re-measured residuals}
+
+The test \texttt{compare\_against\_reference} in
+\texttt{crates/vedaksha-ephem-core/tests/oracle\_comparison.rs} was re-run for this paper on
+2026-08-28 (\texttt{cargo test -p vedaksha-ephem-core --test oracle\_comparison -- --nocapture});
+Table~\ref{tab:oracle} reports the residuals it measured and printed, split at 2026-01-01 --
+the date past which \texttt{delta\_t.rs} stops interpolating measured IERS $\Delta T$ values and
+starts extrapolating them. The 2026--2100 mean is not printed by the test itself (which asserts
+only a per-point ceiling for that era); it was computed for this paper directly from the same run's
+24,350-row per-comparison output, and the resulting $n$ and max independently reproduce the values
+the test itself printed for that era, which serves as a cross-check on the computation.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrl}
+\toprule
+Era & $n$ & Mean residual (arcsec) & Max residual (arcsec) \\
+\midrule
+1900--2025 (measured $\Delta T$)  & 15{,}350 & 0.103 & 1.187 (Uranus, 1948-06-18) \\
+2026--2100 (predicted $\Delta T$) & 9{,}000  & 2.200 & 44.912 (Moon, 2099-02-06) \\
+\bottomrule
+\end{tabular}
+\caption{Residuals between Vedaksha's \texttt{SpkReader} (DE440s) and JPL Horizons (DE441),
+24,350 comparisons total, re-measured 2026-08-28.}
+\label{tab:oracle}
+\end{table}
+
+The 1900--2025 figures -- mean 0.103 arcseconds, max 1.187 arcseconds over 15,350 comparisons --
+are what the sub-arcsecond accuracy claim in this paper's abstract rests on, since $\Delta T$ over
+that span is the measured IERS record rather than a prediction.
+
+\subsection{Why residuals grow after 2026}
+
+The 2026--2100 residuals are markedly larger, and this is a time-scale disagreement rather than
+ephemeris error. Past 2025, both Horizons and Vedaksha's \texttt{delta\_t.rs} must predict $\Delta
+T$ (the offset between Terrestrial Time and UT1) rather than read it from the measured record, and
+the two predictions diverge; that divergence appears as a longitude error proportional to each
+body's own angular rate, since the two sides are effectively evaluating the same position at
+slightly different UT1 times. This was re-verified for this paper, not assumed: at the single
+largest-error comparison, Moon at 2099-02-06 (44.912 arcseconds), the reference fixture's own
+longitude values were used to compute each body's angular rate near that date directly (a
+finite-difference of the committed \texttt{ref\_longitude} values on either side of the date), and
+dividing the measured residual by that rate gives the implied time offset. For the Sun, Venus, and
+Mars -- bodies slow enough that this 60-day-span finite difference resolves an unambiguous rate --
+the implied offsets are 67.0\,s, 67.9\,s, and 65.1\,s respectively: a tight, freshly-computed
+cluster around $\sim$66--68 seconds, consistent with the $\sim$68-second $\Delta T$ divergence by
+2099 already documented in \texttt{delta\_t.rs} and \texttt{tests/oracle\_jpl/README.md}. (The
+Moon and Mercury move too far within a single 30-day fixture step -- the Moon by more than a full
+revolution, Mercury through a retrograde loop at this particular date -- for the same
+finite-difference method to give a reliable instantaneous rate, so no implied-offset figure is
+reported for them individually here; the Moon's 44.912-arcsecond residual is nonetheless the
+dataset's largest precisely because its own angular rate -- documented in
+\texttt{oracle\_comparison.rs} as $\sim$0.64 arcseconds per second, by far the fastest of the ten
+bodies -- converts the same few tens of seconds of $\Delta T$ disagreement into the largest
+longitude error of any body in the fixture.) $\Delta T$ prediction past the measured record is unpredictable
+in principle, so this divergence is expected to persist and is not treated as a defect; it is why
+\texttt{oracle\_comparison.rs} asserts the two eras against separate error budgets rather than one
+bound covering both.
+
+\subsection{Scope: what this validation does not cover}
+
+This oracle validates body longitudes only. It says nothing about the accuracy of house-cusp
+computation, which is not measured against any reference in this project. Two earlier test files,
+\texttt{comprehensive\_comparison.rs} and \texttt{extended\_comparison.rs}, once claimed that
+ground, but read fixtures generated from Swiss Ephemeris that had never existed in this
+repository's git history; both had therefore never executed a single assertion while reporting
+green, and were removed on 2026-07-16 rather than revived. Horizons does not serve house cusps,
+ayanamshas, nutation, or tithis, so reviving that coverage would have meant taking on a Swiss
+Ephemeris dependency -- precisely what this project's clean-room position exists to avoid.
+Covering house cusps in the future would require a reference that is itself public-domain or
+derivable from first principles; that work has not been done, and this paper makes no accuracy
+claim about house-cusp computation as a result.
 
 \section{Software Architecture and Availability}
 PLACEHOLDER -- replaced in Task 6.
