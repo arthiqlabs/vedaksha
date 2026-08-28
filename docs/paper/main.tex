@@ -272,10 +272,75 @@ derivable from first principles; that work has not been done, and this paper mak
 claim about house-cusp computation as a result.
 
 \section{Software Architecture and Availability}
-PLACEHOLDER -- replaced in Task 6.
+
+Internally, a computed chart is represented not as a flat response struct but as a property
+graph: \texttt{crates/vedaksha-graph/src/ontology.rs} defines nine node types (chart, planet,
+sign, house, nakshatra, pada, geometric aspect pattern such as a Grand Trine or T-Square, dasha
+period, and fixed star) and twelve edge types connecting them (a planet is placed in a sign,
+occupies a house, aspects another planet, rules a sign, disposits another planet, is conjunct a
+fixed star or in a nakshatra, participates in a pattern, or is the lord of a dasha period, among
+others). This representation is exposed, not merely internal: the \texttt{emit\_graph} MCP tool
+serializes the same graph to Neo4j Cypher, SurrealDB SurrealQL, JSON-LD, plain JSON, or
+retrieval-augmented-generation (RAG) embedding text, so a downstream agent or graph database can
+query a chart's facts directly rather than parsing a bespoke, chart-specific response schema.
+
+The MCP surface is the primary agent-facing interface: 17 tools (\texttt{tools/mcp-tools.json},
+engine version 7.4.0), covering natal chart computation, dasha periods, karakas, combustion,
+shadbala, divisional charts (vargas), the graph emitter above, transits and transit search,
+muhurta search, ashtakavarga, gochara, panchanga, drishti, bhavas, synastry, and composite charts,
+served over both stdio and HTTP with bearer-token authentication.
+
+Vedaksha is distributed across four language surfaces and one container registry, all currently
+at engine version 7.4.0:
+
+\begin{table}[h]
+\centering
+\small
+\begin{tabular}{@{}lp{4.4cm}p{5.8cm}@{}}
+\toprule
+Surface & Install & Notes \\
+\midrule
+crates.io & \texttt{cargo add vedaksha} & 7 published crates (workspace also contains an
+  npm-only WebAssembly crate) \\
+PyPI & \texttt{pip install vedaksha} & Engine via WebAssembly, \texttt{py3-none-any}, Python
+  $\geq$ 3.9, no Rust toolchain \\
+npm & \texttt{npm install vedaksha-wasm} & Browser and edge, no data files \\
+GHCR & \texttt{docker run ghcr.io/} \texttt{arthiqlabs/vedaksha-mcp} & Multi-arch (amd64 +
+  arm64) MCP server image \\
+GitHub & \url{https://github.com/arthiqlabs/vedaksha} & Source, issue tracker,
+  \texttt{docs/audit/} clean-room evidence \\
+\bottomrule
+\end{tabular}
+\caption{Distribution surfaces, engine version 7.4.0.}
+\label{tab:availability}
+\end{table}
+
+Vedaksha is released under the Business Source License 1.1. Per the repository's \texttt{LICENSE}
+file: the Change Date is four years from each version's release date, after which that version
+converts to the Apache License, Version 2.0; the Additional Use Grant permits any non-commercial
+use, with a one-time USD \$500 fee per organization for commercial use, covering unlimited
+products and seats perpetually and applying to the licensed version and every version released
+afterward.
+
+Software DOI: [to be assigned via Zenodo archival, pending].
 
 \section{Conclusion}
-PLACEHOLDER -- replaced in Task 6.
+
+Vedaksha computes planetary positions from the analytical VSOP87A and ELP/MPP02 series and from
+the JPL DE440s numerical kernel, and, re-measured for this paper against an independent
+NASA/JPL Horizons DE441 reference over 15,350 comparisons spanning 1900--2025, the numerical
+pipeline agrees with that independent source to a mean residual of 0.103 arcseconds (maximum
+1.187 arcseconds); the larger residuals reported past 2026 were traced to $\Delta T$ prediction
+divergence rather than ephemeris error, and house-cusp accuracy remains explicitly out of scope
+for this validation. Every ephemeris and sidereal-conversion algorithm in the current release was
+derived from a cited primary source with no code, header, or documentation carried over from the
+AGPL-licensed Swiss Ephemeris library on which prior Vedic astrology software has commonly
+relied, and this clean-room provenance is documented per data source -- with fetch dates and,
+where established, content hashes -- rather than merely asserted. A reader wishing to verify the
+provenance claim independently, rather than take it on the authority of this paper, can do so from
+the public repository at \url{https://github.com/arthiqlabs/vedaksha}, which carries
+\texttt{DATA\_PROVENANCE.md} and the dated clean-room evidence trails under \texttt{docs/audit/}
+at the repository root.
 
 \bibliographystyle{plainnat}
 \bibliography{references}
