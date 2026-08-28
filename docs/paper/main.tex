@@ -33,8 +33,8 @@ provenance is not merely asserted: it is documented per data source, with fetch 
 where established, content hashes, in a public provenance ledger, and specific re-derivations
 carry dated, auditable clean-room evidence trails. Vedaksha is released under the Business
 Source License 1.1 (converting to Apache License
-2.0 four years after each version's release) and is distributed via crates.io, PyPI, npm, and
-GitHub.
+2.0 four years after each version's release) and is distributed via crates.io, PyPI, npm, GHCR,
+and GitHub.
 \end{abstract}
 
 \section{Introduction}
@@ -78,8 +78,8 @@ can check the provenance claim against the same evidence this paper cites.
 The remainder of this paper is organized as follows: Section~2 describes the ephemeris pipeline
 --- the analytical and numerical position computations, reference-frame handling, ayanamsha
 derivation, and clean-room methodology; Section~3 reports independent numerical validation
-against a public ephemeris oracle; Section~4 describes the software's distribution channels,
-interfaces, and licensing; and Section~5 concludes. This paper treats the ephemeris foundation
+against a public ephemeris oracle; Section~4 describes the software's internal property-graph
+representation, its distribution channels, interfaces, and licensing; and Section~5 concludes. This paper treats the ephemeris foundation
 in depth; the derived jyotish (Vedic astrology) computation layer built on top of it ---
 nakshatras, dashas, vargas, panchanga, shadbala, muhurta, and the rest --- is described only at
 the interface level, as the set of MCP tools it exposes in Section~4, and is not given a separate
@@ -202,15 +202,17 @@ than trusting a stale copy.
 
 \subsection{Re-measured residuals}
 
+\begin{sloppypar}
 The test \texttt{compare\_against\_reference} in
-\texttt{crates/vedaksha-ephem-core/tests/oracle\_comparison.rs} was re-run for this paper on
-2026-08-28 (\texttt{cargo test -p vedaksha-ephem-core --test oracle\_comparison -- --nocapture});
+\texttt{crates/vedaksha-ephem-core/\allowbreak{}tests/oracle\_comparison.rs} was re-run for this paper on
+2026-08-28 (\texttt{cargo test -p vedaksha-ephem-core\allowbreak{} --test oracle\_comparison -- --nocapture});
 Table~\ref{tab:oracle} reports the residuals it measured and printed, split at 2026-01-01 ---
 the date past which \texttt{delta\_t.rs} stops interpolating measured IERS $\Delta T$ values and
 starts extrapolating them. The 2026--2100 mean is not printed by the test itself (which asserts
 only a per-point ceiling for that era); it was computed for this paper directly from the same run's
 24,350-row per-comparison output, and the resulting max independently reproduces the value
 the test itself printed for that era ($n$ follows by construction: 24,350 total minus 15,350 measured-era comparisons, with zero skipped).
+\end{sloppypar}
 
 \begin{table}[h]
 \centering
@@ -301,7 +303,7 @@ served over both stdio and HTTP with bearer-token authentication.
 Vedaksha is distributed across four language surfaces and one container registry, all currently
 at engine version 7.4.0:
 
-\begin{table}[h]
+\begin{table}[!htbp]
 \centering
 \small
 \begin{tabular}{@{}l>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{5.6cm}@{}}
