@@ -61,6 +61,7 @@ scripts/setup-hooks.sh
 
 # Internal planning docs — not for public repo
 docs/prompts/
+docs/plans/
 
 # Downstream handoff notes. These are drafted here for convenience but are
 # INTERNAL: they name other repos, carry migration instructions we have not

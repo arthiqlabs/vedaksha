@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata below."
+title: Vedaksha
+abstract: >-
+  Clean-room Rust ephemeris and Vedic astrology engine. Computes planetary
+  positions from VSOP87/ELP2000/MPP02 series and JPL DE440s SPK kernels, and
+  derives Vedic astrology charts (panchanga, varga, bala, dasha) as a
+  queryable property graph. Validated against a 24,350-row JPL Horizons
+  fixture at 0.103 arcsecond mean residual.
+type: software
+version: 7.4.0
+date-released: "2026-08-26"
+url: "https://vedaksha.net"
+repository-code: "https://github.com/arthiqlabs/vedaksha"
+license: BUSL-1.1
+authors:
+  - name: "ArthIQ Labs LLC"
+    email: info@arthiq.net
+    website: "https://vedaksha.net"
+keywords:
+  - astronomy
+  - ephemeris
+  - vedic-astrology
+  - panchang
+  - jyotisha
+  - rust
+  - webassembly
+  - mcp
