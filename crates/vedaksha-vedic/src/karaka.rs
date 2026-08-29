@@ -69,14 +69,32 @@ pub(crate) fn degrees_in_sign(longitude: f64) -> f64 {
     longitude.rem_euclid(30.0)
 }
 
+/// Floating-point tolerance for "at a sign boundary." Longitudes reaching
+/// this function have already passed through at least one ephemeris
+/// computation and `rem_euclid` normalization; a value that should be
+/// exactly on a boundary can arrive as a residual of a few ULPs rather than
+/// literally `0.0`. 1e-9° (~3.6 microarcsec) matches this project's own
+/// established tolerance for "should be exact" degree comparisons (see e.g.
+/// `crates/vedaksha-astro/src/chart.rs`'s rotation-invariance tests) and is
+/// many orders of magnitude tighter than any degree difference that could
+/// change which planet ranks where.
+const BOUNDARY_EPSILON_DEG: f64 = 1e-9;
+
 /// Rahu's effective degree is reflected because it moves retrograde.
 ///
-/// When Rahu is exactly at 0° of a sign (sign boundary), it has traversed
-/// no degrees and ranks lowest (0.0), not highest (30.0 would be out-of-range).
+/// When Rahu is at (or within floating-point noise of) 0° of a sign — a sign
+/// boundary — it has traversed no degrees and ranks lowest (0.0), not
+/// highest (30.0 would be out-of-range). An exact `== 0.0` check here would
+/// silently mis-rank a value that should be exactly zero but arrives as a
+/// tiny residual (e.g. `1e-13`) from upstream normalization.
 #[must_use]
 pub(crate) fn rahu_degrees_in_sign(longitude: f64) -> f64 {
     let d = degrees_in_sign(longitude);
-    if d == 0.0 { 0.0 } else { 30.0 - d }
+    if d < BOUNDARY_EPSILON_DEG {
+        0.0
+    } else {
+        30.0 - d
+    }
 }
 
 /// Compute Chara Karaka assignments ranked from Atmakaraka to Darakaraka.
@@ -245,6 +263,41 @@ mod tests {
         assert!((rahu_degrees_in_sign(310.0) - 20.0).abs() < 1e-9);
         // At sign boundary (longitude 0°), Rahu ranks lowest (0.0)
         assert!((rahu_degrees_in_sign(0.0) - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn rahu_degrees_at_boundary_survives_floating_point_residue() {
+        // A longitude that should land exactly on a sign boundary can arrive
+        // with a tiny residual from upstream normalization (e.g. 1e-13
+        // instead of exactly 0.0). The old `d == 0.0` exact-equality check
+        // would send this down the `30.0 - d` branch, producing a
+        // near-maximal (Atmakaraka-adjacent) rank instead of the intended
+        // near-minimal one — a rank flip on floating-point noise alone.
+        let just_past_boundary = 30.000_000_000_1; // degrees_in_sign wraps this to ~1e-10
+        let d = degrees_in_sign(just_past_boundary);
+        assert!(
+            d < 1e-9,
+            "test setup: expected a sub-epsilon residual, got {d}"
+        );
+        let reflected = rahu_degrees_in_sign(just_past_boundary);
+        assert!(
+            reflected < 1e-6,
+            "a sub-epsilon residual past a sign boundary should rank near the \
+             minimum (rank as if at the boundary), got {reflected}"
+        );
+    }
+
+    #[test]
+    fn rahu_degrees_just_short_of_the_next_boundary_still_reflects() {
+        // A value genuinely near, but not at, the boundary must still take
+        // the ordinary reflection branch — the epsilon guard must not widen
+        // to swallow real near-boundary values.
+        let near_boundary = 29.999; // degrees_in_sign -> 29.999, well outside epsilon
+        let reflected = rahu_degrees_in_sign(near_boundary);
+        assert!(
+            (reflected - 0.001).abs() < 1e-9,
+            "29.999° in-sign should reflect to 0.001°, got {reflected}"
+        );
     }
 
     #[test]
