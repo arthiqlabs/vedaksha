@@ -212,7 +212,41 @@ regime the original finding's 5 full-reorder cases occupied. This is a real, doc
 consequence of Fix 9 reaching this module's typical caller, not a defect in `compute_karakas`
 itself, and not something either fix's own changelog entry states on its own.
 
-### Fix 11 — Chara Dasha's even-lagna direction was a disclosed simplification, now completed
+### Fix 12 — Chara Dasha direction is tested at the 9th sign from lagna, not the lagna itself (supersedes Fix 11)
+Source: Jaimini Sutras, Adhyaya 2 Pada 3 (its own sutra number is unstable across sources — direct
+readings of 22, 28, and 32 are on record, plus an independently-reported 29): *pañcame padakramāt
+prākpratyaktvaṃ caradaśāyām*. Grammatically *pañcame* means "in the fifth" — but a separate Jaimini
+sutra (*sarvatra savarṇā bhāvā rāśayaś ca*, "everywhere, the houses and signs are [denoted] by
+letters") states a letter-to-numeral convention under which *pañcame* decodes arithmetically to
+nine, not five. This decoding is not asserted on trust here: it was checked against eight other
+words coded the same way elsewhere in this sutra layer, each compared to that commentary's own
+stated numeric answer — all eight matched (high confidence — a verifiable arithmetic fact). Under
+that decoding, the sutra is read as: take the 9th sign from the lagna, and test *that* sign — not
+the lagna — for direction.
+Fix 11 (below) cited Adhyaya 1 Pada 1, sutras 25-27, for direction, testing the lagna sign directly
+against a plain odd/even rule with a four-sign "fixed (Sthira) exception." This fix corrects that:
+those sutras are now understood to govern sign-to-lord counting (`sign_distance`'s concern), not
+sequence direction, and are no longer cited for direction. The classification actually tested — the
+sutra's "vishama-pada" (odd-footed) vs. "sama-pada" (even-footed) — turns out to be mathematically
+identical to Fix 11's four-sign exception set: both classify exactly {Aries, Taurus, Gemini, Libra,
+Scorpio, Sagittarius} as the "true" case. So the classification logic in `chara.rs` is unchanged;
+the only correction is which sign gets classified — the 9th from the lagna, not the lagna itself.
+This reading is transmitted in a commentary called the *Subodhinī*, under the name Nīlakaṇṭha —
+moderate confidence on that specific authorship, since a critical edition compiled from multiple
+manuscripts notes copies circulating under that name are sometimes misattributed. The same edition
+describes the 9th-house reading as the view of "many commentators" (a documented majority, not a
+claim of universal agreement), and separately names one minority reading — under the name
+Kṛṣṇānanda Sarasvatī — holding that the word keeps its literal sense and denotes an entirely
+different dasha system, not a rival Chara Dasha direction table. No source found states a rival
+Chara Dasha direction table under any other name.
+This changes computed Chara Dasha output for eight of the twelve lagna signs — Taurus, Gemini, Leo,
+Virgo, Scorpio, Sagittarius, Aquarius, Pisces — relative to Fix 11's behavior. The four movable
+lagnas (Aries, Cancer, Libra, Capricorn) are unaffected: the 9th sign from each of these happens to
+land on the same vishama-pada/sama-pada answer Fix 11's direct-on-the-lagna test already gave them.
+`sign_lord_sign` (lordship assignment) and `sign_distance` (duration arithmetic) are both unchanged
+by this fix, as they were by Fix 11.
+
+### Fix 11 — Chara Dasha's even-lagna direction was a disclosed simplification, now completed (superseded by Fix 12 above)
 Source: Jaimini Sutras, Adhyaya 1 Pada 1, sutras 1.1.25 (*Pracheevruttirvishamabheshu* — odd
 signs count forward), 1.1.26 (*Paravrutyottareshu* — even signs count backward), and 1.1.27
 (*Nakwachit*, "this does not apply in some places").
