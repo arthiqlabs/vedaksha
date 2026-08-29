@@ -179,8 +179,9 @@ pub fn ayanamsha_schema_description() -> String {
     use core::fmt::Write as _;
     let mut s = String::from(
         "Sidereal zodiac system. Eleven systems, each derived forward from a \
-primary source and none tuned to match another implementation. Returns the MEAN \
-ayanamsha - add nutation in longitude yourself for the true ayanamsha. Pass \
+primary source and none tuned to match another implementation. The chart's \
+ayanamsha_value output field reports the TRUE ayanamsha (mean plus nutation in \
+longitude) already applied — nutation is included, do not add it yourself. Pass \
 Tropical for no rotation. Systems: ",
     );
     for (i, a) in vedaksha_astro::sidereal::Ayanamsha::SIDEREAL

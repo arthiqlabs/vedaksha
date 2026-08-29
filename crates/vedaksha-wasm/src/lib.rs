@@ -197,7 +197,7 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 /// * `ayanamsha` — sidereal system: "IndianOfficial" (alias "Lahiri"),
 /// "FaganBradley", "Krishnamurti", "Raman", "SuryaSiddhanta", "Yukteshwar",
 /// "RevatiPaksha", "PushyaPaksha", "TrueChitra", "ChandraHari",
-/// "GalacticCenter0Sag", or "Tropical". Returns the MEAN ayanamsha.
+/// "GalacticCenter0Sag", or "Tropical"
 /// * `jd` — Julian Day for computation
 ///
 /// # Errors
