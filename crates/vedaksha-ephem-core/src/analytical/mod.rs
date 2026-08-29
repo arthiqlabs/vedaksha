@@ -777,7 +777,9 @@ mod tests {
                 d < TOLERANCE_M,
                 "at jd {jd}, earth_state and EMB−Moon/EMRAT disagree by {d} m \
                  (tolerance {TOLERANCE_M} m); the two are supposed to cancel to at most \
-                 ~1 ULP (3.3e-5 m), so this is a real divergence, not rounding"
+                 ~1.66e-5 m absolute (the addition's rounding error, bounded by \
+                 ulp(1 AU)/2 — not a per-component ULP bound, see this module's doc), \
+                 so this is a real divergence, not rounding"
             );
         }
 

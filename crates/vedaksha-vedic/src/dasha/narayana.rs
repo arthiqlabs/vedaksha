@@ -16,6 +16,13 @@
 //! its lord's sign (1-12 years). Standard Parashari lordships are used.
 //!
 //! Source: Jaimini Sutras Ch. 2.
+//!
+//! **Divergence from `dasha::chara` (disclosed, not yet resolved):** Chara Dasha's direction
+//! (same odd/even base rule) applies a fixed-sign (Sthira) exception for Taurus, Scorpio, Leo,
+//! and Aquarius — see `dasha::chara`'s module doc and `DATA_PROVENANCE.md` Fix 11. This module
+//! does not apply that exception. Whether Narayana Dasha's own sutra source calls for the same
+//! exception has not been independently researched; until it is, this is a known, stated gap
+//! rather than a considered design choice.
 
 use serde::{Deserialize, Serialize};
 

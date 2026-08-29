@@ -13,10 +13,19 @@
 // `moon_state(jd)` -> `elp_geocentric(jd)` internally (to build the EMB
 // position, per `analytical/mod.rs`'s `earth_to_emb`), and that call never
 // passes through `compute_state(Body::Moon, ·)` — it was invisible to the
-// old wrapper (investigation finding #1). The guard now reads
+// old wrapper (investigation finding #1). The guard was moved to read
 // `elp_mpp02::ELP_GEOCENTRIC_CALLS`, an atomic counter incremented at the
-// actual `elp_geocentric` call site, so it counts every real ELP evaluation
-// regardless of which `compute_state` arm triggered it.
+// `elp_geocentric` call site.
+//
+// That still undercounted: the counter lived in `elp_geocentric`, one of
+// three public entry points into `vur_series` (the other two,
+// `elp_geocentric_of_date` and `elp_geocentric_with_fit`, call `vur_series`
+// directly and never passed through it). `Body::TrueNode`'s osculating
+// computation goes through `elp_geocentric_of_date` and never through
+// `compute_state` at all, so it was invisible twice over. Fixed by moving
+// the increment into `vur_series` itself, the one function all three public
+// entry points share — it now counts every real ELP evaluation regardless
+// of entry point or whether a `compute_state` arm was involved.
 
 use std::sync::atomic::Ordering;
 use std::sync::{Mutex, MutexGuard};
@@ -65,29 +74,31 @@ fn chart_evaluates_moon_only_a_few_times() {
     println!("chart ELP/MPP02 evaluations: {elp_evals}");
     // Pre-optimization (naive, unmemoized) this was ~123. With the memoizing
     // batch provider and light-time Earth-extrapolation it collapses to a
-    // handful. Measured 2026-08-29 for this exact chart: 9 real ELP
-    // evaluations by this counter, versus 6 that the old trait-level-only
-    // wrapper (which counted only `compute_state(Body::Moon, ·)`) reported —
-    // the 3-call gap was `compute_state(EarthMoonBarycenter, ·)`'s internal
-    // `moon_state` call (investigation finding #1: it computed a Moon
-    // position solely to have it cancel against the Earth anchor's own Moon
-    // evaluation).
+    // handful, though "handful" needs the corrected counter above to state
+    // accurately — history of this number:
+    //   - trait-level-only wrapper (pre-Wave-0): 6 (counted only
+    //     `compute_state(Body::Moon, ·)`, missing the EMB path entirely).
+    //   - Wave 0's `elp_geocentric`-site counter: 9, then, after Wave 1
+    //     removed the EMB/Moon cancelling pair (`EphemerisProvider::earth_state`
+    //     returning VSOP87A's Earth series directly): 6. Both undercounted —
+    //     `Body::TrueNode`'s osculating computation runs through
+    //     `elp_geocentric_of_date`, which never passed through the counter
+    //     site or `compute_state` at all.
+    //   - `vur_series`-site counter (current): **15**, the first count that
+    //     includes the node path. One Moon-body light-time evaluation per
+    //     central-difference timestep (6, as before) plus TrueNode's
+    //     osculating computation (3, one per central-difference timestep) and
+    //     the intermediate values `true_node_osculating` needs beyond a bare
+    //     position.
     //
-    // Wave 1 removed that cancelling pair: `EphemerisProvider::earth_state`
-    // is now a trait method, and `AnalyticalProvider` overrides it to return
-    // VSOP87A's Earth series directly instead of composing and then undoing
-    // the EMB. **Re-measured after that change: 6**, i.e. one Moon-body
-    // light-time evaluation per central-difference timestep and nothing else.
-    // The three Earth-anchor evaluations are gone.
-    //
-    // The threshold keeps the original guard's margin (~2.5x the measured
-    // count) rather than pinning the exact number, so it still catches a real
-    // regression without being brittle to noise; the exact-count assertion
-    // lives in `sun_position_evaluates_the_lunar_series_not_at_all` below,
-    // where zero is the only defensible value.
+    // The threshold is set at 2x the corrected measured count rather than
+    // pinning the exact number, so it still catches a real regression without
+    // being brittle to noise; the exact-count assertion lives in
+    // `sun_position_evaluates_the_lunar_series_not_at_all` below, where zero
+    // is the only defensible value.
     assert!(
-        elp_evals <= 15,
-        "chart evaluated the ELP/MPP02 series {elp_evals} times (expected a handful); \
+        elp_evals <= 30,
+        "chart evaluated the ELP/MPP02 series {elp_evals} times (expected a handful, ~15); \
          the light-time Earth-extrapolation or batch memoization regressed"
     );
 }

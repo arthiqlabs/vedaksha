@@ -64,16 +64,24 @@ use crate::analytical::coefficients::loader::{ElpMainTerm, ElpPertTerm};
 use crate::analytical::coefficients::{moon_distance, moon_latitude, moon_longitude};
 use crate::analytical::simd_trig::sincos_f64x4;
 
-/// Count of [`elp_geocentric`] evaluations performed by this process.
+/// Count of ELP/MPP02 evaluations performed by this process.
 ///
 /// Instrumentation, not part of the numerical API — exists so regression
 /// guards (`tests/chart_lunar_evals.rs`) can count *every* real ELP/MPP02
-/// evaluation, including ones invisible to a trait-level wrapper around
-/// [`crate::jpl::EphemerisProvider::compute_state`]:
+/// evaluation. Incremented inside [`vur_series`], the function all three
+/// public entry points ([`elp_geocentric`], [`elp_geocentric_of_date`],
+/// [`elp_geocentric_with_fit`]) share, so it counts evaluations invisible to
+/// a trait-level wrapper around
+/// [`crate::jpl::EphemerisProvider::compute_state`] —
 /// `AnalyticalProvider::compute_state(EarthMoonBarycenter, jd)` calls
 /// `moon_state(jd)` -> [`elp_geocentric`] internally, never passing through
 /// `compute_state(Body::Moon, ·)` (see
-/// `docs/audit/2026-08-29-perf-investigation.md` #1).
+/// `docs/audit/2026-08-29-perf-investigation.md` #1) — and evaluations that
+/// never go through `compute_state` at all, such as the true node's
+/// osculating computation via [`elp_geocentric_of_date`]. An earlier version
+/// of this counter lived at the [`elp_geocentric`] call site instead and
+/// missed both `elp_geocentric_of_date` and `elp_geocentric_with_fit`
+/// entirely.
 ///
 /// Always compiled rather than `#[cfg(test)]`-gated: an integration test
 /// under `tests/` links against the library built as an ordinary dependency,
@@ -123,7 +131,6 @@ pub enum Fit {
 /// ecliptic and equinox of J2000.
 #[must_use]
 pub fn elp_geocentric(jd: f64) -> MoonRectangular {
-    ELP_GEOCENTRIC_CALLS.fetch_add(1, Ordering::Relaxed);
     elp_geocentric_with_fit(jd, Fit::Llr)
 }
 
@@ -487,6 +494,7 @@ fn corrected_main_amplitude(
 /// `(V, U, r, dV/dt, dU/dt, dr/dt)` with V, U in radians, r in km, and
 /// the dotted quantities in radian/century, radian/century, km/century.
 fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
+    ELP_GEOCENTRIC_CALLS.fetch_add(1, Ordering::Relaxed);
     let args = args_for(fit);
     let t = (jd - J2000) / DAYS_PER_CENTURY;
     let t_pow = [1.0, t, t * t, t * t * t, t * t * t * t];

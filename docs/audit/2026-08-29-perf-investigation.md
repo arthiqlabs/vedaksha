@@ -68,6 +68,8 @@ The sharpest case is `ecliptic_position(Sun, jd)` — the workhorse of `search_t
 
 **Determinism: theoretically ≲1 ULP, but need not actually move (verify, don't assume).** `(a+b)−b ≠ a` in general. Magnitude: `b/a ≈ 3.1e-5`, so ≲1 ULP of Earth's position ≈ 0.03 mm ≈ 4e-11 arcsec at 1 AU (corrected from an earlier "0.03 m" unit slip in this doc — mm, not m). `(a+b)−b` is exact whenever the addition's rounding error is strictly under `ulp(a)/2`, so the digest may not move at all in practice; measure the actual before/after digest rather than assuming a re-pin is required.
 
+**Correction, recorded during implementation (`analytical/mod.rs`'s own doc comment carries the full derivation):** "≲1 ULP" is right about the *absolute* error (≈1.66e-5 m, matching the 0.03 mm above) but wrong read as a *per-component* ULP bound — a component's own ULP shrinks toward zero near a zero crossing while the absolute error stays fixed, and a sweep found up to 1,237 ULP of difference at ordinary in-range dates. The fix ships the absolute bound only; nothing here changes the digest conclusion (it is unchanged, measured).
+
 **Verify:** `analytical_oracle.rs` (21,915 rows vs Horizons) unchanged within tolerance; `analytical_bit_digest` re-pinned in a reviewed commit; a direct assertion that `earth_state` now equals `vsop_state(Earth)` bit-for-bit; `chart_lunar_evals.rs` fixed first (Wave 0) so the improvement is actually observable.
 
 ---
@@ -83,6 +85,8 @@ The module's own ablation (`simd_trig.rs:31`) puts "perturbation phase + ω 13-m
 **Determinism: preserved, and provably so.** `fl(x + ±0) = x` for every finite `x` except `x = −0.0`, and `0.0 × A` is exactly `±0.0`. A partial sum can only be `−0.0` if every prior contribution was `−0.0` — which happens only for the 3 all-zero-multiplier terms, where both forms give a phase of `±0` and the resulting `±0` amplitude contribution changes nothing. A sparse rewrite that visits the nonzero multipliers in their original index order produces bit-identical phases. This makes `analytical_bit_digest` a clean pass/fail rather than a re-pin — prove it, don't assert it.
 
 **Representation:** build a CSR-style side table at `LazyLock` load time — per-term offsets plus a flat array of `(arg_index: u8, multiplier: i16)`. Max |multiplier| measured is 75, so `i8` overflows. Prefer the load-time transform over regenerating the `.bin` blobs; the blobs are under coefficient-provenance CI gates and the win is identical.
+
+**Correction, recorded during implementation:** 75 does not overflow `i8` (range −128..127). The shipped implementation keeps `i16` anyway for an unrelated reason (a fixed 8-slot record layout costs nothing extra at that width); see `elp_mpp02.rs`'s own `# Layout` doc and the `pert_multiplier_density_matches_the_investigation` test.
 
 ---
 

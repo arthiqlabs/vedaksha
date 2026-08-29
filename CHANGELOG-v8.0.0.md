@@ -20,6 +20,15 @@ regression test asserting the exact first-period sign for both Aries and Pisces 
 on both Chara and Narayana. No change to `chara.rs`/`narayana.rs` themselves, which were already
 correct — the defect was entirely in the MCP dispatch layer.
 
+**Disclosed here since it cuts the other way:** `compute_dasha`'s `lagna_sign` input is 1-indexed,
+but `compute_bhavas` and `compute_vargas` both serve their own `lagna_sign` output as 0-indexed
+("0=Aries … 11=Pisces"). A caller who chains one of those tools' output straight into
+`compute_dasha` — rather than following `compute_dasha`'s own 1-indexed schema — was getting the
+*correct* Chara/Narayana result before this fix by accident, and will now be off by one sign in
+the other direction. Callers should pass `compute_dasha`'s documented 1-indexed value, not a
+0-indexed value taken from another tool's output; this cross-tool indexing inconsistency is not
+otherwise resolved by this release.
+
 ## Chara Dasha: counting direction implemented (previously disclosed as incomplete)
 
 `compute_chara` always counted forward through the 12 signs regardless of the lagna sign — its
@@ -39,10 +48,12 @@ research (Jaimini Sutras, no reference-engine consultation):
   `crates/vedaksha-vedic/src/dasha/chara.rs`'s module doc and `DATA_PROVENANCE.md` Fix 11 for the
   full citation and confidence discussion.
 
-**This changes computed Chara Dasha output for every lagna sign except Aries, Gemini, Libra, and
-Sagittarius** — the four odd, non-fixed signs, for which forward was already correct. This is a
-feature completion of a previously-disclosed gap, not a silent behavior change, but the scale of
-affected output (most charts) should not be understated.
+**This changes computed Chara Dasha output for six of the twelve lagna signs — Cancer, Leo, Virgo,
+Capricorn, Aquarius, and Pisces — which now count backward instead of the old always-forward
+behavior.** The other six (Aries, Taurus, Gemini, Libra, Scorpio, Sagittarius) were already
+correct, forward being both the old behavior and the sutra-27 fixed-sign exception's answer for
+Taurus/Scorpio. This is a feature completion of a previously-disclosed gap, not a silent behavior
+change, but the scale of affected output (half of all charts) should not be understated.
 
 ## Naming symmetry for mean vs. true ayanamsha — breaking API rename
 
@@ -108,12 +119,15 @@ correct effect of v7.6.0's fix reaching a typical caller more accurately — not
 ## Performance: three fixes to the analytical (VSOP87A/ELP-MPP02) ephemeris path
 
 Found during a dedicated optimization investigation (`docs/audit/2026-08-29-perf-investigation.md`)
-into the analytical provider's hot path. All three are internal-only: no public function signature,
-computed value, or output schema changes. Each is verified bit-identical (or, where floating-point
-addition/subtraction order genuinely changed, bounded and measured rather than assumed) against
-`analytical_oracle.rs` (21,915 rows vs. the JPL Horizons DE441 fixture) and `analytical_bit_digest.rs`
-(pinned SHA-256 digest over the full supported range) — both byte-identical before and after every
-change below.
+into the analytical provider's hot path. None changes any computed value or output schema. The
+first two add one new public Rust API item each (`EphemerisProvider::earth_state` and a
+`#[doc(hidden)]` test counter) but no existing signature changes; the third touches no Rust API at
+all. The first two are verified bit-identical (or, where floating-point addition/subtraction order
+genuinely changed, bounded and measured rather than assumed) against `analytical_oracle.rs`
+(21,915 rows vs. the JPL Horizons DE441 fixture) and `analytical_bit_digest.rs` (pinned SHA-256
+digest over the full supported range) — both byte-identical before and after each change. The
+third (wasm `simd128`) is a wasm-build-only change verified through the Python conformance suite
+and a direct engine comparison instead, since neither native harness exercises that build path.
 
 - **Stopped computing the Moon twice to cancel it against itself.** The analytical
   Earth-Moon-barycenter path built `EMB = vsop_earth + moon/EMRAT`, then immediately recovered
@@ -123,10 +137,15 @@ change below.
   EMB and Moon are independent kernel segments and nothing cancels) keeps the original arithmetic as
   its default. Measured (criterion, aarch64, bench profile): `ecliptic_position(Sun)` 531.65µs →
   11.210µs (47.4×), full 11-body chart 19.465ms → 6.8497ms (2.84×), batched chart 6.5343ms →
-  5.6880ms (1.15×). The addition/subtraction reordering is bounded at ≤1 ULP by IEEE 754 argument
-  and measured at exactly zero difference across both fixtures; a dedicated 800-JD sweep found the
-  two computation paths agree within 1mm and 1 ULP everywhere, confirming the shortcut is correct,
-  not merely different.
+  5.6880ms (1.15×). The addition/subtraction reordering is bounded only in absolute terms — the
+  addition's rounding error is fixed at ≤ulp(1 AU)/2 ≈ 1.66e-5 m (0.03mm) by IEEE 754 argument,
+  ten orders of magnitude inside VSOP87A's own 0.239″ mean residual — and measured at exactly zero
+  difference across both fixtures. That bound is *not* a general per-component ULP bound: a
+  dedicated sweep found up to 1,237 ULP of difference in an individual component near a zero
+  crossing, an ordinary in-range date, because a ULP shrinks toward zero there while the absolute
+  error stays fixed. A separate 800-JD sweep (not spanning a crossing) found the two paths agree
+  within 1mm and 1 ULP on that sample, but the absolute bound above is the one that holds
+  everywhere and is what the code asserts.
 - **Stopped multiplying ELP/MPP02's perturbation phases by zero.** Each of the 33,122 lunar
   perturbation terms carries 13 integer multipliers but only ~3.90 are nonzero on average (97.1%
   have ≤5); the dense dot product multiplied by zero anyway, 861,172 times per evaluation. Terms
@@ -135,11 +154,16 @@ change below.
   variable-length sparse form measured 43% *slower* (branch misprediction dominates the saved
   arithmetic) than the dense original. Bundled with three call-site hoists of already-jd-independent
   computation. Measured: `elp_mpp02_moon` 261.80µs → 216.19µs (−17.4%), a 365-day lunar scan
-  −15.6%, full chart −12.0%, batched chart −11.9%. Verified bit-identical three independent ways,
-  including a new 630,003-evaluation, 3,780,018-bit-pattern digest test
-  (`tests/lunar_series_bit_digest.rs`) dedicated to this module, since the existing bit digest only
-  samples the Moon 2,435 times downstream of precession/nutation/aberration.
-- **Restored SIMD for the Python package's bundled wasm engine.** The npm package's wasm build has
+  −15.6%, full chart −12.0%, batched chart −11.9%. Verified bit-identical three independent ways
+  (all raw bit patterns compared via `to_bits()`, so signed zeros count as distinct): a
+  430,586-comparison sweep across all 33,122 terms found every value identical except 15 of 39
+  all-zero-multiplier term-epoch pairs differing only in the sign of a zero — sin/cos of ±0.0
+  produce the same result either way, so this reaches no output, and is stated as the boundary the
+  underlying IEEE-754 argument predicts rather than asserted past it; a new 630,003-evaluation,
+  3,780,018-bit-pattern digest test (`tests/lunar_series_bit_digest.rs`) dedicated to this module,
+  since the existing bit digest only samples the Moon 2,435 times downstream of
+  precession/nutation/aberration; and `analytical_bit_digest` itself, unchanged.
+- **Enabled SIMD for the Python package's bundled wasm engine.** The npm package's wasm build has
   set `-C target-feature=+simd128` since it was introduced; the Python package's build script never
   did, so `wide`'s `f64x4` silently fell back to scalar inside every published Python wheel. Fixed
   by adding the same flag; verified the resulting `.wasm` binary actually changed and that scalar

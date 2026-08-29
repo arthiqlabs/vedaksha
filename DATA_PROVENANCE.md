@@ -234,8 +234,7 @@ inconsistent with sutras 25-26 for movable-even signs (e.g. Cancer — movable b
 sutra text places in the backward group with no stated exception for movable signs). No confirmed
 classical sub-rule exists for dual (Dwiswabhava) signs beyond the plain odd/even rule; dual signs
 are not treated as an exception category here.
-This changes computed Chara Dasha output for every lagna sign except Aries — the only sign where
-the old always-forward behavior already matched the correct direction. Non-fixed even lagnas
+This changes computed Chara Dasha output for six of the twelve lagna signs. Non-fixed even lagnas
 (Cancer, Virgo, Capricorn, Pisces) now count backward instead of forward; fixed odd lagnas (Leo,
 Aquarius) now count backward instead of forward; non-fixed odd lagnas other than Aries (Gemini,
 Libra, Sagittarius) are unaffected in direction (still forward) but were already correct. Fixed

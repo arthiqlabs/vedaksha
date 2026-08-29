@@ -2,7 +2,9 @@
 
 **Date:** 2026-08-29
 **Scope:** primary-source research behind `crates/vedaksha-vedic/src/karaka.rs`'s citation
-(rewritten in the same release — see `CHANGELOG-v8.0.0.md` and `DATA_PROVENANCE.md` Fix 10).
+(rewritten in v7.6.0 — see `CHANGELOG-v7.6.0.md` and `DATA_PROVENANCE.md` Fix 10). This audit doc
+itself is added in v8.0.0, as the module's first dedicated derivation record; the citation work it
+documents already shipped.
 This is the derivation record the module's own citation summarizes; it exists so the claim can
 be checked and re-run, matching the precedent set for the ayanamsha and lunar-theory subsystems
 (`docs/audit/2026-08-17-ayanamsha-cleanroom/`, `docs/audit/2026-05-09-elp-mpp02-cleanroom/`).
@@ -93,7 +95,7 @@ commentarial tradition" rather than asserting one number as if uncontested.
 
 ## What shipped, and what did not change
 
-- `crates/vedaksha-vedic/src/karaka.rs`'s citation now states the ranking-chain source (Jaimini
+- `crates/vedaksha-vedic/src/karaka.rs`'s citation states the ranking-chain source (Jaimini
   Sutras, Adhyaya 1 Pada 1) and the reflection-arithmetic source (Parashara's BPHS, Karakatwas
   chapter) separately, and states the two open questions above explicitly (sutra numbering;
   conditional-vs-unconditional Rahu inclusion) rather than presenting the current behavior as
@@ -103,8 +105,9 @@ commentarial tradition" rather than asserting one number as if uncontested.
   both are legitimate, textually-grounded choices per the findings above, not adjustments made
   to match any external comparison.
 - Separately, and independently of this research, `rahu_degrees_in_sign`'s boundary check was
-  hardened from exact floating-point equality to an epsilon tolerance (see `CHANGELOG-v8.0.0.md`
+  hardened from exact floating-point equality to an epsilon tolerance (see `CHANGELOG-v7.6.0.md`
   and `DATA_PROVENANCE.md` Fix 10) — a code-quality fix, not a convention change.
+- All three of the above shipped in v7.6.0. This audit doc is new in v8.0.0.
 
 ## Explicit gaps, stated rather than papered over
 
