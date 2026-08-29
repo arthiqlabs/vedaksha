@@ -11,7 +11,7 @@
         "properties": {
           "ayanamsha": {
             "default": "Tropical",
-            "description": "Sidereal zodiac system. Eleven systems, each derived forward from a primary source and none tuned to match another implementation. The chart's ayanamsha_value output field reports the TRUE ayanamsha (mean plus nutation in longitude) already applied — nutation is included, do not add it yourself. Pass Tropical for no rotation. Systems: IndianOfficial = Indian Astronomical Ephemeris 2022, AYANAMSA section: 23 deg 51 min 25.53 sec at J2000.0, propagated by P03 general precession | FaganBradley = Fagan & Firebrace, Primer of Sidereal Astrology: synetic vernal point 335 deg 57 min 28.64 sec at B1950.0, ayanamsha = 360 deg minus SVP | Krishnamurti = Krishnamurti Padhdhati Vol-I: 22 deg 22 min 00 sec on the 1st of Chitra 1900, propagated at KSK's stated 50.2388475 arcsec/yr | Raman = Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49 | SuryaSiddhanta = Surya Siddhanta Ch. 3 vv. 9-12 | Yukteshwar = Yukteswar, The Holy Science (1894) | RevatiPaksha [star] = Revati at the sidereal initial point, the majority reading against Surya Siddhanta Ch. 8's own 359 deg 50 min, zeta Piscium per Hipparcos | PushyaPaksha [star] = Narasimha Rao, Introducing Pushya-paksha Ayanamsa | TrueChitra [star] = Self-describing condition; Spica per Hipparcos | ChandraHari [star] = Chandra Hari, Indian J. History of Science 33(4), 1998 | GalacticCenter0Sag [star] = Self-describing condition; Sgr A* per Gordon, de Witt & Jacobs (2023), AJ 165, 49.",
+            "description": "Sidereal zodiac system. Eleven systems, each derived forward from a primary source and none tuned to match another implementation. The chart's true_ayanamsha_value output field reports the TRUE ayanamsha (mean plus nutation in longitude) already applied — nutation is included, do not add it yourself. Pass Tropical for no rotation. Systems: IndianOfficial = Indian Astronomical Ephemeris 2022, AYANAMSA section: 23 deg 51 min 25.53 sec at J2000.0, propagated by P03 general precession | FaganBradley = Fagan & Firebrace, Primer of Sidereal Astrology: synetic vernal point 335 deg 57 min 28.64 sec at B1950.0, ayanamsha = 360 deg minus SVP | Krishnamurti = Krishnamurti Padhdhati Vol-I: 22 deg 22 min 00 sec on the 1st of Chitra 1900, propagated at KSK's stated 50.2388475 arcsec/yr | Raman = Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49 | SuryaSiddhanta = Surya Siddhanta Ch. 3 vv. 9-12 | Yukteshwar = Yukteswar, The Holy Science (1894) | RevatiPaksha [star] = Revati at the sidereal initial point, the majority reading against Surya Siddhanta Ch. 8's own 359 deg 50 min, zeta Piscium per Hipparcos | PushyaPaksha [star] = Narasimha Rao, Introducing Pushya-paksha Ayanamsa | TrueChitra [star] = Self-describing condition; Spica per Hipparcos | ChandraHari [star] = Chandra Hari, Indian J. History of Science 33(4), 1998 | GalacticCenter0Sag [star] = Self-describing condition; Sgr A* per Gordon, de Witt & Jacobs (2023), AJ 165, 49.",
             "enum": [
               "IndianOfficial",
               "FaganBradley",
@@ -93,10 +93,6 @@
               "type": "object"
             },
             "type": "array"
-          },
-          "ayanamsha_value": {
-            "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees. Zero for a tropical chart.",
-            "type": "number"
           },
           "config_summary": {
             "description": "One-line record of the ephemeris, house system and ayanamsha used.",
@@ -195,6 +191,10 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "true_ayanamsha_value": {
+            "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees. Zero for a tropical chart.",
+            "type": "number"
           }
         },
         "required": [
@@ -698,7 +698,7 @@
       "inputSchema": {
         "properties": {
           "ayanamsha": {
-            "description": "Sidereal zodiac system. Eleven systems, each derived forward from a primary source and none tuned to match another implementation. The chart's ayanamsha_value output field reports the TRUE ayanamsha (mean plus nutation in longitude) already applied — nutation is included, do not add it yourself. Pass Tropical for no rotation. Systems: IndianOfficial = Indian Astronomical Ephemeris 2022, AYANAMSA section: 23 deg 51 min 25.53 sec at J2000.0, propagated by P03 general precession | FaganBradley = Fagan & Firebrace, Primer of Sidereal Astrology: synetic vernal point 335 deg 57 min 28.64 sec at B1950.0, ayanamsha = 360 deg minus SVP | Krishnamurti = Krishnamurti Padhdhati Vol-I: 22 deg 22 min 00 sec on the 1st of Chitra 1900, propagated at KSK's stated 50.2388475 arcsec/yr | Raman = Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49 | SuryaSiddhanta = Surya Siddhanta Ch. 3 vv. 9-12 | Yukteshwar = Yukteswar, The Holy Science (1894) | RevatiPaksha [star] = Revati at the sidereal initial point, the majority reading against Surya Siddhanta Ch. 8's own 359 deg 50 min, zeta Piscium per Hipparcos | PushyaPaksha [star] = Narasimha Rao, Introducing Pushya-paksha Ayanamsa | TrueChitra [star] = Self-describing condition; Spica per Hipparcos | ChandraHari [star] = Chandra Hari, Indian J. History of Science 33(4), 1998 | GalacticCenter0Sag [star] = Self-describing condition; Sgr A* per Gordon, de Witt & Jacobs (2023), AJ 165, 49.",
+            "description": "Sidereal zodiac system. Eleven systems, each derived forward from a primary source and none tuned to match another implementation. The chart's true_ayanamsha_value output field reports the TRUE ayanamsha (mean plus nutation in longitude) already applied — nutation is included, do not add it yourself. Pass Tropical for no rotation. Systems: IndianOfficial = Indian Astronomical Ephemeris 2022, AYANAMSA section: 23 deg 51 min 25.53 sec at J2000.0, propagated by P03 general precession | FaganBradley = Fagan & Firebrace, Primer of Sidereal Astrology: synetic vernal point 335 deg 57 min 28.64 sec at B1950.0, ayanamsha = 360 deg minus SVP | Krishnamurti = Krishnamurti Padhdhati Vol-I: 22 deg 22 min 00 sec on the 1st of Chitra 1900, propagated at KSK's stated 50.2388475 arcsec/yr | Raman = Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49 | SuryaSiddhanta = Surya Siddhanta Ch. 3 vv. 9-12 | Yukteshwar = Yukteswar, The Holy Science (1894) | RevatiPaksha [star] = Revati at the sidereal initial point, the majority reading against Surya Siddhanta Ch. 8's own 359 deg 50 min, zeta Piscium per Hipparcos | PushyaPaksha [star] = Narasimha Rao, Introducing Pushya-paksha Ayanamsa | TrueChitra [star] = Self-describing condition; Spica per Hipparcos | ChandraHari [star] = Chandra Hari, Indian J. History of Science 33(4), 1998 | GalacticCenter0Sag [star] = Self-describing condition; Sgr A* per Gordon, de Witt & Jacobs (2023), AJ 165, 49.",
             "enum": [
               "IndianOfficial",
               "FaganBradley",
@@ -760,10 +760,6 @@
       "name": "compute_vargas",
       "outputSchema": {
         "properties": {
-          "ayanamsha_value": {
-            "description": "True ayanamsha (mean plus nutation in longitude) applied before dividing, in degrees. Zero when Tropical.",
-            "type": "number"
-          },
           "julian_day": {
             "description": "The Julian Day the vargas were computed for, echoed back.",
             "type": "number"
@@ -771,6 +767,10 @@
           "tradition": {
             "description": "The tradition actually used: 'modality' or 'element'.",
             "type": "string"
+          },
+          "true_ayanamsha_value": {
+            "description": "True ayanamsha (mean plus nutation in longitude) applied before dividing, in degrees. Zero when Tropical.",
+            "type": "number"
           },
           "vargas": {
             "description": "One entry per requested division, in the order requested.",

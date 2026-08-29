@@ -575,11 +575,11 @@ fn mcp_compute_vargas_documented_path_returns_charts() {
 
     // The ayanamsha was applied before dividing, not ignored.
     assert!(
-        result["ayanamsha_value"]
+        result["true_ayanamsha_value"]
             .as_f64()
             .is_some_and(|a| a > 23.0 && a < 24.5),
         "IndianOfficial at J2000 is ~23.86 deg, got {}",
-        result["ayanamsha_value"]
+        result["true_ayanamsha_value"]
     );
 }
 

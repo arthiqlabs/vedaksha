@@ -82,7 +82,7 @@ pub fn definition() -> super::ToolDefinition {
                     "type": "number",
                     "description": "The Julian Day the chart was cast for, echoed back."
                 },
-                "ayanamsha_value": {
+                "true_ayanamsha_value": {
                     "type": "number",
                     "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees. Zero for a tropical chart."
                 },

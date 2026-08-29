@@ -936,7 +936,7 @@ fn compute_shadbala_surfaces_agree() {
 ///     `Zodiac: IndianOfficial` — under the schema default it would read
 ///     `Zodiac: Tropical`, and that string is the cheapest proof the frame
 ///     argument survived the trip on both surfaces.
-///   * `ayanamsha_value` must sit in [23.6, 23.7]: the Indian official
+///   * `true_ayanamsha_value` must sit in [23.6, 23.7]: the Indian official
 ///     ayanamsha is 23°51′25″.53 (23.857°) at J2000 and 23.654° here
 ///     at J2000, and this instant is 5313.06 d = 14.55 yr earlier, so at the
 ///     ~50.3″/yr general-precession rate the offset is 23.853 − 14.55 ×
@@ -976,7 +976,7 @@ fn compute_natal_chart_surfaces_agree_sidereal() {
     let planets = wasm["planets"].as_array().expect("planets array");
     assert_eq!(planets.len(), 10, "ten bodies requested, ten rows back");
     assert_eq!(wasm["houses"]["cusps"].as_array().unwrap().len(), 12);
-    let ayanamsha = wasm["ayanamsha_value"].as_f64().expect("a number");
+    let ayanamsha = wasm["true_ayanamsha_value"].as_f64().expect("a number");
     assert!(
         (23.6..23.7).contains(&ayanamsha),
         "sanity: the Indian official ayanamsha in mid-1985 is ≈23.65°, got {ayanamsha}"

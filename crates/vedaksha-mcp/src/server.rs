@@ -473,7 +473,7 @@ impl McpServer {
                 "applying": a.motion == vedaksha_astro::aspects::AspectMotion::Applying,
                 "strength": a.strength,
             })).collect::<Vec<_>>(),
-            "ayanamsha_value": ayanamsha_value,
+            "true_ayanamsha_value": ayanamsha_value,
             "julian_day": jd,
             "config_summary": chart.config_summary,
         });
@@ -1063,7 +1063,7 @@ impl McpServer {
                 .collect();
             return Ok(serde_json::json!({
                 "julian_day": input.julian_day,
-                "ayanamsha_value": 0.0,
+                "true_ayanamsha_value": 0.0,
                 "tradition": tradition_name,
                 "vargas": vargas,
             }));
@@ -1133,7 +1133,7 @@ impl McpServer {
 
         Ok(serde_json::json!({
             "julian_day": input.julian_day,
-            "ayanamsha_value": ayanamsha_value,
+            "true_ayanamsha_value": ayanamsha_value,
             "tradition": tradition_name,
             "vargas": vargas,
         }))
@@ -1911,7 +1911,7 @@ mod tests {
 
         let tropical = chart(r#"{"julian_day":2451545.0,"latitude":28.6,"longitude":77.2}"#);
         assert_eq!(
-            tropical["ayanamsha_value"].as_f64(),
+            tropical["true_ayanamsha_value"].as_f64(),
             Some(0.0),
             "the tropical default is a zero rotation, stated explicitly"
         );
@@ -1919,7 +1919,7 @@ mod tests {
         let sidereal = chart(
             r#"{"julian_day":2451545.0,"latitude":28.6,"longitude":77.2,"ayanamsha":"Lahiri"}"#,
         );
-        let offset = sidereal["ayanamsha_value"].as_f64().expect("a number");
+        let offset = sidereal["true_ayanamsha_value"].as_f64().expect("a number");
         assert!(
             (23.8..23.9).contains(&offset),
             "the Indian official ayanamsha at J2000 is 23°51′25″.53 ≈ 23.86°, got {offset}"

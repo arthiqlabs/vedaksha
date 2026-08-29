@@ -196,7 +196,7 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 /// [`vedaksha_astro::sidereal::tropical_to_sidereal`]'s own contract. This is a
 /// distinct, standalone conversion utility, not the chart-building path — it is
 /// unaffected by `compute_natal_chart`/`compute_vargas` now reporting the true
-/// (mean + nutation) ayanamsha in their `ayanamsha_value` output field.
+/// (mean + nutation) ayanamsha in their `true_ayanamsha_value` output field.
 ///
 /// # Arguments
 /// * `tropical_longitude` — Tropical longitude in degrees
@@ -473,7 +473,7 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
             "applying": a.motion == vedaksha_astro::aspects::AspectMotion::Applying,
             "strength": a.strength,
         })).collect::<Vec<_>>(),
-        "ayanamsha_value": ayanamsha_value,
+        "true_ayanamsha_value": ayanamsha_value,
         "julian_day": jd,
         "config_summary": chart.config_summary,
     });
@@ -1117,7 +1117,7 @@ mod tests {
         assert!(output["houses"].is_object());
         assert!(output["aspects"].is_array());
         assert!(output["julian_day"].is_number());
-        assert!(output["ayanamsha_value"].is_number());
+        assert!(output["true_ayanamsha_value"].is_number());
 
         let planets = output["planets"].as_array().unwrap();
         assert_eq!(planets.len(), 9);
@@ -1131,7 +1131,7 @@ mod tests {
         // mangling the value — not the value being one particular constant,
         // which is a question for the derivation and its fixture.
         let jd = output["julian_day"].as_f64().unwrap();
-        let ayan = output["ayanamsha_value"].as_f64().unwrap();
+        let ayan = output["true_ayanamsha_value"].as_f64().unwrap();
         let reference = vedaksha_astro::sidereal::true_ayanamsha_value(
             vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
             jd,
@@ -1157,7 +1157,7 @@ mod tests {
     /// (`compute_chart` fed a UT1 RAMC and a `ChartConfig`), so it inherits
     /// the same gap: nothing checked that the caller's `ayanamsha` string
     /// reached the config. `compute_natal_chart_inner_known_chart` above looks
-    /// like it covers this and does not — `ayanamsha_value` is serialised from
+    /// like it covers this and does not — `true_ayanamsha_value` is serialised from
     /// `ayanamsha_system` directly, on a separate line from the `ChartConfig`,
     /// so forcing `ayanamsha: Some(Ayanamsha::Tropical)` into the config
     /// leaves that assertion reading a healthy sidereal offset while every longitude

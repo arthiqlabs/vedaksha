@@ -122,7 +122,7 @@ pub fn definition() -> super::ToolDefinition {
                     "type": "number",
                     "description": "The Julian Day the vargas were computed for, echoed back."
                 },
-                "ayanamsha_value": {
+                "true_ayanamsha_value": {
                     "type": "number",
                     "description": "True ayanamsha (mean plus nutation in longitude) applied before dividing, in degrees. Zero when Tropical."
                 },
