@@ -12,7 +12,12 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 root="$(cd "$here/../.." && pwd)"
 out="$here/src/vedaksha/_wasm/vedaksha.wasm"
 
-cargo build --release --target wasm32-unknown-unknown -p vedaksha-py-engine
+# +simd128 makes wide's f64x4 vectorize the lunar kernel (otherwise it falls
+# back to scalar) -- matches release.yml's wasm job, which sets the same flag
+# for the npm package's wasm build. Verified bit-identical against the
+# scalar build via bindings/python/tests/conformance/test_parity.py before
+# this was enabled; see docs/audit/2026-08-29-perf-investigation.md #7b.
+RUSTFLAGS="-C target-feature=+simd128" cargo build --release --target wasm32-unknown-unknown -p vedaksha-py-engine
 
 built="$root/target/wasm32-unknown-unknown/release/vedaksha_py_engine.wasm"
 mkdir -p "$(dirname "$out")"
