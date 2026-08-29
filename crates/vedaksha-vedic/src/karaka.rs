@@ -10,7 +10,30 @@
 //! in the 8-karaka scheme, using a reflected degree (30° − degrees) because
 //! it moves retrograde.
 //!
-//! Source: Jaimini Sutras 1.1.
+//! # Sources — two distinct claims, cited separately
+//!
+//! The karaka-ranking chain itself (Atmakaraka through Darakaraka, each the
+//! next-highest degree after the previous) is Jaimini's own sutra text,
+//! Adhyaya 1 Pada 1 — commonly numbered around sutra 1.1.11 for Atmakaraka,
+//! though the exact numbering varies by commentarial tradition (a second,
+//! independently-numbered rendering places the same rule at 1.1.13). The
+//! same root sutra names Rahu explicitly as an admissible 8th karaka
+//! alongside the seven classical grahas ("of the seven... or the eight...",
+//! in the sutra's own wording) — the 8-karaka scheme is not a later addition
+//! layered on top of a silent 7-planet text.
+//!
+//! The specific rule applied here — reading a retrograde body's degree in
+//! reverse — is a traditional application of the same reverse-motion
+//! (Apasavya) principle Jaimini's own text uses a few sutras earlier for
+//! Ketu's Argala (Jaimini Sutras 1.1.10). The literal "30° minus degree"
+//! arithmetic is attested in a later classical text, Parashara's *Brihat
+//! Parashara Hora Shastra* (chapter on Karakatwas, commonly numbered ch.
+//! 32) — not as a separately numbered sutra within Jaimini's own karaka
+//! passage. Both are legitimate classical sources; neither settles two
+//! genuinely open scholarly questions this module does not take a position
+//! on: whether Rahu's inclusion in the 8-karaka scheme is unconditional (as
+//! implemented here) or a tie-break-only fallback per some readings, and the
+//! exact sutra-number scheme for the ranking chain above.
 
 use serde::{Deserialize, Serialize};
 
@@ -80,7 +103,10 @@ pub(crate) fn degrees_in_sign(longitude: f64) -> f64 {
 /// change which planet ranks where.
 const BOUNDARY_EPSILON_DEG: f64 = 1e-9;
 
-/// Rahu's effective degree is reflected because it moves retrograde.
+/// Rahu's effective degree is reflected because it moves retrograde. See the
+/// module documentation's "Sources" section for the specific classical basis
+/// (Jaimini's reverse-motion principle, the literal arithmetic from
+/// Parashara's BPHS) and the open questions it does not resolve.
 ///
 /// When Rahu is at (or within floating-point noise of) 0° of a sign — a sign
 /// boundary — it has traversed no degrees and ranks lowest (0.0), not
