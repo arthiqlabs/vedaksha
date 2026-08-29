@@ -32,7 +32,13 @@ pub enum Body {
     Pluto,
     /// Mean ascending lunar node.
     MeanNode,
-    /// True ascending lunar node (Meeus 5-term approximation, ~0.09° accuracy).
+    /// True ascending lunar node from osculating orbital elements (0.6″ max
+    /// vs JPL DE441 over 1900–2100; measured 2026-07-16 across 2,435
+    /// epochs). Derived from Moon position/velocity via ELP/MPP02. As of
+    /// this release, numerically identical to [`Self::TrueNodeOsculating`]
+    /// — kept as a separate variant for API stability. Previously a 5-term
+    /// Meeus approximation; see `DATA_PROVENANCE.md`'s "Fix 2" entry for
+    /// that history.
     TrueNode,
     /// True ascending lunar node from osculating orbital elements (0.6″ max vs
     /// JPL DE441 over 1900–2100; measured 2026-07-16 across 2,435 epochs).
@@ -40,7 +46,9 @@ pub enum Body {
     TrueNodeOsculating,
     /// Mean descending lunar node (Ketu) — [`Self::MeanNode`] + 180°.
     MeanSouthNode,
-    /// True descending lunar node (Ketu) — [`Self::TrueNode`] + 180°.
+    /// True descending lunar node (Ketu) — [`Self::TrueNode`] + 180°. As of
+    /// this release, numerically identical to
+    /// [`Self::TrueSouthNodeOsculating`].
     TrueSouthNode,
     /// Osculating descending lunar node (Ketu) — [`Self::TrueNodeOsculating`]
     /// + 180°.
