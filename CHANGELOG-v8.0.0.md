@@ -25,7 +25,7 @@ full workspace test run before and after.
 - `tropical_to_sidereal` → `mean_tropical_to_sidereal`
 - `get_ayanamsha` → `get_mean_ayanamsha`
 
-Any direct caller of these four Rust functions or two wasm/JS exports must update to the new
+Any direct caller of these three Rust functions or two wasm/JS exports must update to the new
 names. Every other public function, every MCP tool name, and every MCP tool's input parameter
 names (including the `ayanamsha` parameter that selects a sidereal *system*, e.g.
 `"IndianOfficial"` — a different concept from mean-vs-true, and not touched by this release) are
@@ -68,6 +68,7 @@ both the published Rust crate and the published wasm/npm package — a real brea
 any direct caller by strict semver, regardless of how small the rename is in spirit. This ships
 as a **major** version bump.
 
-**Scale:** four Rust/wasm function names and one served JSON field name change. No ephemeris,
+**Scale:** five Rust/wasm function names (three Rust, two wasm) and one served JSON field name
+change. No ephemeris,
 ayanamsha derivation, nutation series, or computed astronomical value changes as a result of
 this release — every behavioral change already shipped in v7.6.0. This release is naming-only.
