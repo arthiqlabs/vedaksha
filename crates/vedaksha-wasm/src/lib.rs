@@ -443,7 +443,11 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
         &config,
     );
 
-    let ayanamsha_value = vedaksha_astro::sidereal::ayanamsha_value(ayanamsha_system, jd);
+    // Uses the TRUE ayanamsha so this field always equals the rotation
+    // `compute_chart` actually performed (see `sidereal::true_ayanamsha_value`).
+    // Must stay identical to the MCP path (`vedaksha-mcp/src/server.rs`);
+    // `mcp_surface_parity` enforces it.
+    let ayanamsha_value = vedaksha_astro::sidereal::true_ayanamsha_value(ayanamsha_system, jd);
 
     // Serialize
     let output = serde_json::json!({
@@ -1122,7 +1126,7 @@ mod tests {
         // which is a question for the derivation and its fixture.
         let jd = output["julian_day"].as_f64().unwrap();
         let ayan = output["ayanamsha_value"].as_f64().unwrap();
-        let reference = vedaksha_astro::sidereal::ayanamsha_value(
+        let reference = vedaksha_astro::sidereal::true_ayanamsha_value(
             vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
             jd,
         );
@@ -1159,12 +1163,12 @@ mod tests {
     /// only in the `ayanamsha` field:
     ///
     /// ```text
-    /// sidereal_x = normalize(tropical_x − ayanamsha_value(Lahiri, jd))
+    /// sidereal_x = normalize(tropical_x − true_ayanamsha_value(Lahiri, jd))
     /// ```
     ///
     /// for `asc`, `mc`, all twelve cusps and every planet longitude. No
     /// external oracle — the right-hand side comes from the same public
-    /// `ayanamsha_value` a caller would use, and the identity is the
+    /// `true_ayanamsha_value` a caller would use, and the identity is the
     /// definition of a sidereal frame.
     ///
     /// # Derivation
@@ -1189,7 +1193,7 @@ mod tests {
     /// stays green.
     #[test]
     fn served_sidereal_request_yields_a_sidereal_chart() {
-        use vedaksha_astro::sidereal::{Ayanamsha, ayanamsha_value};
+        use vedaksha_astro::sidereal::{Ayanamsha, true_ayanamsha_value};
         use vedaksha_math::angle::normalize_degrees;
 
         let served = |ayanamsha: &str| -> serde_json::Value {
@@ -1225,10 +1229,10 @@ mod tests {
         );
 
         // Guard: a degenerate ayanamsha makes every assertion below vacuous.
-        let ayan = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
+        let ayan = true_ayanamsha_value(Ayanamsha::IndianOfficial, jd);
         assert!(
             ayan > 20.0,
-            "ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected the full Lahiri offset. With a \
+            "true_ayanamsha_value(Lahiri, {jd}) = {ayan}°, expected the full Lahiri offset. With a \
              near-zero ayanamsha this test cannot tell a sidereal chart from a \
              tropical one."
         );
