@@ -39,19 +39,22 @@ pub fn mean_node(jd: f64) -> f64 {
     vedaksha_math::angle::normalize_degrees(omega)
 }
 
-/// Compute the true longitude of the ascending node.
+/// Meeus 5-term truncated approximation of the true node — kept as a
+/// private, independently-derived cross-check for
+/// [`true_node_osculating`], not for production use.
 ///
-/// True node = mean node + principal perturbation terms.
+/// [`Body::TrueNode`] returns [`true_node_osculating`] (see its doc
+/// comment for the accuracy claim). This function exists only so this
+/// module's own tests keep a second, independently-sourced method to
+/// diff the osculating computation against — the exact class of
+/// regression guard that caught the v7.0.0 node-frame defect, where two
+/// node methods silently drifted into different reference frames.
 ///
 /// Uses the 5 largest perturbation terms from Meeus Ch. 47.
 /// Residual vs full lunar theory: ~0.09° max for modern dates.
-/// Improving beyond this requires verified coefficients from
-/// Chapront's complete lunar node series — not attempted here
-/// to avoid sign/argument transcription errors.
 ///
 /// Source: Meeus, *Astronomical Algorithms*, 2nd ed., Ch. 47.
-#[must_use]
-pub fn true_node(jd: f64) -> f64 {
+fn true_node_meeus_truncated(jd: f64) -> f64 {
     let t = julian::centuries_from_j2000(jd);
     let mean = mean_node(jd);
 
@@ -174,9 +177,15 @@ pub fn south_node_mean(jd: f64) -> f64 {
 }
 
 /// South Node (Ketu) = North Node + 180° (true).
+///
+/// As of this release [`Body::TrueNode`] itself returns
+/// [`true_node_osculating`] rather than a truncated series, so this is
+/// now numerically identical to [`south_node_osculating`] and simply
+/// delegates to it. Both names are kept so `Body::TrueSouthNode` and
+/// `Body::TrueSouthNodeOsculating` remain distinct, stable API surface.
 #[must_use]
 pub fn south_node_true(jd: f64) -> f64 {
-    vedaksha_math::angle::normalize_degrees(true_node(jd) + 180.0)
+    south_node_osculating(jd)
 }
 
 /// South Node (Ketu) = North Node + 180° (osculating).
@@ -195,7 +204,7 @@ pub fn south_node_osculating(jd: f64) -> f64 {
 pub fn node_longitude(body: Body, jd_tt: f64) -> Option<f64> {
     match body {
         Body::MeanNode => Some(mean_node(jd_tt)),
-        Body::TrueNode => Some(true_node(jd_tt)),
+        Body::TrueNode => Some(true_node_osculating(jd_tt)),
         Body::TrueNodeOsculating => Some(true_node_osculating(jd_tt)),
         Body::MeanSouthNode => Some(south_node_mean(jd_tt)),
         Body::TrueSouthNode => Some(south_node_true(jd_tt)),
@@ -257,19 +266,6 @@ mod tests {
     }
 
     #[test]
-    fn true_node_differs_from_mean_node() {
-        let mn = mean_node(J2000);
-        let tn = true_node(J2000);
-        // Perturbation should make them differ (but not by huge amounts)
-        let diff = (tn - mn).abs();
-        assert!(diff > 0.0, "True node should differ from mean node");
-        assert!(
-            diff < 5.0,
-            "True node perturbation unexpectedly large: {diff:.4}°"
-        );
-    }
-
-    #[test]
     fn south_node_is_north_plus_180() {
         let mn = mean_node(J2000);
         let sn = south_node_mean(J2000);
@@ -277,24 +273,6 @@ mod tests {
         assert!(
             (sn - expected).abs() < 1e-10,
             "South node should be north + 180°: south={sn:.6}, north+180={expected:.6}"
-        );
-    }
-
-    #[test]
-    fn true_node_at_j2000_close_to_mean_node() {
-        // The maximum perturbation of the true node from the mean node is ≈ 1.60°
-        // (dominated by the 1.4979° sin(2(D-F)) term in Meeus Ch. 47).
-        // A tight tolerance of 1.7° confirms the perturbation is physically bounded.
-        // Reference: Meeus, "Astronomical Algorithms" 2nd ed., Ch. 47.
-        let mn = mean_node(J2000);
-        let tn = true_node(J2000);
-        let mut diff = (tn - mn).abs();
-        if diff > 180.0 {
-            diff = 360.0 - diff;
-        }
-        assert!(
-            diff < 1.7,
-            "True node at J2000 should be within 1.7° of mean node, diff={diff:.4}°"
         );
     }
 
@@ -347,7 +325,7 @@ mod tests {
             (2_469_807.5, "2050"),
             (2_488_069.5, "2100"),
         ] {
-            let tn = true_node(jd);
+            let tn = true_node_meeus_truncated(jd);
             let osc = true_node_osculating(jd);
             let mut diff = (osc - tn).abs();
             if diff > 180.0 {
@@ -456,7 +434,7 @@ mod tests {
 
         for (jd, label) in &epochs {
             let mean = mean_node(*jd);
-            let true_m = true_node(*jd);
+            let true_m = true_node_meeus_truncated(*jd);
             let osc = true_node_osculating(*jd);
 
             // Valid range
@@ -506,7 +484,7 @@ mod tests {
         for jd in [2_415_020.5, 2_451_545.0, 2_460_000.5, 2_488_070.0] {
             for (north, south, label) in [
                 (mean_node(jd), south_node_mean(jd), "mean"),
-                (true_node(jd), south_node_true(jd), "true"),
+                (true_node_osculating(jd), south_node_true(jd), "true"),
                 (
                     true_node_osculating(jd),
                     south_node_osculating(jd),
