@@ -11,7 +11,7 @@
 CARGO ?= cargo
 PY    ?= python3
 
-.PHONY: gate fmt lint test guards portability wasm validate clean-check help
+.PHONY: gate fmt lint test guards portability wasm validate bench clean-check help
 
 help:
 	@echo "make gate        — everything CI gates. Run before every commit."
@@ -22,6 +22,7 @@ help:
 	@echo "make portability — no-default-features builds (the no_std surface)"
 	@echo "make wasm        — rebuild the Python binding's wasm blob"
 	@echo "make validate    — release + ignored tests. Tens of minutes; pre-tag only."
+	@echo "make bench       — criterion suite under the shipped RUSTFLAGS for this arch"
 
 # ── The gate ────────────────────────────────────────────────────────────────
 # Ordered cheapest-first so a formatting slip fails in two seconds rather than
@@ -71,3 +72,20 @@ wasm:
 # release.yml runs no tests of its own.
 validate:
 	$(CARGO) test --workspace --release --locked -- --include-ignored
+
+# Not part of `gate`: criterion benchmarks take a while and are not a
+# pass/fail check. Reproduces the shipped build's codegen locally so numbers
+# here are comparable to the tracked trend in benchmarks.yml, instead of a
+# plain-scalar build that never exercises the 4-wide SIMD lunar kernel.
+# RUSTFLAGS matches Dockerfile's per-arch case and release.yml's build-mcp
+# matrix: x86-64-v3 (AVX2) on x86_64, nothing extra on aarch64 (NEON is
+# already the baseline there). See
+# docs/audit/2026-08-29-perf-investigation.md #7a.
+bench:
+	@arch="$$(uname -m)"; \
+	case "$$arch" in \
+	  x86_64) flags="-C target-cpu=x86-64-v3" ;; \
+	  *)      flags="" ;; \
+	esac; \
+	echo "── bench (arch=$$arch, RUSTFLAGS='$$flags') ──"; \
+	RUSTFLAGS="$$flags" $(CARGO) bench -p vedaksha-ephem-core

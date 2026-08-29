@@ -55,12 +55,33 @@
 //!   [`elp_geocentric`] for J2000-fixed work).
 
 use core::f64::consts::PI;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 use wide::f64x4;
 
 use crate::analytical::coefficients::loader::{ElpMainTerm, ElpPertTerm};
 use crate::analytical::coefficients::{moon_distance, moon_latitude, moon_longitude};
 use crate::analytical::simd_trig::sincos_f64x4;
+
+/// Count of [`elp_geocentric`] evaluations performed by this process.
+///
+/// Instrumentation, not part of the numerical API — exists so regression
+/// guards (`tests/chart_lunar_evals.rs`) can count *every* real ELP/MPP02
+/// evaluation, including ones invisible to a trait-level wrapper around
+/// [`crate::jpl::EphemerisProvider::compute_state`]:
+/// `AnalyticalProvider::compute_state(EarthMoonBarycenter, jd)` calls
+/// `moon_state(jd)` -> [`elp_geocentric`] internally, never passing through
+/// `compute_state(Body::Moon, ·)` (see
+/// `docs/audit/2026-08-29-perf-investigation.md` #1).
+///
+/// Always compiled rather than `#[cfg(test)]`-gated: an integration test
+/// under `tests/` links against the library built as an ordinary dependency,
+/// not with the crate's own `cfg(test)`, so a `cfg(test)` counter would be
+/// invisible to it. The cost is one relaxed atomic increment per evaluation
+/// — negligible next to the ~35,758 series terms each evaluation performs —
+/// and it has no effect on any computed value.
+#[doc(hidden)]
+pub static ELP_GEOCENTRIC_CALLS: AtomicU64 = AtomicU64::new(0);
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
@@ -101,6 +122,7 @@ pub enum Fit {
 /// ecliptic and equinox of J2000.
 #[must_use]
 pub fn elp_geocentric(jd: f64) -> MoonRectangular {
+    ELP_GEOCENTRIC_CALLS.fetch_add(1, Ordering::Relaxed);
     elp_geocentric_with_fit(jd, Fit::Llr)
 }
 
@@ -907,6 +929,188 @@ mod tests {
         assert!(
             dr < 100.0,
             "fit difference at J2000 = {dr:.3} km, too large"
+        );
+    }
+
+    /// `simd_trig::sincos_f64x4` was validated (before this test existed)
+    /// only over `|x| ≤ 3000`. This test computes the ACTUAL `|phase|`
+    /// values `eval_main_series`/`eval_pert_series` feed to that kernel
+    /// across `AnalyticalProvider`'s full supported JD range (`JD_MIN` /
+    /// `JD_MAX` in `analytical/mod.rs`, ~-2000 CE to ~+3000 CE), by
+    /// evaluating the real argument polynomials and the real per-term
+    /// integer multipliers from every coefficient table — not an assumed
+    /// or guessed bound. See docs/audit/2026-08-29-perf-investigation.md
+    /// §3b, which independently derived 3,303,561 rad at t=-40 centuries
+    /// by the same method.
+    ///
+    /// It then measures `sincos_f64x4` vs. scalar `libm::sincos` at every
+    /// one of those real phases, plus a dense sweep across the full
+    /// reachable interval, and records the actual error — this is the
+    /// number that decides whether the kernel is safe to keep using here
+    /// (and whether it would be safe to extend to VSOP87A, which runs to
+    /// even larger arguments).
+    #[test]
+    fn sincos_matches_libm_at_real_elp_phase_domain() {
+        use crate::analytical::{JD_MAX, JD_MIN};
+
+        let t_min = (JD_MIN - J2000) / DAYS_PER_CENTURY;
+        let t_max = (JD_MAX - J2000) / DAYS_PER_CENTURY;
+        // J2000, present-day (~2025), several points spanning to both
+        // range extremes.
+        let epochs = [
+            t_min, -30.0, -20.0, -10.0, -5.0, 0.0, 0.253, 2.0, 5.0, 8.0, t_max,
+        ];
+
+        let args = build_args(Fit::Llr);
+
+        let mut max_abs_phase = 0.0_f64;
+        let mut max_abs_phase_t = 0.0_f64;
+        let mut real_phases: Vec<f64> = Vec::new();
+
+        for &t in &epochs {
+            let t_pow = [1.0, t, t * t, t * t * t, t * t * t * t];
+
+            // Main series: 4-arg dot products (D, F, l, l').
+            let mut a_arg4 = [0.0_f64; 4];
+            for (d, coeffs) in args.del.iter().enumerate() {
+                a_arg4[d] = reduce_arg(coeffs, &t_pow).0;
+            }
+            for terms in [
+                moon_longitude::MAIN.as_slice(),
+                moon_latitude::MAIN.as_slice(),
+                moon_distance::MAIN.as_slice(),
+            ] {
+                for term in terms {
+                    let phase = f64::from(term.i1) * a_arg4[0]
+                        + f64::from(term.i2) * a_arg4[1]
+                        + f64::from(term.i3) * a_arg4[2]
+                        + f64::from(term.i4) * a_arg4[3];
+                    real_phases.push(phase);
+                    if phase.abs() > max_abs_phase {
+                        max_abs_phase = phase.abs();
+                        max_abs_phase_t = t;
+                    }
+                }
+            }
+
+            // Perturbation series: 13-arg dot products (4 Delaunay + 8
+            // planetary mean longitudes + zeta).
+            let mut a_arg13 = [0.0_f64; 13];
+            for (d, coeffs) in args.del.iter().enumerate() {
+                a_arg13[d] = reduce_arg(coeffs, &t_pow).0;
+            }
+            for (p, coeffs) in args.pla.iter().enumerate() {
+                a_arg13[4 + p] = reduce_arg(coeffs, &t_pow).0;
+            }
+            a_arg13[12] = reduce_arg(&args.zeta, &t_pow).0;
+
+            for groups in [
+                [
+                    moon_longitude::PERT_0.as_slice(),
+                    moon_longitude::PERT_1.as_slice(),
+                    moon_longitude::PERT_2.as_slice(),
+                    moon_longitude::PERT_3.as_slice(),
+                ],
+                [
+                    moon_latitude::PERT_0.as_slice(),
+                    moon_latitude::PERT_1.as_slice(),
+                    moon_latitude::PERT_2.as_slice(),
+                    moon_latitude::PERT_3.as_slice(),
+                ],
+                [
+                    moon_distance::PERT_0.as_slice(),
+                    moon_distance::PERT_1.as_slice(),
+                    moon_distance::PERT_2.as_slice(),
+                    moon_distance::PERT_3.as_slice(),
+                ],
+            ] {
+                for group in groups {
+                    for term in group {
+                        let phase = f64::from(term.i1) * a_arg13[0]
+                            + f64::from(term.i2) * a_arg13[1]
+                            + f64::from(term.i3) * a_arg13[2]
+                            + f64::from(term.i4) * a_arg13[3]
+                            + f64::from(term.i5) * a_arg13[4]
+                            + f64::from(term.i6) * a_arg13[5]
+                            + f64::from(term.i7) * a_arg13[6]
+                            + f64::from(term.i8) * a_arg13[7]
+                            + f64::from(term.i9) * a_arg13[8]
+                            + f64::from(term.i10) * a_arg13[9]
+                            + f64::from(term.i11) * a_arg13[10]
+                            + f64::from(term.i12) * a_arg13[11]
+                            + f64::from(term.i13) * a_arg13[12];
+                        real_phases.push(phase);
+                        if phase.abs() > max_abs_phase {
+                            max_abs_phase = phase.abs();
+                            max_abs_phase_t = t;
+                        }
+                    }
+                }
+            }
+        }
+
+        println!(
+            "max |phase| fed to sincos_f64x4 across the supported JD range \
+             [{JD_MIN}, {JD_MAX}]: {max_abs_phase:e} rad at t={max_abs_phase_t} cy \
+             ({} real term-phase samples)",
+            real_phases.len()
+        );
+        // Cross-check against the investigation's independently-derived
+        // figure at the JD_MIN edge (t=-40 cy): ~3,303,561 rad. Our grid
+        // uses the exact t_min rather than -40.0, so allow a wide band —
+        // this is a sanity check that we are in the same regime, not a
+        // precise reproduction.
+        assert!(
+            max_abs_phase > 3_000_000.0,
+            "expected max |phase| > 3e6 rad near JD_MIN (t_min={t_min}), got {max_abs_phase:e}"
+        );
+
+        // Dense sweep across the full reachable interval (irrational step,
+        // as in simd_trig::tests::matches_libm_across_domain) to catch
+        // reduction-boundary cases the discrete real term phases don't
+        // happen to land on.
+        let mut x = -max_abs_phase;
+        while x <= max_abs_phase {
+            real_phases.push(x);
+            x += 137.035_999; // fine, irrational-ish step to vary the reduction
+        }
+
+        let mut max_sin_err = 0.0_f64;
+        let mut max_cos_err = 0.0_f64;
+        for chunk in real_phases.chunks(4) {
+            let mut lane = [0.0_f64; 4];
+            lane[..chunk.len()].copy_from_slice(chunk);
+            let (s, c) = sincos_f64x4(f64x4::from(lane));
+            let (s, c) = (s.to_array(), c.to_array());
+            for i in 0..chunk.len() {
+                let (ls, lc) = libm::sincos(lane[i]);
+                max_sin_err = max_sin_err.max((s[i] - ls).abs());
+                max_cos_err = max_cos_err.max((c[i] - lc).abs());
+            }
+        }
+
+        println!(
+            "max sin err = {max_sin_err:e}, max cos err = {max_cos_err:e} \
+             over the real ELP phase domain (|x| up to {max_abs_phase:e} rad)"
+        );
+
+        // Measured 2026-08-29 (aarch64, debug profile): max sin err
+        // 1.11e-16, max cos err 2.22e-16 — 1-2 ULP, the same order as the
+        // existing |x| ≤ 3000 test's own measured error. The vector
+        // kernel's large-argument reduction is NOT degrading here; use
+        // the same 1e-12 bound `simd_trig::tests::matches_libm_across_domain`
+        // uses, so both tests hold the kernel to one documented standard.
+        assert!(
+            max_sin_err < 1e-12,
+            "max sin abs error {max_sin_err:e} over the real production phase \
+             domain exceeds 1e-12 — the vector sincos kernel is not safe at \
+             this range; see docs/audit/2026-08-29-perf-investigation.md §3b"
+        );
+        assert!(
+            max_cos_err < 1e-12,
+            "max cos abs error {max_cos_err:e} over the real production phase \
+             domain exceeds 1e-12 — the vector sincos kernel is not safe at \
+             this range; see docs/audit/2026-08-29-perf-investigation.md §3b"
         );
     }
 }

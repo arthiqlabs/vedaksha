@@ -13,6 +13,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Run benchmarks
+        # ubuntu-latest is x86_64. Match the RUSTFLAGS the shipped x86-64
+        # binaries actually build with (Dockerfile's amd64 branch,
+        # release.yml's build-mcp x86_64-unknown-linux-gnu matrix entry) so
+        # this tracked trend measures the configuration the project ships,
+        # not a plain-scalar build. See `make bench` for the local
+        # equivalent (docs/audit/2026-08-29-perf-investigation.md #7a).
+        env:
+          RUSTFLAGS: "-C target-cpu=x86-64-v3"
         run: cargo bench --workspace 2>&1 | tee benchmark-output.txt
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
