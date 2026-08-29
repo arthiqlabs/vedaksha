@@ -1,6 +1,6 @@
 {
   "$comment": "Machine-readable release metrics for arthiqlabs/vedaksha. vedaksha.net fetches this file from raw.githubusercontent so the site stays current without a deploy — before it existed, every engine release needed a matching hand-edit and deploy of the site, and the site drifted twice. Update it in the same commit as a version bump; CI's version-check asserts engineVersion against the tag, so it cannot be silently forgotten. The test counts are the numbers the two CI commands printed at that tag, not an enumeration.",
-  "engineVersion": "7.5.0",
+  "engineVersion": "7.6.0",
   "released": "2026-08-29",
   "tests": {
     "perPush": 1093,
