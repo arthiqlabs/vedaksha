@@ -20,11 +20,11 @@ name = "dump-tools-list"
 path = "src/bin/dump_tools_list.rs"
 
 [dependencies]
-vedaksha-math = { version = "7.0.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "7.0.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "7.0.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "7.0.0", path = "../vedaksha-vedic" }
-vedaksha-graph = { version = "7.0.0", path = "../vedaksha-graph", features = ["emitters", "from-chart"] }
+vedaksha-math = { version = "8.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "8.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "8.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "8.0.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "8.0.0", path = "../vedaksha-graph", features = ["emitters", "from-chart"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

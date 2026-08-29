@@ -1,0 +1,73 @@
+# v8.0.0
+
+## Naming symmetry for mean vs. true ayanamsha — breaking API rename
+
+v7.6.0 added `true_ayanamsha_value`/`true_tropical_to_sidereal` (mean ayanamsha plus
+nutation-in-longitude) alongside the existing `ayanamsha_value`/`tropical_to_sidereal`
+(mean-only). That left an asymmetric pair: the "true" functions say what they are, but the
+mean-only ones don't say anything — nothing in `ayanamsha_value`'s name signals it's mean-only,
+which is exactly the kind of unlabeled-default ambiguity this project's own module
+documentation warns about elsewhere ("an engine that is silent about which one it returns gets
+compared against the wrong column"). This release makes the pairing fully symmetric, no
+unlabeled default on either side.
+
+**Renamed — published Rust API (`vedaksha-astro`, crates.io):**
+- `sidereal::ayanamsha_value` → `sidereal::mean_ayanamsha_value`
+- `sidereal::tropical_to_sidereal` → `sidereal::mean_tropical_to_sidereal`
+- `sidereal::sidereal_to_tropical` → `sidereal::mean_sidereal_to_tropical`
+
+`true_ayanamsha_value` and `true_tropical_to_sidereal` keep their existing names — they were
+already correctly labeled. No function body, computed value, or test assertion value changed
+anywhere; this is a pure identifier rename, independently verified against the diff and by a
+full workspace test run before and after.
+
+**Renamed — published wasm/npm API (`vedaksha-wasm`):**
+- `tropical_to_sidereal` → `mean_tropical_to_sidereal`
+- `get_ayanamsha` → `get_mean_ayanamsha`
+
+Any direct caller of these four Rust functions or two wasm/JS exports must update to the new
+names. Every other public function, every MCP tool name, and every MCP tool's input parameter
+names (including the `ayanamsha` parameter that selects a sidereal *system*, e.g.
+`"IndianOfficial"` — a different concept from mean-vs-true, and not touched by this release) are
+unchanged.
+
+## Served JSON field renamed: `ayanamsha_value` → `true_ayanamsha_value`
+
+`compute_natal_chart` and `compute_vargas` (both the MCP and wasm surfaces) report an
+`ayanamsha_value` field that — since v7.6.0 — actually reports the **true** ayanamsha (the exact
+rotation applied to the chart). That created the same kind of ambiguity as above one layer up:
+the served field shared a name with the library's `ayanamsha_value()` function, but the two mean
+different things. The field is renamed to `true_ayanamsha_value` to match the quantity it
+actually reports and the function that computes it. The MCP and wasm output schemas, the
+`ayanamsha` input parameter's description text (which references this field by name), and the
+Python binding's docstring are all updated to match. No computed value changed — this is a pure
+key rename, independently verified (including by actually building the wasm engine and running
+the Python conformance suite end-to-end, not just a static diff read).
+
+## Chara-karaka module: dedicated sources record added
+
+`docs/audit/2026-08-29-karaka-sources.md` records what was consulted for the citation rewritten
+in v7.6.0 (Jaimini's own sutra text for the karaka-ranking chain and Rahu's textual inclusion,
+Parashara's *Brihat Parashara Hora Shastra* for the specific "30 minus degree" arithmetic
+Jaimini's own text leaves implicit) — the module had no dedicated derivation record before this,
+unlike the ayanamsha and lunar-theory subsystems. No ranking behavior changed.
+
+**Disclosed here, not previously stated anywhere:** `compute_karakas` performs no rotation
+itself and is unaffected by v7.6.0's true-ayanamsha fix directly — but its typical caller chains
+`compute_natal_chart`'s (now-corrected) sidereal output straight into it. For a chart where
+Rahu's degree-within-sign sits within about the same ~17-20 arcsec margin of a sign boundary,
+that correction can move it across the boundary and change its karaka rank. This is the intended,
+correct effect of v7.6.0's fix reaching a typical caller more accurately — not a new defect in
+`compute_karakas`, and not something either release's changelog stated on its own until now. See
+`DATA_PROVENANCE.md`'s Fix 9/Fix 10 cross-reference note for the full explanation.
+
+## Release-policy note
+
+Unlike v7.6.0 (a value-only change, shipped minor), this release renames public identifiers in
+both the published Rust crate and the published wasm/npm package — a real breaking change for
+any direct caller by strict semver, regardless of how small the rename is in spirit. This ships
+as a **major** version bump.
+
+**Scale:** four Rust/wasm function names and one served JSON field name change. No ephemeris,
+ayanamsha derivation, nutation series, or computed astronomical value changes as a result of
+this release — every behavioral change already shipped in v7.6.0. This release is naming-only.

@@ -13,7 +13,7 @@ categories = ["science", "mathematics"]
 
 [dependencies]
 libm = "0.2"
-vedaksha-math = { version = "7.0.0", path = "../vedaksha-math" }
+vedaksha-math = { version = "8.0.0", path = "../vedaksha-math" }
 # SIMD lanes (safe wrapper over core::arch; no_std). Used to vectorize the
 # ELP/MPP02 lunar-series trig evaluation.
 #

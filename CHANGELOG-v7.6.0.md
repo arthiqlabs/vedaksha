@@ -20,6 +20,12 @@ release; `compute_chart` and `search_muhurta`'s sidereal lookups simply were not
   (mean ayanamsha plus nutation-in-longitude). `ayanamsha_value` and `tropical_to_sidereal`
   themselves are unchanged — they remain the standalone mean-only quantities the module has
   always documented.
+
+  > **Superseded in v8.0.0.** The `ayanamsha_value`/`tropical_to_sidereal` names above (and the
+  > `ayanamsha_value` JSON field this changelog describes below) were renamed in v8.0.0 for
+  > naming symmetry with `true_ayanamsha_value`/`true_tropical_to_sidereal` — see
+  > `CHANGELOG-v8.0.0.md`. This entry is left as written because it accurately describes what
+  > shipped in v7.6.0; it does not describe the names as they exist at HEAD.
 - `compute_chart`'s internal sidereal rotation, and `search_muhurta`'s sidereal Sun/Moon lookups,
   now use the true ayanamsha.
 - The `ayanamsha_value` field reported by `compute_natal_chart` and `compute_vargas` (both the
