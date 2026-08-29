@@ -26,6 +26,16 @@ Oracle: Moon apparent ecliptic longitude at JD 2451545.0 TT (J2000.0) = 223.3238
 License: U.S. Government work, public domain.
 Note: The test vector (numeric fact) crosses the cleanroom boundary; no JPL source code was consulted.
 
+> **Superseded 2026-08-29 — `Body::TrueNode` no longer uses the tolerance this entry
+> describes.** As of v7.5.0, `Body::TrueNode` (and `Body::TrueSouthNode`) return the
+> osculating node computation (`true_node_osculating`, already independently validated to
+> 0.6″ against JPL Horizons — see `tests/oracle_jpl/README.md`) rather than the 5-term Meeus
+> series this entry tightened a tolerance for. The Meeus formula is retained privately in
+> `crates/vedaksha-ephem-core/src/nodes.rs` as a cross-check for the osculating computation's
+> own regression tests; it is no longer reachable through any `Body` variant. This entry is
+> left in place because a provenance record is not improved by being tidied after the fact —
+> it documents what was true when it was written. See `CHANGELOG-v7.5.0.md`.
+
 ### Fix 2 — True Lunar Node Tolerance
 Source: Meeus, J. (1998). "Astronomical Algorithms", 2nd ed., Willmann-Bell, Ch. 47.
 Note: Tightened tolerance from 3° to 1.7° based on the amplitude of the dominant perturbation
