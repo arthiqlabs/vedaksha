@@ -66,7 +66,7 @@ The sharpest case is `ecliptic_position(Sun, jd)` — the workhorse of `search_t
 
 **Fix:** give `EphemerisProvider` an `earth_state`-shaped method with a default impl doing today's `EMB − Moon/EMRAT`, overridden in `AnalyticalProvider` to return `vsop_state(Earth, jd)` directly.
 
-**Determinism: breaks `analytical_bit_digest`.** `(a+b)−b ≠ a` in general. Magnitude: `b/a ≈ 3.1e-5`, so ≲1 ULP of Earth's position ≈ 0.03 m ≈ 4e-11 arcsec at 1 AU. The direct path is *more* accurate — it removes a rounding round-trip — but the digest must be re-pinned deliberately, with the reason recorded.
+**Determinism: theoretically ≲1 ULP, but need not actually move (verify, don't assume).** `(a+b)−b ≠ a` in general. Magnitude: `b/a ≈ 3.1e-5`, so ≲1 ULP of Earth's position ≈ 0.03 mm ≈ 4e-11 arcsec at 1 AU (corrected from an earlier "0.03 m" unit slip in this doc — mm, not m). `(a+b)−b` is exact whenever the addition's rounding error is strictly under `ulp(a)/2`, so the digest may not move at all in practice; measure the actual before/after digest rather than assuming a re-pin is required.
 
 **Verify:** `analytical_oracle.rs` (21,915 rows vs Horizons) unchanged within tolerance; `analytical_bit_digest` re-pinned in a reviewed commit; a direct assertion that `earth_state` now equals `vsop_state(Earth)` bit-for-bit; `chart_lunar_evals.rs` fixed first (Wave 0) so the improvement is actually observable.
 
