@@ -2643,7 +2643,7 @@ mod tests {
 
     #[test]
     fn tithi_nakshatra_end_real_ephemeris() {
-        use vedaksha_astro::sidereal::{Ayanamsha, tropical_to_sidereal};
+        use vedaksha_astro::sidereal::{Ayanamsha, true_tropical_to_sidereal};
         use vedaksha_ephem_core::analytical::AnalyticalProvider;
         use vedaksha_ephem_core::bodies::Body;
         use vedaksha_ephem_core::coordinates::apparent_position;
@@ -2683,7 +2683,7 @@ mod tests {
             apparent_position(&provider, Body::Moon, t).ok().map(|p| {
                 let trop = p.ecliptic.longitude.to_degrees();
                 (
-                    tropical_to_sidereal(trop, Ayanamsha::IndianOfficial, t),
+                    true_tropical_to_sidereal(trop, Ayanamsha::IndianOfficial, t),
                     p.longitude_speed,
                 )
             })

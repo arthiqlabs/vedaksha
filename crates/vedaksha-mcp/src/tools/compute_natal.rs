@@ -84,7 +84,7 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "ayanamsha_value": {
                     "type": "number",
-                    "description": "Mean ayanamsha applied, in degrees. Zero for a tropical chart."
+                    "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees. Zero for a tropical chart."
                 },
                 "config_summary": {
                     "type": "string",

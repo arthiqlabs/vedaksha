@@ -124,7 +124,7 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "ayanamsha_value": {
                     "type": "number",
-                    "description": "Mean ayanamsha applied before dividing, in degrees. Zero when Tropical."
+                    "description": "True ayanamsha (mean plus nutation in longitude) applied before dividing, in degrees. Zero when Tropical."
                 },
                 "tradition": {
                     "type": "string",
