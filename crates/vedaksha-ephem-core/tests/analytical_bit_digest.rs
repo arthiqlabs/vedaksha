@@ -190,10 +190,15 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// evaluations that cancel. The investigation predicted a ≲1 ULP move here and
 /// a deliberate re-pin.
 ///
-/// It does not move. `(a + b) − b` is exact whenever the addition's rounding
-/// error δ satisfies `|δ| < ulp(a)/2`, which with `|b/a| ≈ 3.1e-5` is almost
-/// always; only an exact tie rounds away. Measured by dumping all 21,915 rows
-/// either side of the change with `--nocapture`:
+/// It does not move — **for this specific fixture's 21,915 rows**, measured,
+/// not because the underlying arithmetic change is provably always
+/// bit-identical. The addition's rounding error δ satisfies `|δ| ≤
+/// ulp(1 AU)/2 ≈ 1.66e-5 m`, always — that is a sound, general *absolute*
+/// bound. But whether that perturbation reaches a *printed digest bit*
+/// depends on where in a component's floating-point representation ~1.66e-5 m
+/// happens to land, which varies row to row; it is not a property that holds
+/// or fails uniformly. Measured by dumping all 21,915 rows either side of the
+/// change with `--nocapture`:
 ///
 /// | | sha256 of the `ROW` lines |
 /// |---|---|
@@ -201,15 +206,24 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// | after  | `e1a1784dc35970a2af1316f7049bb8064bec1ce3afecc8f0da3859cf0807f5af` |
 ///
 /// `cmp` reports the two dumps byte-identical — every longitude, latitude,
-/// distance and speed bit. Ties do occur (`analytical/mod.rs`'s
-/// `earth_state_matches_the_emb_minus_moon_construction` finds 2 of 4,800
-/// components across an 800-JD sweep, both `velocity.z`, both 1 ULP), but
-/// velocity reaches an apparent position only through the light-time
-/// extrapolation `v·(−τ)` with τ ≤ a few hours, so 1 ULP of it is ~1e-20 AU and
-/// never survives to a printed bit.
+/// distance and speed bit, for these rows. Separately, `analytical/mod.rs`'s
+/// `earth_state_matches_the_emb_minus_moon_construction` (an 800-JD sweep
+/// with a fixed, non-randomized JD list) finds 2 of 4,800 components
+/// differing, both `velocity.z`, both 1 ULP — and a dedicated sweep bisected
+/// onto a `position.z` zero crossing, plus a one-second-step sweep across the
+/// 2025 March equinox, both ordinary in-range dates, measure the same
+/// underlying perturbation reaching **up to 1,237 ULP** of the affected
+/// component. Per component, the production rate at which this perturbation
+/// reaches a printed digest bit is measured at **~2.0e-4 per Sun-position
+/// row**; over this fixture's 1,535 Sun rows that predicts an *expected*
+/// ~0.31 differing rows — landing on exactly 0 is a real, reproducible
+/// result, but a coin-flip-margin one, not a guarantee.
 ///
-/// So [`EXPECTED_DIGEST`] below is unchanged, and that is the *result* of the
-/// measurement rather than an assumption that nothing happened.
+/// So [`EXPECTED_DIGEST`] below is unchanged, and that is the *measured
+/// result* for this fixture's specific rows and date range — not a proof
+/// that it must stay unchanged. **If this fixture's date range, row
+/// selection, or row count ever changes, re-verify the digest by measuring
+/// it again rather than assuming it will stay unchanged.**
 const EXPECTED_DIGEST: &str = "c3b77a61898779714b3366f5c51d4ca5b7860ad3e6669d12fc238734e754734a";
 
 /// The digest from the v6 precession correction until the `COS_EPS` correction.

@@ -323,28 +323,40 @@ impl EphemerisProvider for AnalyticalProvider {
     /// the workhorse of `search_transits` and `search_muhurta`'s solar scan,
     /// pays exactly that and nothing else of consequence.
     ///
-    /// # Determinism: bounded by 1 ULP, and measured at zero
+    /// # Determinism: bounded in absolute terms, not in per-component ULP
     ///
     /// `(a + b) − b ≠ a` in binary floating point in general: the addition
     /// rounds once and the subtraction rounds again. Here `a` is Earth's
-    /// position and `b` the EMRAT-scaled Moon term, with `b/a ≈ 3.1e-5`, so the
-    /// discarded round trip is bounded by ~1 ULP of Earth's position — 3.3e-5 m
-    /// (0.03 **mm**), i.e. 4e-11 arcsec at 1 AU. This path removes the two
-    /// roundings rather than introducing one, so it is the *more* accurate of
-    /// the two; the bound is ten orders of magnitude inside VSOP87A's own
-    /// 0.239″ mean residual against Horizons.
+    /// position and `b` the EMRAT-scaled Moon term, with `|b/a| ≈ 3.1e-5` at
+    /// the ~1 AU vector-magnitude scale that governs the addition's rounding.
+    /// That fixes the addition's rounding error at `|δ| ≤ ulp(1 AU)/2 ≈
+    /// 1.66e-5 m` (0.03 **mm**) — an *absolute* bound that holds everywhere in
+    /// the supported range, ten orders of magnitude inside VSOP87A's own
+    /// 0.239″ mean residual against Horizons. This path removes the two
+    /// roundings rather than introducing one, so where it differs at all it
+    /// is the *more* accurate of the two.
     ///
-    /// **Measured, not assumed: the change moved nothing.** With `|b| ≪ |a|`
-    /// the addition's error δ satisfies `|δ| ≤ ulp(a)/2`, the subtraction
-    /// recovers `a + δ` exactly, and that rounds back to `a` except on an exact
-    /// tie — so the round trip is lossless almost everywhere. Over the
+    /// That bound is **absolute, not relative**: a ULP is measured against a
+    /// value's own magnitude, and Earth's individual x/y/z components each
+    /// cross zero over time, where `ulp(component)` shrinks toward zero while
+    /// the ~1.66e-5 m absolute error stays fixed. Measured directly: a sweep
+    /// bisected onto a `position.z` zero crossing, and a one-second-step
+    /// sweep across the 2025 March equinox — both ordinary, in-range dates,
+    /// not edge cases — find the discarded round trip reaching **up to 1,237
+    /// ULP** of the affected component. So "≤1 ULP" is not a property of this
+    /// construction in general, only of JDs that happen to stay away from a
+    /// crossing; `earth_state_matches_the_emb_minus_moon_construction` below
+    /// asserts the absolute bound, not a per-component ULP count, for exactly
+    /// this reason.
+    ///
+    /// **Measured, not assumed: the fixture digest moved nothing.** Over the
     /// 21,915-row Horizons fixture, `analytical_bit_digest`'s ROW dump is
     /// **byte-for-byte identical** either side of this change and
-    /// `EXPECTED_DIGEST` did not need re-pinning. Ties are real but rare and do
-    /// not reach an apparent position: the sweep in
-    /// `earth_state_matches_the_emb_minus_moon_construction` finds 2 of 4,800
-    /// components tie-rounded by 1 ULP, both `velocity.z`, and velocity enters
-    /// only the light-time extrapolation `v·(−τ)` with τ ≤ a few hours.
+    /// `EXPECTED_DIGEST` did not need re-pinning — a fact about this specific
+    /// fixture's rows, not a proof that the arithmetic is always
+    /// bit-identical; see that test's own doc comment for the measured
+    /// production rate at which the underlying perturbation reaches a
+    /// printed digest bit.
     ///
     /// The two tests below pin both halves:
     /// `earth_state_is_bit_identical_to_vsop87a_earth` pins the identity this
@@ -622,45 +634,60 @@ mod tests {
     }
 
     /// The override is an *algebraic* shortcut, so it must still agree with the
-    /// construction it replaces — to the ~1 ULP the two roundings cost, and no
-    /// further.
+    /// construction it replaces — to the absolute-distance bound asserted
+    /// below, not to a fixed ULP count (see "What this does NOT bound" below
+    /// for why a per-component ULP assertion was removed from this test).
     ///
     /// This is the test that would catch the shortcut being wrong rather than
     /// merely different: if `earth_to_emb` ever stopped being built from the
     /// same VSOP87A Earth term (or the EMRAT divisors diverged), the two paths
-    /// would separate by kilometres, not ULPs. The bound is expressed in metres
-    /// so the failure message is readable; 1 ULP of Earth's position at 1 AU is
-    /// 3.3e-5 m, and the tolerance below is 1 mm — 30× that, and still seven
-    /// orders of magnitude below the 56.8 km a wrong EMRAT divisor costs and
-    /// eight below the 4,671 km an un-lifted EMB costs.
+    /// would separate by kilometres, not fractions of a millimetre. The bound
+    /// is expressed in metres so the failure message is readable: the
+    /// tolerance below is 1 mm, still seven orders of magnitude below the
+    /// 56.8 km a wrong EMRAT divisor costs and eight below the 4,671 km an
+    /// un-lifted EMB costs.
     ///
-    /// # What was actually measured (2026-08-29)
+    /// # What was actually measured (2026-08-29), on THIS sweep's 800 JDs
     ///
     /// Over the 800 JDs this sweeps — the eight anchors above, 426 spread
     /// evenly across the whole supported range, and 366 daily steps through
     /// 2025 — **every one of the 2,400 position components is bit-identical**
     /// between the two paths, and exactly **2 of the 2,400 velocity components
     /// differ, by exactly 1 ULP** (both `velocity.z`, at jd 2816787 and jd
-    /// 2021848.22). Maximum positional separation: 0 m.
+    /// 2021848.22). Maximum positional separation: 0 m. That is a true report
+    /// of these particular JDs, not a general property of the construction —
+    /// see the next section.
     ///
-    /// Both halves of that are the predicted behaviour, not luck. Writing `a`
-    /// for Earth's component and `b` for the EMRAT-scaled Moon term
-    /// (`|b/a| ≈ 3.1e-5`): `fl(a + b) = a + b + δ` with `|δ| ≤ ulp(a)/2`; the
-    /// subtraction's exact result is then `a + δ`, which lies inside
-    /// `[a − ulp(a)/2, a + ulp(a)/2]` and so rounds back to `a` — except when
-    /// `|δ|` is exactly `ulp(a)/2`, where ties-to-even can round away. So the
-    /// round trip is lossless almost everywhere and 1 ULP on a tie, which is
-    /// what the sweep finds. The assertion below is therefore a bound, not an
-    /// equality.
+    /// # What this does NOT bound: per-component ULP near a zero crossing
+    ///
+    /// The underlying rounding argument only supports an *absolute* bound.
+    /// Writing `a` for Earth's component and `b` for the EMRAT-scaled Moon
+    /// term (`|b/a| ≈ 3.1e-5` at the ~1 AU scale that governs the addition):
+    /// `fl(a + b) = a + b + δ` with `|δ| ≤ ulp(1 AU)/2 ≈ 1.66e-5 m`, always.
+    /// That does *not* imply the subtraction's result is within a small
+    /// number of ULPs of `a`: ULP is relative to `a`'s own magnitude, and
+    /// Earth's x/y/z components individually pass through zero, where
+    /// `ulp(a)` shrinks toward zero while `δ` does not shrink with it. A
+    /// sweep bisected onto a `position.z` zero crossing, and a
+    /// one-second-step sweep across the 2025 March equinox — both ordinary,
+    /// in-range dates — measure the discarded round trip reaching **up to
+    /// 1,237 ULP**. This test's fixed JD list simply doesn't land near a
+    /// crossing, which is exactly why an earlier version of this test
+    /// asserted `ulps <= 1` here: that assertion passed today by accident of
+    /// which JDs were sampled, and would have started failing on a
+    /// non-regression the moment someone extended or randomized the JD list.
+    /// It has been removed; the `d < TOLERANCE_M` absolute-distance assertion
+    /// below is the real, general correctness guard, because it does not
+    /// depend on how close any component happens to be to zero.
     ///
     /// `analytical_bit_digest` agrees at the other end of the pipeline: over
     /// the 21,915-row Horizons fixture the ROW dump is **byte-for-byte
     /// unchanged** by this override (sha256 of the dumps either side of the
     /// change: `e1a1784dc35970a2af1316f7049bb8064bec1ce3afecc8f0da3859cf0807f5af`
-    /// both times), so `EXPECTED_DIGEST` did not need re-pinning. The two
-    /// tie-rounded velocity ULPs never reach an apparent position: velocity is
-    /// used only for the light-time Earth extrapolation `v·(−τ)`, where τ ≤ a
-    /// few hours, so a 1-ULP velocity moves the anchor by ~1e-20 AU.
+    /// both times), so `EXPECTED_DIGEST` did not need re-pinning — measured
+    /// for this specific fixture, not proven in general (production rate:
+    /// ~2.0e-4 differing Sun rows per row evaluated; see that test's doc
+    /// comment).
     #[test]
     fn earth_state_matches_the_emb_minus_moon_construction() {
         const AU_M: f64 = AU_KM * 1000.0;
@@ -710,6 +737,22 @@ mod tests {
                 direct.velocity.z,
             ];
 
+            // No per-component ULP assertion here on purpose. Per-component
+            // ULP is not bounded near a zero crossing — see
+            // docs/audit/2026-08-29-perf-investigation.md #1 and the
+            // "Determinism" doc comment on `earth_state` above: measured up
+            // to 1,237 ULP at ordinary, in-range JDs (a sweep bisected onto a
+            // `position.z` zero crossing, and a one-second-step sweep across
+            // the 2025 March equinox). This sweep's fixed JD list happens not
+            // to land near a crossing, so it currently sees only exact
+            // matches or 1-ULP velocity ties, but that is a property of
+            // these particular JDs, not of the construction — an assertion
+            // like `ulps <= 1` would be a latent trap for whoever later
+            // extends or randomizes the JD list, failing on a phantom
+            // regression rather than a real one. The `d < TOLERANCE_M` check
+            // below, which bounds absolute distance rather than a
+            // per-component ULP count, is the real, general correctness
+            // guard.
             for (i, (a, b)) in got.iter().zip(via_emb.iter()).enumerate() {
                 components += 1;
                 if a.to_bits() != b.to_bits() {
@@ -718,12 +761,6 @@ mod tests {
                     let kind = if i < 3 { "position" } else { "velocity" };
                     println!(
                         "  jd {jd}: {kind}[{}] differs by {ulps} ULP ({a:e} vs {b:e})",
-                        i % 3
-                    );
-                    assert!(
-                        ulps <= 1,
-                        "at jd {jd}, {kind}[{}] differs from the EMB round trip by {ulps} ULP; \
-                         the cancellation is only supposed to cost a tie-rounding, i.e. 1 ULP",
                         i % 3
                     );
                 }
