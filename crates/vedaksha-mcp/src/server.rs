@@ -1472,8 +1472,8 @@ impl McpServer {
         //
         //   * The Moon is wanted tropical by the tithi refinement (the
         //     ayanamsha cancels in the elongation) and sidereal by the
-        //     nakshatra refinement. Those are one `tropical_to_sidereal` apart,
-        //     so a single evaluation yields both.
+        //     nakshatra refinement. Those are one `true_tropical_to_sidereal`
+        //     apart, so a single evaluation yields both.
         //   * Each refinement asks for its body at the candidate instant twice
         //     — once to identify the boundary it is aiming at, once on the
         //     first Newton step, which starts from that same instant.
