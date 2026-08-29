@@ -37,22 +37,25 @@ pub fn definition() -> super::ToolDefinition {
         name: "compute_combustion",
         description: "Compute combustion state for each planet relative to the Sun per BPHS Ch.7 \
             vv.28-29. Returns Combust, DeeplyCombust, or None for Moon, Mars, Mercury, Jupiter, \
-            Venus, Saturn with degrees of separation.",
+            Venus, Saturn with degrees of separation. This is a low-level tool over already-known \
+            positions, not a natal-chart tool: call compute_natal_chart first and pass its \
+            planets[].longitude (matched by planets[].name) and planets[].retrograde values \
+            straight through as this tool's inputs — do not recompute or re-derive them.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
-                "sun":     { "type": "number", "description": "Sidereal longitude of Sun [0, 360)" },
-                "moon":    { "type": "number", "description": "Sidereal longitude of Moon [0, 360)" },
-                "mars":    { "type": "number", "description": "Sidereal longitude of Mars [0, 360)" },
-                "mercury": { "type": "number", "description": "Sidereal longitude of Mercury [0, 360)" },
-                "jupiter": { "type": "number", "description": "Sidereal longitude of Jupiter [0, 360)" },
-                "venus":   { "type": "number", "description": "Sidereal longitude of Venus [0, 360)" },
-                "saturn":  { "type": "number", "description": "Sidereal longitude of Saturn [0, 360)" },
-                "mercury_retrograde": { "type": "boolean", "default": false, "description": "True if Mercury is retrograde, which narrows its combustion orb from 14 deg to 12 deg (BPHS Ch. 7 vv. 28-29)" },
-                "venus_retrograde":   { "type": "boolean", "default": false, "description": "True if Venus is retrograde, which narrows its combustion orb from 10 deg to 8 deg" },
-                "mars_retrograde":    { "type": "boolean", "default": false, "description": "True if Mars is retrograde, which narrows its combustion orb from 17 deg to 8 deg" },
-                "jupiter_retrograde": { "type": "boolean", "default": false, "description": "True if Jupiter is retrograde. Accepted for symmetry; Jupiter's orb is 11 deg either way, so this does not change the result" },
-                "saturn_retrograde":  { "type": "boolean", "default": false, "description": "True if Saturn is retrograde. Accepted for symmetry; Saturn's orb is 16 deg either way, so this does not change the result" }
+                "sun":     { "type": "number", "description": "Sidereal longitude of Sun [0, 360). From compute_natal_chart's planets[] entry where name == \"Sun\", field longitude." },
+                "moon":    { "type": "number", "description": "Sidereal longitude of Moon [0, 360). From compute_natal_chart's planets[] entry where name == \"Moon\", field longitude." },
+                "mars":    { "type": "number", "description": "Sidereal longitude of Mars [0, 360). From compute_natal_chart's planets[] entry where name == \"Mars\", field longitude." },
+                "mercury": { "type": "number", "description": "Sidereal longitude of Mercury [0, 360). From compute_natal_chart's planets[] entry where name == \"Mercury\", field longitude." },
+                "jupiter": { "type": "number", "description": "Sidereal longitude of Jupiter [0, 360). From compute_natal_chart's planets[] entry where name == \"Jupiter\", field longitude." },
+                "venus":   { "type": "number", "description": "Sidereal longitude of Venus [0, 360). From compute_natal_chart's planets[] entry where name == \"Venus\", field longitude." },
+                "saturn":  { "type": "number", "description": "Sidereal longitude of Saturn [0, 360). From compute_natal_chart's planets[] entry where name == \"Saturn\", field longitude." },
+                "mercury_retrograde": { "type": "boolean", "default": false, "description": "True if Mercury is retrograde, which narrows its combustion orb from 14 deg to 12 deg (BPHS Ch. 7 vv. 28-29). From compute_natal_chart's Mercury entry, field retrograde." },
+                "venus_retrograde":   { "type": "boolean", "default": false, "description": "True if Venus is retrograde, which narrows its combustion orb from 10 deg to 8 deg. From compute_natal_chart's Venus entry, field retrograde." },
+                "mars_retrograde":    { "type": "boolean", "default": false, "description": "True if Mars is retrograde, which narrows its combustion orb from 17 deg to 8 deg. From compute_natal_chart's Mars entry, field retrograde." },
+                "jupiter_retrograde": { "type": "boolean", "default": false, "description": "True if Jupiter is retrograde. Accepted for symmetry; Jupiter's orb is 11 deg either way, so this does not change the result. From compute_natal_chart's Jupiter entry, field retrograde." },
+                "saturn_retrograde":  { "type": "boolean", "default": false, "description": "True if Saturn is retrograde. Accepted for symmetry; Saturn's orb is 16 deg either way, so this does not change the result. From compute_natal_chart's Saturn entry, field retrograde." }
             },
             "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn"]
         }),
