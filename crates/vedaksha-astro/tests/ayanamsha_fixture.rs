@@ -29,7 +29,7 @@
 //! `--verify` mode is wired into full validation.
 
 use std::str::FromStr;
-use vedaksha_astro::sidereal::{Ayanamsha, ayanamsha_value};
+use vedaksha_astro::sidereal::{Ayanamsha, mean_ayanamsha_value};
 
 const FIXTURE: &str = include_str!("fixtures/ayanamsha.json");
 
@@ -58,7 +58,7 @@ fn engine_reproduces_the_independent_python_derivation() {
             let system = Ayanamsha::from_str(key)
                 .unwrap_or_else(|e| panic!("fixture names a system the engine lacks: {e}"));
             let want = want.as_f64().expect("non-numeric fixture value");
-            let got = ayanamsha_value(system, jd);
+            let got = mean_ayanamsha_value(system, jd);
             let delta = (got - want).abs();
             if delta > worst.0 {
                 worst = (delta, format!("{key} at {label}"));

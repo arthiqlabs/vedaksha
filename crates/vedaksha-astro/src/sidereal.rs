@@ -13,8 +13,8 @@
 //!
 //! # What this module returns
 //!
-//! **Mean ayanamsha by default.** [`ayanamsha_value`], [`tropical_to_sidereal`] and
-//! [`sidereal_to_tropical`] never include nutation in longitude. [`true_ayanamsha_value`]
+//! **Mean ayanamsha by default.** [`mean_ayanamsha_value`], [`mean_tropical_to_sidereal`] and
+//! [`mean_sidereal_to_tropical`] never include nutation in longitude. [`true_ayanamsha_value`]
 //! and [`true_tropical_to_sidereal`] do — they are what chart assembly
 //! (`vedaksha_astro::chart::compute_chart`) uses, so a served sidereal chart's
 //! rotation matches the nutation already present in its tropical longitudes. A
@@ -918,7 +918,7 @@ fn surya_siddhanta(jd: f64) -> f64 {
 /// * `system` — the sidereal system.
 /// * `jd` — Julian Day Number, Terrestrial Time.
 #[must_use]
-pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
+pub fn mean_ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
     match system {
         Ayanamsha::IndianOfficial => precession_anchored(IAE_J2000_ANCHOR_DEG, julian::J2000, jd),
         Ayanamsha::FaganBradley => precession_anchored(360.0 - FAGAN_SVP_B1950_DEG, B1950, jd),
@@ -952,8 +952,8 @@ pub fn ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
 /// module documentation for why that distinction decides which published table
 /// a result should be compared against.
 #[must_use]
-pub fn tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
-    normalize_degrees(tropical_longitude_deg - ayanamsha_value(system, jd))
+pub fn mean_tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
+    normalize_degrees(tropical_longitude_deg - mean_ayanamsha_value(system, jd))
 }
 
 /// The **true** ayanamsha, in decimal degrees: mean ayanamsha plus nutation
@@ -965,7 +965,7 @@ pub fn tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: 
 ///
 /// This is the relation the module documentation above already states — the
 /// *Indian Astronomical Ephemeris* prints it, and it is what the daily tables
-/// most panchanga-makers consume actually use. [`ayanamsha_value`] never
+/// most panchanga-makers consume actually use. [`mean_ayanamsha_value`] never
 /// includes nutation, by design: it is the standalone, primary-sourced
 /// quantity documented at the top of this module. Use *this* function
 /// instead when rotating a chart or a scored position whose tropical
@@ -978,7 +978,7 @@ pub fn tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: 
 ///
 /// * `system` — the sidereal system.
 /// * `jd` — Julian Day Number. Every current caller passes UT1 here (the
-///   same value already threaded through [`ayanamsha_value`]); this function
+///   same value already threaded through [`mean_ayanamsha_value`]); this function
 ///   passes it straight to [`vedaksha_ephem_core::nutation::nutation`]
 ///   without first converting to Terrestrial Time. Nutation-in-longitude's
 ///   terms have a range of periods and amplitudes; the fastest-changing terms
@@ -996,7 +996,7 @@ pub fn true_ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
         return 0.0;
     }
     let (dpsi, _deps) = nutation(jd);
-    ayanamsha_value(system, jd) + dpsi.to_degrees()
+    mean_ayanamsha_value(system, jd) + dpsi.to_degrees()
 }
 
 /// Convert a tropical ecliptic longitude to sidereal longitude using the
@@ -1007,7 +1007,7 @@ pub fn true_ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
 /// ```
 ///
 /// See [`true_ayanamsha_value`] for when to prefer this over
-/// [`tropical_to_sidereal`].
+/// [`mean_tropical_to_sidereal`].
 #[must_use]
 pub fn true_tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
     normalize_degrees(tropical_longitude_deg - true_ayanamsha_value(system, jd))
@@ -1023,8 +1023,8 @@ pub fn true_tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha,
 /// module documentation for why that distinction decides which published table
 /// a result should be compared against.
 #[must_use]
-pub fn sidereal_to_tropical(sidereal_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
-    normalize_degrees(sidereal_longitude_deg + ayanamsha_value(system, jd))
+pub fn mean_sidereal_to_tropical(sidereal_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
+    normalize_degrees(sidereal_longitude_deg + mean_ayanamsha_value(system, jd))
 }
 
 #[cfg(test)]
@@ -1039,7 +1039,7 @@ mod tests {
 
     #[test]
     fn indian_official_reproduces_its_j2000_anchor() {
-        let v = ayanamsha_value(Ayanamsha::IndianOfficial, julian::J2000);
+        let v = mean_ayanamsha_value(Ayanamsha::IndianOfficial, julian::J2000);
         assert!(
             (v - IAE_J2000_ANCHOR_DEG).abs() < ANCHOR_TOL,
             "IAE 2022 gives 23°51'25\".53 at J2000; got {v}"
@@ -1048,7 +1048,7 @@ mod tests {
 
     #[test]
     fn fagan_bradley_reproduces_its_b1950_anchor() {
-        let v = ayanamsha_value(Ayanamsha::FaganBradley, B1950);
+        let v = mean_ayanamsha_value(Ayanamsha::FaganBradley, B1950);
         let expected = 360.0 - FAGAN_SVP_B1950_DEG;
         assert!(
             (v - expected).abs() < ANCHOR_TOL,
@@ -1058,7 +1058,7 @@ mod tests {
 
     #[test]
     fn krishnamurti_reproduces_its_1900_anchor() {
-        let v = ayanamsha_value(Ayanamsha::Krishnamurti, KP_ANCHOR_JD);
+        let v = mean_ayanamsha_value(Ayanamsha::Krishnamurti, KP_ANCHOR_JD);
         assert!(
             (v - KP_ANCHOR_DEG).abs() < ANCHOR_TOL,
             "KSK Vol-I gives 22°22'00\" on the 1st of Chitra 1900; got {v}"
@@ -1067,7 +1067,7 @@ mod tests {
 
     #[test]
     fn yukteshwar_reproduces_its_1894_anchor() {
-        let v = ayanamsha_value(Ayanamsha::Yukteshwar, YUKTESHWAR_ANCHOR_JD);
+        let v = mean_ayanamsha_value(Ayanamsha::Yukteshwar, YUKTESHWAR_ANCHOR_JD);
         assert!(
             (v - YUKTESHWAR_ANCHOR_DEG).abs() < ANCHOR_TOL,
             "The Holy Science gives 20°54'36\" at the 1894 equinox; got {v}"
@@ -1091,7 +1091,7 @@ mod tests {
         // belongs.
         for year in [398_i32, 500, 1000, 1582, 1912, 1918, 2000, 2100] {
             let jd = julian::calendar_to_jd(year, 1, 1.0);
-            let got = ayanamsha_value(Ayanamsha::Raman, jd) * 3600.0;
+            let got = mean_ayanamsha_value(Ayanamsha::Raman, jd) * 3600.0;
             let want = f64::from(year - RAMAN_ZERO_YEAR) * RAMAN_RATE_ARCSEC_PER_YEAR;
             assert!(
                 (got - want).abs() < 1e-6,
@@ -1105,7 +1105,7 @@ mod tests {
         let julian_year_reading = ((jd_1912 - julian::calendar_to_jd(RAMAN_ZERO_YEAR, 1, 1.0))
             / JULIAN_YEAR)
             * RAMAN_RATE_ARCSEC_PER_YEAR;
-        let calendar_year_reading = ayanamsha_value(Ayanamsha::Raman, jd_1912) * 3600.0;
+        let calendar_year_reading = mean_ayanamsha_value(Ayanamsha::Raman, jd_1912) * 3600.0;
         assert!(
             (calendar_year_reading - julian_year_reading).abs() > 1.0,
             "the calendar-year and Julian-year readings must be distinguishable, else this \
@@ -1115,7 +1115,7 @@ mod tests {
 
     #[test]
     fn surya_siddhanta_is_zero_at_the_kali_epoch() {
-        let v = ayanamsha_value(Ayanamsha::SuryaSiddhanta, KALI_EPOCH_JD);
+        let v = mean_ayanamsha_value(Ayanamsha::SuryaSiddhanta, KALI_EPOCH_JD);
         assert!(
             v.abs() < ANCHOR_TOL,
             "the libration's phase origin is the Kali epoch, so it is zero there; got {v}"
@@ -1137,7 +1137,7 @@ mod tests {
         for (system, star, assigned) in cases {
             for jd in [1_721_060.0_f64, 2_415_020.0, julian::J2000, 2_524_594.0] {
                 let sidereal = normalize_degrees(
-                    mean_ecliptic_longitude_of_date(star, jd) - ayanamsha_value(system, jd),
+                    mean_ecliptic_longitude_of_date(star, jd) - mean_ayanamsha_value(system, jd),
                 );
                 let residual = normalize_degrees_signed(sidereal - assigned) * 3600.0;
                 assert!(
@@ -1154,7 +1154,7 @@ mod tests {
 
     /// Bisect for the Julian Day at which a system's ayanamsha is zero.
     fn zero_year(system: Ayanamsha, mut lo: f64, mut hi: f64) -> f64 {
-        let f = |jd: f64| ayanamsha_value(system, jd);
+        let f = |jd: f64| mean_ayanamsha_value(system, jd);
         assert!(f(lo) * f(hi) < 0.0, "{}: no bracket", system.key());
         for _ in 0..200 {
             let mid = (lo + hi) / 2.0;
@@ -1207,14 +1207,14 @@ mod tests {
             "the half-period crossing after the Kali epoch is 499 CE; got {y:.2} CE"
         );
         // DA-10: positive and increasing after 499 CE, reaching +27° at 2299 CE.
-        let at_j2000 = ayanamsha_value(Ayanamsha::SuryaSiddhanta, julian::J2000);
+        let at_j2000 = mean_ayanamsha_value(Ayanamsha::SuryaSiddhanta, julian::J2000);
         assert!(
             at_j2000 > 0.0,
             "a negative value at J2000 means the folding direction is inverted; got {at_j2000}"
         );
         let period = MAHAYUGA_DAYS / SS_REVOLUTIONS_PER_MAHAYUGA;
         let peak_jd = KALI_EPOCH_JD + 0.75 * period;
-        let peak = ayanamsha_value(Ayanamsha::SuryaSiddhanta, peak_jd);
+        let peak = mean_ayanamsha_value(Ayanamsha::SuryaSiddhanta, peak_jd);
         assert!(
             (peak - SS_AMPLITUDE_DEG).abs() < 1e-9,
             "the extremum is +27°; got {peak}"
@@ -1261,14 +1261,14 @@ mod tests {
         // rather than silently redefining the system.
         let p03_rate_per_century = general_precession_p03(julian::J2000 + 36_525.0)
             - general_precession_p03(julian::J2000);
-        // Measured THROUGH `ayanamsha_value`, not recomputed from the constants.
+        // Measured THROUGH `mean_ayanamsha_value`, not recomputed from the constants.
         // The earlier version evaluated `KP_RATE_ARCSEC_PER_YEAR * 36525 /
         // JULIAN_YEAR` inline, which never enters `rate_anchored` and therefore
         // could not see a bug inside it: swapping the Julian year for a tropical
         // one there left both assertions in this test green.
         let kp_rate_per_century =
-            (ayanamsha_value(Ayanamsha::Krishnamurti, julian::J2000 + 36_525.0)
-                - ayanamsha_value(Ayanamsha::Krishnamurti, julian::J2000))
+            (mean_ayanamsha_value(Ayanamsha::Krishnamurti, julian::J2000 + 36_525.0)
+                - mean_ayanamsha_value(Ayanamsha::Krishnamurti, julian::J2000))
                 * 3600.0;
         let divergence = kp_rate_per_century - p03_rate_per_century;
         assert!(
@@ -1383,8 +1383,8 @@ mod tests {
         // increase with time at roughly 50"/yr, except the Surya Siddhanta, which
         // is a libration and reverses by construction.
         for &system in Ayanamsha::SIDEREAL {
-            let a = ayanamsha_value(system, 2_415_020.0); // 1900
-            let b = ayanamsha_value(system, 2_451_545.0); // 2000
+            let a = mean_ayanamsha_value(system, 2_415_020.0); // 1900
+            let b = mean_ayanamsha_value(system, 2_451_545.0); // 2000
             let rate = (b - a) * 3600.0; // arcsec per century
             assert!(
                 (4_900.0..5_500.0).contains(&rate),
@@ -1407,7 +1407,9 @@ mod tests {
             for year in [398_i32, 1000, 1581, 1582, 1583, 1900, 1999, 2000, 2100] {
                 let before = julian::calendar_to_jd(year + 1, 1, 1.0) - 1e-6;
                 let after = julian::calendar_to_jd(year + 1, 1, 1.0) + 1e-6;
-                let jump = (ayanamsha_value(system, after) - ayanamsha_value(system, before)).abs()
+                let jump = (mean_ayanamsha_value(system, after)
+                    - mean_ayanamsha_value(system, before))
+                .abs()
                     * 3600.0;
                 assert!(
                     jump < 1e-3,
@@ -1427,8 +1429,8 @@ mod tests {
         let period = MAHAYUGA_DAYS / SS_REVOLUTIONS_PER_MAHAYUGA;
         for quarter in [0.25_f64, 0.5, 0.75, 1.0] {
             let fold = KALI_EPOCH_JD + quarter * period;
-            let a = ayanamsha_value(Ayanamsha::SuryaSiddhanta, fold - 1e-4);
-            let b = ayanamsha_value(Ayanamsha::SuryaSiddhanta, fold + 1e-4);
+            let a = mean_ayanamsha_value(Ayanamsha::SuryaSiddhanta, fold - 1e-4);
+            let b = mean_ayanamsha_value(Ayanamsha::SuryaSiddhanta, fold + 1e-4);
             assert!(
                 (a - b).abs() * 3600.0 < 1e-3,
                 "discontinuity at phase {quarter}: {a} then {b}"
@@ -1439,7 +1441,7 @@ mod tests {
     #[test]
     fn tropical_is_exactly_zero_everywhere() {
         for jd in [0.0_f64, 1_000_000.0, julian::J2000, 3_000_000.0] {
-            assert_eq!(ayanamsha_value(Ayanamsha::Tropical, jd), 0.0);
+            assert_eq!(mean_ayanamsha_value(Ayanamsha::Tropical, jd), 0.0);
         }
     }
 
@@ -1450,7 +1452,7 @@ mod tests {
         let jd = julian::J2000;
         for (i, &a) in Ayanamsha::SIDEREAL.iter().enumerate() {
             for &b in &Ayanamsha::SIDEREAL[i + 1..] {
-                let d = (ayanamsha_value(a, jd) - ayanamsha_value(b, jd)).abs() * 3600.0;
+                let d = (mean_ayanamsha_value(a, jd) - mean_ayanamsha_value(b, jd)).abs() * 3600.0;
                 assert!(
                     d > 1.0,
                     "{} and {} differ by only {d:.3} arcsec at J2000",
@@ -1466,8 +1468,8 @@ mod tests {
         for &system in Ayanamsha::ALL {
             for jd in [2_415_020.0_f64, julian::J2000, 2_488_070.0] {
                 for lon in [0.0_f64, 47.5, 180.0, 359.9] {
-                    let there = tropical_to_sidereal(lon, system, jd);
-                    let back = sidereal_to_tropical(there, system, jd);
+                    let there = mean_tropical_to_sidereal(lon, system, jd);
+                    let back = mean_sidereal_to_tropical(there, system, jd);
                     let d = normalize_degrees_signed(back - lon).abs();
                     assert!(d < 1e-9, "{}: {lon} -> {there} -> {back}", system.key());
                 }
@@ -1478,7 +1480,7 @@ mod tests {
     #[test]
     fn true_ayanamsha_value_adds_nutation_in_longitude_to_the_mean() {
         let jd = 2_451_545.0; // J2000.0
-        let mean = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
+        let mean = mean_ayanamsha_value(Ayanamsha::IndianOfficial, jd);
         let (dpsi, _deps) = vedaksha_ephem_core::nutation::nutation(jd);
         let expected = mean + dpsi.to_degrees();
         let got = true_ayanamsha_value(Ayanamsha::IndianOfficial, jd);
@@ -1501,7 +1503,7 @@ mod tests {
     #[test]
     fn true_ayanamsha_value_is_tropical_zero_for_tropical() {
         // Tropical has no ayanamsha and no sidereal frame to correct for
-        // nutation against; `ayanamsha_value` already special-cases it to 0.0,
+        // nutation against; `mean_ayanamsha_value` already special-cases it to 0.0,
         // and the true variant must not silently add nutation on top.
         let jd = 2_451_545.0;
         assert_eq!(true_ayanamsha_value(Ayanamsha::Tropical, jd), 0.0);
@@ -1869,7 +1871,7 @@ mod tests {
             ),
             (Ayanamsha::FaganBradley, 360.0 - FAGAN_SVP_B1950_DEG, B1950),
         ] {
-            let accumulated = (ayanamsha_value(system, at) - anchor_deg) * 3600.0;
+            let accumulated = (mean_ayanamsha_value(system, at) - anchor_deg) * 3600.0;
 
             let from_p_a = general_precession_p03(at) - general_precession_p03(anchor_jd);
             assert!(
@@ -1936,7 +1938,7 @@ mod tests {
                 other => panic!("{} is in group_b but is not star-anchored", other.key()),
             };
             let got = normalize_degrees(
-                mean_ecliptic_longitude_of_date(star, jd) - ayanamsha_value(system, jd),
+                mean_ecliptic_longitude_of_date(star, jd) - mean_ayanamsha_value(system, jd),
             );
             let delta = normalize_degrees_signed(got - want) * 3600.0;
             assert!(
@@ -2027,7 +2029,7 @@ mod tests {
         );
     }
 
-    /// `is_star_anchored()` must agree with what `ayanamsha_value` actually
+    /// `is_star_anchored()` must agree with what `mean_ayanamsha_value` actually
     /// dispatches, and the catalogue identifiers must match the manifest.
     ///
     /// `is_star_anchored()` is a hand-maintained `matches!` list that decides the

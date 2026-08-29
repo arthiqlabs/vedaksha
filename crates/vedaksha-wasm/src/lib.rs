@@ -101,8 +101,8 @@ pub fn compute_varga(longitude: f64, varga: &str) -> Result<u8, JsError> {
 /// systems × 4 charts × 24 positions) in the wrong house.
 ///
 /// To use these cusps sidereally, rotate them yourself: subtract the ayanamsha
-/// from each returned longitude, via [`get_ayanamsha`] or
-/// [`tropical_to_sidereal`], using the SAME ayanamsha system as the planets.
+/// from each returned longitude, via [`get_mean_ayanamsha`] or
+/// [`mean_tropical_to_sidereal`], using the SAME ayanamsha system as the planets.
 /// If you want a sidereal chart with its cusps already in frame, call
 /// [`compute_chart`] instead of assembling one from this primitive.
 ///
@@ -193,7 +193,7 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 /// Convert tropical longitude to sidereal.
 ///
 /// Uses the **mean** ayanamsha: nutation in longitude is not included, matching
-/// [`vedaksha_astro::sidereal::tropical_to_sidereal`]'s own contract. This is a
+/// [`vedaksha_astro::sidereal::mean_tropical_to_sidereal`]'s own contract. This is a
 /// distinct, standalone conversion utility, not the chart-building path — it is
 /// unaffected by `compute_natal_chart`/`compute_vargas` now reporting the true
 /// (mean + nutation) ayanamsha in their `true_ayanamsha_value` output field.
@@ -209,13 +209,13 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 /// # Errors
 /// Errors if `ayanamsha` is not a recognised system name.
 #[wasm_bindgen]
-pub fn tropical_to_sidereal(
+pub fn mean_tropical_to_sidereal(
     tropical_longitude: f64,
     ayanamsha: &str,
     jd: f64,
 ) -> Result<f64, JsError> {
     let system = parse_ayanamsha(ayanamsha)?;
-    Ok(vedaksha_astro::sidereal::tropical_to_sidereal(
+    Ok(vedaksha_astro::sidereal::mean_tropical_to_sidereal(
         tropical_longitude,
         system,
         jd,
@@ -236,9 +236,9 @@ pub fn tropical_to_sidereal(
 /// # Errors
 /// Errors if `ayanamsha` is not a recognised system name.
 #[wasm_bindgen]
-pub fn get_ayanamsha(ayanamsha: &str, jd: f64) -> Result<f64, JsError> {
+pub fn get_mean_ayanamsha(ayanamsha: &str, jd: f64) -> Result<f64, JsError> {
     let system = parse_ayanamsha(ayanamsha)?;
-    Ok(vedaksha_astro::sidereal::ayanamsha_value(system, jd))
+    Ok(vedaksha_astro::sidereal::mean_ayanamsha_value(system, jd))
 }
 
 /// Get the zodiac sign for a longitude.

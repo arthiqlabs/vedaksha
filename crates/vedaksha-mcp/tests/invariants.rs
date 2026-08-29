@@ -37,10 +37,10 @@ fn sidereal_longitude_equals_tropical_minus_ayanamsha() {
 
     for &sys in &systems {
         for &jd in &jds {
-            let ayan = sidereal::ayanamsha_value(sys, jd);
+            let ayan = sidereal::mean_ayanamsha_value(sys, jd);
             for &lon in &longitudes {
                 total += 1;
-                let sidereal = sidereal::tropical_to_sidereal(lon, sys, jd);
+                let sidereal = sidereal::mean_tropical_to_sidereal(lon, sys, jd);
                 let expected = normalize_degrees(lon - ayan);
                 let diff = (sidereal - expected).abs();
                 if diff < 1e-10 || (360.0 - diff).abs() < 1e-10 {
@@ -62,7 +62,7 @@ fn sidereal_longitude_equals_tropical_minus_ayanamsha() {
 
 #[test]
 fn sidereal_tropical_roundtrip() {
-    // tropical_to_sidereal(sidereal_to_tropical(x)) == x
+    // mean_tropical_to_sidereal(mean_sidereal_to_tropical(x)) == x
     let jd = 2451545.0;
     let mut total = 0;
     let mut pass = 0;
@@ -74,8 +74,8 @@ fn sidereal_tropical_roundtrip() {
     ] {
         for lon in (0..360).map(|i| i as f64) {
             total += 1;
-            let trop = sidereal::sidereal_to_tropical(lon, sys, jd);
-            let back = sidereal::tropical_to_sidereal(trop, sys, jd);
+            let trop = sidereal::mean_sidereal_to_tropical(lon, sys, jd);
+            let back = sidereal::mean_tropical_to_sidereal(trop, sys, jd);
             if (normalize_degrees(back) - normalize_degrees(lon)).abs() < 1e-10 {
                 pass += 1;
             }
