@@ -185,6 +185,22 @@ No new numerical constants were introduced; no external source was consulted to 
 was wrong, only Vedaksha's own already-cited nutation series and its own already-stated mean/true
 relation. See `CHANGELOG-v7.6.0.md`.
 
+### Fix 10 — Chara-karaka module gained its first provenance record
+Source: Jaimini Sutras, Adhyaya 1 Pada 1 (karaka-ranking chain; commonly numbered around 1.1.11 for
+Atmakaraka, though the exact numbering varies by commentarial tradition), and Parashara's *Brihat
+Parashara Hora Shastra* (chapter on Karakatwas, commonly numbered ch. 32, for the literal "30 minus
+degree" arithmetic applied to a retrograde body).
+Note: `crates/vedaksha-vedic/src/karaka.rs` previously cited only "Jaimini Sutras 1.1" as one bare
+module-level line, with no citation distinguishing the karaka-ranking chain from the Rahu-reflection
+rule specifically. v7.6.0 splits the citation into its two actual claims (see the module doc) and
+states, rather than silently assumes, two genuinely open scholarly questions: the exact sutra
+numbering, and whether Rahu's inclusion in the 8-karaka scheme is unconditional or a tie-break-only
+fallback per some classical readings. No ranking behavior changed as a result of this citation work.
+Separately, `rahu_degrees_in_sign`'s sign-boundary check was hardened from exact float equality
+(`d == 0.0`) to an epsilon tolerance (`1e-9°`) — a code-quality fix independent of the citation
+question, addressing a case where a value that should be exactly zero but arrives as a tiny
+floating-point residual would previously have been mis-ranked. See `CHANGELOG-v7.6.0.md`.
+
 ## Standing rules
 
 - Every PR that adds a new external data source must add a row here.

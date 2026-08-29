@@ -40,4 +40,23 @@ specifically (as opposed to its tropical ephemeris, which is unaffected).
 
 ## Chara-karaka module: citation clarified, boundary check hardened
 
-See the entry below for the Jaimini chara-karaka fix in this same release.
+The chara-karaka module's citation previously read only "Jaimini Sutras 1.1" — one bare line
+covering both the karaka-ranking chain and the Rahu-reflection rule, without distinguishing them.
+Primary-source review found the ranking chain is Jaimini's own sutra text (Adhyaya 1 Pada 1,
+commonly numbered around 1.1.11 for Atmakaraka, though numbering varies by tradition), and that
+Rahu's inclusion in the 8-karaka scheme is explicit in Jaimini's own root sutra. The specific
+reflection rule for a retrograde body's degree is a traditional application of the same
+reverse-motion (Apasavya) principle Jaimini's own text uses for Ketu's Argala a few sutras
+earlier; the literal "30 minus degree" arithmetic is attested in Parashara's *Brihat Parashara
+Hora Shastra* (chapter on Karakatwas), not as a separately numbered Jaimini sutra. The module's
+citation now states both sources separately, and states plainly the two questions this review
+could not resolve (the exact sutra numbering; whether Rahu's inclusion is unconditional or a
+tie-break-only fallback per some readings) rather than presenting the current behavior as
+uncontested. No ranking behavior changed.
+
+Separately, `rahu_degrees_in_sign`'s sign-boundary check was hardened from exact floating-point
+equality (`d == 0.0`) to a `1e-9°` tolerance, matching this project's own established tolerance
+for "should be exact" degree comparisons elsewhere. A longitude that should land exactly on a
+sign boundary can arrive with a few-ULP residual rather than a literal zero; the old check would
+have sent such a value down the reflection branch, producing a near-maximal rank instead of the
+intended near-minimal one.
