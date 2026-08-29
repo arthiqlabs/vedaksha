@@ -28,8 +28,9 @@ Note: The test vector (numeric fact) crosses the cleanroom boundary; no JPL sour
 
 > **Superseded 2026-08-29 — `Body::TrueNode` no longer uses the tolerance this entry
 > describes.** As of v7.5.0, `Body::TrueNode` (and `Body::TrueSouthNode`) return the
-> osculating node computation (`true_node_osculating`, already independently validated to
-> 0.6″ against JPL Horizons — see the `osculating_node_vs_jpl_horizons` test in
+> osculating node computation (`true_node_osculating` — the underlying osculating-node
+> method, validated via its J2000-frame variant, `true_node_osculating_j2000`, to 0.6″
+> against JPL Horizons — see the `osculating_node_vs_jpl_horizons` test in
 > `crates/vedaksha-ephem-core/src/nodes.rs`) rather than the 5-term Meeus
 > series this entry tightened a tolerance for. The Meeus formula is retained privately in
 > `crates/vedaksha-ephem-core/src/nodes.rs` as a cross-check for the osculating computation's

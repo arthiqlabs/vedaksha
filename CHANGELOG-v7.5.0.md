@@ -13,7 +13,10 @@ correctly, not evidence that switching `Body::TrueNode` to it is an accuracy
 improvement. See "What changed, and what didn't" below for why those are
 different claims.
 
-Values move only on `Body::TrueNode` and `Body::TrueSouthNode`. Nothing else changes.
+Values move only on `Body::TrueNode` and `Body::TrueSouthNode`. Nothing else
+changes directly — though anything derived from these two values (their
+reported speed, and any aspect calculation involving them) moves as a
+consequence.
 
 ---
 
@@ -21,8 +24,8 @@ Values move only on `Body::TrueNode` and `Body::TrueSouthNode`. Nothing else cha
 
 `Body::TrueNode` and `Body::TrueSouthNode` now compute exactly what
 `Body::TrueNodeOsculating` and `Body::TrueSouthNodeOsculating` already computed.
-All four `Body` variants remain — this is not a breaking removal of API
-surface, and every existing call site that names a `Body` variant continues to
+All four `Body` variants remain — no `Body` enum variant is added, removed, or
+renamed, and every existing call site that names a `Body` variant continues to
 compile unchanged. What changes is the *value* those two variants return: up
 to ~0.35° of difference from the previous truncated-series output, per this
 project's own existing regression tests (`osculating_node_close_to_meeus_true_node`,
@@ -31,7 +34,7 @@ that gap before this release.
 
 **This is a change of which quantity is reported, not a correction of an
 error.** The osculating node and the Meeus 5-term series are two different,
-legitimate orbital-element definitions that libration against each other by a
+legitimate orbital-element definitions that librate against each other by a
 bounded ~0.3° — this project's own test comments in `nodes.rs` describe that
 gap as a bounded libration between two different definitions, not as an
 accuracy defect in either one. The osculating element is the definition most

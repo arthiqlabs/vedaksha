@@ -34,12 +34,10 @@ pub enum Body {
     MeanNode,
     /// True ascending lunar node from osculating orbital elements. Derived
     /// from Moon position/velocity via ELP/MPP02. The underlying
-    /// osculating-node method — shared by this variant and
-    /// [`Self::TrueNodeOsculating`], which differ only by the documented
-    /// frame term — is validated to 0.6″ max vs JPL DE441 over 1900–2100
-    /// (measured 2026-07-16 across 2,435 epochs, on the J2000-frame
-    /// evaluation used for that comparison). As of this release, this
-    /// variant is numerically identical to [`Self::TrueNodeOsculating`] —
+    /// osculating-node method is validated to 0.6″ max vs JPL DE441 over
+    /// 1900–2100 (measured 2026-07-16 across 2,435 epochs, on the
+    /// J2000-frame evaluation used for that comparison). As of this release,
+    /// this variant is numerically identical to [`Self::TrueNodeOsculating`] —
     /// kept as a separate variant for API stability. Previously a 5-term
     /// Meeus approximation; see `DATA_PROVENANCE.md`'s "Fix 2" entry for
     /// that history.
