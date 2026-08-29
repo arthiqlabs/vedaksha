@@ -81,8 +81,10 @@ class Vedaksha:
         ``ayanamsha`` selects the sidereal system; omit it for tropical. The
         engine owns the name list and validates it, so this binding forwards the
         string rather than keeping a copy that could drift. Run
-        ``vedaksha tools`` to see the current enum. Values are the **mean**
-        ayanamsha — add nutation in longitude yourself for the true one.
+        ``vedaksha tools`` to see the current enum. The chart's
+        ``ayanamsha_value`` field reports the **true** ayanamsha (mean plus
+        nutation in longitude) already applied — nutation is included, do not
+        add it yourself.
         """
         args: dict[str, Any] = {
             "julian_day": julian_day,
