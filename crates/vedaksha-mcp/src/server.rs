@@ -404,12 +404,15 @@ impl McpServer {
         // for. Every longitude, the ascendant, the MC and all twelve cusps below
         // have been rotated by this value; without it a sidereal caller cannot
         // check the rotation or convert back to tropical. `None` is tropical,
-        // which is a zero rotation — the same number `ayanamsha_value` returns
-        // for `Ayanamsha::Tropical`, which is what the wasm surface passes.
-        // Must stay identical to the wasm path (`vedaksha-wasm/src/lib.rs`);
-        // `mcp_surface_parity` enforces it.
-        let ayanamsha_value =
-            ayanamsha.map_or(0.0, |a| vedaksha_astro::sidereal::ayanamsha_value(a, jd));
+        // which is a zero rotation — the same number `true_ayanamsha_value`
+        // returns for `Ayanamsha::Tropical`, which is what the wasm surface
+        // passes. Uses the TRUE ayanamsha so this field always equals the
+        // rotation `compute_chart` actually performed (see
+        // `sidereal::true_ayanamsha_value`) — must stay identical to the wasm
+        // path (`vedaksha-wasm/src/lib.rs`); `mcp_surface_parity` enforces it.
+        let ayanamsha_value = ayanamsha.map_or(0.0, |a| {
+            vedaksha_astro::sidereal::true_ayanamsha_value(a, jd)
+        });
 
         Ok((chart, ayanamsha_value))
     }
@@ -1405,13 +1408,17 @@ impl McpServer {
         let provider = AnalyticalProvider;
         let min_quality = input.min_quality.unwrap_or(0.5);
 
-        // Muhurta needs sidereal Sun and Moon longitudes (Lahiri ayanamsha).
+        // Muhurta needs sidereal Sun and Moon longitudes (Lahiri ayanamsha),
+        // using the TRUE ayanamsha (mean + nutation-in-longitude) so the
+        // quality scoring and nakshatra-boundary refinement below are rotated
+        // consistently with the nutation already present in the tropical
+        // positions `apparent_position`/`apparent_positions` return.
         // Position only — daily motion is not used, so skip the central-
         // difference work via `ecliptic_position` (≈3× cheaper per step).
         let get_moon_sidereal = |jd: f64| -> Option<f64> {
             let pos = coordinates::ecliptic_position(&provider, Body::Moon, jd).ok()?;
             let tropical_lon = pos.longitude.to_degrees();
-            Some(vedaksha_astro::sidereal::tropical_to_sidereal(
+            Some(vedaksha_astro::sidereal::true_tropical_to_sidereal(
                 tropical_lon,
                 vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                 jd,
@@ -1421,7 +1428,7 @@ impl McpServer {
         let get_sun_sidereal = |jd: f64| -> Option<f64> {
             let pos = coordinates::ecliptic_position(&provider, Body::Sun, jd).ok()?;
             let tropical_lon = pos.longitude.to_degrees();
-            Some(vedaksha_astro::sidereal::tropical_to_sidereal(
+            Some(vedaksha_astro::sidereal::true_tropical_to_sidereal(
                 tropical_lon,
                 vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                 jd,
@@ -1559,7 +1566,7 @@ impl McpServer {
 
         let moon_sid_speed = |jd: f64| -> Option<(f64, f64)> {
             let (tropical_lon, speed) = moon_pos_speed(jd)?;
-            let sid = vedaksha_astro::sidereal::tropical_to_sidereal(
+            let sid = vedaksha_astro::sidereal::true_tropical_to_sidereal(
                 tropical_lon,
                 vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                 jd,
@@ -1919,13 +1926,14 @@ mod tests {
         );
         assert!(
             (offset
-                - vedaksha_astro::sidereal::ayanamsha_value(
+                - vedaksha_astro::sidereal::true_ayanamsha_value(
                     vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
                     2451545.0
                 ))
             .abs()
-                < f64::EPSILON,
-            "the reported offset must be the one the library computed"
+                < 1e-9,
+            "the reported offset must be the true (mean + nutation-in-longitude) \
+             ayanamsha the library computed"
         );
 
         // And it must describe the payload it arrived with: the ascendant is
