@@ -1,5 +1,49 @@
 # v8.0.0
 
+## `compute_dasha`: Chara and Narayana dasha's `lagna_sign` was off by one sign — live since v2.4.0
+
+**Severity: high. This is a real, long-lived correctness defect on a documented, live API
+surface, not a naming or documentation change.** `compute_dasha`'s MCP schema documents
+`lagna_sign` as 1-indexed ("Lagna (ascendant) sign 1–12, 1 = Aries"). The underlying
+`vedaksha_vedic::dasha::chara::compute_chara` and `dasha::narayana::compute_narayana` functions
+are both 0-indexed (0 = Aries) — correctly documented as such, and internally self-consistent
+with their own test suites. The MCP dispatch layer (`compute_dasha`'s `call_compute_dasha`)
+passed the 1-indexed input straight through with no conversion. Every caller who correctly
+followed the documented schema received a Chara or Narayana dasha sequence starting exactly one
+sign later than their true ascendant.
+
+This was introduced when the Chara/Narayana dispatch was first added, in **v2.4.0**, and has
+been present in every tagged release since — this is not a regression from any recent work in
+this release; it is a defect this release happens to be the first to find and fix. Fixed by
+converting the 1-indexed input to 0-indexed at the MCP boundary before dispatch, with a
+regression test asserting the exact first-period sign for both Aries and Pisces boundary cases,
+on both Chara and Narayana. No change to `chara.rs`/`narayana.rs` themselves, which were already
+correct — the defect was entirely in the MCP dispatch layer.
+
+## Chara Dasha: counting direction implemented (previously disclosed as incomplete)
+
+`compute_chara` always counted forward through the 12 signs regardless of the lagna sign — its
+own module doc already disclosed this as a known simplification ("full Jaimini treatment...not
+yet implemented"), not a silent defect. This release completes it, from dedicated primary-source
+research (Jaimini Sutras, no reference-engine consultation):
+
+- **Base rule (Jaimini Sutras 1.1.25-26, high confidence):** odd lagna signs count forward, even
+  signs count backward.
+- **Fixed-sign exception (Jaimini Sutras 1.1.27, moderate confidence):** the sutra itself is a
+  terse, two-word exception clause with no explicit list; the commentarial reconstruction —
+  corroborated by two independently-styled sources — is that the four fixed (Sthira) signs invert
+  the plain rule: Taurus and Scorpio (even) count forward; Leo and Aquarius (odd) count backward.
+- **Explicitly not implemented:** a different, popular secondary-source mnemonic ("movable
+  forward, fixed backward, dual forward-then-backward") was considered and rejected — it is
+  internally inconsistent with sutras 25-26 for movable-even signs (e.g. Cancer). See
+  `crates/vedaksha-vedic/src/dasha/chara.rs`'s module doc and `DATA_PROVENANCE.md` Fix 11 for the
+  full citation and confidence discussion.
+
+**This changes computed Chara Dasha output for every lagna sign except Aries, Gemini, Libra, and
+Sagittarius** — the four odd, non-fixed signs, for which forward was already correct. This is a
+feature completion of a previously-disclosed gap, not a silent behavior change, but the scale of
+affected output (most charts) should not be understated.
+
 ## Naming symmetry for mean vs. true ayanamsha — breaking API rename
 
 v7.6.0 added `true_ayanamsha_value`/`true_tropical_to_sidereal` (mean ayanamsha plus
@@ -63,12 +107,21 @@ correct effect of v7.6.0's fix reaching a typical caller more accurately — not
 
 ## Release-policy note
 
-Unlike v7.6.0 (a value-only change, shipped minor), this release renames public identifiers in
-both the published Rust crate and the published wasm/npm package — a real breaking change for
-any direct caller by strict semver, regardless of how small the rename is in spirit. This ships
-as a **major** version bump.
+This release bundles two independent kinds of change, found and fixed together but distinct in
+nature:
 
-**Scale:** five Rust/wasm function names (three Rust, two wasm) and one served JSON field name
-change. No ephemeris,
-ayanamsha derivation, nutation series, or computed astronomical value changes as a result of
-this release — every behavioral change already shipped in v7.6.0. This release is naming-only.
+1. **Breaking API renames** (five Rust/wasm function names, one served JSON field name) — the
+   reason for the major version bump. No computed value changes as part of the rename work
+   itself; every value-level behavior change from the ayanamsha/nutation fix already shipped in
+   v7.6.0.
+2. **Real correctness fixes to `compute_dasha`'s Chara and Narayana systems** — a severity-high,
+   multi-year-live off-by-one bug, and a feature completion of a previously-disclosed gap in
+   Chara Dasha's direction logic. These change computed dasha output for real callers on a live
+   API surface, independent of and unrelated to the ayanamsha renames above.
+
+An earlier draft of this changelog described this release as "naming-only, no computed value
+changes" — that was written before the dasha fixes above were found during this same release's
+final review cycle, and was corrected here rather than left standing now that it is no longer
+true. This release ships as a **major** version bump for the API renames; the dasha fixes are
+bundled into the same release rather than split out, since both were found and fixed in the same
+work session before the previous major-bump work was tagged.
