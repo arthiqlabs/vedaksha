@@ -169,6 +169,22 @@ code, and agree to 5.7e-14° over 192 comparisons spanning 6000 years. `--verify
 compares sha256, and needs no network, so unlike the coefficient-blob jobs it cannot pass
 vacuously.
 
+## Accuracy fixes — 2026-08-29
+
+### Fix 9 — Sidereal chart rotation used the mean ayanamsha, not the true one
+Source: this module's own pre-existing documentation (`crates/vedaksha-astro/src/sidereal.rs`,
+module doc, unchanged by this fix) already states "true ayanamsha = mean ayanamsha + nutation in
+longitude" and that real panchanga tables consume the true value. The tropical longitudes
+`compute_chart` receives are apparent (nutation-inclusive, IAU 2000B — already implemented and
+cited in `crates/vedaksha-ephem-core/src/nutation.rs`), so rotating them by the mean-only
+ayanamsha left an uncancelled nutation-in-longitude term, up to ~17-20 arcsec, in every sidereal
+chart position. Fixed in v7.6.0 by adding `sidereal::true_ayanamsha_value` (mean + nutation) and
+switching `compute_chart` and the muhurta-search sidereal lookups onto it; `sidereal::ayanamsha_value`
+itself is unchanged — it remains the standalone mean quantity documented at the top of the module.
+No new numerical constants were introduced; no external source was consulted to determine this
+was wrong, only Vedaksha's own already-cited nutation series and its own already-stated mean/true
+relation. See `CHANGELOG-v7.6.0.md`.
+
 ## Standing rules
 
 - Every PR that adds a new external data source must add a row here.
