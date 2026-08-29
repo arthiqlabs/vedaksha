@@ -510,11 +510,16 @@ impl McpServer {
                 levels,
             )),
             DashaSystem::Chara => serde_json::to_value(dasha::chara::compute_chara(
-                input.lagna_sign.expect("validated above"),
+                // `lagna_sign` is documented (schema + doc comment) as
+                // 1-indexed (1 = Aries), but `compute_chara` expects
+                // 0-indexed (0 = Aries). `validate()` above guarantees
+                // `[1, 12]`, so `- 1` is safe and yields `[0, 11]`.
+                input.lagna_sign.expect("validated above") - 1,
                 input.birth_jd,
             )),
             DashaSystem::Narayana => serde_json::to_value(dasha::narayana::compute_narayana(
-                input.lagna_sign.expect("validated above"),
+                // Same 1-indexed → 0-indexed conversion as Chara above.
+                input.lagna_sign.expect("validated above") - 1,
                 input.birth_jd,
             )),
         };
@@ -2048,6 +2053,76 @@ mod tests {
         // NarayanaDasha has `lagna_sign` and `periods`.
         assert!(dasha["lagna_sign"].is_number());
         assert!(dasha["periods"].is_array());
+    }
+
+    // `lagna_sign` is documented (compute_dasha's input_schema) as 1-indexed
+    // (1 = Aries), but `compute_chara`/`compute_narayana` expect 0-indexed
+    // (0 = Aries). The dispatch in `call_compute_dasha` must convert between
+    // the two, or every Chara/Narayana dasha served via the documented API
+    // starts exactly one sign later than the true ascendant. Aries (1) and
+    // Pisces (12) are both checked: an off-by-two or sign-flipped conversion
+    // (e.g. `+ 1` instead of `- 1`) could still pass an Aries-only check by
+    // coincidence at one end of the range.
+    #[test]
+    fn compute_dasha_chara_lagna_sign_1_is_aries() {
+        let s = server();
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Chara","lagna_sign":1,"birth_jd":2451545.0}"#,
+        );
+        let periods = dasha.as_array().expect("expected array of CharaPeriod");
+        assert_eq!(
+            periods[0]["sign_name"].as_str().unwrap(),
+            "Aries",
+            "lagna_sign 1 (documented 1-indexed Aries) must start the Chara \
+             dasha on Aries, not the next sign over: {dasha}"
+        );
+    }
+
+    #[test]
+    fn compute_dasha_chara_lagna_sign_12_is_pisces() {
+        let s = server();
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Chara","lagna_sign":12,"birth_jd":2451545.0}"#,
+        );
+        let periods = dasha.as_array().expect("expected array of CharaPeriod");
+        assert_eq!(
+            periods[0]["sign_name"].as_str().unwrap(),
+            "Pisces",
+            "lagna_sign 12 (documented 1-indexed Pisces) must start the Chara \
+             dasha on Pisces: {dasha}"
+        );
+    }
+
+    #[test]
+    fn compute_dasha_narayana_lagna_sign_1_is_aries() {
+        let s = server();
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Narayana","lagna_sign":1,"birth_jd":2451545.0}"#,
+        );
+        assert_eq!(
+            dasha["periods"][0]["sign_name"].as_str().unwrap(),
+            "Aries",
+            "lagna_sign 1 (documented 1-indexed Aries) must start the \
+             Narayana dasha on Aries, not the next sign over: {dasha}"
+        );
+    }
+
+    #[test]
+    fn compute_dasha_narayana_lagna_sign_12_is_pisces() {
+        let s = server();
+        let dasha = dasha_text(
+            &s,
+            r#"{"system":"Narayana","lagna_sign":12,"birth_jd":2451545.0}"#,
+        );
+        assert_eq!(
+            dasha["periods"][0]["sign_name"].as_str().unwrap(),
+            "Pisces",
+            "lagna_sign 12 (documented 1-indexed Pisces) must start the \
+             Narayana dasha on Pisces: {dasha}"
+        );
     }
 
     #[test]
