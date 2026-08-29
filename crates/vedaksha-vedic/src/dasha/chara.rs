@@ -13,44 +13,49 @@
 //! **Sign distance:** Forward count from sign to lord's sign (1–12); a sign
 //! whose lord is in the same sign gets 12 years.
 //!
-//! **Starting sign and direction:** per Jaimini Sutras, Adhyaya 1 Pada 1,
-//! sutras 1.1.25-27:
-//! - Sutra 1.1.25 (*Pracheevruttirvishamabheshu*): odd signs (1-indexed;
-//!   0-indexed even values here — Aries, Gemini, Leo, Libra, Sagittarius,
-//!   Aquarius) count forward.
-//! - Sutra 1.1.26 (*Paravrutyottareshu*): even signs (0-indexed odd values —
-//!   Taurus, Cancer, Virgo, Scorpio, Capricorn, Pisces) count backward.
-//! - Sutra 1.1.27 (*Nakwachit*, "this does not apply in some places"): a
-//!   terse, two-word exception with no explicit list in the sutra text
-//!   itself. The commentarial reconstruction used here (corroborated by two
-//!   independently-styled sources) is that the exception covers exactly the
-//!   four fixed (Sthira) signs — Taurus, Scorpio, Leo, Aquarius — where the
-//!   plain odd/even direction is inverted: Taurus and Scorpio (even) count
-//!   forward; Leo and Aquarius (odd) count backward.
+//! **Direction — tested at the 9th sign from the lagna, not the lagna itself.**
+//! The governing sutra is in Adhyaya 2, Pada 3 (its own number is unstable
+//! across sources — direct readings of 22, 28, and 32 are on record, and a
+//! fourth source independently reports 29): *pañcame padakramāt
+//! prākpratyaktvaṃ caradaśāyām*. Grammatically, *pañcame* means "in the
+//! fifth" — but Jaimini states his own letter-to-numeral convention
+//! elsewhere (*sarvatra savarṇā bhāvā rāśayaś ca*, "everywhere, the houses
+//! and signs are [denoted] by letters"), under which *pañcame* decodes
+//! arithmetically to **nine**, not five. That decoding is not asserted here
+//! on trust: it reproduces, independently, the numeric answer each of eight
+//! other words coded the same way is glossed with elsewhere in this same
+//! sutra layer (high confidence — a verifiable arithmetic fact, not a
+//! judgment call). The sutra is read here as: take the 9th sign from the
+//! lagna, and test it (not the lagna itself) for direction.
 //!
-//! **Confidence:** the base odd/even rule (sutras 25-26) is high confidence —
-//! direct sutra text, corroborated by essentially every secondary source
-//! found, and internally consistent with the identical odd/even logic
-//! applied elsewhere in the same Pada (sutras 1.1.32, 1.1.34). The fixed-sign
-//! exception mapping (sutra 27) is moderate confidence — the sutra itself
-//! gives no explicit list, and the four-sign mapping is a commentarial
-//! reconstruction, though two independently-styled sources ("Sthira" framing
-//! vs. "Vishama Pada"/"Sama Pada" framing) converge on the identical four
-//! signs.
+//! **The classification tested at that 9th sign: vishama-pada ("odd-footed")
+//! vs. sama-pada ("even-footed")** — Aries, Taurus, Gemini, Libra, Scorpio,
+//! Sagittarius are vishama-pada; the other six are sama-pada. This is a
+//! distinct classification from plain odd/even sign numbering (it agrees
+//! with plain odd/even on eight signs and disagrees on exactly Taurus, Leo,
+//! Scorpio, Aquarius — the four signs a still-earlier version of this module
+//! called out as a "fixed-sign exception" to a plain odd/even rule tested
+//! directly on the lagna, before the 9th-house step was found; see
+//! `DATA_PROVENANCE.md` Fix 11 for that history). If the 9th sign from the
+//! lagna is vishama-pada, Chara Dasha counts forward; otherwise backward.
 //!
-//! **A different, popular secondary-source mnemonic exists** ("movable signs
-//! forward, fixed signs backward, dual signs forward-then-backward") and is
-//! *not* implemented here: it is internally inconsistent with sutras 25-26
-//! for movable-even signs (e.g. Cancer — movable but even — which the sutra
-//! text places in the backward group with no stated exception for movable
-//! signs). This module implements the sutra-literal + reconstructed-exception
-//! reading instead.
+//! **Attribution and confidence:** this reading is transmitted in a
+//! commentary called the *Subodhinī*, under the name Nīlakaṇṭha — moderate
+//! confidence on the specific authorship, since a critical edition compiled
+//! from multiple manuscripts notes that copies circulating under that name
+//! are sometimes misattributed. The same critical edition describes the
+//! 9th-house reading as the view of "many commentators" — a documented
+//! majority, not a claim of universal agreement — and separately records a
+//! named minority reading, under the name Kṛṣṇānanda Sarasvatī, holding that
+//! *pañcame* keeps its literal sense and names a different dasha system
+//! entirely, not a rival Chara Dasha direction rule. No source found states
+//! a rival *Chara Dasha* direction table under any other name.
 //!
-//! No confirmed classical sub-rule exists for dual (Dwiswabhava) signs beyond
-//! the plain odd/even rule; dual signs are not an exception category in this
-//! reading — only the four fixed signs are.
-//!
-//! Source: Jaimini Sutras 1.1 (sutras 25-28 cover direction and duration).
+//! **Superseded:** earlier versions of this module cited Adhyaya 1 Pada 1,
+//! sutras 25-27, for direction. Those sutras are understood here to govern a
+//! different rule — sign-to-lord counting, the concern of [`sign_distance`]
+//! below, not sequence direction — and are no longer cited for direction.
+//! See `DATA_PROVENANCE.md` Fix 11 for the full history of that correction.
 
 use serde::{Deserialize, Serialize};
 
@@ -98,10 +103,9 @@ pub struct CharaPeriod {
 ///
 /// A `Vec` of 12 [`CharaPeriod`] entries in the dasha order, starting from
 /// `lagna_sign` and proceeding sign by sign through all 12 signs, in the
-/// direction given by [`chara_direction`] (forward or backward per Jaimini
-/// Sutras 1.1.25-27; see the module doc for the confidence split).
-///
-/// Source: Jaimini Sutras 1.1 (sutras 25-28).
+/// direction given by [`chara_direction`] (forward or backward, tested at
+/// the 9th sign from the lagna; see the module doc for the sutra and its
+/// confidence grading).
 #[must_use]
 pub fn compute_chara(lagna_sign: u8, birth_jd: f64) -> Vec<CharaPeriod> {
     let lagna_sign = lagna_sign % 12;
@@ -139,31 +143,24 @@ enum Direction {
     Backward,
 }
 
-/// Whether `sign` (0-indexed, 0 = Aries) is an odd sign in the classical
-/// 1-indexed numbering (1 = Aries = odd, 2 = Taurus = even, ...) — i.e. an
-/// even 0-indexed value.
-fn is_odd_sign(sign: u8) -> bool {
-    sign.is_multiple_of(2)
+/// Whether `sign` (0-indexed, 0 = Aries) is vishama-pada ("odd-footed"):
+/// Aries, Taurus, Gemini, Libra, Scorpio, Sagittarius. See the module doc —
+/// this is a distinct classification from plain odd/even sign numbering,
+/// used here as the test applied to the 9th sign from the lagna, not to the
+/// lagna itself.
+fn is_vishama_pada(sign: u8) -> bool {
+    matches!(sign, 0 | 1 | 2 | 6 | 7 | 8)
 }
 
-/// Chara Dasha's counting direction, per Jaimini Sutras 1.1.25-27.
-///
-/// The base rule (sutras 25-26, high confidence): odd signs count forward,
-/// even signs count backward. Sutra 27 states a terse, unlisted exception
-/// ("this does not apply in some places"); the commentarial reconstruction
-/// (moderate confidence, corroborated by two independently-styled sources)
-/// is that the four fixed (Sthira) signs — Taurus, Scorpio, Leo, Aquarius —
-/// invert the plain odd/even direction. A different, popular secondary-source
-/// mnemonic ("movable forward, fixed backward, dual forward-then-backward")
-/// is not implemented here: it is internally inconsistent with sutras 25-26
-/// for movable-even signs (e.g. Cancer), which the sutra text places in the
-/// backward group with no stated exception for movable signs.
-fn chara_direction(sign: u8) -> Direction {
-    match sign {
-        1 | 7 => Direction::Forward,   // Taurus, Scorpio: fixed exception
-        4 | 10 => Direction::Backward, // Leo, Aquarius: fixed exception
-        _ if is_odd_sign(sign) => Direction::Forward,
-        _ => Direction::Backward,
+/// Chara Dasha's counting direction: vishama-pada/sama-pada, tested at the
+/// 9th sign from `lagna` — see the module doc for the sutra and its
+/// confidence grading.
+fn chara_direction(lagna: u8) -> Direction {
+    let ninth_from_lagna = (lagna + 8) % 12;
+    if is_vishama_pada(ninth_from_lagna) {
+        Direction::Forward
+    } else {
+        Direction::Backward
     }
 }
 
@@ -265,99 +262,151 @@ mod tests {
         }
     }
 
-    // 5. Odd, non-fixed lagna (Gemini=2) counts forward
+    // 5-16. Direction for every lagna, tested at the 9th sign from the lagna
+    // (vishama-pada => forward, sama-pada => backward). Table verified by
+    // hand: 9th-from-lagna for each of the 12 lagnas, checked against the
+    // vishama-pada set {Aries, Taurus, Gemini, Libra, Scorpio, Sagittarius}.
+    // Movable lagnas (Aries, Cancer, Libra, Capricorn) keep the same
+    // direction a plain-odd/even-on-the-lagna rule would also give them;
+    // the other eight flip relative to that plain rule, which is exactly
+    // the vishama-pada/sama-pada split this module now applies at the 9th
+    // house rather than at the lagna itself.
     #[test]
-    fn odd_non_fixed_lagna_counts_forward() {
-        let periods = compute_chara(2, TEST_JD); // Gemini
+    fn aries_lagna_counts_forward() {
+        let periods = compute_chara(0, TEST_JD); // Aries; 9th = Sagittarius, vishama-pada
+        assert_eq!(periods[0].sign_index, 0);
         assert_eq!(
-            periods[0].sign_index, 2,
-            "first period should be Gemini itself"
-        );
-        assert_eq!(
-            periods[1].sign_index, 3,
-            "second period should be Cancer (forward)"
+            periods[1].sign_index, 1,
+            "second period should be Taurus (forward)"
         );
     }
 
-    // 6. Even, non-fixed lagna (Cancer=3) counts backward
     #[test]
-    fn even_non_fixed_lagna_counts_backward() {
-        let periods = compute_chara(3, TEST_JD); // Cancer
+    fn taurus_lagna_counts_backward() {
+        let periods = compute_chara(1, TEST_JD); // Taurus; 9th = Capricorn, sama-pada
+        assert_eq!(periods[0].sign_index, 1);
         assert_eq!(
-            periods[0].sign_index, 3,
-            "first period should be Cancer itself"
+            periods[1].sign_index, 0,
+            "second period should be Aries (backward)"
         );
+    }
+
+    #[test]
+    fn gemini_lagna_counts_backward() {
+        let periods = compute_chara(2, TEST_JD); // Gemini; 9th = Aquarius, sama-pada
+        assert_eq!(periods[0].sign_index, 2);
+        assert_eq!(
+            periods[1].sign_index, 1,
+            "second period should be Taurus (backward)"
+        );
+    }
+
+    #[test]
+    fn cancer_lagna_counts_backward() {
+        let periods = compute_chara(3, TEST_JD); // Cancer; 9th = Pisces, sama-pada
+        assert_eq!(periods[0].sign_index, 3);
         assert_eq!(
             periods[1].sign_index, 2,
             "second period should be Gemini (backward)"
         );
     }
 
-    // 7. Fixed exception: Taurus (even) counts forward, not backward
     #[test]
-    fn fixed_sign_exception_taurus_counts_forward() {
-        let periods = compute_chara(1, TEST_JD); // Taurus
+    fn leo_lagna_counts_forward() {
+        let periods = compute_chara(4, TEST_JD); // Leo; 9th = Aries, vishama-pada
+        assert_eq!(periods[0].sign_index, 4);
         assert_eq!(
-            periods[0].sign_index, 1,
-            "first period should be Taurus itself"
-        );
-        assert_eq!(
-            periods[1].sign_index, 2,
-            "second period should be Gemini (forward, exception overrides even-backward)"
+            periods[1].sign_index, 5,
+            "second period should be Virgo (forward)"
         );
     }
 
-    // 8. Fixed exception: Scorpio (even) counts forward, not backward
     #[test]
-    fn fixed_sign_exception_scorpio_counts_forward() {
-        let periods = compute_chara(7, TEST_JD); // Scorpio
+    fn virgo_lagna_counts_forward() {
+        let periods = compute_chara(5, TEST_JD); // Virgo; 9th = Taurus, vishama-pada
+        assert_eq!(periods[0].sign_index, 5);
         assert_eq!(
-            periods[0].sign_index, 7,
-            "first period should be Scorpio itself"
+            periods[1].sign_index, 6,
+            "second period should be Libra (forward)"
         );
+    }
+
+    #[test]
+    fn libra_lagna_counts_forward() {
+        let periods = compute_chara(6, TEST_JD); // Libra; 9th = Gemini, vishama-pada
+        assert_eq!(periods[0].sign_index, 6);
+        assert_eq!(
+            periods[1].sign_index, 7,
+            "second period should be Scorpio (forward)"
+        );
+    }
+
+    #[test]
+    fn scorpio_lagna_counts_backward() {
+        let periods = compute_chara(7, TEST_JD); // Scorpio; 9th = Cancer, sama-pada
+        assert_eq!(periods[0].sign_index, 7);
+        assert_eq!(
+            periods[1].sign_index, 6,
+            "second period should be Libra (backward)"
+        );
+    }
+
+    #[test]
+    fn sagittarius_lagna_counts_backward() {
+        let periods = compute_chara(8, TEST_JD); // Sagittarius; 9th = Leo, sama-pada
+        assert_eq!(periods[0].sign_index, 8);
+        assert_eq!(
+            periods[1].sign_index, 7,
+            "second period should be Scorpio (backward)"
+        );
+    }
+
+    #[test]
+    fn capricorn_lagna_counts_backward() {
+        let periods = compute_chara(9, TEST_JD); // Capricorn; 9th = Virgo, sama-pada
+        assert_eq!(periods[0].sign_index, 9);
         assert_eq!(
             periods[1].sign_index, 8,
-            "second period should be Sagittarius (forward, exception overrides even-backward)"
+            "second period should be Sagittarius (backward)"
         );
     }
 
-    // 9. Fixed exception: Leo (odd) counts backward, not forward
     #[test]
-    fn fixed_sign_exception_leo_counts_backward() {
-        let periods = compute_chara(4, TEST_JD); // Leo
+    fn aquarius_lagna_counts_forward() {
+        let periods = compute_chara(10, TEST_JD); // Aquarius; 9th = Libra, vishama-pada
+        assert_eq!(periods[0].sign_index, 10);
         assert_eq!(
-            periods[0].sign_index, 4,
-            "first period should be Leo itself"
-        );
-        assert_eq!(
-            periods[1].sign_index, 3,
-            "second period should be Cancer (backward, exception overrides odd-forward)"
+            periods[1].sign_index, 11,
+            "second period should be Pisces (forward)"
         );
     }
 
-    // 10. Fixed exception: Aquarius (odd) counts backward, not forward
     #[test]
-    fn fixed_sign_exception_aquarius_counts_backward() {
-        let periods = compute_chara(10, TEST_JD); // Aquarius
+    fn pisces_lagna_counts_forward() {
+        let periods = compute_chara(11, TEST_JD); // Pisces; 9th = Scorpio, vishama-pada
+        assert_eq!(periods[0].sign_index, 11);
         assert_eq!(
-            periods[0].sign_index, 10,
-            "first period should be Aquarius itself"
-        );
-        assert_eq!(
-            periods[1].sign_index, 9,
-            "second period should be Capricorn (backward, exception overrides odd-forward)"
+            periods[1].sign_index, 0,
+            "second period should be Aries (forward)"
         );
     }
 
-    // 11. Aries (odd, non-fixed) still counts forward — regression guard for the un-exceptional case
+    // 17. The vishama-pada classification itself matches the module doc's set
     #[test]
-    fn aries_lagna_still_counts_forward() {
-        let periods = compute_chara(0, TEST_JD); // Aries
-        assert_eq!(periods[0].sign_index, 0);
-        assert_eq!(
-            periods[1].sign_index, 1,
-            "second period should be Taurus (forward)"
-        );
+    fn vishama_pada_set_is_exactly_documented() {
+        let expected_vishama_pada = [
+            true, true, true, false, false, false, true, true, true, false, false, false,
+        ];
+        for (sign, &expected) in expected_vishama_pada.iter().enumerate() {
+            #[allow(clippy::cast_possible_truncation)]
+            let sign = sign as u8;
+            assert_eq!(
+                is_vishama_pada(sign),
+                expected,
+                "sign {sign} ({}): expected vishama-pada = {expected}",
+                SIGN_NAMES[sign as usize]
+            );
+        }
     }
 
     // 12. All 12 signs still appear exactly once regardless of direction (backward case)
