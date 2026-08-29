@@ -201,6 +201,17 @@ Separately, `rahu_degrees_in_sign`'s sign-boundary check was hardened from exact
 question, addressing a case where a value that should be exactly zero but arrives as a tiny
 floating-point residual would previously have been mis-ranked. See `CHANGELOG-v7.6.0.md`.
 
+**Cross-effect with Fix 9, disclosed here since it is not obvious from either entry alone:**
+`compute_karakas` takes caller-supplied sidereal longitudes and performs no rotation itself, so
+Fix 9 does not touch this module's code — but a caller who chains `compute_natal_chart` into
+`compute_karakas` (the normal usage pattern) now feeds it longitudes, Rahu's included, that are
+up to ~17-20 arcsec different from before Fix 9, because `compute_natal_chart`'s sidereal output
+changed. For a chart where Rahu's degree-within-sign sits within about that same margin of a
+sign boundary, this shift can move it across the boundary and change its karaka rank — the exact
+regime the original finding's 5 full-reorder cases occupied. This is a real, documented-here
+consequence of Fix 9 reaching this module's typical caller, not a defect in `compute_karakas`
+itself, and not something either fix's own changelog entry states on its own.
+
 ## Standing rules
 
 - Every PR that adds a new external data source must add a row here.
