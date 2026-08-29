@@ -105,9 +105,57 @@ correct effect of v7.6.0's fix reaching a typical caller more accurately — not
 `compute_karakas`, and not something either release's changelog stated on its own until now. See
 `DATA_PROVENANCE.md`'s Fix 9/Fix 10 cross-reference note for the full explanation.
 
+## Performance: three fixes to the analytical (VSOP87A/ELP-MPP02) ephemeris path
+
+Found during a dedicated optimization investigation (`docs/audit/2026-08-29-perf-investigation.md`)
+into the analytical provider's hot path. All three are internal-only: no public function signature,
+computed value, or output schema changes. Each is verified bit-identical (or, where floating-point
+addition/subtraction order genuinely changed, bounded and measured rather than assumed) against
+`analytical_oracle.rs` (21,915 rows vs. the JPL Horizons DE441 fixture) and `analytical_bit_digest.rs`
+(pinned SHA-256 digest over the full supported range) — both byte-identical before and after every
+change below.
+
+- **Stopped computing the Moon twice to cancel it against itself.** The analytical
+  Earth-Moon-barycenter path built `EMB = vsop_earth + moon/EMRAT`, then immediately recovered
+  `Earth = EMB - moon/EMRAT` — two full 35,758-term ELP/MPP02 lunar evaluations to produce a value
+  VSOP87A's own 2,202-term Earth series already determines directly. A new `EphemerisProvider::earth_state`
+  trait method lets `AnalyticalProvider` return `vsop_state(Earth)` directly; the SPK provider (where
+  EMB and Moon are independent kernel segments and nothing cancels) keeps the original arithmetic as
+  its default. Measured (criterion, aarch64, bench profile): `ecliptic_position(Sun)` 531.65µs →
+  11.210µs (47.4×), full 11-body chart 19.465ms → 6.8497ms (2.84×), batched chart 6.5343ms →
+  5.6880ms (1.15×). The addition/subtraction reordering is bounded at ≤1 ULP by IEEE 754 argument
+  and measured at exactly zero difference across both fixtures; a dedicated 800-JD sweep found the
+  two computation paths agree within 1mm and 1 ULP everywhere, confirming the shortcut is correct,
+  not merely different.
+- **Stopped multiplying ELP/MPP02's perturbation phases by zero.** Each of the 33,122 lunar
+  perturbation terms carries 13 integer multipliers but only ~3.90 are nonzero on average (97.1%
+  have ≤5); the dense dot product multiplied by zero anyway, 861,172 times per evaluation. Terms
+  now store only their nonzero multipliers, in original argument order, in a fixed-width 8-slot
+  layout (5 read unconditionally, a tail gated for the 2.9% needing more) — chosen after a
+  variable-length sparse form measured 43% *slower* (branch misprediction dominates the saved
+  arithmetic) than the dense original. Bundled with three call-site hoists of already-jd-independent
+  computation. Measured: `elp_mpp02_moon` 261.80µs → 216.19µs (−17.4%), a 365-day lunar scan
+  −15.6%, full chart −12.0%, batched chart −11.9%. Verified bit-identical three independent ways,
+  including a new 630,003-evaluation, 3,780,018-bit-pattern digest test
+  (`tests/lunar_series_bit_digest.rs`) dedicated to this module, since the existing bit digest only
+  samples the Moon 2,435 times downstream of precession/nutation/aberration.
+- **Restored SIMD for the Python package's bundled wasm engine.** The npm package's wasm build has
+  set `-C target-feature=+simd128` since it was introduced; the Python package's build script never
+  did, so `wide`'s `f64x4` silently fell back to scalar inside every published Python wheel. Fixed
+  by adding the same flag; verified the resulting `.wasm` binary actually changed and that scalar
+  and simd128 builds agree bit-for-bit across the Python conformance suite and direct chart
+  comparisons before enabling it.
+
+Wave 0 of the investigation (SIMD trigonometric-kernel domain verification, extended from ±3,000 to
+±3,400,000 radians with 1-2 ULP error measured at the new boundary; an ELP-call-count test that
+silently couldn't detect the regression it was named for; `target-cpu=x86-64-v3` for shipped
+benchmarks) is folded in as verification and tooling, not a behavior change. Two further items the
+investigation identified — light-time target extrapolation and lane-parallel SIMD accumulation —
+are explicitly deferred; both need separate ratification before any work starts.
+
 ## Release-policy note
 
-This release bundles two independent kinds of change, found and fixed together but distinct in
+This release bundles three independent kinds of change, found and fixed together but distinct in
 nature:
 
 1. **Breaking API renames** (five Rust/wasm function names, one served JSON field name) — the
@@ -118,10 +166,12 @@ nature:
    multi-year-live off-by-one bug, and a feature completion of a previously-disclosed gap in
    Chara Dasha's direction logic. These change computed dasha output for real callers on a live
    API surface, independent of and unrelated to the ayanamsha renames above.
+3. **Three performance fixes to the analytical ephemeris path** (above) — internal-only, verified
+   bit-identical (or boundedly, measurably equivalent), no public API or computed-value change.
 
 An earlier draft of this changelog described this release as "naming-only, no computed value
 changes" — that was written before the dasha fixes above were found during this same release's
 final review cycle, and was corrected here rather than left standing now that it is no longer
-true. This release ships as a **major** version bump for the API renames; the dasha fixes are
-bundled into the same release rather than split out, since both were found and fixed in the same
-work session before the previous major-bump work was tagged.
+true. This release ships as a **major** version bump for the API renames; the dasha fixes and
+performance work are bundled into the same release rather than split out, since all were found and
+fixed in the same work session before the previous major-bump work was tagged.
