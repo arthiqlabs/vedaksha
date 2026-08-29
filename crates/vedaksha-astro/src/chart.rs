@@ -124,7 +124,8 @@ pub struct ComputedChart {
 ///   frame — never ayanamsha-corrected).
 /// * `geo_latitude` — Geographic latitude in degrees.
 /// * `obliquity`   — Obliquity of the ecliptic in degrees.
-/// * `jd`          — Julian Day (for ayanamsha computation).
+/// * `jd`          — Julian Day (for ayanamsha computation; used as the
+///   nutation argument too — see [`crate::sidereal::true_ayanamsha_value`]).
 /// * `config`      — Chart configuration.
 #[must_use]
 pub fn compute_chart(
@@ -135,10 +136,15 @@ pub fn compute_chart(
     jd: f64,
     config: &ChartConfig,
 ) -> ComputedChart {
-    // 1. Apply ayanamsha if sidereal
+    // 1. Apply ayanamsha if sidereal. Uses the TRUE ayanamsha (mean +
+    //    nutation-in-longitude, see `sidereal::true_ayanamsha_value`): `lon`
+    //    below is a true-equinox-of-date tropical longitude (nutation
+    //    already applied by the caller), so rotating it by the mean-only
+    //    ayanamsha would leave an uncancelled nutation term — up to ~17-20
+    //    arcsec — live in every sidereal position this function returns.
     let ayanamsha_offset = config
         .ayanamsha
-        .map_or(0.0, |a| crate::sidereal::ayanamsha_value(a, jd));
+        .map_or(0.0, |a| crate::sidereal::true_ayanamsha_value(a, jd));
 
     // 2. Compute houses — tropically, as the RAMC/obliquity transform
     //    requires — then rotate the cusps into the chart's frame so they share
@@ -351,12 +357,21 @@ mod tests {
 
         // Expected sidereal longitude is computed from the engine itself, not
         // from a hardcoded ayanamsha, so this test survives re-derivation.
+        // Uses the TRUE ayanamsha (mean + nutation-in-longitude): the tropical
+        // longitude fed to compute_chart is assumed already nutation-inclusive
+        // by every real caller, so the rotation must be too. A 0.01° tolerance
+        // (this test's old value) is larger than the ~17-20″ nutation term and
+        // could not have told a mean rotation from a true one — 1e-9° is tight
+        // enough to require the exact relationship.
         let expected = vedaksha_math::angle::normalize_degrees(
             130.0
-                - crate::sidereal::ayanamsha_value(crate::sidereal::Ayanamsha::IndianOfficial, JD),
+                - crate::sidereal::true_ayanamsha_value(
+                    crate::sidereal::Ayanamsha::IndianOfficial,
+                    JD,
+                ),
         );
         assert!(
-            (chart.planets[0].longitude - expected).abs() < 0.01,
+            (chart.planets[0].longitude - expected).abs() < 1e-9,
             "Sidereal longitude mismatch: got {}, expected {}",
             chart.planets[0].longitude,
             expected
@@ -393,7 +408,7 @@ mod tests {
     /// 9 systems at every polar latitude in the grid.
     #[test]
     fn house_assignment_is_invariant_under_ayanamsha_rotation() {
-        use crate::sidereal::{Ayanamsha, ayanamsha_value};
+        use crate::sidereal::{Ayanamsha, true_ayanamsha_value};
 
         // Every house system whose cusps are a function of the ascendant and
         // the RAMC alone — i.e. every one except Whole-Sign.
@@ -450,7 +465,7 @@ mod tests {
 
         for system in systems {
             for (ramc, lat, jd) in charts {
-                let ayan = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
+                let ayan = true_ayanamsha_value(Ayanamsha::IndianOfficial, jd);
                 let mut trop_cfg = ChartConfig {
                     house_system: system,
                     ..ChartConfig::default()
@@ -571,7 +586,7 @@ mod tests {
     /// Only comparing `asc` against the tropical chart exposes the mix.
     #[test]
     fn whole_sign_bhavas_follow_the_sidereal_sign_of_the_ascendant() {
-        use crate::sidereal::{Ayanamsha, ayanamsha_value};
+        use crate::sidereal::{Ayanamsha, true_ayanamsha_value};
 
         let charts = [
             (30.0, 0.0, 2_433_282.5),
@@ -601,7 +616,7 @@ mod tests {
             // left asc/cusps tropical while rotating the planets would satisfy
             // every other assertion below.
             let trop = compute_chart(&data, ramc, lat, OBL, jd, &trop_cfg);
-            let ayan = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
+            let ayan = true_ayanamsha_value(Ayanamsha::IndianOfficial, jd);
             let expected_asc = normalize_degrees(trop.houses.asc - ayan);
             assert!(
                 libm::fabs(asc - expected_asc) < 1e-9,
