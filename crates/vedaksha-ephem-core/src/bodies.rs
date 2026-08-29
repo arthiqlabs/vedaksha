@@ -32,17 +32,23 @@ pub enum Body {
     Pluto,
     /// Mean ascending lunar node.
     MeanNode,
-    /// True ascending lunar node from osculating orbital elements (0.6″ max
-    /// vs JPL DE441 over 1900–2100; measured 2026-07-16 across 2,435
-    /// epochs). Derived from Moon position/velocity via ELP/MPP02. As of
-    /// this release, numerically identical to [`Self::TrueNodeOsculating`]
-    /// — kept as a separate variant for API stability. Previously a 5-term
+    /// True ascending lunar node from osculating orbital elements. Derived
+    /// from Moon position/velocity via ELP/MPP02. The underlying
+    /// osculating-node method — shared by this variant and
+    /// [`Self::TrueNodeOsculating`], which differ only by the documented
+    /// frame term — is validated to 0.6″ max vs JPL DE441 over 1900–2100
+    /// (measured 2026-07-16 across 2,435 epochs, on the J2000-frame
+    /// evaluation used for that comparison). As of this release, this
+    /// variant is numerically identical to [`Self::TrueNodeOsculating`] —
+    /// kept as a separate variant for API stability. Previously a 5-term
     /// Meeus approximation; see `DATA_PROVENANCE.md`'s "Fix 2" entry for
     /// that history.
     TrueNode,
-    /// True ascending lunar node from osculating orbital elements (0.6″ max vs
-    /// JPL DE441 over 1900–2100; measured 2026-07-16 across 2,435 epochs).
-    /// Derived from Moon position/velocity via ELP/MPP02. Suitable for KP sub-lord work.
+    /// True ascending lunar node from osculating orbital elements. Derived
+    /// from Moon position/velocity via ELP/MPP02. Suitable for KP sub-lord
+    /// work. Shares the same underlying osculating-node method as
+    /// [`Self::TrueNode`] — see that variant's doc comment for the validated
+    /// accuracy figure and which evaluation it was measured on.
     TrueNodeOsculating,
     /// Mean descending lunar node (Ketu) — [`Self::MeanNode`] + 180°.
     MeanSouthNode,

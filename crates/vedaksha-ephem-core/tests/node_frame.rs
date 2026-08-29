@@ -10,12 +10,14 @@
 //! wrong. The pipeline treated a node as a body one AU away and subtracted
 //! Earth's position from it, moving the reported node by up to 75°, while the
 //! only test on that path asserted the state vector was *finite*. Separately,
-//! `true_node_osculating` was referred to J2000 while `mean_node` and
-//! `true_node` were referred to the equinox of date, so the three arms of the
-//! `Body` node selector were not in the same frame — a difference that grows
-//! at the precession rate and reached 1.5° at 1900, and which the existing
-//! bound of 0.5° over epochs ending in 2026 could not distinguish from the
-//! bounded difference between a smoothed series and an instantaneous element.
+//! `true_node_osculating` was referred to J2000 while `mean_node` and the
+//! then-public true-node function (since renamed and made private — see
+//! `true_node_meeus_truncated` below) were referred to the equinox of date,
+//! so the three arms of the `Body` node selector were not in the same frame
+//! — a difference that grows at the precession rate and reached 1.5° at
+//! 1900, and which the existing bound of 0.5° over epochs ending in 2026
+//! could not distinguish from the bounded difference between a smoothed
+//! series and an instantaneous element.
 
 use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
