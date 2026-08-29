@@ -54,6 +54,7 @@ pub fn mean_node(jd: f64) -> f64 {
 /// Residual vs full lunar theory: ~0.09° max for modern dates.
 ///
 /// Source: Meeus, *Astronomical Algorithms*, 2nd ed., Ch. 47.
+#[cfg(test)]
 fn true_node_meeus_truncated(jd: f64) -> f64 {
     let t = julian::centuries_from_j2000(jd);
     let mean = mean_node(jd);
@@ -204,8 +205,7 @@ pub fn south_node_osculating(jd: f64) -> f64 {
 pub fn node_longitude(body: Body, jd_tt: f64) -> Option<f64> {
     match body {
         Body::MeanNode => Some(mean_node(jd_tt)),
-        Body::TrueNode => Some(true_node_osculating(jd_tt)),
-        Body::TrueNodeOsculating => Some(true_node_osculating(jd_tt)),
+        Body::TrueNode | Body::TrueNodeOsculating => Some(true_node_osculating(jd_tt)),
         Body::MeanSouthNode => Some(south_node_mean(jd_tt)),
         Body::TrueSouthNode => Some(south_node_true(jd_tt)),
         Body::TrueSouthNodeOsculating => Some(south_node_osculating(jd_tt)),

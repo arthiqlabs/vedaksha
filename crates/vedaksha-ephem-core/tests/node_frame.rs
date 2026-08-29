@@ -49,6 +49,35 @@ fn wrap180(mut d: f64) -> f64 {
     d
 }
 
+/// Independent replica of the 5-term truncated true-node series used only by
+/// [`every_node_method_shares_one_frame`] below.
+///
+/// `vedaksha_ephem_core::nodes` keeps its own copy of this series private and
+/// test-only, precisely so it stays an independently-derived cross-check for
+/// the osculating computation rather than a production code path — which
+/// means this integration test needs its own copy to keep doing the same
+/// cross-check from outside the crate. Deliberately uses `f64::sin` here
+/// rather than the `libm::sin` the module uses internally, so the two
+/// implementations share no code path at all.
+///
+/// Source: Meeus, *Astronomical Algorithms*, 2nd ed., Ch. 47.
+fn true_node_meeus_truncated(jd: f64) -> f64 {
+    let t = (jd - 2_451_545.0) / 36525.0;
+    let mean = nodes::mean_node(jd);
+
+    let d = (297.850_192_1 + 445_267.111_403_4 * t).to_radians();
+    let m = (357.529_109_2 + 35_999.050_290_9 * t).to_radians();
+    let mp = (134.963_396_4 + 477_198.867_505_5 * t).to_radians();
+    let f = (93.272_095_0 + 483_202.017_523_3 * t).to_radians();
+
+    let correction = -1.4979 * (2.0 * (d - f)).sin() - 0.1500 * m.sin() - 0.1226 * (2.0 * d).sin()
+        + 0.1176 * (2.0 * f).sin()
+        - 0.0801 * (2.0 * (mp - f)).sin();
+
+    let lon = mean + correction;
+    lon.rem_euclid(360.0)
+}
+
 /// Apparent ecliptic longitude in degrees, through the production pipeline.
 ///
 /// Takes the provider by reference to read like every other call site here,
@@ -75,7 +104,7 @@ fn pipeline_reports_the_node_longitude_itself() {
         let jd_tt = delta_t::ut1_to_tt(jd_ut);
         let expected = [
             (Body::MeanNode, nodes::mean_node(jd_tt), "mean"),
-            (Body::TrueNode, nodes::true_node(jd_tt), "true"),
+            (Body::TrueNode, nodes::true_node_osculating(jd_tt), "true"),
             (
                 Body::TrueNodeOsculating,
                 nodes::true_node_osculating(jd_tt),
@@ -192,7 +221,7 @@ fn every_node_method_shares_one_frame() {
     let mut jd = 2_415_020.5;
     let (mut worst, mut worst_jd) = (0.0_f64, 0.0_f64);
     while jd <= 2_488_069.5 {
-        let diff = wrap180(nodes::true_node_osculating(jd) - nodes::true_node(jd)).abs();
+        let diff = wrap180(nodes::true_node_osculating(jd) - true_node_meeus_truncated(jd)).abs();
         if diff > worst {
             worst = diff;
             worst_jd = jd;

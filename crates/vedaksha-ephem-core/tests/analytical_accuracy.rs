@@ -367,7 +367,7 @@ fn node_delegation() {
     // longitudes. End-to-end coverage of the reported values, their frame and
     // their motion is in `tests/node_frame.rs`.
     let mean_lon = vedaksha_ephem_core::nodes::mean_node(jd);
-    let true_lon = vedaksha_ephem_core::nodes::true_node(jd);
+    let true_lon = vedaksha_ephem_core::nodes::true_node_osculating(jd);
 
     let mut diff = (mean_lon - true_lon).abs();
     if diff > 180.0 {
