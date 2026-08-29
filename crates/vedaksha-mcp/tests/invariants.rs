@@ -511,13 +511,13 @@ fn served_ramc_is_built_from_ut1_not_tt() {
 /// tropical rotated by exactly the ayanamsha, on every reported longitude:
 ///
 /// ```text
-/// sidereal_x = normalize(tropical_x − ayanamsha_value(Lahiri, jd))
+/// sidereal_x = normalize(tropical_x − true_ayanamsha_value(Lahiri, jd))
 /// ```
 ///
 /// for `asc`, `mc` and all twelve cusps. No external oracle: the right-hand
-/// side is computed here from `vedaksha_astro::sidereal::ayanamsha_value`, the
-/// same public function a caller would use, and the identity is the definition
-/// of a sidereal frame rather than a measured figure.
+/// side is computed here from `vedaksha_astro::sidereal::true_ayanamsha_value`,
+/// the same public function `compute_chart` uses internally, and the identity
+/// is the definition of a sidereal frame rather than a measured figure.
 ///
 /// # Derivation of the numbers asserted
 ///
@@ -573,10 +573,10 @@ fn served_sidereal_request_yields_a_sidereal_chart() {
     // Guard: a degenerate ayanamsha would make every assertion below vacuous.
     // Lahiri at J2000 is tens of degrees; anything under 20° means the reference
     // itself has broken and the comparison proves nothing.
-    let ayan = sidereal::ayanamsha_value(Ayanamsha::IndianOfficial, jd_ut1);
+    let ayan = sidereal::true_ayanamsha_value(Ayanamsha::IndianOfficial, jd_ut1);
     assert!(
         ayan > 20.0,
-        "ayanamsha_value(Lahiri, {jd_ut1}) = {ayan}°, expected the full Lahiri offset. With a \
+        "true_ayanamsha_value(Lahiri, {jd_ut1}) = {ayan}°, expected the full Lahiri offset. With a \
          near-zero ayanamsha the sidereal/tropical comparison below cannot \
          distinguish a sidereal chart from a tropical one."
     );
