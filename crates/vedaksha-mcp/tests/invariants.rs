@@ -523,9 +523,9 @@ fn served_ramc_is_built_from_ut1_not_tt() {
 ///
 /// At `jd = 2451544.5` (2000-01-01 00:00 UT), 28.6139° N, 77.2090° E, Placidus:
 ///
-/// - `ayanamsha_value(Lahiri, 2451544.5)` = <ayanamsha>°
+/// - `true_ayanamsha_value(Lahiri, 2451544.5)` = <ayanamsha>°
 /// - served tropical `asc`  = 255.288134034110612°, `mc` = 176.919476718792396°
-/// - served sidereal `asc`  = 231.431060259900079°, `mc` = 153.062402944581862°
+/// - served sidereal `asc`  = 231.434931337870211°, `mc` = 153.066274022551994°
 /// - tropical − <ayanamsha> = sidereal
 ///
 /// which matches the served sidereal `asc` to the last bit the subtraction can

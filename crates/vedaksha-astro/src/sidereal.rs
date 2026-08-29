@@ -13,8 +13,13 @@
 //!
 //! # What this module returns
 //!
-//! **Mean ayanamsha, always.** Nutation in longitude is never included. A caller
-//! who wants the true ayanamsha adds nutation themselves:
+//! **Mean ayanamsha by default.** [`ayanamsha_value`], [`tropical_to_sidereal`] and
+//! [`sidereal_to_tropical`] never include nutation in longitude. [`true_ayanamsha_value`]
+//! and [`true_tropical_to_sidereal`] do — they are what chart assembly
+//! (`vedaksha_astro::chart::compute_chart`) uses, so a served sidereal chart's
+//! rotation matches the nutation already present in its tropical longitudes. A
+//! caller of the mean-only functions who wants the true ayanamsha adds nutation
+//! themselves:
 //!
 //! ```text
 //! true ayanamsha = mean ayanamsha + nutation in longitude
@@ -976,11 +981,15 @@ pub fn tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: 
 ///   same value already threaded through [`ayanamsha_value`]); this function
 ///   passes it straight to [`vedaksha_ephem_core::nutation::nutation`]
 ///   without first converting to Terrestrial Time. Nutation-in-longitude's
-///   fastest-changing term has amplitude ~17.2″ over an 18.6-year period, so
-///   a UT1↔TT offset of ΔT ≈ 69 s (today's value) contributes at most
-///   ≈1.3×10⁻⁵ arcsec of error — ten orders of magnitude below the effect
-///   this function exists to include, and negligible against this project's
-///   sub-arcsecond accuracy claims.
+///   terms have a range of periods and amplitudes; the fastest-changing terms
+///   are not the largest-amplitude one (the 18.6-year term), but several
+///   shorter-period terms with higher argument rates. A worst-case bound
+///   summing |amplitude × argument-rate| over the series' largest terms gives
+///   an error, from using UT1 directly instead of converting to Terrestrial
+///   Time first, of order 10⁻⁴ arcsec over a UT1↔TT offset of ΔT ≈ 69 s
+///   (today's value) — roughly five orders of magnitude below the ~17-20
+///   arcsec effect this function exists to include, and far below this
+///   project's sub-arcsecond accuracy claims.
 #[must_use]
 pub fn true_ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
     if matches!(system, Ayanamsha::Tropical) {

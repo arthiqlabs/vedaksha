@@ -1183,8 +1183,8 @@ mod tests {
     /// this is the same instant and observer as the MCP twin and must produce
     /// the same numbers:
     ///
-    /// - `ayanamsha_value(Lahiri, 2451544.5)` = <ayanamsha>°
-    /// - tropical `asc` = 255.288134034110612°, sidereal `asc` = 231.431060259900079°
+    /// - `true_ayanamsha_value(Lahiri, 2451544.5)` = <ayanamsha>°
+    /// - tropical `asc` = 255.288134034110612°, sidereal `asc` = 231.434931337870211°
     /// - tropical − <ayanamsha> = sidereal
     ///
     /// Tolerance 1e-9° is a floating-point allowance: the observed residual is
