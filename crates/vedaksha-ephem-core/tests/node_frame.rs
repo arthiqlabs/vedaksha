@@ -53,7 +53,7 @@ fn wrap180(mut d: f64) -> f64 {
 /// [`every_node_method_shares_one_frame`] below.
 ///
 /// `vedaksha_ephem_core::nodes` keeps its own copy of this series private and
-/// test-only, precisely so it stays an independently-derived cross-check for
+/// test-only, precisely so it stays an independently-transcribed cross-check for
 /// the osculating computation rather than a production code path — which
 /// means this integration test needs its own copy to keep doing the same
 /// cross-check from outside the crate. Deliberately uses `f64::sin` here

@@ -40,7 +40,7 @@ pub fn mean_node(jd: f64) -> f64 {
 }
 
 /// Meeus 5-term truncated approximation of the true node — kept as a
-/// private, independently-derived cross-check for
+/// private, independently-transcribed cross-check for
 /// [`true_node_osculating`], not for production use.
 ///
 /// [`Body::TrueNode`] returns [`true_node_osculating`] (see its doc
@@ -52,6 +52,11 @@ pub fn mean_node(jd: f64) -> f64 {
 ///
 /// Uses the 5 largest perturbation terms from Meeus Ch. 47.
 /// Residual vs full lunar theory: ~0.09° max for modern dates.
+///
+/// Note: `tests/node_frame.rs` keeps its own independently-transcribed
+/// replica of this same 5-term series (using `f64::sin` instead of
+/// `libm::sin`) for its dense two-century integration test, so any
+/// transcription fix here should be mirrored there.
 ///
 /// Source: Meeus, *Astronomical Algorithms*, 2nd ed., Ch. 47.
 #[cfg(test)]
@@ -86,8 +91,8 @@ fn true_node_meeus_truncated(jd: f64) -> f64 {
 /// select the ascending (not descending) node. This is exact to the
 /// accuracy of the underlying lunar ephemeris.
 ///
-/// **Frame:** mean ecliptic and equinox of date, matching [`mean_node`] and
-/// [`true_node`]. The crossing is computed against the ecliptic *of date*,
+/// **Frame:** mean ecliptic and equinox of date, matching [`mean_node`].
+/// The crossing is computed against the ecliptic *of date*,
 /// which is the same reference plane the Meeus node polynomial uses — not
 /// the J2000 plane rotated into of-date coordinates, which is a different
 /// quantity. For the J2000 value see [`true_node_osculating_j2000`].
