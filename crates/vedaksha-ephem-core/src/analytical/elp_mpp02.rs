@@ -1300,10 +1300,11 @@ mod tests {
     ///
     /// `docs/audit/2026-08-29-perf-investigation.md` #2 states mean 3.90
     /// nonzero of 13 (30.0% dense), maximum 7, 97.0% of terms with ≤5, and
-    /// max |multiplier| 75 — the last of which is why the side table stores
-    /// `i16` and not `i8`. Those are load-bearing for both the performance
-    /// argument and the type choice, so they are asserted here rather than
-    /// taken on trust from a document.
+    /// max |multiplier| 75. That document also claims 75 overflows `i8` —
+    /// it doesn't (`i8` holds -128..127); see this module's own `# Layout`
+    /// doc for the actual (unrelated) reason `i16` was kept. These figures
+    /// are load-bearing for the performance argument, so they are asserted
+    /// here rather than taken on trust from a document.
     #[test]
     fn pert_multiplier_density_matches_the_investigation() {
         let mut total_terms = 0u64;
@@ -1352,7 +1353,8 @@ mod tests {
             le5 as f64 / total_terms as f64 > 0.96,
             "investigation says 97.0% of terms have <=5 nonzero multipliers"
         );
-        // The reason the side table stores `i16`: `i8` would overflow.
+        // 75 fits in i8 (-128..127) fine — see the module's `# Layout` doc
+        // for why i16 was kept anyway; it isn't this.
         assert_eq!(
             max_abs_multiplier, 75,
             "investigation says max |multiplier| is 75"
