@@ -192,6 +192,12 @@ pub fn find_aspects(positions_json: &str, major_only: bool) -> Result<String, Js
 
 /// Convert tropical longitude to sidereal.
 ///
+/// Uses the **mean** ayanamsha: nutation in longitude is not included, matching
+/// [`vedaksha_astro::sidereal::tropical_to_sidereal`]'s own contract. This is a
+/// distinct, standalone conversion utility, not the chart-building path — it is
+/// unaffected by `compute_natal_chart`/`compute_vargas` now reporting the true
+/// (mean + nutation) ayanamsha in their `ayanamsha_value` output field.
+///
 /// # Arguments
 /// * `tropical_longitude` — Tropical longitude in degrees
 /// * `ayanamsha` — sidereal system: "IndianOfficial" (alias "Lahiri"),
