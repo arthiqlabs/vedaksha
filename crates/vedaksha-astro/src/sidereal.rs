@@ -48,6 +48,7 @@
 //! recorded for completeness rather than enforced.
 
 use vedaksha_ephem_core::julian;
+use vedaksha_ephem_core::nutation::nutation;
 use vedaksha_ephem_core::precession::general_precession_p03;
 use vedaksha_ephem_core::stars::{CatalogueStar, mean_ecliptic_longitude_of_date};
 use vedaksha_math::angle::{normalize_degrees, normalize_degrees_signed};
@@ -950,6 +951,59 @@ pub fn tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: 
     normalize_degrees(tropical_longitude_deg - ayanamsha_value(system, jd))
 }
 
+/// The **true** ayanamsha, in decimal degrees: mean ayanamsha plus nutation
+/// in longitude.
+///
+/// ```text
+/// true ayanamsha = mean ayanamsha + nutation in longitude
+/// ```
+///
+/// This is the relation the module documentation above already states — the
+/// *Indian Astronomical Ephemeris* prints it, and it is what the daily tables
+/// most panchanga-makers consume actually use. [`ayanamsha_value`] never
+/// includes nutation, by design: it is the standalone, primary-sourced
+/// quantity documented at the top of this module. Use *this* function
+/// instead when rotating a chart or a scored position whose tropical
+/// longitude was itself computed with nutation applied (IAU 2000B —
+/// [`vedaksha_ephem_core::nutation`]), so the reported offset matches the
+/// rotation actually performed rather than leaving an uncancelled ~17-20
+/// arcsec nutation term live in the sidereal result.
+///
+/// # Arguments
+///
+/// * `system` — the sidereal system.
+/// * `jd` — Julian Day Number. Every current caller passes UT1 here (the
+///   same value already threaded through [`ayanamsha_value`]); this function
+///   passes it straight to [`vedaksha_ephem_core::nutation::nutation`]
+///   without first converting to Terrestrial Time. Nutation-in-longitude's
+///   fastest-changing term has amplitude ~17.2″ over an 18.6-year period, so
+///   a UT1↔TT offset of ΔT ≈ 69 s (today's value) contributes at most
+///   ≈1.3×10⁻⁵ arcsec of error — ten orders of magnitude below the effect
+///   this function exists to include, and negligible against this project's
+///   sub-arcsecond accuracy claims.
+#[must_use]
+pub fn true_ayanamsha_value(system: Ayanamsha, jd: f64) -> f64 {
+    if matches!(system, Ayanamsha::Tropical) {
+        return 0.0;
+    }
+    let (dpsi, _deps) = nutation(jd);
+    ayanamsha_value(system, jd) + dpsi.to_degrees()
+}
+
+/// Convert a tropical ecliptic longitude to sidereal longitude using the
+/// **true** ayanamsha (mean + nutation in longitude).
+///
+/// ```text
+/// sidereal = tropical − true_ayanamsha
+/// ```
+///
+/// See [`true_ayanamsha_value`] for when to prefer this over
+/// [`tropical_to_sidereal`].
+#[must_use]
+pub fn true_tropical_to_sidereal(tropical_longitude_deg: f64, system: Ayanamsha, jd: f64) -> f64 {
+    normalize_degrees(tropical_longitude_deg - true_ayanamsha_value(system, jd))
+}
+
 /// Convert a sidereal ecliptic longitude to tropical longitude.
 ///
 /// ```text
@@ -1410,6 +1464,52 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn true_ayanamsha_value_adds_nutation_in_longitude_to_the_mean() {
+        let jd = 2_451_545.0; // J2000.0
+        let mean = ayanamsha_value(Ayanamsha::IndianOfficial, jd);
+        let (dpsi, _deps) = vedaksha_ephem_core::nutation::nutation(jd);
+        let expected = mean + dpsi.to_degrees();
+        let got = true_ayanamsha_value(Ayanamsha::IndianOfficial, jd);
+        assert!(
+            (got - expected).abs() < 1e-12,
+            "true_ayanamsha_value should be exactly mean + nutation-in-longitude: \
+             got {got}, expected {expected}"
+        );
+        // Sanity on the magnitude: nutation-in-longitude is bounded by roughly
+        // ±20 arcsec (~0.0056°) at any date — a materially larger gap would mean
+        // something other than nutation leaked in.
+        assert!(
+            (got - mean).abs() < 0.01,
+            "true - mean ayanamsha gap {}° is larger than nutation-in-longitude's \
+             bound (~0.0056° / 20″)",
+            (got - mean).abs()
+        );
+    }
+
+    #[test]
+    fn true_ayanamsha_value_is_tropical_zero_for_tropical() {
+        // Tropical has no ayanamsha and no sidereal frame to correct for
+        // nutation against; `ayanamsha_value` already special-cases it to 0.0,
+        // and the true variant must not silently add nutation on top.
+        let jd = 2_451_545.0;
+        assert_eq!(true_ayanamsha_value(Ayanamsha::Tropical, jd), 0.0);
+    }
+
+    #[test]
+    fn true_tropical_to_sidereal_matches_true_ayanamsha_value() {
+        let jd = 2_451_545.0;
+        let tropical_lon = 130.0;
+        let true_ayan = true_ayanamsha_value(Ayanamsha::IndianOfficial, jd);
+        let expected = normalize_degrees(tropical_lon - true_ayan);
+        let got = true_tropical_to_sidereal(tropical_lon, Ayanamsha::IndianOfficial, jd);
+        assert!(
+            (got - expected).abs() < 1e-12,
+            "true_tropical_to_sidereal should equal tropical - true_ayanamsha_value: \
+             got {got}, expected {expected}"
+        );
     }
 
     // ── The name surface ──────────────────────────────────────────────────────
