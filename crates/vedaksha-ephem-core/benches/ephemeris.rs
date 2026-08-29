@@ -17,7 +17,7 @@ use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::analytical::elp_mpp02::elp_geocentric;
 use vedaksha_ephem_core::analytical::vsop87a::{Planet, vsop87a_heliocentric};
 use vedaksha_ephem_core::bodies::Body;
-use vedaksha_ephem_core::coordinates::{apparent_position, apparent_positions};
+use vedaksha_ephem_core::coordinates::{apparent_position, apparent_positions, ecliptic_position};
 
 /// A representative contemporary epoch (≈ 2025), well inside the supported range.
 const JD: f64 = 2_460_676.5;
@@ -87,6 +87,23 @@ fn bench_chart_batch(c: &mut Criterion) {
     });
 }
 
+fn bench_sun_position(c: &mut Criterion) {
+    // `ecliptic_position(Sun, jd)` is the single most-called position in the
+    // search paths — `search_transits`' coarse scan and `search_muhurta`'s
+    // solar scan both walk it one grid point at a time, with no shared
+    // memoizing provider across points. It is also the sharpest case for the
+    // Earth-anchor cost: the Sun is the SSB origin, so essentially the entire
+    // evaluation is `earth_state`.
+    let provider = AnalyticalProvider::new();
+    c.bench_function("ecliptic_position_sun", |b| {
+        b.iter(|| {
+            let p = ecliptic_position(&provider, black_box(Body::Sun), black_box(JD))
+                .expect("Sun position should be supported");
+            black_box(p);
+        });
+    });
+}
+
 fn bench_transit_scan(c: &mut Criterion) {
     // 365 daily moon positions — models transit/dasha scanning where the same
     // series is evaluated across many dates (the batch-amortization target).
@@ -108,6 +125,7 @@ criterion_group!(
     bench_moon,
     bench_chart,
     bench_chart_batch,
+    bench_sun_position,
     bench_transit_scan
 );
 criterion_main!(benches);

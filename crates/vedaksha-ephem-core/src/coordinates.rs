@@ -16,14 +16,11 @@ use core::f64::consts::PI;
 use crate::bodies::Body;
 use crate::delta_t;
 use crate::error::ComputeError;
-use crate::jpl::{EphemerisProvider, Position, Velocity};
+use crate::jpl::{EMRAT, EphemerisProvider, StateVector};
 use crate::nutation;
 use crate::obliquity;
 use crate::precession;
 use vedaksha_math::matrix::{Matrix3, Vector3};
-
-/// Earth-Moon mass ratio (DE440/441 value).
-const EMRAT: f64 = 81.300_568_94;
 
 /// Geocentric-to-EMB conversion factor for Moon: |Moon-geocentric| = factor × |Moon-rel-EMB|.
 const MOON_GEO_FACTOR: f64 = (1.0 + EMRAT) / EMRAT;
@@ -46,45 +43,6 @@ pub struct ApparentPosition {
     pub ecliptic: EclipticCoords,
     /// Daily motion in ecliptic longitude (degrees/day, positive = direct)
     pub longitude_speed: f64,
-}
-
-/// Compute the barycentric position and velocity of Earth at a given Julian Day.
-///
-/// `Earth = EMB - Moon_relative_to_EMB / EMRAT`
-///
-/// The SPK file stores EMB (target=3, center=0) and Moon (target=301, center=3),
-/// so the Moon state arriving here is **relative to the EMB**, not geocentric.
-/// The divisor is therefore `EMRAT`, not `1 + EMRAT`:
-///
-/// ```text
-/// EMB   = Earth + r/(1+EMRAT)              r = geocentric Moon
-/// M_rel = Moon - EMB = r·EMRAT/(1+EMRAT)   =>  r = M_rel·(1+EMRAT)/EMRAT
-/// Earth = EMB - r/(1+EMRAT) = EMB - M_rel/EMRAT
-/// ```
-///
-/// Using `1/(1+EMRAT)` on a rel-EMB Moon — as this did until 2026-08-20 —
-/// leaves the observer 56.8 km off, which is 0.078 arcsec at 1 AU and scales as
-/// 1/distance. It affected every provider, the SPK path included.
-fn earth_state(
-    provider: &dyn EphemerisProvider,
-    jd: f64,
-) -> Result<(Position, Velocity), ComputeError> {
-    let emb = provider.compute_state(Body::EarthMoonBarycenter, jd)?;
-    let moon = provider.compute_state(Body::Moon, jd)?;
-
-    let factor = 1.0 / EMRAT;
-
-    let pos = Position {
-        x: emb.position.x - moon.position.x * factor,
-        y: emb.position.y - moon.position.y * factor,
-        z: emb.position.z - moon.position.z * factor,
-    };
-    let vel = Velocity {
-        x: emb.velocity.x - moon.velocity.x * factor,
-        y: emb.velocity.y - moon.velocity.y * factor,
-        z: emb.velocity.z - moon.velocity.z * factor,
-    };
-    Ok((pos, vel))
 }
 
 /// Compute apparent ecliptic coordinates (without speed) for a body at a
@@ -229,20 +187,21 @@ fn light_time_geocentric(
 ) -> Result<[f64; 3], ComputeError> {
     // For non-Moon bodies the geocentric vector subtracts Earth's barycentric
     // position at the retarded time t−τ. Re-evaluating Earth there pulls the
-    // expensive ELP/MPP02 lunar series (via `earth_state`) at every iteration
-    // and for every body. Instead, anchor Earth's state once at the
-    // observation time and extrapolate to first order:
+    // provider's `earth_state` at every iteration and for every body — which on
+    // the SPK path is two kernel lookups and on the analytical path used to be
+    // two full ELP/MPP02 lunar evaluations. Instead, anchor Earth's state once
+    // at the observation time and extrapolate to first order:
     //   Earth(t−τ) ≈ Earth(t) + v_Earth·(−τ).
     // τ is at most a few hours, so the (second-derivative) error in Earth's
-    // position is sub-milliarcsec on the apparent direction. The anchor's
-    // `compute_state(Moon, jd)` is shared across bodies by the memoizing
-    // provider, so a full chart evaluates the lunar series ~once per timestep
-    // instead of ~75 times. The Moon itself does not use `earth_state` (it
-    // scales the rel-EMB vector directly), so its own position is unaffected.
+    // position is sub-milliarcsec on the apparent direction. The anchor is
+    // shared across bodies by the memoizing provider, so a full chart resolves
+    // Earth ~once per timestep instead of ~75 times. The Moon itself does not
+    // use `earth_state` (it scales the rel-EMB vector directly), so its own
+    // position is unaffected.
     let earth_anchor = if body == Body::Moon {
         None
     } else {
-        Some(earth_state(provider, jd)?)
+        Some(provider.earth_state(jd)?)
     };
 
     let mut tau = 0.0_f64;
@@ -270,14 +229,14 @@ fn light_time_geocentric(
 ///
 /// For the Moon, scales the rel-EMB vector by `MOON_GEO_FACTOR`. For other
 /// bodies, subtracts Earth's position obtained by first-order extrapolation of
-/// `earth_anchor` (Earth's `(position, velocity)` at the observation time `jd`)
-/// to `jd − tau` — see [`light_time_geocentric`].
+/// `earth_anchor` (Earth's state at the observation time `jd`) to `jd − tau` —
+/// see [`light_time_geocentric`].
 fn retarded_geocentric(
     provider: &dyn EphemerisProvider,
     body: Body,
     jd: f64,
     tau: f64,
-    earth_anchor: Option<(Position, Velocity)>,
+    earth_anchor: Option<StateVector>,
 ) -> Result<[f64; 3], ComputeError> {
     let target_state = provider.compute_state(body, jd - tau)?;
     if body == Body::Moon {
@@ -287,7 +246,8 @@ fn retarded_geocentric(
             target_state.position.z * MOON_GEO_FACTOR,
         ]);
     }
-    let (earth_pos, earth_vel) = earth_anchor.expect("non-Moon body has an Earth anchor");
+    let earth = earth_anchor.expect("non-Moon body has an Earth anchor");
+    let (earth_pos, earth_vel) = (earth.position, earth.velocity);
     let dt = -tau;
     Ok([
         target_state.position.x - (earth_pos.x + earth_vel.x * dt),
@@ -383,9 +343,10 @@ fn apparent_position_with_frames(
 /// Batch entry point for chart computation. All bodies share one memoizing
 /// provider ([`crate::cache::CachingProvider`]), so state lookups that recur
 /// across bodies and across the daily-motion timesteps are evaluated once and
-/// reused. The dominant saving is the ELP/MPP02 lunar series pulled into
-/// [`earth_state`] during every planet's light-time correction: at each shared
-/// timestamp it is now evaluated once rather than once per body.
+/// reused. The dominant saving is the Earth anchor
+/// ([`EphemerisProvider::earth_state`]) that every planet's light-time
+/// correction needs: at each shared timestamp it is now resolved once rather
+/// than once per body.
 ///
 /// Results are **bit-identical** to calling [`apparent_position`] per body —
 /// only redundant work is removed. One entry is returned per input body, in

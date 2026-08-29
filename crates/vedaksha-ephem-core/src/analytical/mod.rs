@@ -21,7 +21,7 @@ pub mod vsop87a;
 
 use crate::bodies::Body;
 use crate::error::ComputeError;
-use crate::jpl::{AU_KM, EphemerisProvider, Position, StateVector, Velocity};
+use crate::jpl::{AU_KM, EMRAT, EphemerisProvider, Position, StateVector, Velocity};
 
 use self::vsop87a::Planet;
 
@@ -49,9 +49,6 @@ const COS_EPS: f64 = 0.917_482_062_069_181_8;
 
 /// Precomputed sine of the same obliquity. This one was already exact.
 const SIN_EPS: f64 = 0.397_777_155_931_913_7;
-
-/// Earth-Moon mass ratio (DE440/441 value).
-const EMRAT: f64 = 81.300_568_94;
 
 /// Julian millennia to days conversion factor.
 const DAYS_PER_MILLENNIUM: f64 = 365_250.0;
@@ -205,16 +202,18 @@ impl Default for AnalyticalProvider {
 /// Lift VSOP87A's Earth-centre state to the Earth-Moon barycentre.
 ///
 /// VSOP87A's `ear` series gives the Earth's centre. Every consumer of this
-/// trait — `coordinates::earth_state` above all — expects `EarthMoonBarycenter`
-/// to mean the barycentre, which is what the SPK path genuinely stores. The
-/// offset is `Moon_rel_EMB / EMRAT`, about 4,671 km:
+/// trait — [`EphemerisProvider::earth_state`]'s default body above all —
+/// expects `EarthMoonBarycenter` to mean the barycentre, which is what the SPK
+/// path genuinely stores. The offset is `Moon_rel_EMB / EMRAT`, about 4,671 km:
 ///
 /// ```text
 /// EMB = Earth + r/(1+EMRAT) = Earth + Moon_rel_EMB/EMRAT
 /// ```
 ///
-/// `earth_state` divides by the same `EMRAT`, so the two cancel exactly and the
-/// observer returns to the VSOP87A Earth this series actually defines.
+/// [`EphemerisProvider::earth_state`]'s default body divides by the same
+/// `EMRAT`, so the two cancel and the observer returns to the VSOP87A Earth this
+/// series actually defines. That round trip is why [`AnalyticalProvider`]
+/// overrides `earth_state`; see the override's own comment.
 fn earth_to_emb(earth: StateVector, moon_rel_emb: StateVector) -> StateVector {
     let f = 1.0 / EMRAT;
     StateVector {
@@ -302,6 +301,69 @@ impl EphemerisProvider for AnalyticalProvider {
                 body_id: body.naif_id(),
             }),
         }
+    }
+
+    /// Earth's own barycentric state — VSOP87A's `ear` series, directly.
+    ///
+    /// The trait's default body computes `EMB − Moon_rel_EMB/EMRAT`. On this
+    /// provider both of those terms come from series *this file* composes:
+    /// [`earth_to_emb`] builds `EarthMoonBarycenter` as
+    /// `vsop_state(Earth) + moon_state/EMRAT`, and the default body then
+    /// subtracts `moon_state/EMRAT` straight back off. The two Moon terms
+    /// cancel algebraically, and the answer is `vsop_state(Earth)` — which is
+    /// what this override returns.
+    ///
+    /// # What it costs, and what it buys
+    ///
+    /// `moon_state` is a full ELP/MPP02 evaluation: 35,758 trig terms, ~260 µs
+    /// measured. The default body pulls it **twice** — once inside
+    /// `compute_state(EarthMoonBarycenter, ·)` and once for
+    /// `compute_state(Moon, ·)` — to produce a number that VSOP87A's 2,202-term
+    /// Earth series (~11 µs) already determines. `ecliptic_position(Sun, jd)`,
+    /// the workhorse of `search_transits` and `search_muhurta`'s solar scan,
+    /// pays exactly that and nothing else of consequence.
+    ///
+    /// # Determinism: bounded by 1 ULP, and measured at zero
+    ///
+    /// `(a + b) − b ≠ a` in binary floating point in general: the addition
+    /// rounds once and the subtraction rounds again. Here `a` is Earth's
+    /// position and `b` the EMRAT-scaled Moon term, with `b/a ≈ 3.1e-5`, so the
+    /// discarded round trip is bounded by ~1 ULP of Earth's position — 3.3e-5 m
+    /// (0.03 **mm**), i.e. 4e-11 arcsec at 1 AU. This path removes the two
+    /// roundings rather than introducing one, so it is the *more* accurate of
+    /// the two; the bound is ten orders of magnitude inside VSOP87A's own
+    /// 0.239″ mean residual against Horizons.
+    ///
+    /// **Measured, not assumed: the change moved nothing.** With `|b| ≪ |a|`
+    /// the addition's error δ satisfies `|δ| ≤ ulp(a)/2`, the subtraction
+    /// recovers `a + δ` exactly, and that rounds back to `a` except on an exact
+    /// tie — so the round trip is lossless almost everywhere. Over the
+    /// 21,915-row Horizons fixture, `analytical_bit_digest`'s ROW dump is
+    /// **byte-for-byte identical** either side of this change and
+    /// `EXPECTED_DIGEST` did not need re-pinning. Ties are real but rare and do
+    /// not reach an apparent position: the sweep in
+    /// `earth_state_matches_the_emb_minus_moon_construction` finds 2 of 4,800
+    /// components tie-rounded by 1 ULP, both `velocity.z`, and velocity enters
+    /// only the light-time extrapolation `v·(−τ)` with τ ≤ a few hours.
+    ///
+    /// The two tests below pin both halves:
+    /// `earth_state_is_bit_identical_to_vsop87a_earth` pins the identity this
+    /// override asserts, and `earth_state_matches_the_emb_minus_moon_construction`
+    /// pins its agreement with the construction it replaces.
+    ///
+    /// This override is specific to `AnalyticalProvider`. On the SPK path EMB
+    /// and Moon are independent kernel segments, nothing cancels, and the
+    /// default body is the only correct construction — which is why it stays
+    /// the default.
+    fn earth_state(&self, jd: f64) -> Result<StateVector, ComputeError> {
+        if jd < JD_MIN || jd > JD_MAX {
+            return Err(ComputeError::DateOutOfRange {
+                jd,
+                min: JD_MIN,
+                max: JD_MAX,
+            });
+        }
+        Ok(vsop_state(Planet::Earth, jd))
     }
 
     fn time_range(&self) -> (f64, f64) {
@@ -507,6 +569,199 @@ mod tests {
                 "length changed by {} for ({x}, {y}, {z})",
                 after / before - 1.0
             );
+        }
+    }
+
+    /// JDs spanning the provider's supported range, used by the `earth_state`
+    /// invariant tests below. `JD_MIN`/`JD_MAX` are included because the
+    /// override carries its own range check and the boundaries are where an
+    /// off-by-one in that check would show.
+    const EARTH_STATE_JDS: [f64; 8] = [
+        JD_MIN,
+        1_356_173.0, // ~ -1000 CE
+        2_086_302.5, // ~ 1000 CE
+        J2000,       // 2000-01-01.5
+        2_460_676.5, // 2025-01-01, the benches' epoch
+        2_469_807.5, // 2050-01-01
+        2_816_787.0, // one day inside the upper edge
+        JD_MAX,
+    ];
+
+    /// **The invariant this override exists to establish.**
+    ///
+    /// `AnalyticalProvider::earth_state` must be bit-for-bit
+    /// `vsop_state(Planet::Earth, jd)` — not "close to", not "within a ULP".
+    /// It is a direct return, and this pins it as one. `analytical_bit_digest`
+    /// is a looser instrument for this: it fingerprints the whole apparent
+    /// pipeline, so a future change that reintroduced an EMRAT round trip here
+    /// would move it, but this test says *what* moved.
+    #[test]
+    fn earth_state_is_bit_identical_to_vsop87a_earth() {
+        let p = provider();
+        for jd in EARTH_STATE_JDS {
+            let got = p.earth_state(jd).expect("in-range jd");
+            let want = vsop_state(Planet::Earth, jd);
+            for (label, a, b) in [
+                ("position.x", got.position.x, want.position.x),
+                ("position.y", got.position.y, want.position.y),
+                ("position.z", got.position.z, want.position.z),
+                ("velocity.x", got.velocity.x, want.velocity.x),
+                ("velocity.y", got.velocity.y, want.velocity.y),
+                ("velocity.z", got.velocity.z, want.velocity.z),
+            ] {
+                assert_eq!(
+                    a.to_bits(),
+                    b.to_bits(),
+                    "earth_state({jd}).{label} = {a:?} ({:016x}) is not bit-identical to \
+                     vsop_state(Earth, {jd}).{label} = {b:?} ({:016x})",
+                    a.to_bits(),
+                    b.to_bits(),
+                );
+            }
+        }
+    }
+
+    /// The override is an *algebraic* shortcut, so it must still agree with the
+    /// construction it replaces — to the ~1 ULP the two roundings cost, and no
+    /// further.
+    ///
+    /// This is the test that would catch the shortcut being wrong rather than
+    /// merely different: if `earth_to_emb` ever stopped being built from the
+    /// same VSOP87A Earth term (or the EMRAT divisors diverged), the two paths
+    /// would separate by kilometres, not ULPs. The bound is expressed in metres
+    /// so the failure message is readable; 1 ULP of Earth's position at 1 AU is
+    /// 3.3e-5 m, and the tolerance below is 1 mm — 30× that, and still seven
+    /// orders of magnitude below the 56.8 km a wrong EMRAT divisor costs and
+    /// eight below the 4,671 km an un-lifted EMB costs.
+    ///
+    /// # What was actually measured (2026-08-29)
+    ///
+    /// Over the 800 JDs this sweeps — the eight anchors above, 426 spread
+    /// evenly across the whole supported range, and 366 daily steps through
+    /// 2025 — **every one of the 2,400 position components is bit-identical**
+    /// between the two paths, and exactly **2 of the 2,400 velocity components
+    /// differ, by exactly 1 ULP** (both `velocity.z`, at jd 2816787 and jd
+    /// 2021848.22). Maximum positional separation: 0 m.
+    ///
+    /// Both halves of that are the predicted behaviour, not luck. Writing `a`
+    /// for Earth's component and `b` for the EMRAT-scaled Moon term
+    /// (`|b/a| ≈ 3.1e-5`): `fl(a + b) = a + b + δ` with `|δ| ≤ ulp(a)/2`; the
+    /// subtraction's exact result is then `a + δ`, which lies inside
+    /// `[a − ulp(a)/2, a + ulp(a)/2]` and so rounds back to `a` — except when
+    /// `|δ|` is exactly `ulp(a)/2`, where ties-to-even can round away. So the
+    /// round trip is lossless almost everywhere and 1 ULP on a tie, which is
+    /// what the sweep finds. The assertion below is therefore a bound, not an
+    /// equality.
+    ///
+    /// `analytical_bit_digest` agrees at the other end of the pipeline: over
+    /// the 21,915-row Horizons fixture the ROW dump is **byte-for-byte
+    /// unchanged** by this override (sha256 of the dumps either side of the
+    /// change: `e1a1784dc35970a2af1316f7049bb8064bec1ce3afecc8f0da3859cf0807f5af`
+    /// both times), so `EXPECTED_DIGEST` did not need re-pinning. The two
+    /// tie-rounded velocity ULPs never reach an apparent position: velocity is
+    /// used only for the light-time Earth extrapolation `v·(−τ)`, where τ ≤ a
+    /// few hours, so a 1-ULP velocity moves the anchor by ~1e-20 AU.
+    #[test]
+    fn earth_state_matches_the_emb_minus_moon_construction() {
+        const AU_M: f64 = AU_KM * 1000.0;
+        const TOLERANCE_M: f64 = 1e-3;
+
+        // The anchors, a coarse sweep of the full supported range, and a year
+        // of daily steps around the contemporary epoch (where the tie, if one
+        // existed, would matter most).
+        let mut jds: Vec<f64> = EARTH_STATE_JDS.to_vec();
+        let step = (JD_MAX - JD_MIN) / 425.0;
+        for i in 0..426 {
+            jds.push(JD_MIN + f64::from(i) * step);
+        }
+        for day in 0..366 {
+            jds.push(2_460_676.5 + f64::from(day));
+        }
+
+        let p = provider();
+        let mut components = 0usize;
+        let mut non_exact = 0usize;
+        let mut max_m = 0.0_f64;
+
+        for &jd in &jds {
+            let direct = p.earth_state(jd).expect("in-range jd");
+
+            // The trait default's construction, spelled out here so the test
+            // does not depend on which provider supplies the default body.
+            let emb = p
+                .compute_state(Body::EarthMoonBarycenter, jd)
+                .expect("in-range jd");
+            let moon = p.compute_state(Body::Moon, jd).expect("in-range jd");
+            let f = 1.0 / EMRAT;
+            let via_emb = [
+                emb.position.x - moon.position.x * f,
+                emb.position.y - moon.position.y * f,
+                emb.position.z - moon.position.z * f,
+                emb.velocity.x - moon.velocity.x * f,
+                emb.velocity.y - moon.velocity.y * f,
+                emb.velocity.z - moon.velocity.z * f,
+            ];
+            let got = [
+                direct.position.x,
+                direct.position.y,
+                direct.position.z,
+                direct.velocity.x,
+                direct.velocity.y,
+                direct.velocity.z,
+            ];
+
+            for (i, (a, b)) in got.iter().zip(via_emb.iter()).enumerate() {
+                components += 1;
+                if a.to_bits() != b.to_bits() {
+                    non_exact += 1;
+                    let ulps = a.to_bits().abs_diff(b.to_bits());
+                    let kind = if i < 3 { "position" } else { "velocity" };
+                    println!(
+                        "  jd {jd}: {kind}[{}] differs by {ulps} ULP ({a:e} vs {b:e})",
+                        i % 3
+                    );
+                    assert!(
+                        ulps <= 1,
+                        "at jd {jd}, {kind}[{}] differs from the EMB round trip by {ulps} ULP; \
+                         the cancellation is only supposed to cost a tie-rounding, i.e. 1 ULP",
+                        i % 3
+                    );
+                }
+            }
+
+            let d = libm::sqrt(
+                (got[0] - via_emb[0]) * (got[0] - via_emb[0])
+                    + (got[1] - via_emb[1]) * (got[1] - via_emb[1])
+                    + (got[2] - via_emb[2]) * (got[2] - via_emb[2]),
+            ) * AU_M;
+            max_m = max_m.max(d);
+
+            assert!(
+                d < TOLERANCE_M,
+                "at jd {jd}, earth_state and EMB−Moon/EMRAT disagree by {d} m \
+                 (tolerance {TOLERANCE_M} m); the two are supposed to cancel to at most \
+                 ~1 ULP (3.3e-5 m), so this is a real divergence, not rounding"
+            );
+        }
+
+        println!(
+            "earth_state vs EMB−Moon/EMRAT over {} JDs: {non_exact}/{components} components \
+             differ, max positional separation {max_m:e} m",
+            jds.len()
+        );
+    }
+
+    /// The override must reject out-of-range dates the same way
+    /// `compute_state` does. Without its own check it would silently answer for
+    /// any `jd`, because it no longer routes through `compute_state`.
+    #[test]
+    fn earth_state_rejects_out_of_range_dates() {
+        let p = provider();
+        for jd in [0.0, JD_MIN - 1.0, JD_MAX + 1.0, 5_000_000.0] {
+            match p.earth_state(jd) {
+                Err(ComputeError::DateOutOfRange { .. }) => {}
+                other => panic!("earth_state({jd}) should be DateOutOfRange, got {other:?}"),
+            }
         }
     }
 }

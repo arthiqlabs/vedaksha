@@ -175,6 +175,41 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// encoded 84381.448 arcsec (IAU 1976), which is the frame VSOP87A and
 /// ELP/MPP02 are defined against; only `OBLIQUITY_J2000`'s own literal and the
 /// comments claimed otherwise, and those were corrected to match the values.
+///
+/// # Why this did NOT move at the EMB/Moon cancellation removal (2026-08-29)
+///
+/// Recorded because it was *expected* to move, and a check that came back
+/// negative is worth as much as one that came back positive — otherwise the
+/// next reader re-runs the same investigation.
+///
+/// Wave 1 of `docs/audit/2026-08-29-perf-investigation.md` (finding #1) gave
+/// [`vedaksha_ephem_core::jpl::EphemerisProvider`] an `earth_state` method and
+/// had `AnalyticalProvider` override it to return VSOP87A's Earth series
+/// directly, instead of composing `EMB = Earth + Moon/EMRAT` and then
+/// subtracting `Moon/EMRAT` straight back off — two full 35,758-term ELP/MPP02
+/// evaluations that cancel. The investigation predicted a ≲1 ULP move here and
+/// a deliberate re-pin.
+///
+/// It does not move. `(a + b) − b` is exact whenever the addition's rounding
+/// error δ satisfies `|δ| < ulp(a)/2`, which with `|b/a| ≈ 3.1e-5` is almost
+/// always; only an exact tie rounds away. Measured by dumping all 21,915 rows
+/// either side of the change with `--nocapture`:
+///
+/// | | sha256 of the `ROW` lines |
+/// |---|---|
+/// | before | `e1a1784dc35970a2af1316f7049bb8064bec1ce3afecc8f0da3859cf0807f5af` |
+/// | after  | `e1a1784dc35970a2af1316f7049bb8064bec1ce3afecc8f0da3859cf0807f5af` |
+///
+/// `cmp` reports the two dumps byte-identical — every longitude, latitude,
+/// distance and speed bit. Ties do occur (`analytical/mod.rs`'s
+/// `earth_state_matches_the_emb_minus_moon_construction` finds 2 of 4,800
+/// components across an 800-JD sweep, both `velocity.z`, both 1 ULP), but
+/// velocity reaches an apparent position only through the light-time
+/// extrapolation `v·(−τ)` with τ ≤ a few hours, so 1 ULP of it is ~1e-20 AU and
+/// never survives to a printed bit.
+///
+/// So [`EXPECTED_DIGEST`] below is unchanged, and that is the *result* of the
+/// measurement rather than an assumption that nothing happened.
 const EXPECTED_DIGEST: &str = "c3b77a61898779714b3366f5c51d4ca5b7860ad3e6669d12fc238734e754734a";
 
 /// The digest from the v6 precession correction until the `COS_EPS` correction.
