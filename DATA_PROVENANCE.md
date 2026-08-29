@@ -212,6 +212,37 @@ regime the original finding's 5 full-reorder cases occupied. This is a real, doc
 consequence of Fix 9 reaching this module's typical caller, not a defect in `compute_karakas`
 itself, and not something either fix's own changelog entry states on its own.
 
+### Fix 11 — Chara Dasha's even-lagna direction was a disclosed simplification, now completed
+Source: Jaimini Sutras, Adhyaya 1 Pada 1, sutras 1.1.25 (*Pracheevruttirvishamabheshu* — odd
+signs count forward), 1.1.26 (*Paravrutyottareshu* — even signs count backward), and 1.1.27
+(*Nakwachit*, "this does not apply in some places").
+Before this fix, `crates/vedaksha-vedic/src/dasha/chara.rs` always counted forward from the lagna
+regardless of sign, and its own module doc already disclosed this as a known simplification
+("full Jaimini treatment involves Chara/Sthira/Dwiswabhava distinctions not yet implemented") —
+this was an honestly-labeled gap, not a silent defect. This fix implements the disclosed gap:
+odd lagnas (0-indexed even values) count forward and even lagnas (0-indexed odd values) count
+backward per sutras 25-26 (high confidence — direct sutra text, corroborated by essentially every
+secondary source found, and consistent with the identical odd/even logic applied elsewhere in the
+same Pada at sutras 1.1.32 and 1.1.34), with the four fixed (Sthira) signs — Taurus, Scorpio, Leo,
+Aquarius — inverting that base direction per the commentarial reconstruction of sutra 27's terse,
+unlisted exception (moderate confidence — the sutra itself names no signs; the four-sign mapping
+is a reconstruction corroborated by two independently-styled sources, one framing it as "Sthira,"
+the other as "Vishama Pada"/"Sama Pada," that converge on the identical four signs).
+A different, popular secondary-source mnemonic ("movable signs forward, fixed signs backward,
+dual signs forward-then-backward") was considered and is not implemented: it is internally
+inconsistent with sutras 25-26 for movable-even signs (e.g. Cancer — movable but even — which the
+sutra text places in the backward group with no stated exception for movable signs). No confirmed
+classical sub-rule exists for dual (Dwiswabhava) signs beyond the plain odd/even rule; dual signs
+are not treated as an exception category here.
+This changes computed Chara Dasha output for every lagna sign except Aries — the only sign where
+the old always-forward behavior already matched the correct direction. Non-fixed even lagnas
+(Cancer, Virgo, Capricorn, Pisces) now count backward instead of forward; fixed odd lagnas (Leo,
+Aquarius) now count backward instead of forward; non-fixed odd lagnas other than Aries (Gemini,
+Libra, Sagittarius) are unaffected in direction (still forward) but were already correct. Fixed
+even lagnas (Taurus, Scorpio) are unaffected — the exception direction (forward) coincided with
+the old always-forward behavior. `sign_lord_sign` (lordship assignment) and `sign_distance`
+(duration arithmetic) are both unchanged by this fix.
+
 ## Standing rules
 
 - Every PR that adds a new external data source must add a row here.
