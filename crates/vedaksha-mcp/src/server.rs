@@ -484,21 +484,6 @@ impl McpServer {
     fn call_compute_dasha(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
         use crate::tools::compute_dasha::{ComputeDashaInput, DashaSystem};
         use vedaksha_vedic::dasha;
-        use vedaksha_vedic::dasha::chara::GrahaSigns;
-
-        // TODO(Task 2): placeholder chart (every graha in Aries) until the
-        // JSON schema accepts real natal positions for Chara/Narayana. See
-        // the TODO at the Chara/Narayana match arms below.
-        const PLACEHOLDER_GRAHA_SIGNS: GrahaSigns = GrahaSigns {
-            sun: 0,
-            moon: 0,
-            mars: 0,
-            mercury: 0,
-            jupiter: 0,
-            venus: 0,
-            saturn: 0,
-            rahu: 0,
-        };
 
         let input: ComputeDashaInput = serde_json::from_value(args.clone())
             .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
@@ -524,35 +509,32 @@ impl McpServer {
                 input.birth_jd,
                 levels,
             )),
-            DashaSystem::Chara => {
-                // TODO(Task 2): the MCP schema does not yet accept natal
-                // graha positions, so Chara/Narayana are computed here
-                // against an all-Aries placeholder chart -- every sign's
-                // lord ends up "in Aries", which is wrong for any real
-                // chart. This is a deliberate minimum-to-compile stopgap
-                // after `dasha::chara::compute_chara`'s signature changed
-                // to take chart-dependent positions (see
-                // `crates/vedaksha-vedic/src/dasha/chara.rs`); wiring real
-                // positions through the JSON schema is Task 2's job, not
-                // done here.
-                serde_json::to_value(dasha::chara::compute_chara(
-                    // `lagna_sign` is documented (schema + doc comment) as
-                    // 1-indexed (1 = Aries), but `compute_chara` expects
-                    // 0-indexed (0 = Aries). `validate()` above guarantees
-                    // `[1, 12]`, so `- 1` is safe and yields `[0, 11]`.
-                    input.lagna_sign.expect("validated above") - 1,
-                    input.birth_jd,
-                    PLACEHOLDER_GRAHA_SIGNS,
-                ))
-            }
-            DashaSystem::Narayana => {
-                // See the TODO on the Chara arm above -- same placeholder.
-                serde_json::to_value(dasha::narayana::compute_narayana(
-                    // Same 1-indexed → 0-indexed conversion as Chara above.
-                    input.lagna_sign.expect("validated above") - 1,
-                    input.birth_jd,
-                    PLACEHOLDER_GRAHA_SIGNS,
-                ))
+            // Chara and Narayana are unreachable through this surface until
+            // the JSON schema accepts natal graha positions.
+            //
+            // They FAIL rather than serve a placeholder chart. The obvious
+            // stopgap -- pass an all-Aries chart so the workspace compiles --
+            // returns twelve well-formed periods with plausible year counts
+            // that are wrong for every real chart, and nothing on this
+            // surface would catch it: the `compute_dasha` tests assert only
+            // that the response is an array of numbers, never a duration
+            // value, and no gate scans for TODOs. A wrong answer that looks
+            // right is worse than an error, so this is an error.
+            //
+            // `dasha::chara::compute_chara` now needs the natal positions of
+            // the seven classical grahas plus Rahu, because a sign's dasha
+            // length is the count to the sign its lord actually occupies.
+            // Wiring those through this tool's input schema is the next
+            // change; see `crates/vedaksha-vedic/src/dasha/chara.rs`.
+            DashaSystem::Chara | DashaSystem::Narayana => {
+                return Err(McpError::computation_failed(
+                    "Chara and Narayana dasha are temporarily unavailable: their period \
+                     lengths depend on the natal positions of the grahas, and this tool's \
+                     input schema does not yet accept them. Previous releases answered \
+                     these systems from a fixed table that ignored the birth chart \
+                     entirely; that behaviour was incorrect and has been removed rather \
+                     than left in place.",
+                ));
             }
         };
 
@@ -2062,99 +2044,51 @@ mod tests {
         assert!(dasha["maha_periods"].is_array());
     }
 
+    /// Chara and Narayana must FAIL on this surface, not answer.
+    ///
+    /// Their period lengths depend on the natal positions of the grahas,
+    /// which this tool's input schema does not yet accept. The alternative --
+    /// answering from a placeholder chart so the code compiles -- returns
+    /// twelve well-formed periods with plausible year counts that are wrong
+    /// for every real chart, which is strictly worse than an error.
+    ///
+    /// # What must be restored when the schema gains graha positions
+    ///
+    /// This test REPLACES six tests, and two guarantees they carried must
+    /// come back with the real wiring rather than being lost here:
+    ///
+    /// 1. **The 1-indexed to 0-indexed `lagna_sign` conversion.** The schema
+    ///    documents `lagna_sign` as 1-indexed (1 = Aries); `compute_chara`
+    ///    and `compute_narayana` take 0-indexed. That conversion lived in the
+    ///    dispatch arms this change removed, and shipping without it is
+    ///    exactly the off-by-one defect that went unnoticed from v2.4.0 to
+    ///    v8.0.0. The replacements must assert BOTH ends of the range --
+    ///    lagna_sign 1 starts on Aries AND lagna_sign 12 starts on Pisces --
+    ///    because an off-by-two or sign-flipped conversion can pass an
+    ///    Aries-only check by coincidence.
+    /// 2. **Duration values, not just response shape.** The six removed tests
+    ///    asserted only `is_number()`/`is_array()`/`sign_name`, never a
+    ///    `duration_years`. That is why a full workspace gate stayed green
+    ///    while this tool served chart-independent durations for its entire
+    ///    life. The replacements must pin actual durations against a known
+    ///    chart.
     #[test]
-    fn compute_dasha_dispatches_chara() {
+    fn compute_dasha_chara_and_narayana_fail_rather_than_answer_without_positions() {
         let s = server();
-        // Chara returns an array of CharaPeriod, not a struct.
-        let dasha = dasha_text(
-            &s,
-            r#"{"system":"Chara","lagna_sign":1,"birth_jd":2451545.0}"#,
-        );
-        let periods = dasha.as_array().expect("expected array of CharaPeriod");
-        assert!(!periods.is_empty());
-        assert!(periods[0]["sign_index"].is_number());
-    }
-
-    #[test]
-    fn compute_dasha_dispatches_narayana() {
-        let s = server();
-        let dasha = dasha_text(
-            &s,
-            r#"{"system":"Narayana","lagna_sign":1,"birth_jd":2451545.0}"#,
-        );
-        // NarayanaDasha has `lagna_sign` and `periods`.
-        assert!(dasha["lagna_sign"].is_number());
-        assert!(dasha["periods"].is_array());
-    }
-
-    // `lagna_sign` is documented (compute_dasha's input_schema) as 1-indexed
-    // (1 = Aries), but `compute_chara`/`compute_narayana` expect 0-indexed
-    // (0 = Aries). The dispatch in `call_compute_dasha` must convert between
-    // the two, or every Chara/Narayana dasha served via the documented API
-    // starts exactly one sign later than the true ascendant. Aries (1) and
-    // Pisces (12) are both checked: an off-by-two or sign-flipped conversion
-    // (e.g. `+ 1` instead of `- 1`) could still pass an Aries-only check by
-    // coincidence at one end of the range.
-    #[test]
-    fn compute_dasha_chara_lagna_sign_1_is_aries() {
-        let s = server();
-        let dasha = dasha_text(
-            &s,
-            r#"{"system":"Chara","lagna_sign":1,"birth_jd":2451545.0}"#,
-        );
-        let periods = dasha.as_array().expect("expected array of CharaPeriod");
-        assert_eq!(
-            periods[0]["sign_name"].as_str().unwrap(),
-            "Aries",
-            "lagna_sign 1 (documented 1-indexed Aries) must start the Chara \
-             dasha on Aries, not the next sign over: {dasha}"
-        );
-    }
-
-    #[test]
-    fn compute_dasha_chara_lagna_sign_12_is_pisces() {
-        let s = server();
-        let dasha = dasha_text(
-            &s,
-            r#"{"system":"Chara","lagna_sign":12,"birth_jd":2451545.0}"#,
-        );
-        let periods = dasha.as_array().expect("expected array of CharaPeriod");
-        assert_eq!(
-            periods[0]["sign_name"].as_str().unwrap(),
-            "Pisces",
-            "lagna_sign 12 (documented 1-indexed Pisces) must start the Chara \
-             dasha on Pisces: {dasha}"
-        );
-    }
-
-    #[test]
-    fn compute_dasha_narayana_lagna_sign_1_is_aries() {
-        let s = server();
-        let dasha = dasha_text(
-            &s,
-            r#"{"system":"Narayana","lagna_sign":1,"birth_jd":2451545.0}"#,
-        );
-        assert_eq!(
-            dasha["periods"][0]["sign_name"].as_str().unwrap(),
-            "Aries",
-            "lagna_sign 1 (documented 1-indexed Aries) must start the \
-             Narayana dasha on Aries, not the next sign over: {dasha}"
-        );
-    }
-
-    #[test]
-    fn compute_dasha_narayana_lagna_sign_12_is_pisces() {
-        let s = server();
-        let dasha = dasha_text(
-            &s,
-            r#"{"system":"Narayana","lagna_sign":12,"birth_jd":2451545.0}"#,
-        );
-        assert_eq!(
-            dasha["periods"][0]["sign_name"].as_str().unwrap(),
-            "Pisces",
-            "lagna_sign 12 (documented 1-indexed Pisces) must start the \
-             Narayana dasha on Pisces: {dasha}"
-        );
+        for system in ["Chara", "Narayana"] {
+            let resp = s.handle_request(&format!(
+                r#"{{"jsonrpc":"2.0","id":13,"method":"tools/call","params":{{
+                    "name":"compute_dasha",
+                    "arguments":{{"system":"{system}","lagna_sign":1,"birth_jd":2451545.0}}
+                }}}}"#
+            ));
+            let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+            assert!(
+                val["error"].is_object(),
+                "{system} must return an error while graha positions cannot be \
+                 supplied, not a plausible-looking wrong answer: {val}"
+            );
+        }
     }
 
     #[test]

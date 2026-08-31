@@ -285,6 +285,62 @@ land on the same vishama-pada/sama-pada answer Fix 11's direct-on-the-lagna test
 `sign_lord_sign` (lordship assignment) and `sign_distance` (duration arithmetic) are both unchanged
 by this fix, as they were by Fix 11.
 
+### Fix 13 — Chara/Narayana Dasha durations ignored the birth chart entirely
+Source: Jaimini Sutras, Adhyaya 1 Pada 1, the sutra beginning *nathantah samah prayena* ("the years
+end at the lord"), whose Sanskrit commentary glosses it *svasvadhipashritarashi* — "the sign
+resorted to by their own respective lords"; and, independently, Parashara's *Brihat Parashara Hora
+Shastra*, chapter on the sign-based dashas, which states the count runs "from the Rasi up to the
+house in which its lord is posited." Verse numbering for that chapter differs across recensions, so
+it is cited here by chapter and incipit rather than by number.
+Both sources make the duration **chart-dependent**: a sign's dasha length is the count from that
+sign to the sign its lord *actually occupies in the natal chart*. Before this fix,
+`crates/vedaksha-vedic/src/dasha/chara.rs` computed it from a hardcoded 12-entry table mapping each
+sign to its lord's *other domicile* (Aries to Mars to Scorpio, and so on), and neither
+`compute_chara` nor `compute_narayana` accepted any planetary position at all — so every chart ever
+computed received identical durations (Aries always 7 years, Cancer always 12, Capricorn always 1),
+independent of the birth instant. That table has **zero attestation in any source consulted**.
+A chart-independent duration table does exist classically — Sthira Dasha assigns 7/8/9 years by sign
+modality — but that is a different dasha, and this was not it.
+Fixed by taking the natal signs of the seven classical grahas plus Rahu (Ketu derived as the
+opposite point, a definitional relationship, rather than accepted as separate and possibly
+inconsistent input) and computing, per sign: the inclusive count to its lord's occupied sign minus
+one, counted **forward for signs in an odd pada** (Aries/Taurus/Gemini, Libra/Scorpio/Sagittarius)
+and **backward for signs in an even pada**, with a lord in its own sign giving 12 years. Note this
+per-sign count direction is a *different* rule from the sequence direction of Fix 12, which is one
+global decision taken from the pada of the 9th sign from the lagna; the two share a classification
+but not a subject.
+Dual lordship is resolved for the two signs that have it — Scorpio (Mars and Ketu) and Aquarius
+(Saturn and Rahu), a co-lordship attested by a *vriddha-karika* and by BPHS independently — using
+the classical strength cascade, with one documented divergence: the texts list rashi-bala before the
+"larger number of years" criterion, but the classical worked example below requires the reverse
+order, so the implementation follows the worked example and says so.
+**Verified against a classical conformance oracle.** The BPHS chapter carries a worked chart giving
+all twelve dasha lengths; the implemented rule reproduces all twelve exactly, exercising forward and
+reverse counting, the own-sign case, and both dual-lord signs. It is encoded as a regression test.
+Note the oracle constrains the cascade only weakly: its Aquarius case is decided identically by
+three different criteria, so the single ordering constraint it actually establishes is that the
+"larger number of years" criterion outranks rashi-bala.
+**Deliberately not implemented, and disclosed rather than silently omitted:** a well-attested rule
+(BPHS verse, and a *vriddha-karika* in the Jaimini line) adds one year when a sign's lord is exalted
+and subtracts one when debilitated. It is omitted here on an explicit ratified decision, following a
+named 20th-century teaching lineage that removed it because it produces a zero-year dasha for
+Sagittarius when Jupiter is in Capricorn, and a thirteen-year dasha for Virgo when Mercury is in
+Virgo. No classical source addresses either boundary — the tradition's response to those two cases
+was to question whether the adjustment belongs at all, not to clamp it, and no school clamps. The
+grammatical question of whether the adjustment attaches to a sign's *lord's* dignity or to an
+exalted planet *occupying* the sign was settled in favour of the lord by a Sanskrit worked example
+(Taurus receives the adjustment because its lord Venus is exalted in Pisces — a different sign).
+Separately, the *exaltation tiebreak within the dual-lord cascade* is a distinct rule and is
+retained; only the duration adjustment is omitted.
+**Narayana Dasha is now a documented alias of Chara Dasha.** `narayana.rs` previously cited "Jaimini
+Sutras Ch. 2" as its source; that citation could not be supported and has been removed. The name
+appears in no classical corpus searched — including the BPHS passage that enumerates the sign-based
+dasha systems by name, where Chara and Sthira appear and Narayana does not — and traces instead to a
+late-20th-century work by a living author. Its duration rule is identical to Chara's in every source
+found, so it receives the identical corrected computation. Its one genuinely distinguishing feature
+(a different starting-sign rule) is deliberately not implemented: its only written source is a
+modern copyrighted work, which is out of bounds for this project's clean-room position.
+
 ## Standing rules
 
 - Every PR that adds a new external data source must add a row here.

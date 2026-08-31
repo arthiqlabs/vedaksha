@@ -77,8 +77,11 @@
 //! below). That chart's two dual-lord signs constrain the cascade:
 //!
 //! - **Aquarius -> 8 years**, which requires counting to Rahu (in Gemini),
-//!   not Saturn (in Leo). Rahu is conjoined with Moon in Gemini; Saturn is
-//!   alone in Leo. Step 1 (conjunction) alone explains this.
+//!   not Saturn (in Leo). This case **discriminates nothing**: Rahu wins
+//!   under step 1 (it is conjoined with Moon in Gemini, Saturn is alone in
+//!   Leo), *and* under step 3 (8 years vs. Saturn's 6), *and* under step 4
+//!   (Gemini is dual, Leo is fixed). All three agree, so the case is
+//!   consistent with the implemented order but is not evidence for it.
 //! - **Scorpio -> 6 years**, which requires counting to Mars (in Taurus),
 //!   not Ketu (in Sagittarius). Neither is conjoined with anything, so steps
 //!   1-2 tie. The stated textual order would apply rashi-bala next and
@@ -90,12 +93,19 @@
 //! So the textual source lists rashi-bala before the duration comparison,
 //! but the worked example only reproduces if duration is compared **first**,
 //! ahead of rashi-bala. That is the ordering implemented here: conjunction,
-//! conjunction-count, duration, rashi-bala, exaltation. This makes step 3
-//! (duration) and step 5 (exaltation) — moved earlier and unresolved by any
-//! prose source respectively — the weakest-attested links: partly grade (d),
-//! not (a). The BPHS worked example never reaches step 4 or 5 for either
-//! dual-lord sign, so exaltation-of-Rahu/Ketu (itself a contested point
-//! across traditions) is implemented but untested by the fixture.
+//! conjunction-count, duration, rashi-bala, exaltation.
+//!
+//! **Be precise about how little the fixture actually proves.** Scorpio is
+//! the only discriminating case, and the single constraint it establishes is
+//! that *duration outranks rashi-bala*. It says nothing about whether
+//! conjunction precedes duration, whether conjunction-count is a distinct
+//! step at all, or where exaltation belongs — indeed the bare one-step rule
+//! "larger duration wins" reproduces both dual-lord signs of this fixture on
+//! its own. Steps 1, 2 and 5 are carried over from the prose source's stated
+//! order and are unexercised here: partly grade (d), not (a). Exaltation of
+//! Rahu/Ketu (itself contested across traditions) is implemented but never
+//! reached by the fixture. A second worked chart whose dual-lord signs
+//! separate these criteria would be worth encoding if one is found.
 //!
 //! **Deliberately NOT implemented: the exaltation/debilitation +-1 year
 //! adjustment.** A well-attested classical rule (a Brihat Parashara Hora
@@ -362,6 +372,21 @@ fn is_vishama_pada(sign: u8) -> bool {
     matches!(sign, 0 | 1 | 2 | 6 | 7 | 8)
 }
 
+/// Whether a sign's own **duration count** runs zodiacally (forward).
+///
+/// Deliberately a separate function from [`is_vishama_pada`] despite
+/// currently delegating to it. The two encode the same classification but
+/// answer different questions about different subjects: this one is asked
+/// twelve times, once per sign being measured, to pick that sign's
+/// duration-count direction; [`is_vishama_pada`] is asked once, about the
+/// 9th sign from the lagna, to pick the whole sequence's direction. They are
+/// separately attested and could separately move. Collapsing this into a
+/// direct call would mean a future edit driven by new sequence-direction
+/// research silently changed every duration as well.
+fn counts_zodiacally(sign: u8) -> bool {
+    is_vishama_pada(sign)
+}
+
 /// Chara Dasha's counting direction: vishama-pada/sama-pada, tested at the
 /// 9th sign from `lagna` — see the module doc for the sutra and its
 /// confidence grading.
@@ -394,7 +419,6 @@ fn lord_sign_for(sign: u8, pos: GrahaSigns) -> u8 {
 /// Resolve a dual-lordship sign (Scorpio: Mars/Ketu; Aquarius: Saturn/Rahu)
 /// to a single lord's sign, per the cascade documented at the top of this
 /// module.
-#[allow(clippy::too_many_arguments)]
 fn resolve_dual_lord(sign: u8, a: Graha, a_sign: u8, b: Graha, b_sign: u8, pos: GrahaSigns) -> u8 {
     let a_in_sign = a_sign == sign;
     let b_in_sign = b_sign == sign;
@@ -454,17 +478,24 @@ fn resolve_dual_lord(sign: u8, a: Graha, a_sign: u8, b: Graha, b_sign: u8, pos: 
 /// A sign whose lord occupies the sign itself gets 12 years. Otherwise the
 /// count runs forward (zodiacal) or backward from `sign`, chosen by
 /// `sign`'s own vishama-pada/sama-pada grouping — see the module doc.
+///
+/// Uses [`counts_zodiacally`], not [`is_vishama_pada`] directly. The two
+/// currently return the same thing, but they answer different questions
+/// about different subjects (this one about the sign being measured, the
+/// other about the 9th from the lagna), and the indirection is what keeps
+/// them independently editable if research ever moves one.
 fn duration_for(sign: u8, lord_sign: u8) -> u8 {
     if lord_sign == sign {
         return 12;
     }
-    #[allow(clippy::cast_possible_truncation)]
-    let steps = if is_vishama_pada(sign) {
+    // `rem_euclid(12)` on a non-equal pair yields 1..=11, so the `as u8`
+    // cannot truncate and the result is never 0 -- a zero-length dasha is
+    // unreachable here by construction, not by clamping.
+    if counts_zodiacally(sign) {
         (i16::from(lord_sign) - i16::from(sign)).rem_euclid(12) as u8
     } else {
         (i16::from(sign) - i16::from(lord_sign)).rem_euclid(12) as u8
-    };
-    steps
+    }
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
