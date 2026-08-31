@@ -484,6 +484,21 @@ impl McpServer {
     fn call_compute_dasha(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
         use crate::tools::compute_dasha::{ComputeDashaInput, DashaSystem};
         use vedaksha_vedic::dasha;
+        use vedaksha_vedic::dasha::chara::GrahaSigns;
+
+        // TODO(Task 2): placeholder chart (every graha in Aries) until the
+        // JSON schema accepts real natal positions for Chara/Narayana. See
+        // the TODO at the Chara/Narayana match arms below.
+        const PLACEHOLDER_GRAHA_SIGNS: GrahaSigns = GrahaSigns {
+            sun: 0,
+            moon: 0,
+            mars: 0,
+            mercury: 0,
+            jupiter: 0,
+            venus: 0,
+            saturn: 0,
+            rahu: 0,
+        };
 
         let input: ComputeDashaInput = serde_json::from_value(args.clone())
             .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
@@ -509,19 +524,36 @@ impl McpServer {
                 input.birth_jd,
                 levels,
             )),
-            DashaSystem::Chara => serde_json::to_value(dasha::chara::compute_chara(
-                // `lagna_sign` is documented (schema + doc comment) as
-                // 1-indexed (1 = Aries), but `compute_chara` expects
-                // 0-indexed (0 = Aries). `validate()` above guarantees
-                // `[1, 12]`, so `- 1` is safe and yields `[0, 11]`.
-                input.lagna_sign.expect("validated above") - 1,
-                input.birth_jd,
-            )),
-            DashaSystem::Narayana => serde_json::to_value(dasha::narayana::compute_narayana(
-                // Same 1-indexed → 0-indexed conversion as Chara above.
-                input.lagna_sign.expect("validated above") - 1,
-                input.birth_jd,
-            )),
+            DashaSystem::Chara => {
+                // TODO(Task 2): the MCP schema does not yet accept natal
+                // graha positions, so Chara/Narayana are computed here
+                // against an all-Aries placeholder chart -- every sign's
+                // lord ends up "in Aries", which is wrong for any real
+                // chart. This is a deliberate minimum-to-compile stopgap
+                // after `dasha::chara::compute_chara`'s signature changed
+                // to take chart-dependent positions (see
+                // `crates/vedaksha-vedic/src/dasha/chara.rs`); wiring real
+                // positions through the JSON schema is Task 2's job, not
+                // done here.
+                serde_json::to_value(dasha::chara::compute_chara(
+                    // `lagna_sign` is documented (schema + doc comment) as
+                    // 1-indexed (1 = Aries), but `compute_chara` expects
+                    // 0-indexed (0 = Aries). `validate()` above guarantees
+                    // `[1, 12]`, so `- 1` is safe and yields `[0, 11]`.
+                    input.lagna_sign.expect("validated above") - 1,
+                    input.birth_jd,
+                    PLACEHOLDER_GRAHA_SIGNS,
+                ))
+            }
+            DashaSystem::Narayana => {
+                // See the TODO on the Chara arm above -- same placeholder.
+                serde_json::to_value(dasha::narayana::compute_narayana(
+                    // Same 1-indexed → 0-indexed conversion as Chara above.
+                    input.lagna_sign.expect("validated above") - 1,
+                    input.birth_jd,
+                    PLACEHOLDER_GRAHA_SIGNS,
+                ))
+            }
         };
 
         result.map_err(|e| McpError::computation_failed(&e.to_string()))
