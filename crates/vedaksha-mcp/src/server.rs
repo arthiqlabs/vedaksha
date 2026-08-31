@@ -526,11 +526,26 @@ impl McpServer {
                     .graha_signs
                     .expect("validated above")
                     .into_graha_signs();
-                serde_json::to_value(dasha::chara::compute_chara(
-                    lagna_0indexed,
-                    input.birth_jd,
-                    positions,
-                ))
+                let periods =
+                    dasha::chara::compute_chara(lagna_0indexed, input.birth_jd, positions);
+                // Wrapped in the same `{lagna_sign, periods}` envelope
+                // Narayana returns. Through v8.1.0 Chara served a bare array
+                // while Narayana served this object, for two systems that now
+                // compute identically -- an asymmetry with no reason behind
+                // it beyond the order the two were written. Unified here
+                // because v9 is a breaking release and this is the only cheap
+                // moment to do it.
+                //
+                // `lagna_sign` echoes the 0-indexed value, matching Narayana's
+                // long-standing output and the `sign_index` convention every
+                // other tool on this surface serves. Note it therefore differs
+                // from the 1-indexed `lagna_sign` this tool ACCEPTS -- a
+                // pre-existing cross-tool wart disclosed in
+                // CHANGELOG-v8.0.0.md and deliberately not resolved here.
+                Ok(serde_json::json!({
+                    "lagna_sign": lagna_0indexed,
+                    "periods": periods,
+                }))
             }
             DashaSystem::Narayana => {
                 let lagna_0indexed = input.lagna_sign.expect("validated above") - 1;
@@ -2101,15 +2116,59 @@ mod tests {
     }
 
     /// Extract the sign-period array from a Chara or Narayana response.
-    /// `compute_chara` serialises to a bare JSON array; `compute_narayana`
-    /// serialises to an object with a `periods` field.
+    ///
+    /// Both systems serve the same `{lagna_sign, periods}` envelope, so this
+    /// reads one shape. It deliberately does NOT fall back to a bare array:
+    /// through v8.1.0 Chara served one and Narayana served the object, and an
+    /// accommodating helper is what let that asymmetry sit unnoticed. If the
+    /// shapes ever diverge again this panics, which is the point.
     fn periods_array<'a>(system: &str, dasha: &'a serde_json::Value) -> &'a Vec<serde_json::Value> {
-        if let Some(arr) = dasha.as_array() {
-            return arr;
+        dasha["periods"].as_array().unwrap_or_else(|| {
+            panic!("expected {system} response to contain a `periods` array, got: {dasha}")
+        })
+    }
+
+    /// Chara and Narayana must serve the **same envelope**, not merely the
+    /// same numbers.
+    ///
+    /// `compute_narayana` is a pure alias of `compute_chara`, so any shape
+    /// difference between them is accidental. One existed until v9: Chara
+    /// returned a bare array, Narayana an object. Pinned here so the two
+    /// cannot drift apart again silently.
+    #[test]
+    fn chara_and_narayana_serve_an_identical_envelope() {
+        let s = server();
+        let args = |system: &str| {
+            format!(
+                r#"{{"system":"{system}","lagna_sign":11,"birth_jd":2451545.0,
+                    "graha_signs":{{"sun":9,"moon":2,"mars":1,"mercury":10,
+                    "jupiter":10,"venus":10,"saturn":4,"rahu":2}}}}"#
+            )
+        };
+        let chara = dasha_text(&s, &args("Chara"));
+        let narayana = dasha_text(&s, &args("Narayana"));
+
+        assert!(
+            chara.get("lagna_sign").is_some() && chara.get("periods").is_some(),
+            "Chara must serve the {{lagna_sign, periods}} envelope, got: {chara}"
+        );
+        assert_eq!(
+            chara["lagna_sign"], narayana["lagna_sign"],
+            "the two systems must echo the same lagna_sign"
+        );
+        assert_eq!(
+            periods_array("Chara", &chara).len(),
+            periods_array("Narayana", &narayana).len(),
+            "the two systems must return the same number of periods"
+        );
+        // Narayana is an alias, so the durations must match sign for sign.
+        for (c, n) in periods_array("Chara", &chara)
+            .iter()
+            .zip(periods_array("Narayana", &narayana))
+        {
+            assert_eq!(c["sign_name"], n["sign_name"]);
+            assert_eq!(c["duration_years"], n["duration_years"]);
         }
-        dasha["periods"]
-            .as_array()
-            .unwrap_or_else(|| panic!("expected {system} response to be/contain an array: {dasha}"))
     }
 
     /// Duration VALUES, pinned against BPHS ch. 46's worked example — not

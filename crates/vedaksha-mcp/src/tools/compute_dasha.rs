@@ -71,44 +71,62 @@ impl DashaSystem {
 /// caller who omits one field gets a specific "which field" error from
 /// [`validate`] rather than a generic JSON-deserialization failure that
 /// does not name the missing field.
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
+/// Natal sign of each graha, as supplied by the caller.
+///
+/// Fields are `Option<i32>`, not `u8`, deliberately. `u8` would reject a
+/// negative value inside `serde` before [`validate`] ever runs, yielding
+/// `invalid value: integer -1, expected u8` with no field name — and `-1` is
+/// a plausible caller mistake, being exactly what an off-by-one from a
+/// 1-indexed source produces. Widening the parse lets every range error reach
+/// [`validate`] and come back naming the offending graha.
+///
+/// `deny_unknown_fields` is load-bearing rather than tidiness: `ketu` is
+/// deliberately absent because it is derived from `rahu`, and silently
+/// ignoring a supplied `ketu` would accept an internally inconsistent chart
+/// while appearing to honour it. Rejecting it says so.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GrahaSignsInput {
     /// Sun's natal sign, 0–11 (0 = Aries).
-    pub sun: Option<u8>,
+    pub sun: Option<i32>,
     /// Moon's natal sign, 0–11 (0 = Aries).
-    pub moon: Option<u8>,
+    pub moon: Option<i32>,
     /// Mars's natal sign, 0–11 (0 = Aries).
-    pub mars: Option<u8>,
+    pub mars: Option<i32>,
     /// Mercury's natal sign, 0–11 (0 = Aries).
-    pub mercury: Option<u8>,
+    pub mercury: Option<i32>,
     /// Jupiter's natal sign, 0–11 (0 = Aries).
-    pub jupiter: Option<u8>,
+    pub jupiter: Option<i32>,
     /// Venus's natal sign, 0–11 (0 = Aries).
-    pub venus: Option<u8>,
+    pub venus: Option<i32>,
     /// Saturn's natal sign, 0–11 (0 = Aries).
-    pub saturn: Option<u8>,
+    pub saturn: Option<i32>,
     /// Rahu's (north lunar node's) natal sign, 0–11 (0 = Aries).
-    pub rahu: Option<u8>,
+    pub rahu: Option<i32>,
 }
 
 impl GrahaSignsInput {
     /// Convert to the library's [`vedaksha_vedic::dasha::chara::GrahaSigns`].
     ///
     /// # Panics
-    /// Panics if any field is `None`. Only call after [`validate`] has
-    /// confirmed every field is present — the same "validated above"
-    /// contract `moon_longitude` and `lagna_sign` already rely on below.
+    /// Panics if any field is `None` or outside `[0, 11]`. Only call after
+    /// [`validate`] has confirmed both — the same "validated above" contract
+    /// `moon_longitude` and `lagna_sign` already rely on below.
     #[must_use]
     pub fn into_graha_signs(self) -> vedaksha_vedic::dasha::chara::GrahaSigns {
+        // `validate` bounds every field to [0, 11], so each cast is exact.
+        let sign = |v: Option<i32>| -> u8 {
+            u8::try_from(v.expect("validated above")).expect("validated above")
+        };
         vedaksha_vedic::dasha::chara::GrahaSigns {
-            sun: self.sun.expect("validated above"),
-            moon: self.moon.expect("validated above"),
-            mars: self.mars.expect("validated above"),
-            mercury: self.mercury.expect("validated above"),
-            jupiter: self.jupiter.expect("validated above"),
-            venus: self.venus.expect("validated above"),
-            saturn: self.saturn.expect("validated above"),
-            rahu: self.rahu.expect("validated above"),
+            sun: sign(self.sun),
+            moon: sign(self.moon),
+            mars: sign(self.mars),
+            mercury: sign(self.mercury),
+            jupiter: sign(self.jupiter),
+            venus: sign(self.venus),
+            saturn: sign(self.saturn),
+            rahu: sign(self.rahu),
         }
     }
 }
@@ -146,8 +164,12 @@ pub fn definition() -> super::ToolDefinition {
         name: "compute_dasha",
         description: "Compute Vedic dasha (planetary period) sequences. Supports five \
             classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, \
-            require `moon_longitude`); Chara, Narayana (Lagna-sign based, require \
-            `lagna_sign`). Returns a JSON dasha tree with start/end Julian Days.",
+            require `moon_longitude`); Chara, Narayana (sign based, require BOTH \
+            `lagna_sign` AND `graha_signs`, since each sign's period length is counted \
+            to the sign its lord occupies in this chart). `graha_signs` takes the eight \
+            `sign_index` values compute_natal_chart already returns; Ketu is derived \
+            from Rahu and must not be supplied. Returns a JSON dasha tree with \
+            start/end Julian Days.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
@@ -329,7 +351,11 @@ pub fn validate(input: &ComputeDashaInput) -> Result<DashaSystem, McpError> {
             let value = value.ok_or_else(|| {
                 McpError::invalid_parameter(name, "required when system is Chara or Narayana")
             })?;
-            if value > 11 {
+            // Both ends checked. A negative value is the likelier caller
+            // mistake of the two -- it is what an off-by-one from a 1-indexed
+            // source produces -- and reaching here at all is why the field is
+            // parsed as `i32` rather than `u8`.
+            if !(0..=11).contains(&value) {
                 return Err(McpError::invalid_parameter(
                     name,
                     "must be an integer in [0, 11]",

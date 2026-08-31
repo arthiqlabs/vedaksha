@@ -211,7 +211,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Compute Vedic dasha (planetary period) sequences. Supports five classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (Lagna-sign based, require `lagna_sign`). Returns a JSON dasha tree with start/end Julian Days.",
+      "description": "Compute Vedic dasha (planetary period) sequences. Supports five classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (sign based, require BOTH `lagna_sign` AND `graha_signs`, since each sign's period length is counted to the sign its lord occupies in this chart). `graha_signs` takes the eight `sign_index` values compute_natal_chart already returns; Ketu is derived from Rahu and must not be supplied. Returns a JSON dasha tree with start/end Julian Days.",
       "inputSchema": {
         "properties": {
           "birth_jd": {
