@@ -12,11 +12,11 @@ keywords = ["astrology", "ephemeris", "vedic", "jyotish", "kundali"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-vedaksha-math = { version = "8.0.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "8.0.0", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "8.0.0", path = "../vedaksha-astro" }
-vedaksha-vedic = { version = "8.0.0", path = "../vedaksha-vedic" }
-vedaksha-graph = { version = "8.0.0", path = "../vedaksha-graph", features = ["emitters"] }
+vedaksha-math = { version = "9.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "9.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "9.0.0", path = "../vedaksha-astro" }
+vedaksha-vedic = { version = "9.0.0", path = "../vedaksha-vedic" }
+vedaksha-graph = { version = "9.0.0", path = "../vedaksha-graph", features = ["emitters"] }
 
 [features]
 default = ["std"]

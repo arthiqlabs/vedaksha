@@ -12,8 +12,8 @@ keywords = ["astrology", "horoscope", "houses", "aspects", "natal-chart"]
 categories = ["science", "mathematics"]
 
 [dependencies]
-vedaksha-math = { version = "8.0.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "8.0.0", path = "../vedaksha-ephem-core" }
+vedaksha-math = { version = "9.0.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "9.0.0", path = "../vedaksha-ephem-core" }
 libm = "0.2"
 serde = { workspace = true }
 
