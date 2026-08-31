@@ -224,7 +224,85 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// that it must stay unchanged. **If this fixture's date range, row
 /// selection, or row count ever changes, re-verify the digest by measuring
 /// it again rather than assuming it will stay unchanged.**
-const EXPECTED_DIGEST: &str = "c3b77a61898779714b3366f5c51d4ca5b7860ad3e6669d12fc238734e754734a";
+///
+/// # Why this moved at the VSOP87A SIMD adoption (2026-08-31)
+///
+/// [`PRE_VSOP87A_SIMD_DIGEST`] is the value this held from the `COS_EPS`
+/// correction until `vsop87a.rs`'s `eval_series` was rewritten to use
+/// `simd_trig::sincos_f64x4` (Wave 2 item #3/#3b of
+/// `docs/audit/2026-08-29-perf-investigation.md`), the same SIMD-`sincos`
+/// pattern `elp_mpp02.rs` already used for the lunar series since v3.1.0. The
+/// scalar loop gathered up to 4 term angles `B + C*t` in original order,
+/// called the vector kernel, and accumulated scalar in that same original
+/// order — identical in structure to `eval_main_series`'s existing pattern —
+/// with a scalar `libm::sincos` tail for the remainder.
+///
+/// This is a genuinely new SIMD-vs-scalar substitution, not an algebraic
+/// identity (contrast the EMB/Moon cancellation above and the sparse-ELP
+/// perturbation rewrite, neither of which needed a re-pin because both
+/// preserve the exact scalar arithmetic). `sincos_f64x4` and scalar
+/// `libm::sincos` agree only to 1-2 ULP, and VSOP87A now routes every term
+/// through it, so a move here was expected, not a surprise to investigate.
+///
+/// **Pre-check, per the investigation's own explicit condition.** Before
+/// vectorizing, `vsop87a.rs`'s
+/// `tests::sincos_matches_libm_at_real_vsop87a_phase_domain` measured
+/// `sincos_f64x4` against scalar `libm::sincos` at every real per-term
+/// `B + C*t` argument actually reachable across `AnalyticalProvider`'s full
+/// supported JD range (all 8 planets, all 6 power-of-t groups, all 3
+/// coordinates) — maximum argument measured **1,356,541 rad**, matching the
+/// investigation's own independently-derived figure. Measured error: **max
+/// sin 1.11e-16, max cos 1.11e-16** (both `--release` and `debug` profile,
+/// identical) — the same 1-2 ULP order already established and accepted for
+/// ELP at arguments over 2x larger (3,303,561 rad). The kernel's large-argument
+/// reduction is not degrading at VSOP87A's range either; vectorizing was safe
+/// to proceed.
+///
+/// Measured by dumping all 21,915 rows either side of the change with
+/// `--nocapture`:
+///
+/// | | sha256 of the `ROW` lines |
+/// |---|---|
+/// | before | `c3b77a61898779714b3366f5c51d4ca5b7860ad3e6669d12fc238734e754734a` |
+/// | after  | `a6e4f3a47fd65c3de98e88eed980538f5c7b4a4e1b0097626593c9e09521e742` |
+///
+/// 8,943 of 21,915 rows changed — every one a VSOP87A body (Mercury, Venus,
+/// Mars, Jupiter, Saturn, Uranus, Neptune, and Sun via `earth_state`'s direct
+/// VSOP87A-Earth call); **zero Moon rows changed**, confirming the change is
+/// scoped to VSOP87A alone, as intended (`lunar_series_bit_digest.rs`'s two
+/// digests are also unaffected, checked directly on this commit). Diffing the
+/// raw bit patterns of every changed component across all 21,915 rows:
+///
+/// | quantity | rows changed | max delta |
+/// |---|---|---|
+/// | ecliptic longitude | 1,959 | 8.88e-16° (**3.20e-12 arcsec**) |
+/// | ecliptic latitude | 6,157 | 2.50e-16° (**8.99e-13 arcsec**) |
+/// | distance | 4,161 | 1.07e-14 AU (**~1.6 mm**) |
+/// | longitude_speed | 3,430 | 1.02e-13 °/day |
+///
+/// (A raw bit-pattern/ULP count is not reported here because several of the
+/// largest apparent ULP counts land on near-zero latitude values — e.g. one
+/// row's latitude bit pattern differs by tens of millions of ULP while the
+/// actual values are -2.740060111550503e-9° vs -2.74006008397825e-9°, a
+/// 9.93e-14 arcsec difference — the same "ULP explodes near a zero crossing
+/// while the absolute error stays fixed" effect already documented above for
+/// the EMB/Moon cancellation. The absolute deltas in the table are the
+/// physically meaningful measurement.)
+///
+/// Accepted: every delta is 9-11 orders of magnitude below VSOP87A's own
+/// ~2" mean truncation error against Horizons (and the project's ~0.169"
+/// lunar theory floor), so no accuracy claim in the repo moves.
+/// `analytical_oracle.rs` (21,915-row Horizons comparison) and
+/// `cargo test -p vedaksha-ephem-core` both stay green through this change.
+const EXPECTED_DIGEST: &str = "a6e4f3a47fd65c3de98e88eed980538f5c7b4a4e1b0097626593c9e09521e742";
+
+/// The digest from the `COS_EPS` correction until the VSOP87A SIMD adoption.
+///
+/// Kept for the same reason as the others: a pin that only ever holds its
+/// current value cannot tell you which known change you are looking at.
+#[allow(dead_code)]
+const PRE_VSOP87A_SIMD_DIGEST: &str =
+    "c3b77a61898779714b3366f5c51d4ca5b7860ad3e6669d12fc238734e754734a";
 
 /// The digest from the v6 precession correction until the `COS_EPS` correction.
 ///

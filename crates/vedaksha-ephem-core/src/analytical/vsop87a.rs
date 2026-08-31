@@ -20,8 +20,11 @@
 //! ```
 //! where `t` = Julian millennia from J2000.0 = (JD − 2 451 545.0) / 365 250.0.
 
+use wide::f64x4;
+
 use super::coefficients;
 use super::coefficients::loader::Vsop87Term;
+use super::simd_trig::sincos_f64x4;
 
 /// The eight major planets supported by VSOP87A.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -70,7 +73,32 @@ fn eval_series(series: &[&[Vsop87Term]; 6], t: f64) -> (f64, f64) {
         let mut sum_cos = 0.0_f64;
         let mut sum_sin_c = 0.0_f64; // sum of C_i * A_i * sin(B_i + C_i*t)
 
-        for term in terms.iter() {
+        // Vectorized in the same pattern `elp_mpp02.rs`'s `eval_main_series`
+        // uses: gather up to 4 term angles in original order, call
+        // `sincos_f64x4`, then accumulate scalar in that same original order.
+        // `sincos_f64x4` and scalar `libm::sincos` agree only to 1-2 ULP (see
+        // `sincos_matches_libm_at_real_vsop87a_phase_domain`), so which terms
+        // land in the vector body and which in the scalar tail is part of the
+        // output's bit pattern, not an implementation detail.
+        let n_chunks = terms.len() / 4;
+        for ci in 0..n_chunks {
+            let base = ci * 4;
+            let mut angles = [0.0_f64; 4];
+            for (lane, angle) in angles.iter_mut().enumerate() {
+                let term = &terms[base + lane];
+                *angle = term.phase + term.frequency * t;
+            }
+            let (sin4, cos4) = sincos_f64x4(f64x4::from(angles));
+            let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
+            for lane in 0..4 {
+                let term = &terms[base + lane];
+                let a = term.amplitude;
+                let c = term.frequency;
+                sum_cos += a * cos4[lane];
+                sum_sin_c += a * c * sin4[lane];
+            }
+        }
+        for term in &terms[(n_chunks * 4)..] {
             let a = term.amplitude;
             let b = term.phase;
             let c = term.frequency;
@@ -425,5 +453,133 @@ mod tests {
         for &v in pos.iter().chain(vel.iter()) {
             assert!(v.is_finite(), "value at t=0 is not finite: {v}");
         }
+    }
+
+    /// `simd_trig::sincos_f64x4` was validated against ELP/MPP02's real phase
+    /// domain (up to 3,303,561 rad, see `elp_mpp02.rs`'s
+    /// `sincos_matches_libm_at_real_elp_phase_domain` and `simd_trig.rs`'s
+    /// module doc) but never against VSOP87A's own argument distribution.
+    /// `docs/audit/2026-08-29-perf-investigation.md` §3/§3b requires this be
+    /// measured before vectorizing `eval_series`: the argument here is inside
+    /// the already-validated bound, but that has to be checked, not assumed.
+    ///
+    /// This computes the ACTUAL `angle = B + C*t` value every term of every
+    /// planet's every coordinate's every power-of-t group would feed
+    /// `sincos_f64x4`, across `AnalyticalProvider`'s full supported JD range
+    /// (`JD_MIN`/`JD_MAX` in `analytical/mod.rs`, ~-2000 CE to ~+3000 CE),
+    /// sampled at epochs spanning that range — not a synthetic domain check
+    /// unrelated to VSOP87A's real coefficients. It then measures
+    /// `sincos_f64x4` vs. scalar `libm::sincos` at every one of those real
+    /// arguments, plus a dense sweep of the full reachable interval, mirroring
+    /// exactly the method `elp_mpp02.rs`'s own real-phase-domain test uses.
+    #[test]
+    fn sincos_matches_libm_at_real_vsop87a_phase_domain() {
+        use crate::analytical::{JD_MAX, JD_MIN};
+
+        const DAYS_PER_MILLENNIUM: f64 = 365_250.0;
+
+        let t_min = (JD_MIN - J2000) / DAYS_PER_MILLENNIUM;
+        let t_max = (JD_MAX - J2000) / DAYS_PER_MILLENNIUM;
+        // Epochs spanning the full supported range, in Julian millennia
+        // (VSOP87A's own time unit): both extremes plus interior points,
+        // including the present day (t ~ 0.0253).
+        let epochs = [t_min, -3.0, -2.0, -1.0, -0.5, 0.0, 0.0253, 0.5, t_max];
+
+        let planets = [
+            Planet::Mercury,
+            Planet::Venus,
+            Planet::Earth,
+            Planet::Mars,
+            Planet::Jupiter,
+            Planet::Saturn,
+            Planet::Uranus,
+            Planet::Neptune,
+        ];
+
+        let mut max_abs_phase = 0.0_f64;
+        let mut max_abs_phase_t = 0.0_f64;
+        let mut real_phases: Vec<f64> = Vec::new();
+
+        for &t in &epochs {
+            for &planet in &planets {
+                for coord in 0..3 {
+                    for series in get_series(planet, coord) {
+                        for term in series.iter() {
+                            let angle = term.phase + term.frequency * t;
+                            real_phases.push(angle);
+                            if angle.abs() > max_abs_phase {
+                                max_abs_phase = angle.abs();
+                                max_abs_phase_t = t;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        println!(
+            "max |angle| fed to sincos_f64x4 across the supported JD range \
+             [{JD_MIN}, {JD_MAX}]: {max_abs_phase:e} rad at t={max_abs_phase_t} \
+             millennia ({} real term-angle samples)",
+            real_phases.len()
+        );
+        // Cross-check against the investigation's independently-derived
+        // figure over the full JD range: 1,356,541 rad. Our epoch grid uses
+        // the exact t_min/t_max rather than the investigation's own sample
+        // points, so allow a wide band -- this is a sanity check that we are
+        // in the same regime, not a precise reproduction.
+        assert!(
+            max_abs_phase > 1_300_000.0,
+            "expected max |angle| > 1.3e6 rad near the JD range edges, got {max_abs_phase:e}"
+        );
+
+        // Dense sweep across the full reachable interval (irrational step, as
+        // in simd_trig::tests::matches_libm_across_domain and
+        // elp_mpp02::tests::sincos_matches_libm_at_real_elp_phase_domain) to
+        // catch reduction-boundary cases the discrete real term angles don't
+        // happen to land on.
+        let mut x = -max_abs_phase;
+        while x <= max_abs_phase {
+            real_phases.push(x);
+            x += 137.035_999; // fine, irrational-ish step to vary the reduction
+        }
+
+        let mut max_sin_err = 0.0_f64;
+        let mut max_cos_err = 0.0_f64;
+        for chunk in real_phases.chunks(4) {
+            let mut lane = [0.0_f64; 4];
+            lane[..chunk.len()].copy_from_slice(chunk);
+            let (s, c) = sincos_f64x4(f64x4::from(lane));
+            let (s, c) = (s.to_array(), c.to_array());
+            for i in 0..chunk.len() {
+                let (ls, lc) = libm::sincos(lane[i]);
+                max_sin_err = max_sin_err.max((s[i] - ls).abs());
+                max_cos_err = max_cos_err.max((c[i] - lc).abs());
+            }
+        }
+
+        println!(
+            "max sin err = {max_sin_err:e}, max cos err = {max_cos_err:e} \
+             over the real VSOP87A angle domain (|x| up to {max_abs_phase:e} rad)"
+        );
+
+        // Same 1e-12 bound simd_trig::tests::matches_libm_across_domain and
+        // elp_mpp02::tests::sincos_matches_libm_at_real_elp_phase_domain use,
+        // so all three tests hold the kernel to one documented standard. If
+        // this fails, STOP -- do not vectorize eval_series; the kernel is not
+        // safe at VSOP87A's real argument range and this is a correctness
+        // question for simd_trig.rs, not something to work around here.
+        assert!(
+            max_sin_err < 1e-12,
+            "max sin abs error {max_sin_err:e} over the real production VSOP87A \
+             angle domain exceeds 1e-12 -- the vector sincos kernel is not safe \
+             at this range; see docs/audit/2026-08-29-perf-investigation.md §3"
+        );
+        assert!(
+            max_cos_err < 1e-12,
+            "max cos abs error {max_cos_err:e} over the real production VSOP87A \
+             angle domain exceeds 1e-12 -- the vector sincos kernel is not safe \
+             at this range; see docs/audit/2026-08-29-perf-investigation.md §3"
+        );
     }
 }
