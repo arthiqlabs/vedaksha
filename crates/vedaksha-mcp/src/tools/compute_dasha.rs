@@ -66,19 +66,15 @@ impl DashaSystem {
 /// opposite by definition and accepting both invites an
 /// internally-inconsistent chart.
 ///
-/// Every field is `Option` — not because any of them is optional (all eight
-/// are required whenever `graha_signs` itself is required) — but so a
-/// caller who omits one field gets a specific "which field" error from
-/// [`validate`] rather than a generic JSON-deserialization failure that
-/// does not name the missing field.
-/// Natal sign of each graha, as supplied by the caller.
-///
-/// Fields are `Option<i32>`, not `u8`, deliberately. `u8` would reject a
-/// negative value inside `serde` before [`validate`] ever runs, yielding
-/// `invalid value: integer -1, expected u8` with no field name — and `-1` is
-/// a plausible caller mistake, being exactly what an off-by-one from a
-/// 1-indexed source produces. Widening the parse lets every range error reach
-/// [`validate`] and come back naming the offending graha.
+/// Every field is `Option<i32>`, and both halves of that are deliberate.
+/// `Option`, because although all eight are required whenever `graha_signs`
+/// is, a caller who omits one should be told *which* one by [`validate`]
+/// rather than get a generic deserialization failure. `i32` rather than
+/// `u8`, because `u8` rejects a negative inside `serde` before [`validate`]
+/// runs, yielding `invalid value: integer -1, expected u8` with no field
+/// name — and `-1` is a plausible mistake, being exactly what an off-by-one
+/// from a 1-indexed source produces. Widening the parse lets every range
+/// error reach [`validate`] and come back naming the offending graha.
 ///
 /// `deny_unknown_fields` is load-bearing rather than tidiness: `ketu` is
 /// deliberately absent because it is derived from `rahu`, and silently
@@ -146,7 +142,8 @@ pub struct ComputeDashaInput {
     /// Natal Moon sidereal longitude in degrees \[0, 360).
     /// Required for Vimshottari, Ashtottari, Yogini.
     pub moon_longitude: Option<f64>,
-    /// Lagna (ascendant) sign 1–12 (1 = Aries).
+    /// Lagna (ascendant) sign 0–11 (0 = Aries), the same 0-indexed
+    /// convention `compute_natal_chart` serves as `sign_index`.
     /// Required for Chara, Narayana.
     pub lagna_sign: Option<u8>,
     /// Natal sign positions of the seven classical grahas plus Rahu.
@@ -195,9 +192,14 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "lagna_sign": {
                     "type": "integer",
-                    "description": "Lagna (ascendant) sign 1–12 (1 = Aries). Required for Chara, Narayana.",
-                    "minimum": 1,
-                    "maximum": 12
+                    "description": "Lagna (ascendant) sign 0–11 (0 = Aries). Required for \
+                        Chara, Narayana. This is the same 0-indexed convention \
+                        compute_natal_chart, compute_bhavas and compute_vargas all serve as \
+                        `sign_index`, so an ascendant read from any of them passes straight \
+                        through. Through v8.1.0 this one parameter was 1-indexed while every \
+                        other tool was 0-indexed; that mismatch is resolved here.",
+                    "minimum": 0,
+                    "maximum": 11
                 },
                 "graha_signs": {
                     "type": "object",
@@ -234,64 +236,91 @@ pub fn definition() -> super::ToolDefinition {
             "required": ["birth_jd"]
         }),
         annotations: super::ToolAnnotations::READ_ONLY,
+        // The five systems return FOUR different envelopes, so this is a
+        // `oneOf` rather than one object. Through v8.1.0 it declared the
+        // Vimshottari shape unconditionally, with moon_nakshatra /
+        // initial_balance / maha_dashas all "required" -- false for
+        // Ashtottari (which serves `periods` and `starting_lord`), false for
+        // Yogini (`maha_periods`, `starting_yogini_index`), and false for
+        // Chara/Narayana, which return no nakshatra at all. Nothing caught it
+        // because `structured_key` is None, so no structuredContent is
+        // emitted and the output-schema tests had nothing to check against.
         output_schema: Some(serde_json::json!({
             "type": "object",
-            "properties": {
-                "moon_nakshatra": {
-                    "type": "string",
-                    "description": "Birth nakshatra of the Moon, which sets the starting mahadasha."
+            "description": "Envelope depends on `system`; see the four variants below. \
+                Every period carries start_jd/end_jd on the same UT1 scale as birth_jd.",
+            "oneOf": [
+                {
+                    "title": "Vimshottari",
+                    "type": "object",
+                    "properties": {
+                        "moon_nakshatra": { "type": "string" },
+                        "initial_balance": { "type": "number" },
+                        "maha_dashas": { "type": "array", "items": { "type": "object" } }
+                    },
+                    "required": ["moon_nakshatra", "initial_balance", "maha_dashas"]
                 },
-                "initial_balance": {
-                    "type": "number",
-                    "description": "Fraction of the first mahadasha already elapsed at birth, in [0, 1)."
+                {
+                    "title": "Ashtottari",
+                    "type": "object",
+                    "properties": {
+                        "moon_nakshatra": { "type": "string" },
+                        "starting_lord": { "type": "string" },
+                        "initial_balance": { "type": "number" },
+                        "periods": { "type": "array", "items": { "type": "object" } }
+                    },
+                    "required": ["moon_nakshatra", "starting_lord", "initial_balance", "periods"]
                 },
-                "maha_dashas": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "lord": {
-                                "type": "string",
-                                "description": "Ruling graha of the period."
-                            },
-                            "level": {
-                                "type": "integer",
-                                "description": "Nesting depth: 1 = mahadasha, 2 = antardasha, 3 = pratyantardasha."
-                            },
-                            "start_jd": {
-                                "type": "number",
-                                "description": "Start of the period as a Julian Day."
-                            },
-                            "end_jd": {
-                                "type": "number",
-                                "description": "End of the period as a Julian Day."
-                            },
-                            "duration_days": {
-                                "type": "number",
-                                "description": "Length of the period in days."
-                            },
-                            "sub_periods": {
-                                "type": "array",
-                                "items": {
-                                    "type": "object"
-                                },
-                                "description": "Nested periods one level down; empty at the deepest level requested."
-                            }
+                {
+                    "title": "Yogini",
+                    "type": "object",
+                    "properties": {
+                        "moon_nakshatra": { "type": "string" },
+                        "starting_yogini_index": { "type": "integer" },
+                        "initial_balance": { "type": "number" },
+                        "maha_periods": { "type": "array", "items": { "type": "object" } }
+                    },
+                    "required": [
+                        "moon_nakshatra", "starting_yogini_index",
+                        "initial_balance", "maha_periods"
+                    ]
+                },
+                {
+                    "title": "Chara / Narayana",
+                    "type": "object",
+                    "description": "Sign-based systems. Twelve single-level periods, one \
+                        per rashi, in dasha order. No nakshatra or balance: these systems \
+                        are anchored on the lagna and the grahas' natal signs, not the Moon.",
+                    "properties": {
+                        "lagna_sign": {
+                            "type": "integer",
+                            "description": "Lagna the sequence starts from, 0-11 (0 = Aries)."
                         },
-                        "required": [
-                            "lord",
-                            "level",
-                            "start_jd",
-                            "end_jd",
-                            "duration_days"
-                        ]
-                    }
+                        "periods": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "sign_index": { "type": "integer" },
+                                    "sign_name": { "type": "string" },
+                                    "start_jd": { "type": "number" },
+                                    "end_jd": { "type": "number" },
+                                    "duration_years": {
+                                        "type": "number",
+                                        "description": "Counted from this sign to the sign \
+                                            its lord occupies in THIS chart, so it varies \
+                                            between charts."
+                                    }
+                                },
+                                "required": [
+                                    "sign_index", "sign_name",
+                                    "start_jd", "end_jd", "duration_years"
+                                ]
+                            }
+                        }
+                    },
+                    "required": ["lagna_sign", "periods"]
                 }
-            },
-            "required": [
-                "moon_nakshatra",
-                "initial_balance",
-                "maha_dashas"
             ]
         })),
         structured_key: None,
@@ -328,10 +357,10 @@ pub fn validate(input: &ComputeDashaInput) -> Result<DashaSystem, McpError> {
         let sign = input.lagna_sign.ok_or_else(|| {
             McpError::invalid_parameter("lagna_sign", "required for Chara and Narayana")
         })?;
-        if !(1..=12).contains(&sign) {
+        if !(0..=11).contains(&sign) {
             return Err(McpError::invalid_parameter(
                 "lagna_sign",
-                "must be an integer in [1, 12]",
+                "must be an integer in [0, 11]",
             ));
         }
 
@@ -409,7 +438,7 @@ mod tests {
             system: Some("Chara".to_string()),
             birth_jd: 2_451_545.0,
             moon_longitude: None,
-            lagna_sign: Some(1),
+            lagna_sign: Some(0),
             graha_signs: Some(valid_graha_signs()),
             levels: None,
         }
@@ -553,9 +582,18 @@ mod tests {
     }
 
     #[test]
-    fn validate_rejects_lagna_sign_zero() {
+    fn validate_accepts_lagna_sign_zero_as_aries() {
+        // 0 is Aries and VALID as of v9. It was rejected through v8.1.0,
+        // when this parameter alone was 1-indexed.
         let mut input = lagna_input();
         input.lagna_sign = Some(0);
+        assert!(validate(&input).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_lagna_sign_above_eleven() {
+        let mut input = lagna_input();
+        input.lagna_sign = Some(12);
         assert_eq!(
             validate(&input).unwrap_err().error_code,
             "INVALID_PARAMETER"
@@ -563,7 +601,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_rejects_lagna_sign_above_twelve() {
+    fn validate_rejects_lagna_sign_far_above_range() {
         let mut input = lagna_input();
         input.lagna_sign = Some(13);
         assert_eq!(

@@ -521,13 +521,17 @@ impl McpServer {
             // one sign off from the true lagna -- exactly the defect that went
             // unnoticed from v2.4.0 through v8.0.0.
             DashaSystem::Chara => {
-                let lagna_0indexed = input.lagna_sign.expect("validated above") - 1;
+                // No conversion: `lagna_sign` is 0-indexed on this surface as of
+                // v9, matching every other tool's `sign_index`. Through v8.1.0
+                // it was 1-indexed here alone and converted at this point,
+                // which is where the v2.4.0-to-v8.0.0 off-by-one lived. Removing
+                // the conversion removes the defect class, not just the defect.
+                let lagna = input.lagna_sign.expect("validated above");
                 let positions = input
                     .graha_signs
                     .expect("validated above")
                     .into_graha_signs();
-                let periods =
-                    dasha::chara::compute_chara(lagna_0indexed, input.birth_jd, positions);
+                let periods = dasha::chara::compute_chara(lagna, input.birth_jd, positions);
                 // Wrapped in the same `{lagna_sign, periods}` envelope
                 // Narayana returns. Through v8.1.0 Chara served a bare array
                 // while Narayana served this object, for two systems that now
@@ -543,18 +547,23 @@ impl McpServer {
                 // pre-existing cross-tool wart disclosed in
                 // CHANGELOG-v8.0.0.md and deliberately not resolved here.
                 Ok(serde_json::json!({
-                    "lagna_sign": lagna_0indexed,
+                    "lagna_sign": lagna,
                     "periods": periods,
                 }))
             }
             DashaSystem::Narayana => {
-                let lagna_0indexed = input.lagna_sign.expect("validated above") - 1;
+                // No conversion: `lagna_sign` is 0-indexed on this surface as of
+                // v9, matching every other tool's `sign_index`. Through v8.1.0
+                // it was 1-indexed here alone and converted at this point,
+                // which is where the v2.4.0-to-v8.0.0 off-by-one lived. Removing
+                // the conversion removes the defect class, not just the defect.
+                let lagna = input.lagna_sign.expect("validated above");
                 let positions = input
                     .graha_signs
                     .expect("validated above")
                     .into_graha_signs();
                 serde_json::to_value(dasha::narayana::compute_narayana(
-                    lagna_0indexed,
+                    lagna,
                     input.birth_jd,
                     positions,
                 ))
@@ -2077,40 +2086,44 @@ mod tests {
     /// The 1-indexed to 0-indexed `lagna_sign` conversion, at both ends of
     /// the range, for both Chara and Narayana.
     ///
-    /// The schema documents `lagna_sign` as 1-indexed (1 = Aries);
-    /// `compute_chara`/`compute_narayana` take 0-indexed. Shipping without
-    /// that conversion is exactly the off-by-one defect that went unnoticed
-    /// from v2.4.0 through v8.0.0. Both ends are checked because an
-    /// off-by-two or sign-flipped conversion could pass an Aries-only check
-    /// by coincidence.
+    /// As of v9 `lagna_sign` is 0-indexed on this surface, matching the
+    /// `sign_index` every other tool serves, and the dispatch passes it to
+    /// `compute_chara`/`compute_narayana` unchanged. Through v8.1.0 it was
+    /// 1-indexed here alone and converted in the dispatch — and a dispatch
+    /// that forgot to convert is exactly the off-by-one that went unnoticed
+    /// from v2.4.0 through v8.0.0. There is now no conversion to forget.
+    ///
+    /// This still checks both ends of the range rather than trusting that:
+    /// a stray conversion reintroduced anywhere (or an inverted `11 - n`)
+    /// would break one end while an Aries-only check passed by coincidence.
     #[test]
-    fn compute_dasha_chara_and_narayana_lagna_sign_is_1indexed() {
+    fn compute_dasha_chara_and_narayana_lagna_sign_is_0indexed() {
         let s = server();
         for system in ["Chara", "Narayana"] {
             let aries = dasha_text(
                 &s,
                 &format!(
-                    r#"{{"system":"{system}","lagna_sign":1,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                    r#"{{"system":"{system}","lagna_sign":0,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
                 ),
             );
             let periods = periods_array(system, &aries);
             assert_eq!(
                 periods[0]["sign_name"].as_str().unwrap(),
                 "Aries",
-                "{system} lagna_sign 1 must start on Aries, got: {periods:?}"
+                "{system} lagna_sign 0 must start on Aries, got: {periods:?}"
             );
 
             let pisces = dasha_text(
                 &s,
                 &format!(
-                    r#"{{"system":"{system}","lagna_sign":12,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                    r#"{{"system":"{system}","lagna_sign":11,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
                 ),
             );
             let periods = periods_array(system, &pisces);
             assert_eq!(
                 periods[0]["sign_name"].as_str().unwrap(),
                 "Pisces",
-                "{system} lagna_sign 12 must start on Pisces, got: {periods:?}"
+                "{system} lagna_sign 11 must start on Pisces, got: {periods:?}"
             );
         }
     }
@@ -2140,7 +2153,7 @@ mod tests {
         let s = server();
         let args = |system: &str| {
             format!(
-                r#"{{"system":"{system}","lagna_sign":11,"birth_jd":2451545.0,
+                r#"{{"system":"{system}","lagna_sign":10,"birth_jd":2451545.0,
                     "graha_signs":{{"sun":9,"moon":2,"mars":1,"mercury":10,
                     "jupiter":10,"venus":10,"saturn":4,"rahu":2}}}}"#
             )
@@ -2182,10 +2195,22 @@ mod tests {
         let dasha = dasha_text(
             &s,
             &format!(
-                r#"{{"system":"Chara","lagna_sign":11,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                r#"{{"system":"Chara","lagna_sign":10,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
             ),
         );
         let periods = periods_array("Chara", &dasha);
+        // The BPHS worked chart is an AQUARIUS-lagna chart, so assert the
+        // sequence actually starts there. Durations depend only on the graha
+        // positions and never on the lagna, so without this the lagna value
+        // is inert and a wrong ascendant would pass every assertion below --
+        // which is exactly what happened when this parameter switched from
+        // 1-indexed to 0-indexed and these fixtures kept their old value.
+        assert_eq!(
+            periods[0]["sign_name"].as_str().unwrap(),
+            "Aquarius",
+            "BPHS ch. 46's worked chart has an Aquarius lagna; lagna_sign is \
+             0-indexed, so Aquarius is 10"
+        );
         let mut by_sign = std::collections::HashMap::new();
         for p in periods {
             by_sign.insert(
@@ -2213,7 +2238,7 @@ mod tests {
         let dasha = dasha_text(
             &s,
             &format!(
-                r#"{{"system":"Narayana","lagna_sign":11,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                r#"{{"system":"Narayana","lagna_sign":10,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
             ),
         );
         let periods = periods_array("Narayana", &dasha);
