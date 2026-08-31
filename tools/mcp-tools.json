@@ -215,8 +215,72 @@
       "inputSchema": {
         "properties": {
           "birth_jd": {
-            "description": "Birth Julian Day used as the dasha epoch, in UT1 (Universal Time) — not TT, not TDB, i.e. the same scale as compute_natal_chart's julian_day. Dasha computation is ephemeris-free, so this epoch is carried through rather than converted: every returned start_jd/end_jd is on the same UT1 scale as the input.",
+            "description": "Birth Julian Day used as the dasha epoch, in UT1 (Universal Time) — not TT, not TDB, i.e. the same scale as compute_natal_chart's julian_day. This epoch is only added to, never converted: every returned start_jd/end_jd is on the same UT1 scale as the input.",
             "type": "number"
+          },
+          "graha_signs": {
+            "description": "Natal sign positions of the seven classical grahas plus Rahu, 0-11 each (0 = Aries), as served by compute_natal_chart's sign_index. Required for Chara, Narayana, whose period lengths are chart-dependent — each sign's duration is the count from that sign to the sign its lord actually occupies. Sign indices are used rather than longitudes: they chain directly from compute_natal_chart's sign_index with no conversion, carry no tropical-vs-sidereal ambiguity, and avoid the boundary question of a planet at exactly 30.0 degrees. Ketu is not a field: it is derived as (rahu + 6) mod 12, since the two lunar nodes are always exactly opposite.",
+            "properties": {
+              "jupiter": {
+                "description": "Jupiter's natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "mars": {
+                "description": "Mars's natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "mercury": {
+                "description": "Mercury's natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "moon": {
+                "description": "Moon's natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "rahu": {
+                "description": "Rahu's (north lunar node's) natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "saturn": {
+                "description": "Saturn's natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sun": {
+                "description": "Sun's natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "venus": {
+                "description": "Venus's natal sign, 0-11 (0 = Aries).",
+                "maximum": 11,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "sun",
+              "moon",
+              "mars",
+              "mercury",
+              "jupiter",
+              "venus",
+              "saturn",
+              "rahu"
+            ],
+            "type": "object"
           },
           "lagna_sign": {
             "description": "Lagna (ascendant) sign 1–12 (1 = Aries). Required for Chara, Narayana.",

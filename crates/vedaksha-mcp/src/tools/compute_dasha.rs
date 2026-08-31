@@ -54,6 +54,65 @@ impl DashaSystem {
     }
 }
 
+/// Natal sign positions (0 = Aries .. 11 = Pisces) of the seven classical
+/// grahas plus Rahu, as served by `compute_natal_chart`'s `sign_index`
+/// field. Required, with every field, when `system` is `Chara` or
+/// `Narayana` — their dasha durations are chart-dependent (see
+/// [`crate::server`]'s `compute_dasha` dispatch and
+/// `vedaksha_vedic::dasha::chara`'s module doc for the rule).
+///
+/// Ketu is deliberately NOT a field here: it is derived internally as
+/// `(rahu + 6) % 12`, since the two lunar nodes are always exactly
+/// opposite by definition and accepting both invites an
+/// internally-inconsistent chart.
+///
+/// Every field is `Option` — not because any of them is optional (all eight
+/// are required whenever `graha_signs` itself is required) — but so a
+/// caller who omits one field gets a specific "which field" error from
+/// [`validate`] rather than a generic JSON-deserialization failure that
+/// does not name the missing field.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+pub struct GrahaSignsInput {
+    /// Sun's natal sign, 0–11 (0 = Aries).
+    pub sun: Option<u8>,
+    /// Moon's natal sign, 0–11 (0 = Aries).
+    pub moon: Option<u8>,
+    /// Mars's natal sign, 0–11 (0 = Aries).
+    pub mars: Option<u8>,
+    /// Mercury's natal sign, 0–11 (0 = Aries).
+    pub mercury: Option<u8>,
+    /// Jupiter's natal sign, 0–11 (0 = Aries).
+    pub jupiter: Option<u8>,
+    /// Venus's natal sign, 0–11 (0 = Aries).
+    pub venus: Option<u8>,
+    /// Saturn's natal sign, 0–11 (0 = Aries).
+    pub saturn: Option<u8>,
+    /// Rahu's (north lunar node's) natal sign, 0–11 (0 = Aries).
+    pub rahu: Option<u8>,
+}
+
+impl GrahaSignsInput {
+    /// Convert to the library's [`vedaksha_vedic::dasha::chara::GrahaSigns`].
+    ///
+    /// # Panics
+    /// Panics if any field is `None`. Only call after [`validate`] has
+    /// confirmed every field is present — the same "validated above"
+    /// contract `moon_longitude` and `lagna_sign` already rely on below.
+    #[must_use]
+    pub fn into_graha_signs(self) -> vedaksha_vedic::dasha::chara::GrahaSigns {
+        vedaksha_vedic::dasha::chara::GrahaSigns {
+            sun: self.sun.expect("validated above"),
+            moon: self.moon.expect("validated above"),
+            mars: self.mars.expect("validated above"),
+            mercury: self.mercury.expect("validated above"),
+            jupiter: self.jupiter.expect("validated above"),
+            venus: self.venus.expect("validated above"),
+            saturn: self.saturn.expect("validated above"),
+            rahu: self.rahu.expect("validated above"),
+        }
+    }
+}
+
 /// Input parameters for the `compute_dasha` tool.
 #[derive(Debug, Clone, Deserialize)]
 pub struct ComputeDashaInput {
@@ -63,8 +122,7 @@ pub struct ComputeDashaInput {
     /// Time) — not TT, not TDB, i.e. the same scale as
     /// `compute_natal_chart`'s `julian_day`.
     ///
-    /// Dasha computation is ephemeris-free — this epoch is only added to, so
-    /// the scale is carried through rather than converted, and every returned
+    /// This epoch is only added to, never converted, so every returned
     /// `start_jd`/`end_jd` is on the same UT1 scale as the input.
     pub birth_jd: f64,
     /// Natal Moon sidereal longitude in degrees \[0, 360).
@@ -73,6 +131,9 @@ pub struct ComputeDashaInput {
     /// Lagna (ascendant) sign 1–12 (1 = Aries).
     /// Required for Chara, Narayana.
     pub lagna_sign: Option<u8>,
+    /// Natal sign positions of the seven classical grahas plus Rahu.
+    /// Required for Chara, Narayana; irrelevant otherwise.
+    pub graha_signs: Option<GrahaSignsInput>,
     /// Number of nested dasha levels (1–5). Defaults to 3.
     /// Ignored by Chara and Narayana, which return a single level.
     pub levels: Option<u8>,
@@ -100,10 +161,9 @@ pub fn definition() -> super::ToolDefinition {
                     "type": "number",
                     "description": "Birth Julian Day used as the dasha epoch, in \
                         UT1 (Universal Time) — not TT, not TDB, i.e. the same scale as \
-                        compute_natal_chart's julian_day. Dasha computation is \
-                        ephemeris-free, so this epoch is carried through rather than \
-                        converted: every returned start_jd/end_jd is on the same UT1 \
-                        scale as the input."
+                        compute_natal_chart's julian_day. This epoch is only added to, \
+                        never converted: every returned start_jd/end_jd is on the same \
+                        UT1 scale as the input."
                 },
                 "moon_longitude": {
                     "type": "number",
@@ -116,6 +176,30 @@ pub fn definition() -> super::ToolDefinition {
                     "description": "Lagna (ascendant) sign 1–12 (1 = Aries). Required for Chara, Narayana.",
                     "minimum": 1,
                     "maximum": 12
+                },
+                "graha_signs": {
+                    "type": "object",
+                    "description": "Natal sign positions of the seven classical grahas plus \
+                        Rahu, 0-11 each (0 = Aries), as served by compute_natal_chart's \
+                        sign_index. Required for Chara, Narayana, whose period lengths are \
+                        chart-dependent — each sign's duration is the count from that sign to \
+                        the sign its lord actually occupies. Sign indices are used rather than \
+                        longitudes: they chain directly from compute_natal_chart's sign_index \
+                        with no conversion, carry no tropical-vs-sidereal ambiguity, and avoid \
+                        the boundary question of a planet at exactly 30.0 degrees. Ketu is not \
+                        a field: it is derived as (rahu + 6) mod 12, since the two lunar nodes \
+                        are always exactly opposite.",
+                    "properties": {
+                        "sun":     { "type": "integer", "description": "Sun's natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 },
+                        "moon":    { "type": "integer", "description": "Moon's natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 },
+                        "mars":    { "type": "integer", "description": "Mars's natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 },
+                        "mercury": { "type": "integer", "description": "Mercury's natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 },
+                        "jupiter": { "type": "integer", "description": "Jupiter's natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 },
+                        "venus":   { "type": "integer", "description": "Venus's natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 },
+                        "saturn":  { "type": "integer", "description": "Saturn's natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 },
+                        "rahu":    { "type": "integer", "description": "Rahu's (north lunar node's) natal sign, 0-11 (0 = Aries).", "minimum": 0, "maximum": 11 }
+                    },
+                    "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "rahu"]
                 },
                 "levels": {
                     "type": "integer",
@@ -228,6 +312,30 @@ pub fn validate(input: &ComputeDashaInput) -> Result<DashaSystem, McpError> {
                 "must be an integer in [1, 12]",
             ));
         }
+
+        let graha_signs = input.graha_signs.ok_or_else(|| {
+            McpError::invalid_parameter("graha_signs", "required for Chara and Narayana")
+        })?;
+        for (name, value) in [
+            ("graha_signs.sun", graha_signs.sun),
+            ("graha_signs.moon", graha_signs.moon),
+            ("graha_signs.mars", graha_signs.mars),
+            ("graha_signs.mercury", graha_signs.mercury),
+            ("graha_signs.jupiter", graha_signs.jupiter),
+            ("graha_signs.venus", graha_signs.venus),
+            ("graha_signs.saturn", graha_signs.saturn),
+            ("graha_signs.rahu", graha_signs.rahu),
+        ] {
+            let value = value.ok_or_else(|| {
+                McpError::invalid_parameter(name, "required when system is Chara or Narayana")
+            })?;
+            if value > 11 {
+                return Err(McpError::invalid_parameter(
+                    name,
+                    "must be an integer in [0, 11]",
+                ));
+            }
+        }
     }
 
     if let Some(levels) = input.levels
@@ -252,7 +360,21 @@ mod tests {
             birth_jd: 2_451_545.0, // J2000
             moon_longitude: Some(123.45),
             lagna_sign: None,
+            graha_signs: None,
             levels: None,
+        }
+    }
+
+    fn valid_graha_signs() -> GrahaSignsInput {
+        GrahaSignsInput {
+            sun: Some(9),
+            moon: Some(2),
+            mars: Some(1),
+            mercury: Some(10),
+            jupiter: Some(10),
+            venus: Some(10),
+            saturn: Some(4),
+            rahu: Some(2),
         }
     }
 
@@ -262,6 +384,7 @@ mod tests {
             birth_jd: 2_451_545.0,
             moon_longitude: None,
             lagna_sign: Some(1),
+            graha_signs: Some(valid_graha_signs()),
             levels: None,
         }
     }
@@ -320,6 +443,57 @@ mod tests {
         input.lagna_sign = None;
         let err = validate(&input).unwrap_err();
         assert_eq!(err.error_code, "INVALID_PARAMETER");
+    }
+
+    #[test]
+    fn validate_accepts_narayana_with_graha_signs() {
+        let mut input = lagna_input();
+        input.system = Some("Narayana".to_string());
+        assert_eq!(validate(&input).unwrap(), DashaSystem::Narayana);
+    }
+
+    #[test]
+    fn validate_rejects_chara_without_graha_signs() {
+        let mut input = lagna_input();
+        input.graha_signs = None;
+        let err = validate(&input).unwrap_err();
+        assert_eq!(err.error_code, "INVALID_PARAMETER");
+    }
+
+    #[test]
+    fn validate_rejects_chara_missing_rahu() {
+        let mut input = lagna_input();
+        let mut signs = valid_graha_signs();
+        signs.rahu = None;
+        input.graha_signs = Some(signs);
+        let err = validate(&input).unwrap_err();
+        assert_eq!(err.error_code, "INVALID_PARAMETER");
+        assert!(
+            err.message.contains("rahu"),
+            "error should name the missing field, got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn validate_rejects_chara_graha_sign_out_of_range() {
+        let mut input = lagna_input();
+        let mut signs = valid_graha_signs();
+        signs.mars = Some(12);
+        input.graha_signs = Some(signs);
+        let err = validate(&input).unwrap_err();
+        assert_eq!(err.error_code, "INVALID_PARAMETER");
+        assert!(
+            err.message.contains("mars"),
+            "error should name the offending field, got: {}",
+            err.message
+        );
+    }
+
+    #[test]
+    fn validate_moon_based_ignores_missing_graha_signs() {
+        // graha_signs is irrelevant for Moon-based systems.
+        assert!(validate(&moon_input()).is_ok());
     }
 
     #[test]
