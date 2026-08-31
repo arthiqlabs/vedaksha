@@ -17,12 +17,14 @@
 //!
 //! Source: Jaimini Sutras Ch. 2.
 //!
-//! **Divergence from `dasha::chara` (disclosed, not yet resolved):** Chara Dasha's direction
-//! (same odd/even base rule) applies a fixed-sign (Sthira) exception for Taurus, Scorpio, Leo,
-//! and Aquarius — see `dasha::chara`'s module doc and `DATA_PROVENANCE.md` Fix 11. This module
-//! does not apply that exception. Whether Narayana Dasha's own sutra source calls for the same
-//! exception has not been independently researched; until it is, this is a known, stated gap
-//! rather than a considered design choice.
+//! **Divergence from `dasha::chara` (disclosed, not yet resolved):** this module's direction is
+//! the plain odd/even rule, tested directly on the lagna, with no exception. `dasha::chara`'s
+//! direction is tested at the 9th sign from the lagna against a different classification
+//! (vishama-pada/sama-pada) — see `dasha::chara`'s module doc and `DATA_PROVENANCE.md` Fix 12.
+//! The two rules agree on 8 of 12 lagnas and disagree on exactly Gemini, Virgo, Sagittarius, and
+//! Pisces. Whether Narayana Dasha's own sutra source calls for the same 9th-house test has not
+//! been independently researched; until it is, this is a known, stated gap rather than a
+//! considered design choice.
 
 use serde::{Deserialize, Serialize};
 
