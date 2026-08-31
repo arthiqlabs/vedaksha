@@ -227,10 +227,14 @@ fn light_time_geocentric(
 /// Geocentric vector `[x, y, z]` (AU, J2000 mean equatorial) to `body` at the
 /// retarded time `jd − tau`.
 ///
-/// For the Moon, scales the rel-EMB vector by `MOON_GEO_FACTOR`. For other
-/// bodies, subtracts Earth's position obtained by first-order extrapolation of
-/// `earth_anchor` (Earth's state at the observation time `jd`) to `jd − tau` —
-/// see [`light_time_geocentric`].
+/// For the Moon, scales the rel-EMB vector by `MOON_GEO_FACTOR`. Only the
+/// Moon's position is ever used here — its velocity has no consumer on this
+/// path — so this calls [`EphemerisProvider::moon_position`] rather than
+/// [`EphemerisProvider::compute_state`], skipping a velocity computation that
+/// would only be discarded (`docs/audit/2026-08-29-perf-investigation.md`
+/// #5). For other bodies, subtracts Earth's position obtained by first-order
+/// extrapolation of `earth_anchor` (Earth's state at the observation time
+/// `jd`) to `jd − tau` — see [`light_time_geocentric`].
 fn retarded_geocentric(
     provider: &dyn EphemerisProvider,
     body: Body,
@@ -238,14 +242,15 @@ fn retarded_geocentric(
     tau: f64,
     earth_anchor: Option<StateVector>,
 ) -> Result<[f64; 3], ComputeError> {
-    let target_state = provider.compute_state(body, jd - tau)?;
     if body == Body::Moon {
+        let moon_pos = provider.moon_position(jd - tau)?;
         return Ok([
-            target_state.position.x * MOON_GEO_FACTOR,
-            target_state.position.y * MOON_GEO_FACTOR,
-            target_state.position.z * MOON_GEO_FACTOR,
+            moon_pos.x * MOON_GEO_FACTOR,
+            moon_pos.y * MOON_GEO_FACTOR,
+            moon_pos.z * MOON_GEO_FACTOR,
         ]);
     }
+    let target_state = provider.compute_state(body, jd - tau)?;
     let earth = earth_anchor.expect("non-Moon body has an Earth anchor");
     let (earth_pos, earth_vel) = (earth.position, earth.velocity);
     let dt = -tau;

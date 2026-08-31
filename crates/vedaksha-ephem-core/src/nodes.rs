@@ -23,7 +23,7 @@
 //!
 //! Source: Meeus, "Astronomical Algorithms" 2nd ed., Ch. 47.
 
-use crate::analytical::elp_mpp02::{self, MoonRectangular};
+use crate::analytical::elp_mpp02;
 use crate::bodies::Body;
 use crate::julian;
 
@@ -103,7 +103,7 @@ fn true_node_meeus_truncated(jd: f64) -> f64 {
 /// Montenbruck & Gill 2000).
 #[must_use]
 pub fn true_node_osculating(jd: f64) -> f64 {
-    osculating_node(elp_mpp02::elp_geocentric_of_date, jd)
+    osculating_node(elp_mpp02::elp_geocentric_position_of_date, jd)
 }
 
 /// The osculating ascending node in the **J2000** mean ecliptic.
@@ -122,46 +122,42 @@ pub fn true_node_osculating(jd: f64) -> f64 {
 /// Requires the `analytical` module (ELP/MPP02).
 #[must_use]
 pub fn true_node_osculating_j2000(jd: f64) -> f64 {
-    osculating_node(elp_mpp02::elp_geocentric, jd)
+    osculating_node(elp_mpp02::elp_geocentric_position, jd)
 }
 
 /// Shared osculating-node evaluation, parameterised by the frame the lunar
-/// state vector is sampled in. The returned longitude is in whatever frame
+/// position is sampled in. The returned longitude is in whatever frame
 /// `sample` produces.
-fn osculating_node(sample: fn(f64) -> MoonRectangular, jd: f64) -> f64 {
+///
+/// `sample` returns position only, `(x, y, z)`: this function derives its own
+/// velocity by central difference of three position samples, so a full
+/// state's velocity/omega half was never used here even before
+/// `docs/audit/2026-08-29-perf-investigation.md` #5 — `sample` used to be
+/// `fn(f64) -> MoonRectangular`, and only `.x/.y/.z` of each of the three
+/// calls was ever read.
+fn osculating_node(sample: fn(f64) -> (f64, f64, f64), jd: f64) -> f64 {
     // Use a tight differentiation step for velocity (0.001 day ≈ 86 seconds).
     // The osculating node is sensitive to velocity direction.
-    let moon = {
-        let dt = 0.001_f64;
-        let m0 = sample(jd);
-        let mp = sample(jd + dt);
-        let mm = sample(jd - dt);
-        let inv_2dt = 1.0 / (2.0 * dt);
-        MoonRectangular {
-            x: m0.x,
-            y: m0.y,
-            z: m0.z,
-            vx: (mp.x - mm.x) * inv_2dt,
-            vy: (mp.y - mm.y) * inv_2dt,
-            vz: (mp.z - mm.z) * inv_2dt,
-        }
-    };
+    let dt = 0.001_f64;
+    let (x0, y0, z0) = sample(jd);
+    let (xp, yp, zp) = sample(jd + dt);
+    let (xm, ym, zm) = sample(jd - dt);
+    let inv_2dt = 1.0 / (2.0 * dt);
+    let vx = (xp - xm) * inv_2dt;
+    let vy = (yp - ym) * inv_2dt;
+    let vz = (zp - zm) * inv_2dt;
 
     // Avoid division by zero if Moon is exactly on the ecliptic
     // with zero vertical velocity (astronomically impossible, but safe).
-    let vz = if moon.vz.abs() < 1e-15 {
-        1e-15
-    } else {
-        moon.vz
-    };
+    let vz = if vz.abs() < 1e-15 { 1e-15 } else { vz };
 
     // Find where the tangent line to the orbit crosses z = 0.
-    let fac = moon.z / vz;
+    let fac = z0 / vz;
     let sgn = vz.signum();
 
     // Node direction vector (ascending node selected by sign of vz).
-    let nx = (moon.x - fac * moon.vx) * sgn;
-    let ny = (moon.y - fac * moon.vy) * sgn;
+    let nx = (x0 - fac * vx) * sgn;
+    let ny = (y0 - fac * vy) * sgn;
 
     let lon_rad = libm::atan2(ny, nx);
     let lon_deg = lon_rad * 180.0 / core::f64::consts::PI;

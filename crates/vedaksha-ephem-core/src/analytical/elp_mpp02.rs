@@ -68,10 +68,12 @@ use crate::analytical::simd_trig::sincos_f64x4;
 ///
 /// Instrumentation, not part of the numerical API — exists so regression
 /// guards (`tests/chart_lunar_evals.rs`) can count *every* real ELP/MPP02
-/// evaluation. Incremented inside [`vur_series`], the function all three
-/// public entry points ([`elp_geocentric`], [`elp_geocentric_of_date`],
-/// [`elp_geocentric_with_fit`]) share, so it counts evaluations invisible to
-/// a trait-level wrapper around
+/// evaluation. Incremented inside [`vur_series`] and its position-only
+/// sibling [`vur_series_position`] — together the two functions every public
+/// entry point ([`elp_geocentric`], [`elp_geocentric_of_date`],
+/// [`elp_geocentric_with_fit`], [`elp_geocentric_position`],
+/// [`elp_geocentric_position_of_date`]) shares — so it counts evaluations
+/// invisible to a trait-level wrapper around
 /// [`crate::jpl::EphemerisProvider::compute_state`] —
 /// `AnalyticalProvider::compute_state(EarthMoonBarycenter, jd)` calls
 /// `moon_state(jd)` -> [`elp_geocentric`] internally, never passing through
@@ -174,6 +176,50 @@ pub fn elp_geocentric_with_fit(jd: f64, fit: Fit) -> MoonRectangular {
 
     // Apply Laskar P/Q rotation to land in the J2000 ecliptic frame.
     apply_pq_rotation(xyz_date, t)
+}
+
+/// Geocentric Moon **position only** (no velocity) in mean ecliptic and
+/// equinox of **J2000** (LLR fit).
+///
+/// Position in km, in the inertial mean ecliptic and equinox of J2000 — the
+/// same frame and units as [`elp_geocentric`]'s position fields. Every value
+/// this returns is bit-for-bit identical to the corresponding
+/// `(elp_geocentric(jd).x, .y, .z)`; see the `elp_geocentric_position_*`
+/// tests below. It exists because two production callers
+/// ([`crate::coordinates::retarded_geocentric`] for the Moon body, and
+/// [`crate::nodes::osculating_node`]) only ever read the position half of a
+/// lunar state, so computing the velocity/omega half for them is pure waste
+/// (`docs/audit/2026-08-29-perf-investigation.md` #5).
+#[must_use]
+pub fn elp_geocentric_position(jd: f64) -> (f64, f64, f64) {
+    let (v, u, r) = vur_series_position(jd, Fit::Llr);
+    let t = (jd - J2000) / DAYS_PER_CENTURY;
+    let xyz_date = rectangular_from_spherical_position(v, u, r);
+    apply_pq_rotation_position(xyz_date, t)
+}
+
+/// Geocentric Moon **position only** (no velocity) in mean ecliptic and
+/// equinox of **date** (LLR fit).
+///
+/// Position-only counterpart of [`elp_geocentric_of_date`]; see
+/// [`elp_geocentric_position`] for why this exists. Bit-for-bit identical to
+/// `(elp_geocentric_of_date(jd).x, .y, .z)`.
+#[must_use]
+pub fn elp_geocentric_position_of_date(jd: f64) -> (f64, f64, f64) {
+    let (v, u, r) = vur_series_position(jd, Fit::Llr);
+    let tau = (jd - J2000) / DAYS_PER_CENTURY;
+
+    // Add precession of date (in radians) to longitude — same formula as
+    // elp_geocentric_of_date, position terms only.
+    let prec = (P_PA_LIN + P_PA_DELTA) * tau
+        + P_PA_QUAD * tau * tau
+        + P_PA_CUBE * tau * tau * tau
+        + P_PA_QUART * tau * tau * tau * tau;
+
+    let v_d = v + prec;
+
+    // Spherical → rectangular in the (date) ecliptic frame, no P/Q rotation.
+    rectangular_from_spherical_position(v_d, u, r)
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -545,6 +591,56 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
     (v, u, r, vdot, udot, rdot)
 }
 
+/// Position-only sibling of [`vur_series`]: same series, same terms, same
+/// accumulation order, but never computes `omega`/`adot_arg`/`dot` at all.
+///
+/// Returns `(V, U, r)` — V, U in radians, r in km — bit-for-bit identical to
+/// the first three elements of [`vur_series`]'s tuple at the same `(jd,
+/// fit)`. See `tests::vur_series_position_matches_vur_series_position_half`
+/// for the direct proof, and the `elp_geocentric_position*` tests for the
+/// end-to-end one.
+fn vur_series_position(jd: f64, fit: Fit) -> (f64, f64, f64) {
+    ELP_GEOCENTRIC_CALLS.fetch_add(1, Ordering::Relaxed);
+    let args = args_for(fit);
+    let t = (jd - J2000) / DAYS_PER_CENTURY;
+    let t_pow = [1.0, t, t * t, t * t * t, t * t * t * t];
+
+    let a_arg = reduce_all_args_position(args, &t_pow);
+
+    // === Longitude (V), radians ===
+    let v_main = eval_main_series_position(
+        moon_longitude::MAIN.as_slice(),
+        V_MAIN_AMPS.get(fit),
+        &a_arg,
+        SeriesKind::Sine,
+    );
+    let v_pert = eval_pert_series_position(&V_PERT_SPARSE, &a_arg, &t_pow);
+    let v_w1 = eval_poly(&args.w1, t);
+    let v = v_w1 + v_main + v_pert;
+
+    // === Latitude (U), radians ===
+    let u_main = eval_main_series_position(
+        moon_latitude::MAIN.as_slice(),
+        U_MAIN_AMPS.get(fit),
+        &a_arg,
+        SeriesKind::Sine,
+    );
+    let u_pert = eval_pert_series_position(&U_PERT_SPARSE, &a_arg, &t_pow);
+    let u = u_main + u_pert;
+
+    // === Distance (r), km ===
+    let r_main = eval_main_series_position(
+        moon_distance::MAIN.as_slice(),
+        R_MAIN_AMPS.get(fit),
+        &a_arg,
+        SeriesKind::Cosine,
+    );
+    let r_pert = eval_pert_series_position(&R_PERT_SPARSE, &a_arg, &t_pow);
+    let r = (r_main + r_pert) * RA0;
+
+    (v, u, r)
+}
+
 #[derive(Clone, Copy)]
 enum SeriesKind {
     Sine,
@@ -621,6 +717,33 @@ fn reduce_all_args(args: &Args, t_pow: &[f64; 5]) -> ([f64; N_SLOTS], [f64; N_SL
         adot_arg[12] = adot;
     }
     (a_arg, adot_arg)
+}
+
+/// Position-only sibling of [`reduce_arg`]: value `A` only, no derivative.
+///
+/// Same accumulation (`for k in 0..5 { a += coeffs[k] * t_pow[k] }`) as the
+/// `a` half of [`reduce_arg`], so its result is bit-for-bit identical to
+/// `reduce_arg(coeffs, t_pow).0`.
+#[inline]
+fn reduce_arg_position(coeffs: &[f64; 5], t_pow: &[f64; 5]) -> f64 {
+    let mut a = 0.0;
+    for k in 0..5 {
+        a += coeffs[k] * t_pow[k];
+    }
+    a
+}
+
+/// Position-only sibling of [`reduce_all_args`]: skips `adot_arg` entirely.
+fn reduce_all_args_position(args: &Args, t_pow: &[f64; 5]) -> [f64; N_SLOTS] {
+    let mut a_arg = [0.0_f64; N_SLOTS];
+    for (d, coeffs) in args.del.iter().enumerate() {
+        a_arg[d] = reduce_arg_position(coeffs, t_pow);
+    }
+    for (p, coeffs) in args.pla.iter().enumerate() {
+        a_arg[4 + p] = reduce_arg_position(coeffs, t_pow);
+    }
+    a_arg[12] = reduce_arg_position(&args.zeta, t_pow);
+    a_arg
 }
 
 /// Corrected, unit-converted main-problem amplitudes for one series, one entry
@@ -780,6 +903,65 @@ fn eval_main_series(
     }
 
     SeriesPart { value, dot }
+}
+
+/// Position-only sibling of [`eval_main_series`]: computes `value` only, no
+/// `omega`/`dot` at all — the phase is a straight-line dot product, no
+/// derivative dot product alongside it.
+///
+/// The `value` accumulation below is identical, term for term and in the
+/// same order, to [`eval_main_series`]'s own `value` accumulator, so the
+/// result is bit-for-bit identical to `eval_main_series(..).value`.
+fn eval_main_series_position(
+    terms: &[ElpMainTerm],
+    amps: &[f64],
+    a_arg: &[f64; N_SLOTS],
+    kind: SeriesKind,
+) -> f64 {
+    assert_eq!(
+        terms.len(),
+        amps.len(),
+        "main-series amplitude table is not parallel to its term table"
+    );
+
+    let mut value = 0.0;
+
+    let term_phase = |term: &ElpMainTerm| -> f64 {
+        (term.i1 as f64) * a_arg[0]
+            + (term.i2 as f64) * a_arg[1]
+            + (term.i3 as f64) * a_arg[2]
+            + (term.i4 as f64) * a_arg[3]
+    };
+
+    let n_chunks = terms.len() / 4;
+    for ci in 0..n_chunks {
+        let base = ci * 4;
+        let mut phases = [0.0_f64; 4];
+        for (lane, phase) in phases.iter_mut().enumerate() {
+            *phase = term_phase(&terms[base + lane]);
+        }
+        let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
+        let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
+        for lane in 0..4 {
+            let a = amps[base + lane];
+            let (sin_p, cos_p) = (sin4[lane], cos4[lane]);
+            match kind {
+                SeriesKind::Sine => value += a * sin_p,
+                SeriesKind::Cosine => value += a * cos_p,
+            }
+        }
+    }
+    for i in (n_chunks * 4)..terms.len() {
+        let phase = term_phase(&terms[i]);
+        let a = amps[i];
+        let (sin_p, cos_p) = libm::sincos(phase);
+        match kind {
+            SeriesKind::Sine => value += a * sin_p,
+            SeriesKind::Cosine => value += a * cos_p,
+        }
+    }
+
+    value
 }
 
 // ─── Sparse perturbation multipliers ────────────────────────────────────────────
@@ -1049,6 +1231,33 @@ fn sparse_phase_omega(
     (phase, omega)
 }
 
+/// Position-only sibling of [`sparse_phase_omega`]: phase `phi` only, no
+/// `omega`. Same slot order, same seeded accumulator, so bit-for-bit
+/// identical to `sparse_phase_omega(..).0`.
+#[inline]
+fn sparse_phase_position(
+    idx: [u8; PERT_SLOTS_MAX],
+    mul: &[i16; PERT_SLOTS_MAX],
+    a: &[f64; N_SLOTS],
+) -> f64 {
+    let j0 = (idx[0] & 15) as usize;
+    let m0 = f64::from(mul[0]);
+    let mut phase = m0 * a[j0];
+    for s in 1..PERT_SLOTS {
+        let j = (idx[s] & 15) as usize;
+        let m = f64::from(mul[s]);
+        phase += m * a[j];
+    }
+    if mul[PERT_SLOTS] != 0 {
+        for s in PERT_SLOTS..PERT_SLOTS_MAX {
+            let j = (idx[s] & 15) as usize;
+            let m = f64::from(mul[s]);
+            phase += m * a[j];
+        }
+    }
+    phase
+}
+
 static V_PERT_SPARSE: LazyLock<SparsePertSeries> = LazyLock::new(|| {
     SparsePertSeries::build(
         [
@@ -1159,6 +1368,52 @@ fn eval_pert_series(
     SeriesPart { value, dot }
 }
 
+/// Position-only sibling of [`eval_pert_series`]: `value` only, no `dot`,
+/// `omega` or `dtn` at all.
+///
+/// The `value` accumulation is identical, group for group and term for term
+/// in the same order, to [`eval_pert_series`]'s own `value` accumulator —
+/// bit-for-bit identical to `eval_pert_series(..).value`.
+fn eval_pert_series_position(
+    sparse: &SparsePertSeries,
+    a_arg: &[f64; N_SLOTS],
+    t_pow: &[f64; 5],
+) -> f64 {
+    let mut value = 0.0;
+
+    for (n, group) in sparse.groups.iter().enumerate() {
+        let tn = t_pow[n];
+
+        let n_terms = group.sc.len();
+        let n_chunks = n_terms / 4;
+        for ci in 0..n_chunks {
+            let base = ci * 4;
+            let mut phases = [0.0_f64; 4];
+            for (lane, phase) in phases.iter_mut().enumerate() {
+                *phase =
+                    sparse_phase_position(group.idx[base + lane], &group.mul[base + lane], a_arg);
+            }
+            let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
+            let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
+            for lane in 0..4 {
+                let (s, c) = group.sc[base + lane];
+                let (sin_p, cos_p) = (sin4[lane], cos4[lane]);
+                let inner = s * sin_p + c * cos_p;
+                value += tn * inner;
+            }
+        }
+        for i in (n_chunks * 4)..n_terms {
+            let phase = sparse_phase_position(group.idx[i], &group.mul[i], a_arg);
+            let (s, c) = group.sc[i];
+            let (sin_p, cos_p) = libm::sincos(phase);
+            let inner = s * sin_p + c * cos_p;
+            value += tn * inner;
+        }
+    }
+
+    value
+}
+
 // ─── Spherical → rectangular ──────────────────────────────────────────────────
 
 /// Convert (V, U, r) plus their time derivatives in /century to
@@ -1201,6 +1456,27 @@ fn rectangular_from_spherical(
         vy: xp2 * inv_sc,
         vz: xp3 * inv_sc,
     }
+}
+
+/// Position-only sibling of [`rectangular_from_spherical`]: (x, y, z) only,
+/// no velocity at all.
+///
+/// `x1`/`x2`/`x3` are computed by the identical expressions, in the same
+/// order, as [`rectangular_from_spherical`]'s own `x1`/`x2`/`x3` — bit-for-bit
+/// identical results.
+fn rectangular_from_spherical_position(v: f64, u: f64, r: f64) -> (f64, f64, f64) {
+    let cv = libm::cos(v);
+    let sv = libm::sin(v);
+    let cu = libm::cos(u);
+    let su = libm::sin(u);
+
+    let cw = r * cu;
+
+    let x1 = cw * cv;
+    let x2 = cw * sv;
+    let x3 = r * su;
+
+    (x1, x2, x3)
 }
 
 /// Apply the Laskar P/Q rotation from the inertial mean ecliptic of date
@@ -1258,6 +1534,32 @@ fn apply_pq_rotation(xyz_date: MoonRectangular, t: f64) -> MoonRectangular {
         vy: xyz_vy,
         vz: xyz_vz,
     }
+}
+
+/// Position-only sibling of [`apply_pq_rotation`]: rotates `(x, y, z)` only,
+/// no velocity rotation (no `(P, Q)`-prime terms) at all.
+///
+/// `xyz_x`/`xyz_y`/`xyz_z` are computed by the identical expressions, in the
+/// same order and from the same `pw`/`qw`/`ra`/`pwqw`/`pw2`/`qw2`/`pwra`/
+/// `qwra` intermediates, as [`apply_pq_rotation`]'s own position half — so
+/// bit-for-bit identical results.
+fn apply_pq_rotation_position(xyz_date: (f64, f64, f64), t: f64) -> (f64, f64, f64) {
+    let pw = (P1 + P2 * t + P3 * t * t + P4 * t * t * t + P5 * t * t * t * t) * t;
+    let qw = (Q1 + Q2 * t + Q3 * t * t + Q4 * t * t * t + Q5 * t * t * t * t) * t;
+    let ra = 2.0 * libm::sqrt(1.0 - pw * pw - qw * qw);
+    let pwqw = 2.0 * pw * qw;
+    let pw2 = 1.0 - 2.0 * pw * pw;
+    let qw2 = 1.0 - 2.0 * qw * qw;
+    let pwra = pw * ra;
+    let qwra = qw * ra;
+
+    let (x1, x2, x3) = xyz_date;
+
+    let xyz_x = pw2 * x1 + pwqw * x2 + pwra * x3;
+    let xyz_y = pwqw * x1 + qw2 * x2 - qwra * x3;
+    let xyz_z = -pwra * x1 + qwra * x2 + (pw2 + qw2 - 1.0) * x3;
+
+    (xyz_x, xyz_y, xyz_z)
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -1517,6 +1819,67 @@ mod tests {
             (50_000.0..=150_000.0).contains(&v),
             "|v| = {v:.3} km/day out of expected range"
         );
+    }
+
+    /// [`elp_geocentric_position`] must be bit-for-bit `(x, y, z)` of
+    /// [`elp_geocentric`], across the full supported JD range.
+    ///
+    /// This is the direct end-to-end proof that skipping the velocity/omega
+    /// computation changes no computed position value.
+    #[test]
+    fn elp_geocentric_position_matches_elp_geocentric_bit_for_bit() {
+        for t in sparse_test_epochs() {
+            let jd = J2000 + t * DAYS_PER_CENTURY;
+            let full = elp_geocentric(jd);
+            let (x, y, z) = elp_geocentric_position(jd);
+            assert_eq!(
+                x.to_bits(),
+                full.x.to_bits(),
+                "t={t} jd={jd}: x differs — position-only {x:e} vs full {:e}",
+                full.x
+            );
+            assert_eq!(
+                y.to_bits(),
+                full.y.to_bits(),
+                "t={t} jd={jd}: y differs — position-only {y:e} vs full {:e}",
+                full.y
+            );
+            assert_eq!(
+                z.to_bits(),
+                full.z.to_bits(),
+                "t={t} jd={jd}: z differs — position-only {z:e} vs full {:e}",
+                full.z
+            );
+        }
+    }
+
+    /// [`elp_geocentric_position_of_date`] must be bit-for-bit `(x, y, z)` of
+    /// [`elp_geocentric_of_date`], across the full supported JD range.
+    #[test]
+    fn elp_geocentric_position_of_date_matches_elp_geocentric_of_date_bit_for_bit() {
+        for t in sparse_test_epochs() {
+            let jd = J2000 + t * DAYS_PER_CENTURY;
+            let full = elp_geocentric_of_date(jd);
+            let (x, y, z) = elp_geocentric_position_of_date(jd);
+            assert_eq!(
+                x.to_bits(),
+                full.x.to_bits(),
+                "t={t} jd={jd}: x differs — position-only {x:e} vs full {:e}",
+                full.x
+            );
+            assert_eq!(
+                y.to_bits(),
+                full.y.to_bits(),
+                "t={t} jd={jd}: y differs — position-only {y:e} vs full {:e}",
+                full.y
+            );
+            assert_eq!(
+                z.to_bits(),
+                full.z.to_bits(),
+                "t={t} jd={jd}: z differs — position-only {z:e} vs full {:e}",
+                full.z
+            );
+        }
     }
 
     #[test]

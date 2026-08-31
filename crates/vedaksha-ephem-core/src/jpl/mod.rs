@@ -117,6 +117,34 @@ pub trait EphemerisProvider {
         })
     }
 
+    /// Compute the Moon's **position only** (no velocity) at Julian Day `jd`,
+    /// in the same frame and convention as [`Self::compute_state`]'s `Moon`
+    /// arm (relative to the EMB, matching the SPK convention).
+    ///
+    /// # Why this is a trait method with a default body
+    ///
+    /// Mirrors [`Self::earth_state`]'s pattern exactly. The default is the
+    /// general, always-correct construction: derive the position from
+    /// [`Self::compute_state`], discarding the velocity half. That is what
+    /// the SPK path uses, unchanged.
+    ///
+    /// A provider that computes position and velocity together from a
+    /// shared per-term intermediate (as [`crate::analytical::AnalyticalProvider`]'s
+    /// ELP/MPP02 evaluator does) can override this to skip the velocity half
+    /// entirely, rather than computing it and throwing it away. Two
+    /// production callers only ever want the Moon's position and never its
+    /// velocity — [`crate::coordinates::retarded_geocentric`]'s Moon branch,
+    /// and [`crate::nodes::osculating_node`], which derives its own velocity
+    /// by central difference of three position samples
+    /// (`docs/audit/2026-08-29-perf-investigation.md` #5).
+    ///
+    /// # Errors
+    ///
+    /// Same conditions as [`Self::compute_state`] for [`Body::Moon`].
+    fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
+        Ok(self.compute_state(Body::Moon, jd)?.position)
+    }
+
     /// Returns the time range covered by this provider.
     fn time_range(&self) -> (f64, f64);
 }

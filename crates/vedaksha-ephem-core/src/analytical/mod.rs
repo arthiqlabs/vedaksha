@@ -169,6 +169,42 @@ fn moon_state(jd: f64) -> StateVector {
     }
 }
 
+/// Compute Moon **position only** (no velocity) relative to EMB in
+/// equatorial (ICRS) frame.
+///
+/// Position-only sibling of [`moon_state`]; performs exactly the same steps
+/// on the position half — [`elp_mpp02::elp_geocentric_position`] instead of
+/// [`elp_mpp02::elp_geocentric`], then the identical km→AU conversion, EMRAT
+/// scaling and `ecliptic_to_equatorial` call — so its result is bit-for-bit
+/// identical to `moon_state(jd).position`. See
+/// [`crate::jpl::EphemerisProvider::moon_position`] for why this exists.
+fn moon_position_rel_emb(jd: f64) -> Position {
+    // Moon geocentric position in J2000 ecliptic rectangular (km).
+    let (mx, my, mz) = elp_mpp02::elp_geocentric_position(jd);
+
+    // Convert km → AU
+    let mg_x = mx / AU_KM;
+    let mg_y = my / AU_KM;
+    let mg_z = mz / AU_KM;
+
+    // Convert geocentric → relative to EMB:
+    // Moon_rel_EMB = Moon_geocentric * EMRAT / (1 + EMRAT)
+    let emb_factor = EMRAT / (1.0 + EMRAT);
+
+    let rel_x = mg_x * emb_factor;
+    let rel_y = mg_y * emb_factor;
+    let rel_z = mg_z * emb_factor;
+
+    // J2000 ecliptic -> equatorial
+    let (px, py, pz) = ecliptic_to_equatorial(rel_x, rel_y, rel_z);
+
+    Position {
+        x: px,
+        y: py,
+        z: pz,
+    }
+}
+
 /// Analytical ephemeris provider backed by VSOP87A and ELP/MPP02.
 ///
 /// This provider requires no external data files. It covers the range
@@ -376,6 +412,30 @@ impl EphemerisProvider for AnalyticalProvider {
             });
         }
         Ok(vsop_state(Planet::Earth, jd))
+    }
+
+    /// Moon position only, via [`moon_position_rel_emb`] — skips the
+    /// velocity half of [`moon_state`]'s ELP/MPP02 evaluation entirely
+    /// rather than computing and discarding it.
+    ///
+    /// # Bit-identity
+    ///
+    /// [`moon_position_rel_emb`] performs the exact same operations, in the
+    /// same order, as `moon_state`'s position half, differing only in
+    /// calling [`elp_mpp02::elp_geocentric_position`] (proven bit-identical
+    /// to `elp_geocentric`'s position fields by that module's own tests)
+    /// instead of [`elp_mpp02::elp_geocentric`]. So this override's result is
+    /// bit-for-bit identical to `compute_state(Body::Moon, jd)?.position` —
+    /// see `moon_position_is_bit_identical_to_compute_state_moon` below.
+    fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
+        if jd < JD_MIN || jd > JD_MAX {
+            return Err(ComputeError::DateOutOfRange {
+                jd,
+                min: JD_MIN,
+                max: JD_MAX,
+            });
+        }
+        Ok(moon_position_rel_emb(jd))
     }
 
     fn time_range(&self) -> (f64, f64) {
@@ -800,6 +860,61 @@ mod tests {
             match p.earth_state(jd) {
                 Err(ComputeError::DateOutOfRange { .. }) => {}
                 other => panic!("earth_state({jd}) should be DateOutOfRange, got {other:?}"),
+            }
+        }
+    }
+
+    /// **The invariant `AnalyticalProvider::moon_position` exists to
+    /// establish.**
+    ///
+    /// It must be bit-for-bit `compute_state(Body::Moon, jd)?.position` —
+    /// not "close to". Skipping the velocity half of the underlying ELP/MPP02
+    /// evaluation must change no computed position value.
+    #[test]
+    fn moon_position_is_bit_identical_to_compute_state_moon() {
+        let p = provider();
+        // Anchors spanning the supported range, plus a spread of contemporary
+        // and historical dates.
+        let jds: Vec<f64> = {
+            let mut v = EARTH_STATE_JDS.to_vec();
+            let step = (JD_MAX - JD_MIN) / 200.0;
+            for i in 0..=200 {
+                v.push(JD_MIN + f64::from(i) * step);
+            }
+            v
+        };
+        for jd in jds {
+            let got = p.moon_position(jd).expect("in-range jd");
+            let want = p
+                .compute_state(Body::Moon, jd)
+                .expect("in-range jd")
+                .position;
+            for (label, a, b) in [
+                ("x", got.x, want.x),
+                ("y", got.y, want.y),
+                ("z", got.z, want.z),
+            ] {
+                assert_eq!(
+                    a.to_bits(),
+                    b.to_bits(),
+                    "moon_position({jd}).{label} = {a:?} ({:016x}) is not bit-identical to \
+                     compute_state(Moon, {jd}).position.{label} = {b:?} ({:016x})",
+                    a.to_bits(),
+                    b.to_bits(),
+                );
+            }
+        }
+    }
+
+    /// The override must reject out-of-range dates the same way
+    /// `compute_state` does.
+    #[test]
+    fn moon_position_rejects_out_of_range_dates() {
+        let p = provider();
+        for jd in [0.0, JD_MIN - 1.0, JD_MAX + 1.0, 5_000_000.0] {
+            match p.moon_position(jd) {
+                Err(ComputeError::DateOutOfRange { .. }) => {}
+                other => panic!("moon_position({jd}) should be DateOutOfRange, got {other:?}"),
             }
         }
     }

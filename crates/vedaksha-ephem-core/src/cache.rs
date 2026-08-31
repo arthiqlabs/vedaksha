@@ -25,7 +25,7 @@ use std::collections::HashMap;
 
 use crate::bodies::Body;
 use crate::error::ComputeError;
-use crate::jpl::{EphemerisProvider, StateVector};
+use crate::jpl::{EphemerisProvider, Position, StateVector};
 
 /// An [`EphemerisProvider`] that memoizes the wrapped provider's
 /// `compute_state` results for the lifetime of the wrapper.
@@ -50,6 +50,16 @@ pub struct CachingProvider<'a> {
     /// evaluations) reachable through the cache; this second map restores the
     /// memoization that forwarding would otherwise bypass.
     earth_cache: RefCell<HashMap<u64, StateVector>>,
+    /// The Moon's position-only state, memoized separately.
+    ///
+    /// Same forwarding concern as `earth_cache`, one method over: reached
+    /// through [`EphemerisProvider::moon_position`] rather than
+    /// `compute_state`, so a wrapper that let the trait default run against
+    /// `self` would silently discard `AnalyticalProvider`'s override (which
+    /// skips the velocity half of its ELP/MPP02 evaluation) and reinstate the
+    /// full computation. This map restores the memoization forwarding would
+    /// otherwise bypass.
+    moon_position_cache: RefCell<HashMap<u64, Position>>,
 }
 
 #[cfg(feature = "std")]
@@ -61,13 +71,15 @@ impl<'a> CachingProvider<'a> {
             inner,
             cache: RefCell::new(HashMap::new()),
             earth_cache: RefCell::new(HashMap::new()),
+            moon_position_cache: RefCell::new(HashMap::new()),
         }
     }
 
     /// Number of distinct `(body, time)` states currently cached.
     ///
-    /// Counts the `compute_state` cache only; memoized Earth anchors are in
-    /// their own map (see [`Self::earth_len`]).
+    /// Counts the `compute_state` cache only; memoized Earth anchors and Moon
+    /// positions are in their own maps (see [`Self::earth_len`],
+    /// [`Self::moon_position_len`]).
     #[must_use]
     pub fn len(&self) -> usize {
         self.cache.borrow().len()
@@ -77,6 +89,13 @@ impl<'a> CachingProvider<'a> {
     #[must_use]
     pub fn earth_len(&self) -> usize {
         self.earth_cache.borrow().len()
+    }
+
+    /// Number of distinct times for which the Moon's position-only state is
+    /// cached.
+    #[must_use]
+    pub fn moon_position_len(&self) -> usize {
+        self.moon_position_cache.borrow().len()
     }
 
     /// Whether the cache is empty.
@@ -118,6 +137,26 @@ impl EphemerisProvider for CachingProvider<'_> {
         Ok(state)
     }
 
+    /// Memoized forward to the wrapped provider's own `moon_position`.
+    ///
+    /// Deliberately **not** left to the trait default, for the same reason
+    /// `earth_state` is not: the default body would run `compute_state(Moon,
+    /// ·)` against `self` (correct, but through the general path), silently
+    /// discarding whatever the inner provider's override does.
+    /// `AnalyticalProvider`'s override skips the velocity half of its
+    /// ELP/MPP02 evaluation, and it must survive being wrapped.
+    ///
+    /// Errors are not cached, matching [`Self::compute_state`].
+    fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
+        let key = jd.to_bits();
+        if let Some(pos) = self.moon_position_cache.borrow().get(&key).copied() {
+            return Ok(pos);
+        }
+        let pos = self.inner.moon_position(jd)?;
+        self.moon_position_cache.borrow_mut().insert(key, pos);
+        Ok(pos)
+    }
+
     fn time_range(&self) -> (f64, f64) {
         self.inner.time_range()
     }
@@ -135,6 +174,9 @@ mod tests {
         /// wrapper that fell through to the trait default (which would reach
         /// `compute_state` instead) is distinguishable from one that forwarded.
         earth_calls: Cell<usize>,
+        /// Counts calls to this provider's own `moon_position` **override**,
+        /// same purpose as `earth_calls`.
+        moon_position_calls: Cell<usize>,
     }
 
     impl CountingProvider {
@@ -142,6 +184,7 @@ mod tests {
             Self {
                 calls: Cell::new(0),
                 earth_calls: Cell::new(0),
+                moon_position_calls: Cell::new(0),
             }
         }
     }
@@ -179,6 +222,20 @@ mod tests {
                     y: 0.0,
                     z: 0.0,
                 },
+            })
+        }
+
+        /// A distinguishable override: `x = -2*jd`, so a value produced by
+        /// this method can never be confused with one the default body
+        /// (`x = +jd`, via `compute_state`) or `earth_state`'s override
+        /// (`x = -jd`) would produce.
+        fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
+            self.moon_position_calls
+                .set(self.moon_position_calls.get() + 1);
+            Ok(Position {
+                x: -2.0 * jd,
+                y: 0.0,
+                z: 0.0,
             })
         }
 
@@ -221,6 +278,39 @@ mod tests {
         cached.earth_state(2_451_546.0).unwrap();
         assert_eq!(inner.earth_calls.get(), 2);
         assert_eq!(cached.earth_len(), 2);
+    }
+
+    /// The wrapper must forward `moon_position` to the inner provider's
+    /// override and memoize the result — not fall through to the trait
+    /// default. Mirrors `earth_state_forwards_to_the_inner_override_and_memoizes`.
+    #[test]
+    fn moon_position_forwards_to_the_inner_override_and_memoizes() {
+        let inner = CountingProvider::new();
+        let cached = CachingProvider::new(&inner);
+
+        let a = cached.moon_position(2_451_545.0).unwrap();
+        let b = cached.moon_position(2_451_545.0).unwrap();
+
+        // -2*jd is the override's signature; the default body would have
+        // given +jd (via `compute_state`).
+        assert_eq!(a.x, -2.0 * 2_451_545.0, "fell through to the trait default");
+        assert_eq!(a.x.to_bits(), b.x.to_bits());
+        assert_eq!(
+            inner.moon_position_calls.get(),
+            1,
+            "second lookup was not memoized"
+        );
+        assert_eq!(
+            inner.calls.get(),
+            0,
+            "moon_position reached compute_state, so it ran the default body"
+        );
+        assert_eq!(cached.moon_position_len(), 1);
+        assert_eq!(cached.len(), 0, "the Moon position polluted the body cache");
+
+        cached.moon_position(2_451_546.0).unwrap();
+        assert_eq!(inner.moon_position_calls.get(), 2);
+        assert_eq!(cached.moon_position_len(), 2);
     }
 
     #[test]
