@@ -16,17 +16,17 @@
 //! **Direction — tested at the 9th sign from the lagna, not the lagna itself.**
 //! The governing sutra is in Adhyaya 2, Pada 3 (its own number is unstable
 //! across sources — direct readings of 22, 28, and 32 are on record, and a
-//! fourth source independently reports 29): *pañcame padakramāt
-//! prākpratyaktvaṃ caradaśāyām*. Grammatically, *pañcame* means "in the
+//! fourth source independently reports 29): *panchame padakramat
+//! prakpratyaktvam charadashayam*. Grammatically, *panchame* means "in the
 //! fifth" — but Jaimini states his own letter-to-numeral convention
-//! elsewhere (*sarvatra savarṇā bhāvā rāśayaś ca*, "everywhere, the houses
-//! and signs are [denoted] by letters"), under which *pañcame* decodes
-//! arithmetically to **nine**, not five. That decoding is not asserted here
-//! on trust: it reproduces, independently, the numeric answer each of eight
-//! other words coded the same way is glossed with elsewhere in this same
-//! sutra layer (high confidence — a verifiable arithmetic fact, not a
-//! judgment call). The sutra is read here as: take the 9th sign from the
-//! lagna, and test it (not the lagna itself) for direction.
+//! elsewhere (*sarvatra savarna bhava rashayash cha*, "everywhere, the
+//! houses and signs are [denoted] by letters"), under which *panchame*
+//! decodes arithmetically to **nine**, not five. That decoding is not
+//! asserted here on trust: it reproduces, independently, the numeric answer
+//! each of eight other words coded the same way is glossed with elsewhere in
+//! this same sutra layer (high confidence — a verifiable arithmetic fact,
+//! not a judgment call). The sutra is read here as: take the 9th sign from
+//! the lagna, and test it (not the lagna itself) for direction.
 //!
 //! **The classification tested at that 9th sign: vishama-pada ("odd-footed")
 //! vs. sama-pada ("even-footed")** — Aries, Taurus, Gemini, Libra, Scorpio,
@@ -40,16 +40,16 @@
 //! lagna is vishama-pada, Chara Dasha counts forward; otherwise backward.
 //!
 //! **Attribution and confidence:** this reading is transmitted in a
-//! commentary called the *Subodhinī*, under the name Nīlakaṇṭha — moderate
+//! commentary called the Subodhini, under the name Neelakantha — moderate
 //! confidence on the specific authorship, since a critical edition compiled
 //! from multiple manuscripts notes that copies circulating under that name
 //! are sometimes misattributed. The same critical edition describes the
 //! 9th-house reading as the view of "many commentators" — a documented
 //! majority, not a claim of universal agreement — and separately records a
-//! named minority reading, under the name Kṛṣṇānanda Sarasvatī, holding that
-//! *pañcame* keeps its literal sense and names a different dasha system
-//! entirely, not a rival Chara Dasha direction rule. No source found states
-//! a rival *Chara Dasha* direction table under any other name.
+//! named minority reading, under the name Krishnananda Sarasvati, holding
+//! that *panchame* keeps its literal sense and names a different dasha
+//! system entirely, not a rival Chara Dasha direction rule. No source found
+//! states a rival *Chara Dasha* direction table under any other name.
 //!
 //! **Superseded:** earlier versions of this module cited Adhyaya 1 Pada 1,
 //! sutras 25-27, for direction. Those sutras are understood here to govern a
