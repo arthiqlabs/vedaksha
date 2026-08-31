@@ -16,7 +16,8 @@ prakpratyaktvam charadashayam*. Its key word, *panchame* ("in the fifth," gramma
 decoded by a separate, explicitly-stated Jaimini sutra convention (a letter-to-numeral cipher) to
 mean **nine**, not five — verified against eight other words coded the same way elsewhere in the
 same sutra layer, each checked against its own commentary's stated numeric answer, all eight
-matching. Read this way, the rule is: take the **9th sign from the lagna**, and test that sign —
+matching; see `docs/audit/2026-08-31-chara-dasha-panchame-cipher.md` for the full cipher and
+check. Read this way, the rule is: take the **9th sign from the lagna**, and test that sign —
 not the lagna directly — against the "vishama-pada" (odd-footed: Aries, Taurus, Gemini, Libra,
 Scorpio, Sagittarius) classification. If the 9th sign from the lagna is vishama-pada, Chara Dasha
 counts forward; otherwise backward.

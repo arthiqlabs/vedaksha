@@ -20,13 +20,14 @@
 //! prakpratyaktvam charadashayam*. Grammatically, *panchame* means "in the
 //! fifth" — but Jaimini states his own letter-to-numeral convention
 //! elsewhere (*sarvatra savarna bhava rashayash cha*, "everywhere, the
-//! houses and signs are [denoted] by letters"), under which *panchame*
+//! houses and signs are \[denoted\] by letters"), under which *panchame*
 //! decodes arithmetically to **nine**, not five. That decoding is not
-//! asserted here on trust: it reproduces, independently, the numeric answer
-//! each of eight other words coded the same way is glossed with elsewhere in
-//! this same sutra layer (high confidence — a verifiable arithmetic fact,
-//! not a judgment call). The sutra is read here as: take the 9th sign from
-//! the lagna, and test it (not the lagna itself) for direction.
+//! asserted here on trust — the cipher and an eight-word check are recorded
+//! in full at
+//! `docs/audit/2026-08-31-chara-dasha-panchame-cipher.md`
+//! (high confidence — a verifiable arithmetic fact, not a judgment call).
+//! The sutra is read here as: take the 9th sign from the lagna, and test it
+//! (not the lagna itself) for direction.
 //!
 //! **The classification tested at that 9th sign: vishama-pada ("odd-footed")
 //! vs. sama-pada ("even-footed")** — Aries, Taurus, Gemini, Libra, Scorpio,
@@ -53,9 +54,9 @@
 //!
 //! **Superseded:** earlier versions of this module cited Adhyaya 1 Pada 1,
 //! sutras 25-27, for direction. Those sutras are understood here to govern a
-//! different rule — sign-to-lord counting, the concern of [`sign_distance`]
+//! different rule — sign-to-lord counting, the concern of `sign_distance`
 //! below, not sequence direction — and are no longer cited for direction.
-//! See `DATA_PROVENANCE.md` Fix 11 for the full history of that correction.
+//! See `DATA_PROVENANCE.md` Fix 12 for the full history of that correction.
 
 use serde::{Deserialize, Serialize};
 
@@ -156,7 +157,7 @@ fn is_vishama_pada(sign: u8) -> bool {
 /// 9th sign from `lagna` — see the module doc for the sutra and its
 /// confidence grading.
 fn chara_direction(lagna: u8) -> Direction {
-    let ninth_from_lagna = (lagna + 8) % 12;
+    let ninth_from_lagna = (lagna % 12 + 8) % 12;
     if is_vishama_pada(ninth_from_lagna) {
         Direction::Forward
     } else {
@@ -267,10 +268,14 @@ mod tests {
     // hand: 9th-from-lagna for each of the 12 lagnas, checked against the
     // vishama-pada set {Aries, Taurus, Gemini, Libra, Scorpio, Sagittarius}.
     // Movable lagnas (Aries, Cancer, Libra, Capricorn) keep the same
-    // direction a plain-odd/even-on-the-lagna rule would also give them;
-    // the other eight flip relative to that plain rule, which is exactly
-    // the vishama-pada/sama-pada split this module now applies at the 9th
-    // house rather than at the lagna itself.
+    // direction the previously-implemented rule (plain odd/even on the
+    // lagna directly, with a four-sign fixed exception; see
+    // DATA_PROVENANCE.md Fix 11) also gave them; the other eight flip
+    // relative to that previous rule. Against a genuinely plain odd/even
+    // rule with no exception at all, the split would be different (only
+    // Gemini, Virgo, Sagittarius, Pisces would flip) -- the 4-keep/8-flip
+    // split above is specifically relative to Fix 11's four-sign-exception
+    // rule, not to plain odd/even.
     #[test]
     fn aries_lagna_counts_forward() {
         let periods = compute_chara(0, TEST_JD); // Aries; 9th = Sagittarius, vishama-pada
@@ -391,25 +396,32 @@ mod tests {
         );
     }
 
-    // 17. The vishama-pada classification itself matches the module doc's set
+    // 17. The load-bearing claim behind this fix: is_vishama_pada's true-set is
+    // exactly the four-sign-exception classification the previously-implemented
+    // rule (DATA_PROVENANCE.md Fix 11) applied directly to the lagna. This is
+    // what makes the fix "only change which sign gets tested" rather than also
+    // changing the classification -- reproduces the pre-fix logic verbatim
+    // (see git history at a0e160c) rather than re-deriving the same answer.
     #[test]
-    fn vishama_pada_set_is_exactly_documented() {
-        let expected_vishama_pada = [
-            true, true, true, false, false, false, true, true, true, false, false, false,
-        ];
-        for (sign, &expected) in expected_vishama_pada.iter().enumerate() {
-            #[allow(clippy::cast_possible_truncation)]
-            let sign = sign as u8;
+    fn vishama_pada_set_matches_the_superseded_fixed_sign_exception() {
+        fn fix_11_forward_on_lagna_directly(sign: u8) -> bool {
+            match sign {
+                1 | 7 => true,               // Taurus, Scorpio: fixed exception
+                4 | 10 => false,             // Leo, Aquarius: fixed exception
+                _ => sign.is_multiple_of(2), // plain odd/even (0-indexed even = 1-indexed odd)
+            }
+        }
+        for sign in 0u8..12 {
             assert_eq!(
                 is_vishama_pada(sign),
-                expected,
-                "sign {sign} ({}): expected vishama-pada = {expected}",
+                fix_11_forward_on_lagna_directly(sign),
+                "sign {sign} ({}): vishama-pada must match the superseded Fix 11 classification",
                 SIGN_NAMES[sign as usize]
             );
         }
     }
 
-    // 12. All 12 signs still appear exactly once regardless of direction (backward case)
+    // 18. All 12 signs still appear exactly once regardless of direction (backward case)
     #[test]
     fn all_12_signs_appear_going_backward() {
         let periods = compute_chara(3, TEST_JD); // Cancer, backward
