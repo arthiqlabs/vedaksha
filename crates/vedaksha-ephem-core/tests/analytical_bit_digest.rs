@@ -297,7 +297,52 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// lunar theory floor), so no accuracy claim in the repo moves.
 /// `analytical_oracle.rs` (21,915-row Horizons comparison) and
 /// `cargo test -p vedaksha-ephem-core` both stay green through this change.
+/// # This pin is PER-ARCHITECTURE, and that is not a workaround
+///
+/// The digest fingerprints `simd_trig::sincos_f64x4`, and `wide`'s `f64x4`
+/// computes **different results on AVX2 than on NEON** — one 256-bit register
+/// versus two 128-bit ones, with different instruction selection inside the
+/// polynomial. Measured 2026-08-31 on an x86_64 box and cross-checked against
+/// CI's own ubuntu runner, which emits the identical value; reproduced with no
+/// `RUSTFLAGS` at all, so this is the crate's per-architecture implementation
+/// and not target-feature contraction.
+///
+/// So there is no single "the" digest. Before 2026-08-31 this constant held one
+/// value, always measured on an Apple Silicon development machine, and the
+/// weekly Full Validation job — which runs on x86_64 — had therefore been
+/// failing this assertion continuously since 2026-07-26. v8.0.0 and v8.1.0 both
+/// shipped in that state. The gate was not detecting drift; it was reporting the
+/// architecture mismatch, every week, to nobody.
+///
+/// **What this means for the word "bit-identical" elsewhere in this repository:
+/// it is a within-one-architecture claim.** Two builds of the same commit on the
+/// same architecture agree bit for bit; the same commit on AVX2 and on NEON does
+/// not. Accuracy is unaffected and is gated separately by `analytical_oracle.rs`
+/// against Horizons, which passes on both.
+///
+/// # Adding an architecture
+///
+/// Run this test there, take the `sha256` it prints, and add an arm. Do **not**
+/// reuse another architecture's value, and do not delete an arm to make a red
+/// run green — a mismatch *within* one architecture is the real regression this
+/// test exists to catch, and it is still caught.
+#[cfg(target_arch = "aarch64")]
 const EXPECTED_DIGEST: &str = "a6e4f3a47fd65c3de98e88eed980538f5c7b4a4e1b0097626593c9e09521e742";
+
+/// x86_64 counterpart of [`EXPECTED_DIGEST`] — see its doc comment.
+///
+/// Measured 2026-08-31 at v8.1.0, and independently confirmed as the value CI's
+/// ubuntu runner produces for the same tree.
+#[cfg(target_arch = "x86_64")]
+const EXPECTED_DIGEST: &str = "a50d155db570eadec2a85dc5a6136e0c8ed73a9e7f9c482c7a1198012d511572";
+
+/// Sentinel for an architecture with no measured pin — see [`EXPECTED_DIGEST`].
+///
+/// Empty rather than a guess. The test PANICS on it with instructions, because
+/// this file's whole premise is that a check which cannot fail has not run: a
+/// silent skip here would report green having verified nothing.
+#[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+const EXPECTED_DIGEST: &str = "";
 
 /// The digest from the `COS_EPS` correction until the VSOP87A SIMD adoption.
 ///
@@ -653,17 +698,34 @@ fn analytical_bit_digest() {
         "row count moved: the digest is only comparable across commits that \
          emit the same rows"
     );
+    assert!(
+        !EXPECTED_DIGEST.is_empty(),
+        "\n\nNo digest is pinned for this architecture ({}).\n\n\
+         measured sha256 {digest}\n\n\
+         The digest is architecture-specific -- `wide`'s f64x4 sin_cos computes \
+         differently on AVX2 than on NEON -- so there is no single correct value \
+         to compare against here. This test PANICS rather than skipping, because \
+         a skip would report green having verified nothing.\n\n\
+         To pin this architecture: verify the value above is stable across two \
+         runs, then add a `#[cfg(target_arch = ...)]` arm for EXPECTED_DIGEST. \
+         Do NOT reuse another architecture's value.\n",
+        std::env::consts::ARCH
+    );
     assert_eq!(
-        digest, EXPECTED_DIGEST,
-        "\n\nThe analytical path's output bits MOVED.\n\n\
+        digest,
+        EXPECTED_DIGEST,
+        "\n\nThe analytical path's output bits MOVED (architecture: {}).\n\n\
          expected {EXPECTED_DIGEST}\n\
          actual   {digest}\n\
          (for reference, before the `wide` 0.7.33 -> 1.6.1 upgrade: \
          {PRE_WIDE_DIGEST})\n\n\
          This is a real change to ELP/MPP02, VSOP87A, or something they call. \
+         Both values are for THIS architecture, so a mismatch here is real drift, \
+         not the cross-architecture difference documented on EXPECTED_DIGEST. \
          Find out what moved and by how much — re-run this test on both commits \
          with --nocapture and diff the ROW lines — decide whether it is \
-         acceptable, and re-pin EXPECTED_DIGEST in a commit that records the \
-         reason. Do not re-pin to make a red test green.\n"
+         acceptable, and re-pin this architecture's EXPECTED_DIGEST arm in a \
+         commit that records the reason. Do not re-pin to make a red test green.\n",
+        std::env::consts::ARCH
     );
 }

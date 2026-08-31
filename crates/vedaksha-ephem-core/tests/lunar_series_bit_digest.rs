@@ -127,7 +127,24 @@ const EXPECTED_ROWS: u64 = (FULL_RANGE_SAMPLES as u64 + CONTEMPORARY_SAMPLES as 
 /// `VEDAKSHA_DUMP_LUNAR_ROWS=1 … --nocapture` and diff the `LROW` lines —
 /// decide whether it is acceptable, and re-pin in a commit that records the
 /// reason. Do not re-pin to make a red test green.
+///
+/// **Pinned per architecture.** This digest fingerprints `sincos_f64x4`, and
+/// `wide`'s `f64x4` computes differently on AVX2 than on NEON, so there is no
+/// single correct value — see `analytical_bit_digest.rs`'s `EXPECTED_DIGEST`
+/// doc for the full explanation and for what that means for the phrase
+/// "bit-identical" elsewhere in this repository. Add an architecture by running
+/// the test there and adding an arm; never reuse another architecture's value.
+#[cfg(target_arch = "aarch64")]
 const EXPECTED_DIGEST: &str = "e8b21c8863fa0065e125e16a4b3396371f7de6a386d19f35f233c07ac5e1394b";
+
+/// x86_64 counterpart of [`EXPECTED_DIGEST`], measured 2026-08-31.
+#[cfg(target_arch = "x86_64")]
+const EXPECTED_DIGEST: &str = "a2af33c87957fd15249d6f5b714749a8623f0ad4593a1fbc1ce0d4b51c0cccfe";
+
+/// Sentinel for an unpinned architecture — the test panics on it. See
+/// [`EXPECTED_DIGEST`].
+#[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+const EXPECTED_DIGEST: &str = "";
 
 /// Refuse to run in a `debug` build, for the reason
 /// `analytical_bit_digest::require_release_profile` gives: this is
@@ -235,6 +252,16 @@ fn lunar_series_bit_digest() {
         "row count moved: the digest is only comparable across commits that \
          emit the same rows"
     );
+    assert!(
+        !EXPECTED_DIGEST.is_empty(),
+        "\n\nNo lunar-series digest is pinned for this architecture ({}).\n\n\
+         measured sha256 {digest}\n\n\
+         The digest is architecture-specific; see analytical_bit_digest.rs's \
+         EXPECTED_DIGEST doc. This PANICS rather than skipping, because a skip \
+         would report green having verified nothing. To pin: confirm the value \
+         above is stable across two runs, then add a cfg(target_arch) arm.\n",
+        std::env::consts::ARCH
+    );
     assert_eq!(
         digest, EXPECTED_DIGEST,
         "\n\nThe raw ELP/MPP02 lunar series' output bits MOVED.\n\n\
@@ -268,8 +295,20 @@ const POSITION_ONLY_EXPECTED_ROWS: u64 =
 /// **If this assertion fails, the position-only path diverged from the
 /// position half of the full computation.** Same investigation procedure as
 /// [`EXPECTED_DIGEST`]'s doc comment. Do not re-pin to make a red test green.
+///
+/// **Pinned per architecture**, for the same reason as [`EXPECTED_DIGEST`].
+#[cfg(target_arch = "aarch64")]
 const POSITION_ONLY_EXPECTED_DIGEST: &str =
     "6edec0b1dd362d83a0a31e993b940b1119d8a49a9062a4afbf9ecd53ec255e93";
+
+/// x86_64 counterpart of [`POSITION_ONLY_EXPECTED_DIGEST`], measured 2026-08-31.
+#[cfg(target_arch = "x86_64")]
+const POSITION_ONLY_EXPECTED_DIGEST: &str =
+    "57821af832a46e6de2cb9c6a20d1bbee6c4e654f55d7ec950850c8a699784363";
+
+/// Sentinel for an unpinned architecture — the test panics on it.
+#[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+const POSITION_ONLY_EXPECTED_DIGEST: &str = "";
 
 #[test]
 #[ignore = "release-only bit fingerprint of the position-only lunar series; see the module comment"]
@@ -331,6 +370,16 @@ fn lunar_series_position_only_bit_digest() {
         rows, POSITION_ONLY_EXPECTED_ROWS,
         "row count moved: the digest is only comparable across commits that \
          emit the same rows"
+    );
+    assert!(
+        !POSITION_ONLY_EXPECTED_DIGEST.is_empty(),
+        "\n\nNo position-only lunar digest is pinned for this architecture \
+         ({}).\n\n\
+         measured sha256 {digest}\n\n\
+         See analytical_bit_digest.rs's EXPECTED_DIGEST doc. This PANICS rather \
+         than skipping. To pin: confirm the value is stable across two runs, \
+         then add a cfg(target_arch) arm.\n",
+        std::env::consts::ARCH
     );
     assert_eq!(
         digest, POSITION_ONLY_EXPECTED_DIGEST,
