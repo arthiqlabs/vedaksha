@@ -26,6 +26,16 @@
 // the increment into `vur_series` itself, the one function all three public
 // entry points share — it now counts every real ELP evaluation regardless
 // of entry point or whether a `compute_state` arm was involved.
+//
+// Wave 2 (position-only ELP, docs/audit/2026-08-29-perf-investigation.md
+// item #5) added two more public entry points, `elp_geocentric_position`
+// and `elp_geocentric_position_of_date`, each routing through their own
+// sibling function `vur_series_position` rather than `vur_series` -- so
+// there are now five public entry points and two increment sites
+// (`vur_series` and `vur_series_position`), not three and one. Both sites
+// increment the same counter, so this guard still counts every real ELP
+// evaluation regardless of which pipeline (position+velocity or
+// position-only) served it.
 
 use std::sync::atomic::Ordering;
 use std::sync::{Mutex, MutexGuard};

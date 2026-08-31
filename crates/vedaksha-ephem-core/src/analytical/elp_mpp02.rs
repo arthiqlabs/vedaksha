@@ -596,9 +596,11 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
 ///
 /// Returns `(V, U, r)` — V, U in radians, r in km — bit-for-bit identical to
 /// the first three elements of [`vur_series`]'s tuple at the same `(jd,
-/// fit)`. See `tests::vur_series_position_matches_vur_series_position_half`
-/// for the direct proof, and the `elp_geocentric_position*` tests for the
-/// end-to-end one.
+/// fit)`. See `tests::elp_geocentric_position_matches_elp_geocentric_bit_for_bit`
+/// and `tests::elp_geocentric_position_of_date_matches_elp_geocentric_of_date_bit_for_bit`
+/// for the end-to-end proof (there is no direct per-function test of
+/// `vur_series_position` alone; those two tests exercise it through both
+/// public entry points).
 fn vur_series_position(jd: f64, fit: Fit) -> (f64, f64, f64) {
     ELP_GEOCENTRIC_CALLS.fetch_add(1, Ordering::Relaxed);
     let args = args_for(fit);

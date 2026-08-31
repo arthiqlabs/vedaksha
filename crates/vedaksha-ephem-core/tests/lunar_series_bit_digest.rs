@@ -27,6 +27,13 @@
 //! `elp_geocentric_of_date`) = **630,003 lunar-series evaluations**, 3,780,018
 //! pinned `f64` bit patterns.
 //!
+//! A second, companion test ([`lunar_series_position_only_bit_digest`]) runs
+//! the same JD sweep over the two position-only surfaces added in Wave 2
+//! (`elp_geocentric_position`, `elp_geocentric_position_of_date`), pinning
+//! its own digest — kept separate from the digest above rather than folded
+//! in, so neither pinned value has to move when the other surface set
+//! changes.
+//!
 //! # What it is for
 //!
 //! It was added with the sparse-multiplier rewrite of `term_poc`
@@ -78,7 +85,8 @@
 
 use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::analytical::elp_mpp02::{
-    Fit, elp_geocentric, elp_geocentric_of_date, elp_geocentric_with_fit,
+    Fit, elp_geocentric, elp_geocentric_of_date, elp_geocentric_position,
+    elp_geocentric_position_of_date, elp_geocentric_with_fit,
 };
 use vedaksha_ephem_core::jpl::EphemerisProvider;
 
@@ -237,6 +245,103 @@ fn lunar_series_bit_digest() {
          LROW lines — decide whether it is acceptable, and re-pin \
          EXPECTED_DIGEST in a commit that records the reason. Do not re-pin to \
          make a red test green.\n"
+    );
+}
+
+/// Rows the position-only sweep must emit: (200,001 + 10,000) JDs × 2 surfaces.
+const POSITION_ONLY_EXPECTED_ROWS: u64 =
+    (FULL_RANGE_SAMPLES as u64 + CONTEMPORARY_SAMPLES as u64) * 2;
+
+/// Digest of the position-only pipeline's 420,002 rows.
+///
+/// # Measured 2026-08-31, position-only ELP (Wave 2 item #5)
+///
+/// Companion to [`EXPECTED_DIGEST`], added when `elp_geocentric_position` and
+/// `elp_geocentric_position_of_date` were added as new sibling entry points
+/// that skip the velocity/omega computation entirely (`docs/audit/2026-08-29-perf-investigation.md`
+/// #5). Those two functions are claimed to return exactly the position half
+/// of `elp_geocentric`/`elp_geocentric_of_date` at the same `(jd)` — this
+/// digest is the independent, 420,002-evaluation confirmation of that claim,
+/// over the same JD sweep [`lunar_series_bit_digest`] uses for the full
+/// six-component surfaces.
+///
+/// **If this assertion fails, the position-only path diverged from the
+/// position half of the full computation.** Same investigation procedure as
+/// [`EXPECTED_DIGEST`]'s doc comment. Do not re-pin to make a red test green.
+const POSITION_ONLY_EXPECTED_DIGEST: &str =
+    "6edec0b1dd362d83a0a31e993b940b1119d8a49a9062a4afbf9ecd53ec255e93";
+
+#[test]
+#[ignore = "release-only bit fingerprint of the position-only lunar series; see the module comment"]
+fn lunar_series_position_only_bit_digest() {
+    require_release_profile();
+
+    let dump = std::env::var_os("VEDAKSHA_DUMP_LUNAR_ROWS").is_some();
+
+    let (jd_min, jd_max) = AnalyticalProvider.time_range();
+    let jds = sweep_jds(jd_min, jd_max);
+
+    let mut hasher = sha256::Sha256::new();
+    let mut rows = 0u64;
+    let mut line = String::with_capacity(96);
+
+    // The two position-only public surfaces of `analytical::elp_mpp02`, each
+    // over the whole JD list. Kept as two separate passes, matching
+    // `lunar_series_bit_digest`'s per-surface layout, so a divergence
+    // confined to one surface is obvious in a row diff.
+    for surface in 0..2u8 {
+        let tag = match surface {
+            0 => "POS_J2000_LLR",
+            _ => "POS_OFDATE_LLR",
+        };
+        for &jd in &jds {
+            let (x, y, z) = match surface {
+                0 => elp_geocentric_position(jd),
+                _ => elp_geocentric_position_of_date(jd),
+            };
+            line.clear();
+            use std::fmt::Write as _;
+            write!(
+                line,
+                "LROW {tag} {jd:.6} {:016x} {:016x} {:016x}",
+                x.to_bits(),
+                y.to_bits(),
+                z.to_bits(),
+            )
+            .expect("writing to a String cannot fail");
+            if dump {
+                println!("{line}");
+            }
+            hasher.update(line.as_bytes());
+            hasher.update(b"\n");
+            rows += 1;
+        }
+    }
+
+    let digest = hasher.finalize_hex();
+
+    eprintln!(
+        "lunar_series_position_only_bit_digest: {rows} rows over {} JDs \
+         (range {jd_min} .. {jd_max})\n\
+         lunar_series_position_only_bit_digest: sha256 {digest}",
+        jds.len()
+    );
+
+    assert_eq!(
+        rows, POSITION_ONLY_EXPECTED_ROWS,
+        "row count moved: the digest is only comparable across commits that \
+         emit the same rows"
+    );
+    assert_eq!(
+        digest, POSITION_ONLY_EXPECTED_DIGEST,
+        "\n\nThe position-only ELP/MPP02 surfaces' output bits MOVED.\n\n\
+         expected {POSITION_ONLY_EXPECTED_DIGEST}\n\
+         actual   {digest}\n\n\
+         Find out what moved and by how much — re-run this test on both \
+         commits with VEDAKSHA_DUMP_LUNAR_ROWS=1 and --nocapture and diff the \
+         LROW lines — decide whether it is acceptable, and re-pin \
+         POSITION_ONLY_EXPECTED_DIGEST in a commit that records the reason. \
+         Do not re-pin to make a red test green.\n"
     );
 }
 

@@ -116,9 +116,13 @@ fn vsop_state(planet: Planet, jd: f64) -> StateVector {
 
 /// Compute Moon position relative to EMB in equatorial (ICRS) frame.
 ///
-/// The coordinates pipeline (`coordinates.rs`) expects `compute_state(Body::Moon)`
-/// to return the Moon's position **relative to EMB** (Earth-Moon Barycenter),
-/// matching the SPK convention (center=3). The conversion from geocentric is:
+/// `compute_state(Body::Moon)` returns the Moon's position **relative to
+/// EMB** (Earth-Moon Barycenter), matching the SPK convention (center=3).
+/// [`retarded_geocentric`](crate::coordinates)'s Moon branch reaches this
+/// same convention through the position-only [`EphemerisProvider::moon_position`]
+/// trait method instead, not through `compute_state` -- see
+/// `moon_position_rel_emb` below, which performs the identical conversion.
+/// The conversion from geocentric is:
 ///
 ///   Moon_rel_EMB = Moon_geocentric * EMRAT / (1 + EMRAT)
 ///
