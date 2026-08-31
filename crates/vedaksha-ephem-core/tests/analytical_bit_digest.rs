@@ -219,11 +219,14 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// ~0.31 differing rows — landing on exactly 0 is a real, reproducible
 /// result, but a coin-flip-margin one, not a guarantee.
 ///
-/// So [`EXPECTED_DIGEST`] below is unchanged, and that is the *measured
-/// result* for this fixture's specific rows and date range — not a proof
-/// that it must stay unchanged. **If this fixture's date range, row
-/// selection, or row count ever changes, re-verify the digest by measuring
-/// it again rather than assuming it will stay unchanged.**
+/// So [`EXPECTED_DIGEST`] below was unchanged *by the EMB/Moon cancellation
+/// removal specifically*, and that is the *measured result* for this
+/// fixture's specific rows and date range — not a proof that it must stay
+/// unchanged in general, and not a claim that stands for every later change
+/// to this file (see the section immediately below, where it moves again
+/// for an unrelated reason). **If this fixture's date range, row selection,
+/// or row count ever changes, re-verify the digest by measuring it again
+/// rather than assuming it will stay unchanged.**
 ///
 /// # Why this moved at the VSOP87A SIMD adoption (2026-08-31)
 ///
