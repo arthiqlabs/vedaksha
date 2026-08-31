@@ -97,8 +97,8 @@ pub fn search_transits(
     finish_events(events)
 }
 
-/// Sort a body's-worth (or the whole search's worth) of events by exact
-/// Julian Day, matching `search_transits`'s long-standing output order.
+/// Sort the whole search's events by exact Julian Day, matching
+/// `search_transits`'s long-standing output order.
 fn finish_events(mut events: Vec<TransitEvent>) -> Vec<TransitEvent> {
     events.sort_by(|a, b| {
         a.exact_jd
@@ -688,6 +688,14 @@ mod tests {
     /// The floats are compared as raw bit patterns, not with a tolerance: the
     /// claim is that chunking reproduces the identical sequence, and a
     /// tolerance would not test that claim.
+    ///
+    /// `std`-gated because it names `search_transits_in_parallel` and
+    /// `MIN_BODIES_PER_WORKER` directly, both `#[cfg(feature = "std")]` --
+    /// without this gate, `cargo test --no-default-features` fails to
+    /// compile. Not caught by CI today (the no-default-features check runs
+    /// `cargo check --workspace`, not `--all-targets`, so test code is never
+    /// compiled under that feature set) but a real break all the same.
+    #[cfg(feature = "std")]
     #[test]
     fn threaded_and_serial_scans_agree_bit_for_bit() {
         let bodies: Vec<(String, usize)> = (0..8).map(|i| (format!("Body{i}"), i)).collect();
@@ -729,9 +737,21 @@ mod tests {
         // Every path that can produce this answer, checked against the
         // serial walk. `search_transits_in_parallel` is `None` only on a host
         // that reports no parallelism, where there is no threaded path to
-        // check.
+        // check -- but on any host reporting 2-way parallelism or more (with
+        // 8 bodies and MIN_BODIES_PER_WORKER = 2, that means `workers >= 2`),
+        // it must actually return `Some`, or this test would silently
+        // degrade into comparing the serial path against itself.
+        let parallel_result = search_transits_in_parallel(&config, &get_lon);
+        if let Ok(available) = std::thread::available_parallelism() {
+            assert!(
+                available.get() < 2 || parallel_result.is_some(),
+                "host reports {available} threads but search_transits_in_parallel \
+                 returned None -- this would make the comparison below vacuous"
+            );
+        }
+
         let mut under_test = vec![search_transits(&config, &get_lon)];
-        if let Some(parallel) = search_transits_in_parallel(&config, &get_lon) {
+        if let Some(parallel) = parallel_result {
             under_test.push(finish_events(parallel));
         }
 
