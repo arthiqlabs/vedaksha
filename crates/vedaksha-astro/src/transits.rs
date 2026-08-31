@@ -70,13 +70,57 @@ pub struct TransitSearchConfig {
 ///
 /// # Returns
 /// Transit events found, sorted by Julian Day.
+///
+/// The outer loop over `config.transiting_bodies` is independent per body:
+/// each body's coarse scan and crossing detection reads nothing but its own
+/// index and the shared, read-only `config`/`get_longitude`. With the `std`
+/// feature, that independence is split across
+/// [`std::thread::available_parallelism`] workers over contiguous ascending
+/// chunks of `transiting_bodies` — see `search_transits_in_parallel`. Bodies
+/// within one chunk still run in their original left-to-right order, and
+/// chunks are joined and concatenated in spawn order, then the whole set is
+/// sorted by `exact_jd` exactly as the serial path always has been — so the
+/// returned events are bit-identical and in the same order regardless of
+/// which path ran, which `threaded_and_serial_scans_agree_bit_for_bit`
+/// asserts field by field. Ranges with too few bodies to split, and targets
+/// that report no parallelism (wasm32 among them), run serially.
 pub fn search_transits(
     config: &TransitSearchConfig,
     get_longitude: &(dyn Fn(usize, f64) -> Option<f64> + Sync),
 ) -> Vec<TransitEvent> {
+    #[cfg(feature = "std")]
+    if let Some(events) = search_transits_in_parallel(config, get_longitude) {
+        return finish_events(events);
+    }
+
+    let events = evaluate_bodies(config, &config.transiting_bodies, get_longitude);
+    finish_events(events)
+}
+
+/// Sort a body's-worth (or the whole search's worth) of events by exact
+/// Julian Day, matching `search_transits`'s long-standing output order.
+fn finish_events(mut events: Vec<TransitEvent>) -> Vec<TransitEvent> {
+    events.sort_by(|a, b| {
+        a.exact_jd
+            .partial_cmp(&b.exact_jd)
+            .unwrap_or(core::cmp::Ordering::Equal)
+    });
+    events
+}
+
+/// Run the coarse-scan-then-crossing-detection pipeline for each of `bodies`,
+/// in order, concatenating their events.
+///
+/// This is the whole of [`search_transits`]'s per-body work, factored out so
+/// a worker thread can run it over a slice of `transiting_bodies`.
+fn evaluate_bodies(
+    config: &TransitSearchConfig,
+    bodies: &[(String, usize)],
+    get_longitude: &(dyn Fn(usize, f64) -> Option<f64> + Sync),
+) -> Vec<TransitEvent> {
     let mut events = Vec::new();
 
-    for (body_name, body_idx) in &config.transiting_bodies {
+    for (body_name, body_idx) in bodies {
         // Coarse-scan this body's longitudes once on the shared time grid. The
         // longitude at a given (body, jd) is independent of the natal point and
         // aspect, so caching it removes the `N_natal × N_aspect` redundant
@@ -113,12 +157,73 @@ pub fn search_transits(
         }
     }
 
-    events.sort_by(|a, b| {
-        a.exact_jd
-            .partial_cmp(&b.exact_jd)
-            .unwrap_or(core::cmp::Ordering::Equal)
-    });
     events
+}
+
+/// Fewest transiting bodies [`search_transits`] will hand a worker.
+///
+/// Unlike `vedaksha-vedic::muhurta`'s per-day candidate split, a body's
+/// pipeline carries no memo and no cross-chunk state: each body's coarse scan
+/// and crossing detection is entirely self-contained, so splitting bodies
+/// across workers re-derives nothing and has no cold-start penalty. The only
+/// cost of a finer split is thread-spawn overhead against a coarse scan that
+/// is at minimum `step_size`-many `get_longitude` calls (366 for a 1-year,
+/// 1-day-step search) plus bisection refinement per candidate crossing — work
+/// that dominates spawn cost by orders of magnitude even for a single body.
+///
+/// The threshold is set low — bodies, not grid points, are the parallel
+/// unit, and `search_transits`'s callers request few of them. The MCP
+/// `search_transits` tool (`call_search_transits` in `vedaksha-mcp`) draws
+/// from a fixed 10-body catalog and defaults to all of them when the caller
+/// does not filter; a single-digit `MIN_BODIES_PER_WORKER` is what lets that
+/// common "search everything" call actually split, rather than leaving the
+/// served path serial in the case that matters most.
+#[cfg(feature = "std")]
+const MIN_BODIES_PER_WORKER: usize = 2;
+
+/// Evaluate `config.transiting_bodies` across worker threads, or `None` when
+/// there are too few bodies to be worth splitting or the platform reports no
+/// parallelism.
+///
+/// Chunks are contiguous and ascending over `transiting_bodies`, are joined
+/// in the order they were spawned, and are concatenated in that order before
+/// the final by-`exact_jd` sort — so the pre-sort sequence is exactly the one
+/// [`evaluate_bodies`] would produce serially over the whole slice, and the
+/// sort itself is identical either way. Nothing is summed across bodies, so
+/// no floating-point accumulation order changes.
+#[cfg(feature = "std")]
+fn search_transits_in_parallel(
+    config: &TransitSearchConfig,
+    get_longitude: &(dyn Fn(usize, f64) -> Option<f64> + Sync),
+) -> Option<Vec<TransitEvent>> {
+    let bodies = &config.transiting_bodies;
+
+    // `available_parallelism` reports `Err` on the single-threaded targets
+    // this crate also builds for (wasm32 among them), which lands on the
+    // serial path below rather than on a `spawn` that would fail at run time.
+    let available = std::thread::available_parallelism().ok()?.get();
+    let workers = (bodies.len() / MIN_BODIES_PER_WORKER).min(available);
+    if workers < 2 {
+        return None;
+    }
+
+    let per_worker = bodies.len().div_ceil(workers);
+    let mut chunked: Vec<Vec<TransitEvent>> = Vec::with_capacity(workers);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = bodies
+            .chunks(per_worker)
+            .map(|chunk| scope.spawn(move || evaluate_bodies(config, chunk, get_longitude)))
+            .collect();
+        for handle in handles {
+            chunked.push(
+                handle
+                    .join()
+                    .expect("transit search worker thread panicked"),
+            );
+        }
+    });
+
+    Some(chunked.into_iter().flatten().collect())
 }
 
 /// Evaluate one body's longitude on the coarse `step_size` grid once, so the
@@ -568,6 +673,97 @@ mod tests {
         let events = search_transits(&config, &linear_longitude);
         // At least Sun-NatalSun conjunction (day 30) should exist.
         assert!(!events.is_empty(), "Should find events for multiple bodies");
+    }
+
+    /// Splitting the per-body scan across workers must not change one bit of
+    /// the answer, nor the order events come back in.
+    ///
+    /// Eight synthetic bodies is `2 * MIN_BODIES_PER_WORKER` — enough that,
+    /// on any host reporting 2-way parallelism, `search_transits_in_parallel`
+    /// actually splits rather than falling back to `None`.
+    /// `search_transits_in_parallel` is called directly as well, so the
+    /// threaded values are compared even if `search_transits`'s own dispatch
+    /// were to change.
+    ///
+    /// The floats are compared as raw bit patterns, not with a tolerance: the
+    /// claim is that chunking reproduces the identical sequence, and a
+    /// tolerance would not test that claim.
+    #[test]
+    fn threaded_and_serial_scans_agree_bit_for_bit() {
+        let bodies: Vec<(String, usize)> = (0..8).map(|i| (format!("Body{i}"), i)).collect();
+        assert!(
+            bodies.len() >= 2 * MIN_BODIES_PER_WORKER,
+            "the body count must be enough for the scan to split at all: {}",
+            bodies.len()
+        );
+
+        // Distinct rates per body index so the scan walks full cycles for
+        // every body and hits many crossings, rather than degenerating to a
+        // handful of trivial cases.
+        let get_lon = |body_idx: usize, jd: f64| -> Option<f64> {
+            let speed = 0.7 + (body_idx as f64) * 1.3;
+            Some(angle::normalize_degrees(speed * (jd - BASE_JD)))
+        };
+
+        let config = TransitSearchConfig {
+            natal_positions: vec![("N1".into(), 10.0), ("N2".into(), 200.0)],
+            start_jd: BASE_JD,
+            end_jd: BASE_JD + 365.0,
+            transiting_bodies: bodies,
+            aspect_types: vec![
+                ("Conjunction".into(), 0.0),
+                ("Square".into(), 90.0),
+                ("Trine".into(), 120.0),
+            ],
+            max_orb: 1.0,
+            step_size: 1.0,
+        };
+
+        let serial = finish_events(evaluate_bodies(
+            &config,
+            &config.transiting_bodies,
+            &get_lon,
+        ));
+        assert!(!serial.is_empty(), "should detect crossings");
+
+        // Every path that can produce this answer, checked against the
+        // serial walk. `search_transits_in_parallel` is `None` only on a host
+        // that reports no parallelism, where there is no threaded path to
+        // check.
+        let mut under_test = vec![search_transits(&config, &get_lon)];
+        if let Some(parallel) = search_transits_in_parallel(&config, &get_lon) {
+            under_test.push(finish_events(parallel));
+        }
+
+        for got in &under_test {
+            assert_eq!(
+                got.len(),
+                serial.len(),
+                "the threaded scan must report the same number of events"
+            );
+            for (i, (t, s)) in got.iter().zip(&serial).enumerate() {
+                assert_eq!(
+                    t.exact_jd.to_bits(),
+                    s.exact_jd.to_bits(),
+                    "event {i}: exact_jd differs bitwise"
+                );
+                assert_eq!(
+                    t.exact_orb.to_bits(),
+                    s.exact_orb.to_bits(),
+                    "event {i}: exact_orb differs bitwise"
+                );
+                assert_eq!(t.applying, s.applying, "event {i}: applying differs");
+                assert_eq!(
+                    t.transiting_body, s.transiting_body,
+                    "event {i}: transiting_body differs"
+                );
+                assert_eq!(t.natal_body, s.natal_body, "event {i}: natal_body differs");
+                assert_eq!(
+                    t.aspect_type, s.aspect_type,
+                    "event {i}: aspect_type differs"
+                );
+            }
+        }
     }
 
     #[test]
