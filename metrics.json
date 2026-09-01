@@ -9,6 +9,39 @@
     "fullCommand": "cargo test --workspace --release --locked -- --include-ignored"
   },
   "oracleRows": 24350,
+  "accuracy": {
+    "$comment": "Measured agreement with JPL Horizons (DE441), re-run at the tag rather than carried forward. Published here so the site reads them live like every other figure: they were hand-maintained site constants until 2026-09-01 and had gone unverified from v7.0.0 to v9.1.0. Asserted against the engine's own oracle output by check_metrics_accuracy.py, so they cannot drift from what the tests actually print. The SPK and analytical paths are separately implemented and separately measured - neither figure says anything about the other.",
+    "verified": "2026-09-01",
+    "verifiedAtVersion": "9.1.0",
+    "spk": {
+      "$comment": "SpkReader against DE440s, via tests/oracle_comparison.rs.",
+      "provider": "SpkReader",
+      "meanArcsec": 0.103,
+      "maxArcsec": 1.187,
+      "maxBody": "Uranus",
+      "maxDate": "1948-06-18",
+      "comparisons": 15350,
+      "command": "cargo test -p vedaksha-ephem-core --release --locked --test oracle_comparison -- --include-ignored"
+    },
+    "analytical": {
+      "$comment": "AnalyticalProvider (VSOP87A + ELP/MPP02), no runtime data file, via tests/analytical_oracle.rs.",
+      "provider": "AnalyticalProvider",
+      "meanArcsec": 0.239,
+      "maxArcsec": 1.896,
+      "maxBody": "Neptune",
+      "maxDate": "2007-02-09",
+      "comparisons": 13815,
+      "command": "cargo test -p vedaksha-ephem-core --release --locked --test analytical_oracle -- --include-ignored"
+    },
+    "era": {
+      "$comment": "Both mean/max figures above describe the measured-Delta T era ONLY. Past 2025 both Horizons and delta_t.rs must PREDICT Delta T rather than read it from the IERS record, and the two predictions diverge; the residual out there is time-scale disagreement, not ephemeris error, and scales with each body's angular rate. Quoting a mean over the full 24,350 rows alongside the sub-arcsecond claim overstates it. Never write '24,350 positions ... 0.103 arcsec'.",
+      "measured": "1900-2025",
+      "full": "1900-2100",
+      "predictedEraMaxArcsec": 44.912,
+      "predictedEraMaxBody": "Moon",
+      "predictedEraMaxDate": "2099-02-06"
+    }
+  },
   "mcpTools": 17,
   "crates": 7,
   "licence": {

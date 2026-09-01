@@ -89,6 +89,15 @@ jobs:
         env:
           VEDAKSHA_REQUIRE_FIXTURES: '1'
         run: cargo test --workspace --release --locked -- --include-ignored
+      - name: Published accuracy figures match what the engine measures
+        # metrics.json is served live to vedaksha.net, so its accuracy block is
+        # a public claim. It was hand-maintained on the site until 2026-09-01
+        # and went unverified from v7.0.0 through v9.1.0. This re-derives it
+        # from the oracle tests' own output rather than trusting the file.
+        #
+        # Runs here rather than in push CI because it needs the kernel, which
+        # only this job fetches.
+        run: python3 scripts/check_metrics_accuracy.py
       - name: Clippy
         env:
           RUSTFLAGS: -D warnings
