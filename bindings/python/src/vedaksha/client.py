@@ -174,3 +174,63 @@ class Vedaksha:
         naif = body if isinstance(body, int) else NAIF_IDS[body.lower()]
         x, y, z, vx, vy, vz = self._engine.spk_state(naif, julian_day)
         return {"x": x, "y": y, "z": z, "vx": vx, "vy": vy, "vz": vz}
+
+    # -- analytical ephemeris, TT-addressed ---------------------------------
+
+    def analytical_position(self, body: str | int, julian_day_tt: float) -> dict[str, float]:
+        """Return the apparent ecliptic position of ``body`` at ``julian_day_tt``.
+
+        Uses the built-in analytical ephemeris (ELP/MPP02 lunar theory,
+        VSOP87 planetary theory) -- no kernel needed, always available.
+        ``body`` is a NAIF id or a name in :data:`NAIF_IDS`; the analytical
+        tier does not model Pluto (which :data:`NAIF_IDS` does list for the
+        SPK tier above), so passing it here raises.
+
+        Returns ``{"longitude": deg, "latitude": deg, "distance": au}``,
+        ecliptic-of-date coordinates.
+
+        .. warning::
+
+           This is body positions **only**. There is deliberately no
+           TT-addressed chart, houses, or ascendant method: those depend on
+           Earth's instantaneous rotation (sidereal time), which is a
+           function of UT1, not TT or TDB -- "which point of the ecliptic is
+           on the eastern horizon right now, addressed in TT" is not a
+           well-defined question. Use :meth:`natal_chart` (UT1-addressed) for
+           anything involving houses or the ascendant.
+
+        .. note::
+
+           ``julian_day_tt`` here is **TT, not UT1**, unlike the MCP tools
+           above (:meth:`natal_chart` and friends), which take UT1 and
+           convert to TT internally via a Delta T table. This method applies
+           **no Delta T conversion at all** -- the argument reaches the
+           ephemeris pipeline unchanged, the same way :meth:`state_vector`
+           applies no conversion for the SPK tier.
+
+           This is the entry point to use for cross-implementation
+           comparison outside the era where Delta T is a *measured* quantity
+           (roughly 1900-2100): outside that era, Delta T is itself an
+           extrapolation, and two independent implementations generally use
+           two different tables, so comparing UT1-addressed output against
+           UT1-addressed output measures the sum of two entangled error
+           sources -- the ephemeris theories' own truncation error, and the
+           disagreement between the two Delta T extrapolations -- with no way
+           to apportion the residual between them. Addressing both sides in
+           TT removes Delta T from the comparison entirely: neither side
+           performs a UT1->TT conversion, so the only remaining limit is each
+           reference ephemeris's own coverage span.
+
+           The analytical theories are formally referenced to TDB, not TT,
+           but the difference is not corrected here: the periodic TT-TDB
+           term peaks at roughly 1.7 ms (Fairhead & Bretagnon, 1990), and
+           even for the Moon -- the fastest-moving body this method computes,
+           at a mean rate of about 13.176 deg/day -- that bounds the
+           resulting position error at roughly
+           47,435 arcsec/day x (1.7e-3 s / 86,400 s/day) ~= 9.3e-4 arcsec,
+           under one milliarcsecond. Every other body moves slower, so its
+           TT/TDB error is smaller still.
+        """
+        naif = body if isinstance(body, int) else NAIF_IDS[body.lower()]
+        lon, lat, dist = self._engine.analytical_position_tt(naif, julian_day_tt)
+        return {"longitude": lon, "latitude": lat, "distance": dist}

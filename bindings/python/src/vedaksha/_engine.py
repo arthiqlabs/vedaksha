@@ -75,6 +75,7 @@ class Engine:
         self._spk_loaded = ex["vk_spk_loaded"]
         self._spk_state = ex["vk_spk_state"]
         self._spk_range = ex["vk_spk_range"]
+        self._analytical_position_tt = ex["vk_analytical_position_tt"]
 
         abi = ex["vk_abi_version"](self._store)
         if abi != _ABI_VERSION:
@@ -161,6 +162,20 @@ class Engine:
                 return lo, hi
             finally:
                 self._free(self._store, out, 16)
+
+    # -- Analytical (TT) surface --------------------------------------------
+
+    def analytical_position_tt(self, naif_id: int, jd_tt: float) -> tuple[float, float, float]:
+        """Return ``(longitude_deg, latitude_deg, distance_au)``, no SPK kernel needed."""
+        with self._lock:
+            out = self._alloc(self._store, 24)
+            try:
+                rc = self._analytical_position_tt(self._store, naif_id, jd_tt, out)
+                if rc != 0:
+                    raise self._fail(rc, "analytical_position_tt")
+                return struct.unpack("<3d", self._read(out, 24))
+            finally:
+                self._free(self._store, out, 24)
 
 
 _default: Engine | None = None

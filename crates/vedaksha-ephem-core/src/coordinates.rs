@@ -103,14 +103,19 @@ pub fn frame_for(jd_tt: f64) -> CelestialFrame {
     }
 }
 
+/// Compute apparent ecliptic coordinates from an already-converted TT Julian
+/// Day.
+///
+/// This is the single point in the pipeline that touches `jpl`/`nodes`
+/// timestamps: `jd_tt` must already be Terrestrial Time. No caller in this
+/// file may hand this a UT1 value — the public UT1-addressed functions below
+/// convert exactly once, at their own boundary, before reaching here.
 fn compute_ecliptic_with_frame(
     provider: &dyn EphemerisProvider,
     body: Body,
-    jd_ut: f64,
+    jd_tt: f64,
     frame: &CelestialFrame,
 ) -> Result<EclipticCoords, ComputeError> {
-    let jd = delta_t::ut1_to_tt(jd_ut);
-
     // Step 0: the lunar nodes are directions, not bodies.
     //
     // A node has no position, so it has no light-time, no aberration and no
@@ -124,7 +129,7 @@ fn compute_ecliptic_with_frame(
     // The only correction a node does take is nutation in longitude: the node
     // functions return the *mean* equinox of date and every other longitude
     // this function returns is referred to the *true* equinox of date.
-    if let Some(mean_of_date_deg) = crate::nodes::node_longitude(body, jd) {
+    if let Some(mean_of_date_deg) = crate::nodes::node_longitude(body, jd_tt) {
         let mut longitude = mean_of_date_deg.to_radians() + frame.dpsi;
         if longitude < 0.0 {
             longitude += 2.0 * PI;
@@ -145,7 +150,7 @@ fn compute_ecliptic_with_frame(
     // retarded time t-τ. For solar-system bodies this single step provides
     // the apparent direction in the observer's instantaneous rest frame —
     // adding stellar aberration on top would double-count.
-    let geo = light_time_geocentric(provider, body, jd)?;
+    let geo = light_time_geocentric(provider, body, jd_tt)?;
 
     // Steps 2-3: apply the precomputed nutation·precession frame (the
     // provider returns J2000 mean-equatorial vectors; SPK ICRF agrees to
@@ -284,12 +289,25 @@ pub fn apparent_position(
     body: Body,
     jd: f64,
 ) -> Result<ApparentPosition, ComputeError> {
-    // Daily motion uses a ±0.5-day central difference, so three timestamps are
-    // involved; build each one's time-only frame once.
-    let frame = frame_for(delta_t::ut1_to_tt(jd));
-    let frame_before = frame_for(delta_t::ut1_to_tt(jd - 0.5));
-    let frame_after = frame_for(delta_t::ut1_to_tt(jd + 0.5));
-    apparent_position_with_frames(provider, body, jd, &frame, &frame_before, &frame_after)
+    // Daily motion uses a ±0.5-day central difference, so three UT1 timestamps
+    // are involved; each is converted to TT exactly once, here, and the TT
+    // value is what flows into both the frame and the ephemeris query below.
+    let jd_tt = delta_t::ut1_to_tt(jd);
+    let jd_tt_before = delta_t::ut1_to_tt(jd - 0.5);
+    let jd_tt_after = delta_t::ut1_to_tt(jd + 0.5);
+    let frame = frame_for(jd_tt);
+    let frame_before = frame_for(jd_tt_before);
+    let frame_after = frame_for(jd_tt_after);
+    apparent_position_with_frames(
+        provider,
+        body,
+        jd_tt,
+        &frame,
+        jd_tt_before,
+        &frame_before,
+        jd_tt_after,
+        &frame_after,
+    )
 }
 
 /// Apparent ecliptic coordinates **without** daily motion.
@@ -300,6 +318,10 @@ pub fn apparent_position(
 /// muhurta/panchanga sweeps, raw ephemeris position queries); use
 /// [`apparent_position`] when daily motion / retrograde state is needed.
 ///
+/// `jd` is **UT1**; it is converted to TT exactly once, here. See
+/// [`ecliptic_position_tt`] for the TT-addressed sibling used for
+/// cross-implementation comparison.
+///
 /// # Errors
 /// Returns [`ComputeError`] if the provider cannot compute the body's state.
 pub fn ecliptic_position(
@@ -307,26 +329,88 @@ pub fn ecliptic_position(
     body: Body,
     jd: f64,
 ) -> Result<EclipticCoords, ComputeError> {
-    let frame = frame_for(delta_t::ut1_to_tt(jd));
-    compute_ecliptic_with_frame(provider, body, jd, &frame)
+    let jd_tt = delta_t::ut1_to_tt(jd);
+    let frame = frame_for(jd_tt);
+    compute_ecliptic_with_frame(provider, body, jd_tt, &frame)
 }
 
-/// [`apparent_position`] with the three central-difference frames supplied by
-/// the caller, so a batch can build them once and reuse them across all bodies
-/// rather than recomputing nutation/precession/obliquity per body.
+/// TT-addressed sibling of [`ecliptic_position`]: `jd_tt` is **Terrestrial
+/// Time**, not UT1, and this function applies **no Delta T conversion at
+/// all** — the value is passed straight into the pipeline that
+/// [`ecliptic_position`] itself reaches only after converting.
+///
+/// # Why this exists
+/// Every other published entry point to the analytical path is UT1-addressed
+/// and converts to TT internally via [`delta_t::ut1_to_tt`]. Outside the
+/// modern era where Delta T is a measured quantity (roughly 1900-2100),
+/// Delta T itself is an extrapolation, and two independent implementations
+/// generally use two different extrapolations. Comparing this engine's
+/// UT1-addressed output against another implementation's UT1-addressed
+/// output therefore measures the *sum* of two entangled error sources — the
+/// analytical theories' own truncation error, and the disagreement between
+/// the two Delta T tables — with no way to apportion the residual between
+/// them.
+///
+/// Addressing both sides in TT removes Delta T from the comparison entirely:
+/// neither side performs a UT1->TT conversion, so the two independent
+/// extrapolations never enter the picture, and the only remaining limit is
+/// each reference ephemeris's own coverage span. This is the analytical-path
+/// counterpart of [`crate::jpl::reader::SpkReader::compute_state`]'s
+/// TDB-addressed raw entry point, which applies no Delta T conversion for the
+/// same reason.
+///
+/// The tiny remaining TT/TDB distinction (the analytical theories are
+/// formally TDB-referenced) is deliberately not corrected here: the periodic
+/// TT-TDB difference peaks at roughly 1.7 ms (Fairhead & Bretagnon 1990), and
+/// even for the Moon — the fastest-moving body this engine computes, at a
+/// mean rate of about 13.176 deg/day — that maps to at most on the order of
+/// 47,435 arcsec/day x (1.7e-3 s / 86,400 s/day) ~= 9.3e-4 arcsec, under one
+/// milliarcsecond. Every other body moves slower, so its TT/TDB error is
+/// smaller still.
+///
+/// # Why this is body positions only, not a chart
+/// Houses and the ascendant depend on Earth's instantaneous rotation angle
+/// (sidereal time), which is fundamentally a function of UT1, not TT or TDB —
+/// there is no TT-addressed reformulation of "which point of the ecliptic is
+/// on the eastern horizon right now" that means anything. A "TT-addressed
+/// chart" is not a well-defined request, so this entry point is deliberately
+/// restricted to body positions and is not exposed as an MCP tool. Do not
+/// extend it to houses/ascendant/panchanga.
+///
+/// # Errors
+/// Returns [`ComputeError`] if the provider cannot compute the body's state.
+pub fn ecliptic_position_tt(
+    provider: &dyn EphemerisProvider,
+    body: Body,
+    jd_tt: f64,
+) -> Result<EclipticCoords, ComputeError> {
+    let frame = frame_for(jd_tt);
+    compute_ecliptic_with_frame(provider, body, jd_tt, &frame)
+}
+
+/// [`apparent_position`] with the three central-difference **TT** timestamps
+/// and frames supplied by the caller, so a batch can build them once and
+/// reuse them across all bodies rather than recomputing
+/// nutation/precession/obliquity per body.
+///
+/// All three `jd_tt*` parameters must already be TT; no conversion happens
+/// in this function.
+#[allow(clippy::too_many_arguments)]
 fn apparent_position_with_frames(
     provider: &dyn EphemerisProvider,
     body: Body,
-    jd: f64,
+    jd_tt: f64,
     frame: &CelestialFrame,
+    jd_tt_before: f64,
     frame_before: &CelestialFrame,
+    jd_tt_after: f64,
     frame_after: &CelestialFrame,
 ) -> Result<ApparentPosition, ComputeError> {
-    let ecliptic = compute_ecliptic_with_frame(provider, body, jd, frame)?;
+    let ecliptic = compute_ecliptic_with_frame(provider, body, jd_tt, frame)?;
 
     // Step 9: Daily motion via central difference (half-day step).
-    let pos_before = compute_ecliptic_with_frame(provider, body, jd - 0.5, frame_before)?;
-    let pos_after = compute_ecliptic_with_frame(provider, body, jd + 0.5, frame_after)?;
+    let pos_before = compute_ecliptic_with_frame(provider, body, jd_tt_before, frame_before)?;
+    let pos_after = compute_ecliptic_with_frame(provider, body, jd_tt_after, frame_after)?;
 
     // Longitude speed with wrap-around handling
     let mut speed_rad = pos_after.longitude - pos_before.longitude;
@@ -364,11 +448,15 @@ pub fn apparent_positions(
     jd: f64,
 ) -> Vec<(Body, Result<ApparentPosition, ComputeError>)> {
     let cached = crate::cache::CachingProvider::new(provider);
-    // Time-only frames are body-independent — build the three central-difference
-    // frames once and reuse them across every body.
-    let frame = frame_for(delta_t::ut1_to_tt(jd));
-    let frame_before = frame_for(delta_t::ut1_to_tt(jd - 0.5));
-    let frame_after = frame_for(delta_t::ut1_to_tt(jd + 0.5));
+    // Time-only frames are body-independent — convert each of the three UT1
+    // timestamps to TT exactly once and build its frame once, then reuse both
+    // across every body.
+    let jd_tt = delta_t::ut1_to_tt(jd);
+    let jd_tt_before = delta_t::ut1_to_tt(jd - 0.5);
+    let jd_tt_after = delta_t::ut1_to_tt(jd + 0.5);
+    let frame = frame_for(jd_tt);
+    let frame_before = frame_for(jd_tt_before);
+    let frame_after = frame_for(jd_tt_after);
     bodies
         .iter()
         .map(|&body| {
@@ -377,9 +465,11 @@ pub fn apparent_positions(
                 apparent_position_with_frames(
                     &cached,
                     body,
-                    jd,
+                    jd_tt,
                     &frame,
+                    jd_tt_before,
                     &frame_before,
+                    jd_tt_after,
                     &frame_after,
                 ),
             )
@@ -523,5 +613,132 @@ mod tests {
                 "{body:?} distance"
             );
         }
+    }
+
+    /// Core correctness property of the TT entry point: it and the UT1 entry
+    /// point must differ *only* in what the caller supplies for the time
+    /// scale. Calling the TT sibling at `ut1_to_tt(x)` must be bit-identical
+    /// to calling the UT1 function at `x`, for every field, across a spread
+    /// of dates spanning well outside the measured-Delta-T era in both
+    /// directions.
+    #[test]
+    fn ecliptic_position_tt_matches_ut1_at_converted_time() {
+        use crate::analytical::AnalyticalProvider;
+
+        let provider = AnalyticalProvider::new();
+        let bodies = [
+            Body::Sun,
+            Body::Moon,
+            Body::Mercury,
+            Body::Venus,
+            Body::Mars,
+            Body::Jupiter,
+            Body::Saturn,
+            Body::Uranus,
+            Body::Neptune,
+            Body::Pluto,
+            Body::MeanNode,
+            Body::TrueNode,
+        ];
+        // A spread of dates: deep past (well before the measured-Delta-T
+        // era), the measured era itself, present, and far future.
+        let dates_ut1 = [
+            990_000.0,   // 1300 BCE-ish (deep past, Delta T heavily extrapolated)
+            1_500_000.0, // antiquity
+            2_000_000.0, // ~ 763 BCE
+            2_305_447.5, // 1600-01-01
+            2_400_000.5, // 1858-11-17 (MJD epoch)
+            2_451_545.0, // J2000.0 (measured era)
+            2_460_676.5, // 2024-11-24 (measured era)
+            2_500_000.5, // 2132 CE
+            2_600_000.5, // 2405 CE (far future, extrapolated Delta T)
+        ];
+
+        for jd_ut1 in dates_ut1 {
+            let jd_tt = delta_t::ut1_to_tt(jd_ut1);
+            for &body in &bodies {
+                let ut1_result = ecliptic_position(&provider, body, jd_ut1);
+                let tt_result = ecliptic_position_tt(&provider, body, jd_tt);
+                match (ut1_result, tt_result) {
+                    (Ok(ut1), Ok(tt)) => {
+                        assert_eq!(
+                            ut1.longitude.to_bits(),
+                            tt.longitude.to_bits(),
+                            "{body:?} at jd_ut1={jd_ut1}: longitude differs"
+                        );
+                        assert_eq!(
+                            ut1.latitude.to_bits(),
+                            tt.latitude.to_bits(),
+                            "{body:?} at jd_ut1={jd_ut1}: latitude differs"
+                        );
+                        assert_eq!(
+                            ut1.distance.to_bits(),
+                            tt.distance.to_bits(),
+                            "{body:?} at jd_ut1={jd_ut1}: distance differs"
+                        );
+                    }
+                    (Err(_), Err(_)) => {
+                        // Both paths must fail together (e.g. Pluto outside
+                        // the analytical provider's supported range).
+                    }
+                    other => panic!(
+                        "{body:?} at jd_ut1={jd_ut1}: UT1 and TT paths disagreed on success: {other:?}"
+                    ),
+                }
+            }
+        }
+    }
+
+    /// The TT path must apply *no* Delta T conversion: feeding it a UT1 value
+    /// directly (as if it were TT) must disagree with the true UT1 path by an
+    /// amount consistent with Delta T at that epoch — not silently agree,
+    /// which would indicate a conversion was applied somewhere on the "TT"
+    /// path after all.
+    #[test]
+    fn ecliptic_position_tt_applies_no_delta_t_conversion() {
+        use crate::analytical::AnalyticalProvider;
+
+        let provider = AnalyticalProvider::new();
+        let jd_ut1 = 2_305_447.5; // 1600-01-01: far enough from J2000 that
+        // Delta T (~120 s here) produces an easily-measurable longitude shift
+        // for the Moon (fast mover), well above float noise.
+        let delta_t_days = delta_t::ut1_to_tt(jd_ut1) - jd_ut1;
+        assert!(
+            delta_t_days.abs() > 1e-4,
+            "test epoch's Delta T ({delta_t_days} days) is too small to distinguish \
+             from float noise; pick a date further from the measured era"
+        );
+
+        let body = Body::Moon;
+        let true_ut1 = ecliptic_position(&provider, body, jd_ut1).expect("UT1 path");
+        // Misuse the TT entry point by handing it the raw UT1 value.
+        let misfed_tt = ecliptic_position_tt(&provider, body, jd_ut1).expect("TT path");
+
+        // If the TT path silently converted, these would be bit-identical
+        // to true_ut1. They must not be: the TT path took `jd_ut1` literally
+        // as TT, which is `delta_t_days` away from the correct TT instant.
+        assert_ne!(
+            true_ut1.longitude.to_bits(),
+            misfed_tt.longitude.to_bits(),
+            "TT path appears to have applied a Delta T conversion internally"
+        );
+
+        // The Moon's mean motion is ~13.176 deg/day; over `delta_t_days` that
+        // predicts roughly how far apart the two longitudes should land.
+        // Assert the observed gap is within an order of magnitude of that
+        // prediction, ruling out both "no-op" (already excluded above) and
+        // "wildly wrong" conversions.
+        let predicted_shift_deg = 13.176 * delta_t_days.abs();
+        let mut observed_shift_deg =
+            (true_ut1.longitude.to_degrees() - misfed_tt.longitude.to_degrees()).abs();
+        if observed_shift_deg > 180.0 {
+            observed_shift_deg = 360.0 - observed_shift_deg;
+        }
+        assert!(
+            observed_shift_deg > predicted_shift_deg * 0.1
+                && observed_shift_deg < predicted_shift_deg * 10.0,
+            "observed shift {observed_shift_deg}deg not within an order of \
+             magnitude of the Delta-T-predicted shift {predicted_shift_deg}deg"
+        );
     }
 }

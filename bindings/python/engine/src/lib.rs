@@ -25,10 +25,16 @@
 //!   tier, no external data).
 //! * **SPK** — [`vk_spk_load`]/[`vk_spk_state`] expose the sub-arcsecond
 //!   `SpkReader` for callers that supply a DE440s kernel. Independent of MCP.
+//! * **Analytical (TT)** — [`vk_analytical_position_tt`] exposes the
+//!   TT-addressed analytical ephemeris position, no external kernel needed.
+//!   Independent of MCP, and deliberately not part of it — see that
+//!   function's doc comment.
 
 use std::sync::Mutex;
 
+use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
+use vedaksha_ephem_core::coordinates;
 use vedaksha_ephem_core::jpl::{EphemerisProvider, reader::SpkReader};
 
 /// ABI version of this shim. Bump on any breaking change to the exports below.
@@ -240,4 +246,50 @@ pub unsafe extern "C" fn vk_spk_range(out: *mut f64) -> i32 {
     dst[0] = lo;
     dst[1] = hi;
     0
+}
+
+// --- Analytical (TT) surface ------------------------------------------------
+
+/// Compute the analytical-ephemeris apparent ecliptic position of the NAIF
+/// body `naif_id` at Terrestrial Time `jd_tt`, writing
+/// `[longitude_deg, latitude_deg, distance_au]` to `out[..3]`.
+///
+/// `jd_tt` is **TT, not UT1** — unlike the MCP tools, which take UT1 and
+/// convert to TT internally via a Delta T table. This function applies *no*
+/// Delta T conversion anywhere on its path; `jd_tt` reaches
+/// [`coordinates::ecliptic_position_tt`] unchanged. Needs no SPK kernel — it
+/// runs the built-in analytical (ELP/MPP02 + VSOP87) theories, independent of
+/// [`vk_spk_state`].
+///
+/// This is the entry point for cross-implementation comparison outside the
+/// era where Delta T is a measured (rather than extrapolated) quantity:
+/// addressing both sides in TT means neither implementation's Delta T table
+/// enters the comparison, so a residual is attributable to the ephemeris
+/// theories alone. See [`coordinates::ecliptic_position_tt`]'s doc comment
+/// for the full reasoning, the TT/TDB bound, and why this is deliberately
+/// restricted to body positions (no houses/ascendant/chart variant exists or
+/// should be added here).
+///
+/// Returns 0 on success, or a negative error: [`ERR_UNKNOWN_BODY`] (no such
+/// NAIF id, or a body the analytical tier does not model — e.g. Pluto),
+/// [`ERR_COMPUTE`] (date outside the analytical tier's supported range).
+///
+/// # Safety
+/// `out` must point to space for 3 `f64` values in linear memory.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn vk_analytical_position_tt(naif_id: i32, jd_tt: f64, out: *mut f64) -> i32 {
+    let Some(body) = body_from_naif(naif_id) else {
+        return ERR_UNKNOWN_BODY;
+    };
+    let provider = AnalyticalProvider::new();
+    match coordinates::ecliptic_position_tt(&provider, body, jd_tt) {
+        Ok(pos) => {
+            let dst = unsafe { core::slice::from_raw_parts_mut(out, 3) };
+            dst[0] = pos.longitude.to_degrees();
+            dst[1] = pos.latitude.to_degrees();
+            dst[2] = pos.distance;
+            0
+        }
+        Err(_) => ERR_COMPUTE,
+    }
 }
