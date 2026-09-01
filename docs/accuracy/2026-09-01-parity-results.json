@@ -4,7 +4,8 @@
   "measuredAt": null,
   "measuredAtComment": "The date the parity harness actually ran is not recorded in the source this document transcribes, so it is null rather than guessed. publishedAt is when these figures were transcribed here, which is not the same fact and must not be read as one.",
   "engineVersion": "9.1.0",
-  "harness": "A separate parity-testing project that consumes this engine only through its published interfaces and holds its own local copies of the reference kernels. It is maintained by the same authors as this engine: what is independent is the methodology and the reference ephemerides, not the party performing the measurement.",
+  "harness": "A separate parity harness maintained by the same authors",
+  "harnessNote": "A separate parity-testing project that consumes this engine only through its published interfaces and holds its own local copies of the reference kernels. It is maintained by the same authors as this engine: what is independent is the methodology and the reference ephemerides, not the party performing the measurement.",
   "crossValidation": {
     "$comment": "Analytical-path tropical longitudes at 2000 instants for nine bodies (Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune), compared against two independently produced national-agency ephemerides. Comparison counts differ between references because each kernel's own coverage and body set differ. Source: docs/paper/main.tex, subsection 'Cross-validation against a second agency', Table (tab:crossval).",
     "references": [
