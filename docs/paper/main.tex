@@ -303,6 +303,45 @@ marginally smaller than that against DE440.
 These figures were produced by a third party using its own toolchain and its own copies of the
 reference kernels, and are reported here as such rather than as a self-measurement.
 
+\subsection{Component-level validation of the SPK reader}
+
+The comparisons above are end-to-end: each exercises an entire pipeline, with the
+apparent-place machinery (light-time, aberration, precession, nutation) and a UT-to-TT
+conversion layered on top of the position computation itself. A disagreement anywhere in that
+stack appears as a longitude residual, which makes those figures the right measure of what a
+caller receives but a blunt instrument for locating error.
+
+One component admits a sharper test. Vedaksha's SPK reader --- the DAF/SPK binary parser and
+Chebyshev-segment evaluator written for this project rather than taken from an existing SPICE
+toolkit --- is reachable directly, through an entry point that takes a TDB Julian Day and returns
+a raw state vector with no apparent-place processing and no time-scale conversion applied. Two
+implementations reading comparable kernels at the same TDB instant should therefore agree to
+within their shared numerical precision, with nothing else in the comparison at all.
+
+Measured externally by the same independent party, against two kernels' own raw segment
+evaluation: for nine of the ten bodies --- the Sun, Mercury, Venus, Mars, Jupiter, Saturn,
+Uranus, Neptune and Pluto --- agreement is sub-metre, and mostly sub-millimetre, against both
+references. The barycentre-target convention (Mars, Jupiter, Saturn, Uranus, Neptune and Pluto
+addressed as barycentres, matching the segments DE440s actually stores) was verified against both
+kernels before any residual was interpreted.
+
+The tenth body carries a convention that is worth stating precisely, because it is not evident
+from the returned values and a caller who assumes otherwise will be wrong by thousands of
+kilometres. For the Moon, this entry point returns a position relative to the \emph{Earth--Moon
+barycentre} --- neither heliocentric nor referred to Earth's own body centre. The external
+measurement established this by explicit subtraction against a reference kernel's own EMB segment
+at several widely separated instants, rather than assuming it. Once that convention is applied,
+one of the two references agrees with Vedaksha to the same sub-millimetre precision as every other
+body; against the other, a small consistent residual remains, of the order of the Earth-to-EMB
+offset. That residual is reported here as measured and is not explained: accounting for it would
+require inspecting the internals of one implementation or the other, which this project's
+clean-room position does not permit, and it does not affect the apparent-position figures reported
+above, which are computed through a different path.
+
+This result is independent of the longitude comparisons rather than a restatement of them. It
+validates a component the paper claims as independently implemented, in isolation, with the
+time-scale question removed entirely from the comparison.
+
 \subsection{Why residuals grow after 2026}
 
 The 2026--2100 residuals are markedly larger, and this is a time-scale disagreement rather than
@@ -365,6 +404,28 @@ Ephemeris dependency --- precisely what this project's clean-room position exist
 Covering house cusps in the future would require a reference that is itself public-domain or
 derivable from first principles; that work has not been done, and this paper makes no accuracy
 claim about house-cusp computation as a result.
+
+Finally, the validated window is narrower than the supported one. The engine accepts dates from
+roughly 2000~BCE to 3000~CE, and every accuracy figure in this section comes from 1900--2100, with
+the sub-arcsecond claim resting on the 1900--2025 portion where $\Delta T$ is read from the
+measured record. Extending validation across the full supported range is not simply a matter of
+running more comparisons, because two error sources become entangled outside the measured era: the
+truncation error of the analytical theories themselves, which grows with distance from J2000, and
+the divergence between two independent $\Delta T$ extrapolations, which is unbounded in principle.
+A residual measured out there is a sum of the two, and the paper would be unable to say in what
+proportion.
+
+Separating them is possible in principle by addressing both sides in a uniform time scale, so that
+no $\Delta T$ conversion enters the comparison on either side and the remaining difference is
+attributable to the theories alone. Vedaksha does not currently support this on the analytical
+path: every published entry point to it accepts UT1 and performs the conversion internally, and
+the $\Delta T$ value is not itself exposed, so an external party cannot compensate for it either.
+Adding a TT-addressed position entry point --- which would remove the time scale from the
+comparison rather than requiring both sides to attest that they applied the same table --- is the
+concrete prerequisite, and it is left as future work. We note that with $\Delta T$ eliminated the
+binding constraint becomes each reference kernel's own coverage span, which the kernel states
+exactly, rather than the looser and only approximately-bounded window over which a $\Delta T$
+model is considered reliable.
 
 \section{Software Architecture and Availability}
 
