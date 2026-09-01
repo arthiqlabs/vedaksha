@@ -389,3 +389,89 @@ fn the_south_nodes_have_no_state_vector() {
         );
     }
 }
+
+/// Least-squares slope of `ys` against `xs`, in units of y per x.
+fn slope(xs: &[f64], ys: &[f64]) -> f64 {
+    let n = xs.len() as f64;
+    let mx = xs.iter().sum::<f64>() / n;
+    let my = ys.iter().sum::<f64>() / n;
+    let mut sxy = 0.0;
+    let mut sxx = 0.0;
+    for (x, y) in xs.iter().zip(ys) {
+        sxy += (x - mx) * (y - my);
+        sxx += (x - mx) * (x - mx);
+    }
+    sxy / sxx
+}
+
+/// `mean_node` is referred to the mean equinox **of date**, and stays there.
+///
+/// The v7.0.0 defect this file exists for was a frame split between node
+/// methods, and a frame error is invisible to a spot check: it is a linear
+/// drift at the precession rate, which over the 1900-2100 epochs the rest of
+/// this file samples is smaller than the bounded, periodic difference between
+/// a mean element and an instantaneous one. It only separates over centuries.
+///
+/// So this measures the *trend*, not the value, over an 800-year baseline,
+/// against `true_node_osculating` — a different method, from a different
+/// source, independently validated to 0.6″ against JPL Horizons, and
+/// documented as sharing this frame. Two functions in the same frame differ
+/// by a bounded periodic term with no secular part; two functions a
+/// precession apart differ by ~50.29″/yr.
+///
+/// The control is the load-bearing half. Asserting only "the slope is flat"
+/// would pass just as happily if the arithmetic were broken and every slope
+/// came out zero, which is this repo's recurring failure mode: a check that
+/// cannot fail reads exactly like a check that passed. Running the identical
+/// computation against `true_node_osculating_j2000` — a deliberately J2000
+/// value — must recover the precession rate, which proves this test can see
+/// the very error it denies finding.
+#[test]
+fn mean_node_carries_no_precession_trend_against_the_osculating_node() {
+    // 1600-2400 CE. A 211-day step is resonant with neither the draconic
+    // month (27.21 d) nor the year, so the periodic difference averages out
+    // instead of aliasing into an apparent trend.
+    let jd_start = 2_305_447.5_f64;
+    let jd_end = 2_597_641.5_f64;
+    let step = 211.0_f64;
+
+    let mut years = Vec::new();
+    let mut of_date = Vec::new();
+    let mut control = Vec::new();
+
+    let mut jd = jd_start;
+    while jd <= jd_end {
+        years.push((jd - 2_451_545.0) / 365.25);
+        of_date.push(wrap180(nodes::mean_node(jd) - nodes::true_node_osculating(jd)) * 3600.0);
+        control.push(
+            wrap180(nodes::true_node_osculating(jd) - nodes::true_node_osculating_j2000(jd))
+                * 3600.0,
+        );
+        jd += step;
+    }
+    assert!(years.len() > 1_000, "too few samples to resolve a trend");
+
+    let measured = slope(&years, &of_date);
+    let control_slope = slope(&years, &control);
+
+    // Control first: if this does not recover precession, the assertion below
+    // is meaningless and must not be believed.
+    assert!(
+        (control_slope - 50.29).abs() < 1.0,
+        "control failed: of-date minus J2000 should drift at the precession \
+         rate (~50.29 arcsec/yr), got {control_slope:.4}. This test cannot \
+         detect a frame error until the control passes, so the of-date \
+         result below proves nothing."
+    );
+
+    // Measured: ~-0.003 arcsec/yr in practice. The bound is far tighter than
+    // the 50.29 it must exclude and far looser than the noise floor.
+    assert!(
+        measured.abs() < 2.0,
+        "mean_node drifts against true_node_osculating at {measured:.4} \
+         arcsec/yr over 1600-2400. Both are documented as mean ecliptic and \
+         equinox of date; a secular trend means one of them is not. Compare \
+         against the control's {control_slope:.4} arcsec/yr — a value near \
+         that is a J2000-vs-of-date frame split, the v7.0.0 defect class."
+    );
+}
