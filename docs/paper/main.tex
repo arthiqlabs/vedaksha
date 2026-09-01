@@ -342,6 +342,50 @@ This result is independent of the longitude comparisons rather than a restatemen
 validates a component the paper claims as independently implemented, in isolation, with the
 time-scale question removed entirely from the comparison.
 
+\subsection{Bit-level reproducibility is architecture-scoped; accuracy is not}
+
+Vedaksha evaluates both trigonometric series through a SIMD kernel, and that kernel does not
+produce identical bit patterns on every architecture: its four-lane double-precision operations
+map to a single 256-bit AVX2 register on x86-64 but to a pair of 128-bit NEON registers on
+aarch64, and the two paths round differently. The project maintains fixed-point digests over its
+raw series output for regression purposes, and those digests genuinely differ between the two
+architectures --- they are pinned per-architecture rather than as a single value, and a build on an
+architecture with no pinned value fails loudly rather than silently skipping the check.
+
+That is a real limitation on a reproducibility claim, and it is worth separating from a claim
+about accuracy, because the two do not follow from each other. To measure the second directly, the
+validation of Section~3.2 was re-run on both architectures at the same commit, against the same
+reference fixture:
+
+\begin{table}[!htbp]
+\centering
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+Architecture & $n$ & Mean (arcsec) & Max (arcsec) \\
+\midrule
+aarch64 (Apple Silicon) & 13,815 & 0.239 & 1.896 (Neptune, 2007-02-09) \\
+x86-64 (AVX2)           & 13,815 & 0.239 & 1.896 (Neptune, 2007-02-09) \\
+\bottomrule
+\end{tabular}
+\caption{Analytical-path residuals measured on two architectures at one commit. Every per-body
+mean and maximum was also identical to the reported precision, and the worst case fell on the same
+body at the same date on both.}
+\label{tab:arch}
+\end{table}
+
+The residuals are identical at the reported precision of one milliarcsecond, per body as well as
+in aggregate, while the underlying bit patterns are known to differ. The correct statement is
+therefore narrower than ``reproducible'' and stronger than nothing: results are bit-identical
+between builds of a given commit \emph{on a given architecture}, and are equal to well below the
+accuracy floor across architectures. Nothing a caller consumes at the precision this engine claims
+depends on which of the two it runs on.
+
+We report this because the distinction is easy to leave unexamined. A project asserting
+bit-reproducibility without qualifying it by architecture would, on this evidence, be asserting
+something false; a project treating a per-architecture digest mismatch as an accuracy defect would
+be misreading the same evidence in the other direction.
+
 \subsection{Why residuals grow after 2026}
 
 The 2026--2100 residuals are markedly larger, and this is a time-scale disagreement rather than
