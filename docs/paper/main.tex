@@ -414,10 +414,77 @@ in principle, so this divergence is expected to persist and is not treated as a 
 \texttt{oracle\_comparison.rs} asserts the two eras against separate error budgets rather than one
 bound covering both.
 
+\subsection{Accuracy across the full supported range, with $\Delta T$ eliminated}
+\label{sec:fullrange}
+
+The entanglement described above --- a residual outside the measured record being the sum of
+theory truncation error and $\Delta T$ divergence, in unknown proportion --- was a limitation of
+the software's interface, not of the measurement. Engine version 9.1.0 adds
+\texttt{ecliptic\_position\_tt}, a TT-addressed analytical position entry point that performs no
+$\Delta T$ conversion at all, alongside the already TT-addressed raw SPK query. With both sides of
+a comparison addressed in TT, no $\Delta T$ model enters on either side, and the binding
+constraint becomes each kernel's stated coverage span rather than the looser window over which a
+$\Delta T$ model is considered reliable. The results below were produced by the same independent
+party as the cross-validation reported earlier.
+
+That the new path is genuinely conversion-free was verified before it was relied upon, and the
+check yielded a result of its own. Rather than take a $\Delta T$ value from an outside source, the
+implied $\Delta T$ was derived from Vedaksha alone, as the disagreement between the UT1-addressed
+and TT-addressed paths evaluated at the same instant, divided by each body's angular rate. The
+rate used was each body's true instantaneous speed rather than an average: Saturn was near
+stationary and retrograde at the test epoch, which an average-motion estimate misrepresents, and
+correcting this changed the result. Across seven bodies spanning three orders of magnitude of
+angular rate --- from that near-stationary Saturn to the Moon at roughly 12 degrees per day ---
+the implied $\Delta T$ values agree with one another to within 0.017 seconds, and coincide with
+the standard published value at J2000.0 of approximately 63.8 seconds, which is also what
+\texttt{delta\_t.rs} tabulates. Two independent paths through the engine therefore differ by
+exactly one correctly-applied, correctly-signed $\Delta T$ and nothing else, at every angular rate
+the engine computes.
+
+The sweep itself used DE440 only, and the exclusion of the second agency's ephemeris is worth
+stating because it is a coverage fact rather than a preference. INPOP21a's kernel covers
+1897--2102, which does not extend meaningfully beyond the window the paper already reports, so it
+can contribute nothing to a distance-from-J2000 question; it was omitted rather than reported as
+though it corroborated a range it cannot reach. DE440's own coverage, 1550--2650~CE, was confirmed
+directly from the kernel rather than assumed, and bounds the sweep. Within it, 43 instants at
+25-year spacing were compared, both sides addressed in TT, with the reference side computing an
+apparent place --- light-time and aberration applied --- against the same kernel, so that the
+comparison is like-for-like with Vedaksha's apparent ecliptic output rather than against raw
+geometry.
+
+% Per-band, per-body residual table to be inserted here once the harness supplies the numeric
+% breakdown. The prose below states only what the qualitative result supports.
+
+Truncation error does grow with distance from J2000, and the growth is visible and largely
+monotonic. It is largest for Uranus and Neptune, for which the residual spans roughly an order of
+magnitude between the century-band nearest J2000 and the farthest sampled, counting both
+directions in time. It is present but substantially smaller for the Sun, the Moon, and the inner
+planets. This is the qualitative shape the analytical theories' construction would predict, and it
+is reported here as qualitative: the sampling is not yet dense enough to publish a per-band error
+model.
+
+One departure from that pattern is recorded rather than smoothed away. Mars does not follow a
+clean monotonic trend: its 400--500 and 500--600 year bands both sit noticeably above what a
+smooth extrapolation from the nearer bands would predict. With roughly four sampled instants per
+century-band, this cannot presently be distinguished between a real feature of Mars's own
+truncation error and a small sample happening to fall near a resonance or a close approach. A
+finer sweep concentrated on 400--600 years from J2000 for Mars specifically would settle it; that
+has not been run, and the anomaly is stated here as unresolved rather than explained.
+
 \subsection{Scope: what this validation does not cover}
 
 This oracle validates body longitudes only --- not latitudes or distances, which are computed by
 the same pipeline but are not compared against the reference here.
+
+The two analytical surfaces differ in which bodies they expose, and a reader citing either figure
+alone should know which. The \texttt{compute\_natal\_chart} tool serves nine bodies --- the seven
+classical grahas from the Sun through Saturn, plus three lunar-node variants --- and does not
+expose Uranus or Neptune at all, the Jyotish tradition it serves having no use for them. The
+TT-addressed \texttt{ecliptic\_position\_tt} entry point, by contrast, reaches every body the
+analytical theories model, Uranus and Neptune included, and the full-range sweep above accordingly
+covers bodies that no chart this engine produces will ever contain. Pluto is modelled by neither:
+it is absent from the analytical theories, and a request for it is rejected as an unknown body
+rather than reported as a date-range failure.
 
 It also covers exactly ten physical bodies: the Sun, the Moon, and the eight planets through
 Pluto, at 2,435 dates each. **The lunar nodes are deliberately absent from it, and the
@@ -459,17 +526,16 @@ the divergence between two independent $\Delta T$ extrapolations, which is unbou
 A residual measured out there is a sum of the two, and the paper would be unable to say in what
 proportion.
 
-Separating them is possible in principle by addressing both sides in a uniform time scale, so that
-no $\Delta T$ conversion enters the comparison on either side and the remaining difference is
-attributable to the theories alone. Vedaksha does not currently support this on the analytical
-path: every published entry point to it accepts UT1 and performs the conversion internally, and
-the $\Delta T$ value is not itself exposed, so an external party cannot compensate for it either.
-Adding a TT-addressed position entry point --- which would remove the time scale from the
-comparison rather than requiring both sides to attest that they applied the same table --- is the
-concrete prerequisite, and it is left as future work. We note that with $\Delta T$ eliminated the
-binding constraint becomes each reference kernel's own coverage span, which the kernel states
-exactly, rather than the looser and only approximately-bounded window over which a $\Delta T$
-model is considered reliable.
+Separating them is possible by addressing both sides in a uniform time scale, so that no $\Delta
+T$ conversion enters the comparison on either side and the remaining difference is attributable to
+the theories alone. Until engine version 9.1.0 Vedaksha did not support this on the analytical
+path: every published entry point accepted UT1 and performed the conversion internally, and the
+$\Delta T$ value was not itself exposed, so an external party could not compensate for it either.
+That gap has since been closed by a TT-addressed position entry point, and the resulting
+full-range measurement is reported in Section~\ref{sec:fullrange}. The sub-arcsecond claim in this
+paper's abstract nonetheless remains scoped to 1900--2025, where $\Delta T$ is read from the
+measured record; the full-range sweep characterises how truncation error grows outside that
+window, and does not extend the headline figure to it.
 
 \section{Software Architecture and Availability}
 
