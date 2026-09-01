@@ -21,7 +21,19 @@
       "maxBody": "Uranus",
       "maxDate": "1948-06-18",
       "comparisons": 15350,
-      "command": "cargo test -p vedaksha-ephem-core --release --locked --test oracle_comparison -- --include-ignored"
+      "command": "cargo test -p vedaksha-ephem-core --release --locked --test oracle_comparison -- --include-ignored",
+      "perBody": [
+        { "body": "Jupiter", "meanArcsec": 0.098, "maxArcsec": 0.885, "comparisons": 1535 },
+        { "body": "Mars",    "meanArcsec": 0.094, "maxArcsec": 0.291, "comparisons": 1535 },
+        { "body": "Mercury", "meanArcsec": 0.091, "maxArcsec": 0.411, "comparisons": 1535 },
+        { "body": "Moon",    "meanArcsec": 0.166, "maxArcsec": 0.594, "comparisons": 1535 },
+        { "body": "Neptune", "meanArcsec": 0.099, "maxArcsec": 0.987, "comparisons": 1535 },
+        { "body": "Pluto",   "meanArcsec": 0.100, "maxArcsec": 0.262, "comparisons": 1535 },
+        { "body": "Saturn",  "meanArcsec": 0.097, "maxArcsec": 0.339, "comparisons": 1535 },
+        { "body": "Sun",     "meanArcsec": 0.090, "maxArcsec": 0.218, "comparisons": 1535 },
+        { "body": "Uranus",  "meanArcsec": 0.100, "maxArcsec": 1.187, "comparisons": 1535 },
+        { "body": "Venus",   "meanArcsec": 0.091, "maxArcsec": 0.371, "comparisons": 1535 }
+      ]
     },
     "analytical": {
       "$comment": "AnalyticalProvider (VSOP87A + ELP/MPP02), no runtime data file, via tests/analytical_oracle.rs.",
@@ -31,7 +43,18 @@
       "maxBody": "Neptune",
       "maxDate": "2007-02-09",
       "comparisons": 13815,
-      "command": "cargo test -p vedaksha-ephem-core --release --locked --test analytical_oracle -- --include-ignored"
+      "command": "cargo test -p vedaksha-ephem-core --release --locked --test analytical_oracle -- --include-ignored",
+      "perBody": [
+        { "body": "Sun",     "meanArcsec": 0.180, "maxArcsec": 0.324, "comparisons": 1535 },
+        { "body": "Moon",    "meanArcsec": 0.169, "maxArcsec": 0.607, "comparisons": 1535 },
+        { "body": "Mercury", "meanArcsec": 0.180, "maxArcsec": 0.504, "comparisons": 1535 },
+        { "body": "Venus",   "meanArcsec": 0.180, "maxArcsec": 0.473, "comparisons": 1535 },
+        { "body": "Mars",    "meanArcsec": 0.178, "maxArcsec": 0.384, "comparisons": 1535 },
+        { "body": "Jupiter", "meanArcsec": 0.239, "maxArcsec": 1.037, "comparisons": 1535 },
+        { "body": "Saturn",  "meanArcsec": 0.251, "maxArcsec": 0.568, "comparisons": 1535 },
+        { "body": "Uranus",  "meanArcsec": 0.267, "maxArcsec": 1.111, "comparisons": 1535 },
+        { "body": "Neptune", "meanArcsec": 0.503, "maxArcsec": 1.896, "comparisons": 1535 }
+      ]
     },
     "era": {
       "$comment": "Both mean/max figures above describe the measured-Delta T era ONLY. Past 2025 both Horizons and delta_t.rs must PREDICT Delta T rather than read it from the IERS record, and the two predictions diverge; the residual out there is time-scale disagreement, not ephemeris error, and scales with each body's angular rate. Quoting a mean over the full 24,350 rows alongside the sub-arcsecond claim overstates it. Never write '24,350 positions ... 0.103 arcsec'.",

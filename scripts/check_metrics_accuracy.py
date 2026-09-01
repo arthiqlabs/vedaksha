@@ -71,6 +71,27 @@ def run_oracle(test: str) -> str:
     return proc.stdout
 
 
+def parse_per_body(era: str) -> list[dict]:
+    """Pull the `Body  n  mean"  max"` table out of a measured-era block.
+
+    Shared by both oracle tests: they print the table in the identical shape
+    (`analytical_oracle.rs` and `oracle_comparison.rs` both write it via the
+    same `{:<10} {:>7} {:>10.3} {:>10.3}` format), so one parser covers both.
+    """
+    rows = re.findall(
+        r"^([A-Za-z]+)\s+(\d+)\s+([\d.]+)\s+([\d.]+)\s*$", era, re.MULTILINE
+    )
+    return [
+        {
+            "body": body,
+            "comparisons": int(n),
+            "meanArcsec": float(mean),
+            "maxArcsec": float(mx),
+        }
+        for body, n, mean, mx in rows
+    ]
+
+
 def parse_spk(out: str) -> dict:
     """Pull the measured-era block out of oracle_comparison's report."""
     era = out.split("--- Measured-")[1] if "--- Measured-" in out else ""
@@ -81,11 +102,16 @@ def parse_spk(out: str) -> dict:
         print("FAIL: could not parse oracle_comparison output; its format changed")
         print(era[:1500])
         sys.exit(1)
+    # The per-body table lives after the measured-era summary but before the
+    # predicted-ΔT era block, so scope the table search to just that span.
+    body_era = era.split("--- Predicted-")[0] if "--- Predicted-" in era else era
+    per_body = parse_per_body(body_era)
     return {
         "comparisons": int(comparisons.group(1)),
         "meanArcsec": float(mean.group(1)),
         "maxArcsec": float(mx.group(1)),
         "maxBody": mx.group(2),
+        "perBody": per_body,
     }
 
 
@@ -112,6 +138,7 @@ def parse_analytical(out: str) -> dict:
         "meanArcsec": float(mean.group(1)),
         "maxArcsec": float(mx.group(1)),
         "maxBody": mx.group(2),
+        "perBody": parse_per_body(era),
     }
 
 
@@ -130,6 +157,56 @@ def compare(label: str, published: dict, measured: dict) -> list[str]:
                 f"{label}.{key}: metrics.json says {pub}, "
                 f"the test measured {measured[key]}"
             )
+    problems += compare_per_body(label, published.get("perBody"), measured["perBody"])
+    return problems
+
+
+def compare_per_body(label: str, published: object, measured: list[dict]) -> list[str]:
+    """Check every row of a `perBody` table against the matching measured row.
+
+    A body published but not measured, or measured but not published, is a
+    failure in either direction — that is the whole point of the guard.
+    """
+    problems = []
+    if not isinstance(published, list):
+        return [f"{label}.perBody: metrics.json has no `perBody` array"]
+
+    published_by_body = {}
+    for row in published:
+        if not isinstance(row, dict) or "body" not in row:
+            problems.append(f"{label}.perBody: a published row is missing `body`")
+            continue
+        published_by_body[row["body"]] = row
+    measured_by_body = {row["body"]: row for row in measured}
+
+    for body, pub_row in published_by_body.items():
+        if body not in measured_by_body:
+            problems.append(
+                f"{label}.perBody[{body}]: published but not in the measured "
+                f"per-body table"
+            )
+            continue
+        m_row = measured_by_body[body]
+        if pub_row.get("comparisons") != m_row["comparisons"]:
+            problems.append(
+                f"{label}.perBody[{body}].comparisons: metrics.json says "
+                f"{pub_row.get('comparisons')!r}, the test measured {m_row['comparisons']!r}"
+            )
+        for key in ("meanArcsec", "maxArcsec"):
+            pub = pub_row.get(key)
+            if not isinstance(pub, (int, float)) or abs(pub - m_row[key]) > TOLERANCE:
+                problems.append(
+                    f"{label}.perBody[{body}].{key}: metrics.json says {pub}, "
+                    f"the test measured {m_row[key]}"
+                )
+
+    for body in measured_by_body:
+        if body not in published_by_body:
+            problems.append(
+                f"{label}.perBody[{body}]: measured by the test but not "
+                f"published in metrics.json"
+            )
+
     return problems
 
 

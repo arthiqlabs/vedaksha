@@ -183,6 +183,12 @@ fn compare_against_reference() {
     let mut m_max_body = String::new();
     let mut m_max_date = String::new();
 
+    // Measured-ΔT era, per body — body -> (count, sum_arcsec, max_arcsec).
+    // Mirrors analytical_oracle.rs's per_body table so the two accuracy paths
+    // publish comparable per-body figures in the same shape.
+    let mut per_body: std::collections::BTreeMap<String, (u32, f64, f64)> =
+        std::collections::BTreeMap::new();
+
     // Predicted-ΔT era: tracked only to report and to bound the ΔT divergence.
     let mut p_max: f64 = 0.0;
     let mut p_max_body = String::new();
@@ -252,6 +258,12 @@ fn compare_against_reference() {
                 m_max_body = dp.body.clone();
                 m_max_date = dp.date.clone();
             }
+            let e = per_body
+                .entry(dp.body.clone())
+                .or_insert((0u32, 0.0f64, 0.0f64));
+            e.0 += 1;
+            e.1 += diff_arcsec;
+            e.2 = e.2.max(diff_arcsec);
         } else if diff_arcsec > p_max {
             p_max = diff_arcsec;
             p_max_body = dp.body.clone();
@@ -334,6 +346,20 @@ fn compare_against_reference() {
     eprintln!("Comparisons:          {m_total}");
     eprintln!("Mean error:           {m_mean:.3} arcseconds");
     eprintln!("Max error:            {m_max:.3} arcseconds ({m_max_body} at {m_max_date})");
+    eprintln!("\nPER-BODY (measured-ΔT era)");
+    eprintln!(
+        "\n{:<10} {:>7} {:>10} {:>10}",
+        "Body", "n", "mean\"", "max\""
+    );
+    for (body, (n, sum, max)) in &per_body {
+        eprintln!(
+            "{:<10} {:>7} {:>10.3} {:>10.3}",
+            body,
+            n,
+            sum / f64::from(*n),
+            max
+        );
+    }
     eprintln!("\n--- Predicted-ΔT era (2026+; residual is ΔT divergence, not ephemeris) ---");
     eprintln!("Max error:            {p_max:.3} arcseconds ({p_max_body} at {p_max_date})");
 
