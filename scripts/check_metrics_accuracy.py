@@ -26,6 +26,17 @@ script only asserts that what we PUBLISH equals what we MEASURE. Both can be
 true while the engine is inaccurate, and that is the tests' problem, not this
 script's.
 
+It also does not check `accuracy.quantity` or `accuracy.targetConvention`.
+Those are scope prose -- what the figure measures (apparent geocentric
+ecliptic longitude, not latitude/distance/speed) and what convention the
+comparison uses (barycentres, not planet centres) -- not numbers the oracle
+tests print. There is nothing in `--nocapture` output to assert them against;
+they are re-derivations of facts fixed by the fixture's own generator
+(`scripts/generate_horizons_oracle.py`) and by `oracle_comparison.rs`'s field
+list, not by a per-run measurement. Every *numeric* field in the accuracy
+block -- including each `perBody[].comparisons` -- is covered by `compare()`
+above; only this pair of descriptive strings is exempt, deliberately.
+
 # Running it
 
     python3 scripts/check_metrics_accuracy.py

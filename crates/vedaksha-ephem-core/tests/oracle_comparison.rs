@@ -98,7 +98,7 @@ const MEASURED_DT_JD: f64 = 2_461_041.5;
 /// single Uranus point in 1900); 2.0″ leaves headroom without going slack.
 const MEASURED_MAX_ARCSEC: f64 = 2.0;
 
-/// Mean ceiling over the measured-ΔT era. Observed mean is 0.106″.
+/// Mean ceiling over the measured-ΔT era. Observed mean is 0.103″.
 const MEASURED_MEAN_ARCSEC: f64 = 0.20;
 
 /// Per-point ceiling over the predicted-ΔT era, sized by the ΔT divergence

@@ -12,7 +12,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `0.103″ vs JPL Horizons` · `1,101 tests + 24,350 oracle rows` · `MCP-native` · `BUSL-1.1 → Apache 2.0`
+`clean-room` · `0.103″ mean longitude vs JPL Horizons` · `1,101 tests + 24,350 oracle rows` · `MCP-native` · `BUSL-1.1 → Apache 2.0`
 
 [Install](#install) · [Quick start](#quick-start) · [Accuracy](#accuracy) · [What's inside](#whats-inside) · [MCP + property graph](#mcp--property-graph) · [Provenance](#clean-room-provenance) · [License](#license)
 
@@ -68,6 +68,8 @@ their own copies of the reference kernels to check the published numbers below.
 
 Every figure is printed by a named test. Reproduce the ephemeris tables with `bash scripts/download_de440s.sh`, then `cargo test -p vedaksha-ephem-core --release -- --include-ignored --nocapture`; the ayanamsha figures come from `cargo test -p vedaksha-astro sidereal`, and the cross-check against an independent Python derivation of the same primaries from `cargo test -p vedaksha-astro --test ayanamsha_fixture`.
 
+**What the headline 0.103″ measures — precisely.** It is a mean *apparent geocentric ecliptic-longitude* residual, not a general position-accuracy figure: the fixture also carries `ref_latitude`, `ref_distance` and `ref_speed`, but `oracle_comparison.rs` marks them `dead_code` and none of the three enters this number. It covers only the measured-ΔT era, 1900–2025, at 1,535 comparisons per body (15,350 total across 10 bodies) — the full 1900–2100 grid moves the mean to 0.878″ for reasons unrelated to ephemeris accuracy (see below). And it compares against **planetary-system barycentres**, not physical planet centres, matching what the DE440s kernel stores and what `SpkReader` returns; querying centres instead would inject a spurious ~0.1″ offset for the outer planets (`scripts/generate_horizons_oracle.py`) — the same order of magnitude as the headline mean itself. These three facts are also published as data in `metrics.json`'s `accuracy` block (`quantity`, `era`, `targetConvention`), so the site renders them rather than anyone hand-copying this paragraph.
+
 **SpkReader vs JPL Horizons (DE441)** — `oracle_comparison.rs`, 24,350 committed rows (10 bodies × 2,435 dates, 1900–2100). Horizons serves DE441, so this measures our DE440s pipeline against an independent kernel.
 
 | Era | Comparisons | Mean | Max |
@@ -77,7 +79,7 @@ Every figure is printed by a named test. Reproduce the ephemeris tables with `ba
 
 15,349 of 15,350 comparisons before 2026 are sub-arcsecond. **Past 2025 the residual is ΔT prediction, not ephemeris error:** our Espenak–Meeus extrapolation and Horizons' ΔT diverge by ~68 s at 2099, and the error scales with a body's angular rate — the Moon (0.64″/s) picks up ~45″, Pluto essentially none. At 2099-02-06, five bodies spanning 0.03–0.64″/s all imply the same 66–71 s offset, which is the signature of a clock difference, not a position error.
 
-**AnalyticalProvider vs JPL Horizons** — `analytical_oracle.rs`, 1900–2025: overall mean **0.239″**, worst case **1.896″** (Neptune), Moon 0.169″ mean via ELP/MPP02. Densely sampled at 2,435 dates per body.
+**AnalyticalProvider vs JPL Horizons** — `analytical_oracle.rs`, 1900–2025: overall mean **0.239″**, worst case **1.896″** (Neptune), Moon 0.169″ mean via ELP/MPP02. 13,815 comparisons across 9 bodies (1,535 dates per body) over the measured-ΔT era; see `metrics.json`'s `accuracy.analytical` block.
 
 Per body, because the mean hides a pattern worth knowing before you pick this provider:
 

@@ -13,6 +13,8 @@
     "$comment": "Measured agreement with JPL Horizons (DE441), re-run at the tag rather than carried forward. Published here so the site reads them live like every other figure: they were hand-maintained site constants until 2026-09-01 and had gone unverified from v7.0.0 to v9.1.0. Asserted against the engine's own oracle output by check_metrics_accuracy.py, so they cannot drift from what the tests actually print. The SPK and analytical paths are separately implemented and separately measured - neither figure says anything about the other.",
     "verified": "2026-09-01",
     "verifiedAtVersion": "9.1.0",
+    "quantity": "Mean angular residual in apparent geocentric ecliptic longitude (of date) vs JPL Horizons. Not a general position-accuracy figure: the oracle fixture also stores ref_latitude, ref_distance and ref_speed (see oracle_comparison.rs), but none of those enter this number -- longitude only.",
+    "targetConvention": "Comparisons query planetary-system barycentre IDs (Body::naif_id()), matching what the DE440s kernel stores and what SpkReader returns -- not physical planet centres. Querying centres instead would inject a spurious ~0.1 arcsecond offset for the outer planets (scripts/generate_horizons_oracle.py), the same order of magnitude as the headline mean itself.",
     "spk": {
       "$comment": "SpkReader against DE440s, via tests/oracle_comparison.rs.",
       "provider": "SpkReader",
