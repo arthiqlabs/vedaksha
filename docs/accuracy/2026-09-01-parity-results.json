@@ -1,0 +1,124 @@
+{
+  "$comment": "These figures were measured with reference kernels not shipped with this engine, using a separate parity harness this repository cannot run and this repository's CI cannot regenerate. They are not asserted by scripts/check_metrics_accuracy.py and are not covered by any test gate. This document is a dated, provenance-stamped transcription of numbers already published in docs/paper/main.tex (the cross-validation subsection and Table 1, tab:fullrange); it is not a new measurement. It can be superseded only by a dated replacement document, never edited in place.",
+  "measuredAt": "2026-09-01",
+  "engineVersion": "9.1.0",
+  "harness": "A separate parity-testing project that consumes this engine only through its published interfaces and holds its own local copies of the reference kernels. It is maintained by the same authors as this engine: what is independent is the methodology and the reference ephemerides, not the party performing the measurement.",
+  "crossValidation": {
+    "$comment": "Analytical-path tropical longitudes at 2000 instants for nine bodies (Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune), compared against two independently produced national-agency ephemerides. Comparison counts differ between references because each kernel's own coverage and body set differ. Source: docs/paper/main.tex, subsection 'Cross-validation against a second agency', Table (tab:crossval).",
+    "references": [
+      {
+        "reference": "JPL",
+        "kernel": "DE440 (local kernel)",
+        "meanArcsec": 0.130,
+        "maxArcsec": 2.940,
+        "maxBody": "Moon",
+        "comparisons": 13874
+      },
+      {
+        "reference": "IMCCE",
+        "kernel": "INPOP21a (local kernel)",
+        "meanArcsec": 0.115,
+        "maxArcsec": 1.270,
+        "maxBody": "Jupiter",
+        "comparisons": 11732
+      }
+    ]
+  },
+  "byDistanceFromJ2000": {
+    "$comment": "Analytical-path longitude residuals against DE440, by distance from J2000.0. Both sides addressed in TT, so no Delta-T model enters on either side. Each cell is mean/max in arcseconds. Sample counts fall in the outer bands as the kernel's coverage margin (1550-2650 CE) is approached. Source: docs/paper/main.tex, Table 1 (tab:fullrange).",
+    "maxIsLowerBound": true,
+    "maxIsLowerBoundComment": "The maxima in this table are lower bounds on the true worst case, not measured worst cases. A dense quarter-year scan across a 30-year window (440-470 years forward from J2000) found Mars's residual to be a clean periodic oscillation at the Mars-Earth synodic period (2.154 years measured, versus 779.94 days / ~2.135 years published), with sharp peaks (~4.5 arcsec) separated by broad troughs (~0.5-0.9 arcsec). The original 25-year grid steps through roughly 11.7 synodic cycles at a time and therefore samples this oscillation at an effectively arbitrary phase -- aliasing, not noise -- which is why the reported Mars maxima understate the true peak height. The other eight bodies were not tested for an analogous short-period term in this cycle, so their maxima carry the same caveat rather than a clean bill of health.",
+    "bands": [
+      {
+        "band": "0-100",
+        "n": 8,
+        "bodies": {
+          "Sun":     { "mean": 0.084, "max": 0.102 },
+          "Moon":    { "mean": 0.009, "max": 0.019 },
+          "Mercury": { "mean": 0.084, "max": 0.119 },
+          "Venus":   { "mean": 0.080, "max": 0.102 },
+          "Mars":    { "mean": 0.065, "max": 0.113 },
+          "Jupiter": { "mean": 0.178, "max": 0.372 },
+          "Saturn":  { "mean": 0.192, "max": 0.302 },
+          "Uranus":  { "mean": 0.539, "max": 1.215 },
+          "Neptune": { "mean": 1.056, "max": 2.308 }
+        }
+      },
+      {
+        "band": "100-200",
+        "n": 8,
+        "bodies": {
+          "Sun":     { "mean": 0.094, "max": 0.147 },
+          "Moon":    { "mean": 0.017, "max": 0.027 },
+          "Mercury": { "mean": 0.103, "max": 0.157 },
+          "Venus":   { "mean": 0.091, "max": 0.136 },
+          "Mars":    { "mean": 0.115, "max": 0.302 },
+          "Jupiter": { "mean": 0.324, "max": 0.755 },
+          "Saturn":  { "mean": 0.224, "max": 0.432 },
+          "Uranus":  { "mean": 0.582, "max": 2.270 },
+          "Neptune": { "mean": 1.908, "max": 3.632 }
+        }
+      },
+      {
+        "band": "200-300",
+        "n": 8,
+        "bodies": {
+          "Sun":     { "mean": 0.121, "max": 0.189 },
+          "Moon":    { "mean": 0.046, "max": 0.088 },
+          "Mercury": { "mean": 0.124, "max": 0.246 },
+          "Venus":   { "mean": 0.115, "max": 0.186 },
+          "Mars":    { "mean": 0.221, "max": 0.646 },
+          "Jupiter": { "mean": 0.450, "max": 0.639 },
+          "Saturn":  { "mean": 0.360, "max": 0.585 },
+          "Uranus":  { "mean": 1.399, "max": 3.132 },
+          "Neptune": { "mean": 3.385, "max": 4.488 }
+        }
+      },
+      {
+        "band": "300-400",
+        "n": 8,
+        "bodies": {
+          "Sun":     { "mean": 0.156, "max": 0.249 },
+          "Moon":    { "mean": 0.078, "max": 0.168 },
+          "Mercury": { "mean": 0.138, "max": 0.227 },
+          "Venus":   { "mean": 0.135, "max": 0.221 },
+          "Mars":    { "mean": 0.366, "max": 0.758 },
+          "Jupiter": { "mean": 0.413, "max": 0.828 },
+          "Saturn":  { "mean": 0.499, "max": 0.702 },
+          "Uranus":  { "mean": 1.895, "max": 4.587 },
+          "Neptune": { "mean": 4.812, "max": 6.463 }
+        }
+      },
+      {
+        "band": "400-500",
+        "n": 6,
+        "bodies": {
+          "Sun":     { "mean": 0.160, "max": 0.273 },
+          "Moon":    { "mean": 0.242, "max": 0.350 },
+          "Mercury": { "mean": 0.177, "max": 0.353 },
+          "Venus":   { "mean": 0.196, "max": 0.358 },
+          "Mars":    { "mean": 1.259, "max": 3.794 },
+          "Jupiter": { "mean": 0.476, "max": 0.870 },
+          "Saturn":  { "mean": 0.780, "max": 1.027 },
+          "Uranus":  { "mean": 3.209, "max": 6.583 },
+          "Neptune": { "mean": 5.791, "max": 6.379 }
+        }
+      },
+      {
+        "band": "500-600",
+        "n": 4,
+        "bodies": {
+          "Sun":     { "mean": 0.145, "max": 0.165 },
+          "Moon":    { "mean": 0.509, "max": 0.603 },
+          "Mercury": { "mean": 0.151, "max": 0.225 },
+          "Venus":   { "mean": 0.109, "max": 0.144 },
+          "Mars":    { "mean": 2.299, "max": 6.277 },
+          "Jupiter": { "mean": 0.531, "max": 0.591 },
+          "Saturn":  { "mean": 1.181, "max": 1.325 },
+          "Uranus":  { "mean": 5.484, "max": 10.145 },
+          "Neptune": { "mean": 7.826, "max": 8.294 }
+        }
+      }
+    ]
+  }
+}
