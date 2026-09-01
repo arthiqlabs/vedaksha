@@ -72,3 +72,6 @@ HANDOFF-*.md
 
 # CodeGraph local index (derived, per-machine)
 .codegraph/
+
+# arXiv preprint build output
+docs/paper/build/

@@ -1,0 +1,40 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "Vedaksha",
+  "description": "Clean-room Rust ephemeris and Vedic astrology engine. Computes planetary positions from VSOP87/ELP2000/MPP02 series and JPL DE440s SPK kernels, and derives Vedic astrology charts (panchanga, varga, bala, dasha) as a queryable property graph. Validated against a 24,350-row JPL Horizons fixture at 0.103 arcsecond mean residual.",
+  "identifier": "https://github.com/arthiqlabs/vedaksha",
+  "codeRepository": "https://github.com/arthiqlabs/vedaksha",
+  "url": "https://vedaksha.net",
+  "softwareVersion": "9.1.0",
+  "dateModified": "2026-08-31",
+  "license": "https://spdx.org/licenses/BUSL-1.1.html",
+  "programmingLanguage": [
+    "Rust",
+    "Python",
+    "WebAssembly"
+  ],
+  "runtimePlatform": [
+    "Rust 1.89",
+    "Python >= 3.9",
+    "Node.js / browser (WASM)"
+  ],
+  "author": [
+    {
+      "@type": "Organization",
+      "name": "ArthIQ Labs LLC",
+      "email": "info@arthiq.net",
+      "url": "https://vedaksha.net"
+    }
+  ],
+  "keywords": [
+    "astronomy",
+    "ephemeris",
+    "vedic-astrology",
+    "panchang",
+    "jyotisha",
+    "rust",
+    "webassembly",
+    "mcp"
+  ]
+}

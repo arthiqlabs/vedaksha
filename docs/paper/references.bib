@@ -1,0 +1,109 @@
+% Opening page (735), volume (404), and DOI verified against DATA_PROVENANCE.md line 9,
+% 2026-08-28 (that source gives no title and no closing page). Closing page 742 and the
+% corrected title were confirmed via Crossref, 2026-08-28: the DOI was live-resolved via
+% curl -sI https://doi.org/10.1051/0004-6361:20030529 (302 to aanda.org), and its Crossref
+% record (api.crossref.org/works/10.1051/0004-6361:20030529) gives the title as "The lunar
+% theory ELP revisited. Introduction of new planetary perturbations"; this entry previously
+% read "...Introduction and results", which does not match the DOI's registered metadata and
+% was not sourced from DATA_PROVENANCE.md or any other file in this repository.
+@article{chapront2003elpmpp02,
+  author  = {Chapront, J. and Francou, G.},
+  title   = {The lunar theory {ELP} revisited. {I}ntroduction of new planetary perturbations},
+  journal = {Astronomy \& Astrophysics},
+  year    = {2003},
+  volume  = {404},
+  pages   = {735--742},
+  doi     = {10.1051/0004-6361:20030529}
+}
+
+% NOTE: DATA_PROVENANCE.md line 10 gives only "A&A 202, 309" for this paper -- no title and
+% no closing page number. The title below was NOT sourced from DATA_PROVENANCE.md; it was
+% independently verified 2026-08-28 via a live lookup against the NASA ADS abstract record
+% (ui.adsabs.harvard.edu/abs/1988A&A...202..309B) and corroborating citations (Semantic
+% Scholar; Scientific Research Publishing's reference listing), which agree on "Planetary
+% Theories in rectangular and spherical variables: VSOP87 solution." The closing page number
+% is not confirmed against any source in this repository and is intentionally omitted rather
+% than completed from memory. Originally flagged as a concern in task-4-report.md.
+@article{bretagnon1988vsop87,
+  author  = {Bretagnon, P. and Francou, G.},
+  title   = {Planetary Theories in rectangular and spherical variables: {VSOP87} solution},
+  year    = {1988},
+  journal = {Astronomy \& Astrophysics},
+  volume  = {202},
+  pages   = {309}
+}
+
+% Table 1. Verified verbatim against DATA_PROVENANCE.md lines 85--86, 2026-08-28.
+@article{capitaine2003precession,
+  author  = {Capitaine, N. and Wallace, P. T. and Chapront, J.},
+  title   = {Expressions for {IAU} 2000 precession quantities},
+  journal = {Astronomy \& Astrophysics},
+  year    = {2003},
+  volume  = {412},
+  pages   = {567--586}
+}
+
+% NOTE: DATA_PROVENANCE.md line 132 gives only "AJ 165, 49" plus the DOI for this paper --
+% no title, and its page field is a single locator ("49"), not a range. The title below was
+% NOT taken from DATA_PROVENANCE.md or from crates/vedaksha-astro/src/sidereal.rs's
+% SGR_A_STAR doc comment; it was independently verified 2026-08-28 via a live Crossref
+% lookup on the DOI itself (api.crossref.org/works/10.3847/1538-3881/aca65b), which returns
+% "Position and Proper Motion of Sagittarius A* in the ICRF3 Frame from VLBI Absolute
+% Astrometry" together with the same journal, volume, and page recorded here. "AJ" is
+% expanded to its standard full journal name, matching how DATA_PROVENANCE.md's own "A&A"
+% abbreviation is expanded for the other entries in this file; that is a naming-convention
+% expansion, not an invented fact.
+@article{gordon2023sgra,
+  author  = {Gordon, D. and de Witt, A. and Jacobs, C. S.},
+  title   = {Position and Proper Motion of {Sagittarius A*} in the {ICRF3} Frame from {VLBI}
+             Absolute Astrometry},
+  journal = {The Astronomical Journal},
+  year    = {2023},
+  volume  = {165},
+  pages   = {49},
+  doi     = {10.3847/1538-3881/aca65b}
+}
+
+% NASA ADS bibcode 2015IAUGA..2256293G, abstract id. 2256293. Verified via live
+% WebSearch/WebFetch against NASA ADS (ui.adsabs.harvard.edu/abs/2015IAUGA..2256293G) and
+% corroborating citations of the same bibcode, 2026-08-28 -- not typeset from recollection.
+% ssd.jpl.nasa.gov/horizons/ itself gives only a generic "Solar System Dynamics.
+% (Downloaded ...). https://ssd.jpl.nasa.gov" web-citation template and no author-level
+% citation for the Horizons system; this proceedings entry is the citation the wider
+% literature uses for Horizons itself, as opposed to a specific DE44x kernel.
+@inproceedings{giorgini2015horizons,
+  author    = {Giorgini, J. D.},
+  title     = {Status of the {JPL} {Horizons} Ephemeris System},
+  booktitle = {IAU General Assembly},
+  year      = {2015},
+  volume    = {29}
+}
+
+% Star positions and proper motions used for the star-anchored ayanamsha systems. Author,
+% year, journal, volume and page (653) verified against
+% docs/audit/2026-08-17-ayanamsha-cleanroom/derivation-inputs.json (catalogue_source fields,
+% e.g. line 126: "van Leeuwen, F. (2007), A&A 474, 653 -- the re-reduction of the Hipparcos
+% raw data -- via VizieR.") and DATA_PROVENANCE.md's own citation of the same paper. The
+% title and closing page (664) are not stated in either repository source; both were
+% independently verified 2026-08-28 via a live web lookup that resolves directly to the
+% publisher's own article page, aanda.org/articles/aa/abs/2007/41/aa8357-07/aa8357-07.html
+% ("Validation of the new Hipparcos reduction"), corroborated by a second live source
+% (Springer's review of the same reduction, "Hipparcos, the New Reduction").
+@article{vanleeuwen2007hipparcos,
+  author  = {van Leeuwen, F.},
+  title   = {Validation of the new {Hipparcos} reduction},
+  journal = {Astronomy \& Astrophysics},
+  year    = {2007},
+  volume  = {474},
+  pages   = {653--664}
+}
+
+% Public domain (US Government work). Accessed 2026-07-16, SHA256-pinned. Verified against
+% DATA_PROVENANCE.md line 11, 2026-08-28; release year 2021 per MAINTENANCE.md \S4 ("DE440/441
+% were released in 2021").
+@misc{naif2021de440s,
+  author       = {{NAIF/JPL}},
+  title        = {{JPL DE440s SPK} kernel (numerical planetary and lunar ephemeris)},
+  year         = {2021},
+  howpublished = {\url{https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp}}
+}

@@ -52,6 +52,17 @@ jobs:
           # deploy. Asserting it here is what stops the site silently
           # advertising the previous release forever.
           check "metrics.json engineVersion" "$(jq -r .engineVersion metrics.json)"
+          # Citation metadata. CITATION.cff is what GitHub renders behind the
+          # repo's "Cite this repository" button and codemeta.json is what
+          # software-metadata harvesters read, so a stale version here is
+          # publicly wrong in a way a reader is invited to copy. Both arrived
+          # with the preprint branch already reading 7.4.0 while the engine was
+          # at 9.1.0 -- caught by hand at merge time, which is exactly the
+          # accident this job exists to stop happening twice.
+          check "CITATION.cff version" \
+            "$(sed -n 's/^version: \(.*\)$/\1/p' CITATION.cff)"
+          check "codemeta.json softwareVersion" \
+            "$(jq -r .softwareVersion codemeta.json)"
           exit $fail
 
   # The gate that did not exist until v7.2.0.
