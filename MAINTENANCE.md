@@ -308,6 +308,57 @@ scheduled Full Validation job runs it.
   behaviour; it recorded a change that had already been released.
 
 
+## 11. Validation Harness — Audit Backlog (2026-09-01)
+
+**None of the following is a defect.** An independent verification pass over the validation
+harness re-ran the accuracy suite and confirmed the published 0.103″ mean is correct and
+reproducible for the quantity it actually measures (see the Accuracy section of `README.md`
+and `metrics.json`'s `accuracy` block). The six items below are the auditor's longer-term
+suggestions for making the harness itself more thorough, recorded here so the next person to
+audit it does not have to re-derive them from scratch. Nothing here changes a shipped number.
+
+1. **An adversarial sampling oracle.** `generate_horizons_oracle.py` samples uniformly at
+   30-day intervals across 1900-2100. It is not weighted toward the cases most likely to
+   expose a defect: station/retrograde turning points, conjunctions, perigee/apogee, longitude
+   wraparound (0/360), and Chebyshev segment boundaries in the SPK kernel. A second, targeted
+   fixture built around those events would be a stronger regression net than more uniform
+   dates.
+
+2. **Publish latitude, distance and full Cartesian vector residuals.** The oracle fixture
+   already carries `ref_latitude`, `ref_distance` and `ref_speed` — `oracle_comparison.rs`
+   deserialises all three and marks them `#[allow(dead_code)]` (see the struct fields there).
+   Only the headline longitude reduction is computed and published; the other three dimensions
+   are measured for nothing. This is a reporting gap, not a measurement gap: the data already
+   exists in the committed fixture.
+
+3. **A physical planet-centre comparison mode**, published separately from the existing
+   barycentre comparison. `targetConvention` in `metrics.json` already documents that querying
+   Horizons IDs 199/299/499/599/699/799/899/999 (physical centres) instead of the
+   planetary-system barycentre IDs would inject a spurious ~0.1″ offset for the outer planets —
+   the same order of magnitude as the headline mean. Right now that fact is only asserted in
+   prose; a second published comparison would make it a measured, reproducible number instead.
+
+4. **A third, independently-implemented reference path.** The current comparison is
+   SpkReader/DE440s vs. Horizons/DE441. DE440 and DE441 are sibling solutions fit from the same
+   underlying JPL integration and much of the same observational dataset, not two independent
+   determinations of the planetary orbits — so agreement between them is weaker evidence of
+   correctness than it looks. Adding SPICE (NAIF's own toolkit) or a from-scratch DE440 reader
+   as a third path, built independently of both the fixture generator and `SpkReader`, would
+   give a comparison that is actually independent in the way the current one is assumed to be.
+
+5. **Percentile statistics (P50/P90/P99).** `metrics.json`'s `accuracy` block publishes mean
+   and max only. A single outlier (e.g. the 1.187″ Uranus max) says nothing about the shape of
+   the distribution between the mean and that max. P50/P90/P99 would show whether error is
+   concentrated in a few dates/bodies or spread evenly, which the current two numbers cannot
+   distinguish.
+
+6. **A per-quantity validation status page**, rather than one general "accuracy" figure
+   standing in for the whole engine. As of this writing: SPK longitude is externally validated
+   against Horizons; latitude and distance are not (see item 2); house cusps are not externally
+   validated at all; ayanamsha values are re-derived from primary sources but not
+   cross-checked against an independent implementation. A reader who sees "0.103″" without this
+   breakdown can reasonably assume it covers more of the engine than it does.
+
 ## Quick Reference: Annual Maintenance Checklist
 
 ```

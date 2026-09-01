@@ -12,7 +12,7 @@
 
 [Website](https://vedaksha.net) · [Docs](https://vedaksha.net/docs) · [Playground](https://vedaksha.net/playground) · [API reference](https://docs.rs/vedaksha) · [Blog](https://vedaksha.net/blog)
 
-`clean-room` · `0.103″ mean longitude vs JPL Horizons` · `1,101 tests + 24,350 oracle rows` · `MCP-native` · `BUSL-1.1 → Apache 2.0`
+`clean-room` · `0.103″ mean longitude vs JPL Horizons` · `1,147 tests (per push) + 24,350 oracle rows` · `MCP-native` · `BUSL-1.1 → Apache 2.0`
 
 [Install](#install) · [Quick start](#quick-start) · [Accuracy](#accuracy) · [What's inside](#whats-inside) · [MCP + property graph](#mcp--property-graph) · [Provenance](#clean-room-provenance) · [License](#license)
 
