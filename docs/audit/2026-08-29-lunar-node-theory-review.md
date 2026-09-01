@@ -1,5 +1,16 @@
 # Lunar node theory review — open questions
 
+> **BOTH QUESTIONS ARE NOW CLOSED. Do not act on the conclusions below without
+> reading the follow-ups.** Finding 1 (TrueNode) was resolved in v7.5.0. Finding 2
+> (MeanNode) was resolved on 2026-09-01 and is **not** a Vedaksha defect — see
+> `2026-09-01-mean-node-divergence-resolved.md`. That document also corrects a
+> reasoning error in the companion file
+> `2026-08-29-lunar-node-self-consistency-results.md`, which was cited here as
+> ruling out a J2000-frame cause: the self-consistency check it reports compared
+> Vedaksha against Vedaksha and therefore had **no power** to detect that error,
+> since a shared frame mistake would cancel on both sides. The hypothesis was
+> recorded as eliminated while still untested.
+
 **Date:** 2026-08-29
 **Origin:** an independent oracle-parity harness (`vedaksha-parity`) called Vedaksha through its
 published PyPI package (v7.4.0) and reported two measured divergences on real, third-party-sourced
