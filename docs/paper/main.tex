@@ -570,13 +570,41 @@ requires an independent theory choice (a mean secular rate, or an osculating ele
 short-period terms) that no such kernel makes on the caller's behalf. Validating a node against a
 national-agency kernel is thus not merely unavailable but ill-posed.
 
-Nodes are instead checked separately and more weakly. The osculating node is compared against a
+Nodes are instead checked separately. The osculating node is compared against a
 small set of reference points obtained from Horizons in its orbital-elements mode --- a different
 query type from the observer-table data underlying the main oracle --- agreeing to within
-$1.7\times10^{-4}$ degrees over the sampled dates; the mean and true nodes are covered only by
-internal consistency tests (draconic regression rate, frame alignment) with no external reference
-at all. Node accuracy is accordingly a weaker claim than the body-longitude figures reported
-above, and this paper does not assert sub-arcsecond agreement for them.
+$1.7\times10^{-4}$ degrees over the sampled dates.
+
+The mean node admits a partial external check, and the distinction that makes it possible is
+worth drawing precisely, because it is easy to mistake for a contradiction of the ill-posedness
+argument above. What a kernel cannot supply is the definitional choice: which smoothing of the
+real, wobbling node counts as ``the'' mean node. What a kernel can supply, through its state
+vectors and standard orbital mechanics, is the osculating node of the actual orbit --- a
+well-defined geometric quantity requiring no convention at all. And while the \emph{difference}
+between a mean node and the physical osculating node is convention-dependent, it must in every
+convention be bounded and periodic, with no secular term: a smoothing of a quantity cannot drift
+away from it. The absence of secular drift is therefore testable without adopting anyone's
+definition, even though the value is not.
+
+That test has been performed independently, by the same third party as the cross-validation
+above. At 1,801 instants from 1900 to 2050, the Moon's Earth-relative state vector was read from
+DE440 and the osculating node computed from it directly, then expressed in two frames and
+regressed against time. In the properly precession-corrected mean ecliptic and equinox of date,
+the drift against Vedaksha's tropical mean node is
+$-0.036 \pm 2.107$ arcseconds per year --- within 0.05 standard errors of zero. The control,
+which repeats the identical computation in an uncorrected fixed J2000 ecliptic, returns
+$-50.445 \pm 2.109$ arcseconds per year, within 0.3\% of the standard general-precession rate and
+inconsistent with zero by more than twenty standard errors. The method therefore demonstrably
+detects a precession-scale frame error, and does not find one; the main result is smaller than
+the control by a factor of roughly 700. As a check that the pipeline measures the intended
+quantity, the residual spans roughly $\pm 7{,}000$ arcseconds after correction, matching the
+known one-and-a-half to two degree libration of an osculating node about its mean.
+
+This bounds a secular frame error in the mean node at roughly two arcseconds per year; it does
+not constrain the bounded periodic difference, and it is not an accuracy claim about the node's
+value. Node accuracy remains a weaker claim than the body-longitude figures reported above, and
+this paper does not assert sub-arcsecond agreement for any node. The true node is still covered
+only by internal consistency tests.
 
 The oracle says nothing about the accuracy of house-cusp
 computation, which is not measured against any reference in this project. Two earlier test files,
