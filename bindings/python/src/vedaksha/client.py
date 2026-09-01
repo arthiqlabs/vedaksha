@@ -139,14 +139,37 @@ class Vedaksha:
         ``body`` is a NAIF id or a name in :data:`NAIF_IDS`. Requires a kernel
         loaded via :meth:`load_ephemeris`.
 
+        .. warning::
+
+           **The returned position is NOT relative to a single fixed origin.**
+           This is a raw segment read, so the origin is whatever the kernel
+           stores that segment against, and it differs by body:
+
+           * planets and the Sun are returned relative to the **solar-system
+             barycentre** (segment center 0);
+           * the **Moon** is returned relative to the **Earth-Moon
+             barycentre** (segment center 3) -- neither heliocentric, nor
+             relative to Earth's own body centre.
+
+           A caller who assumes one origin for every body will be wrong for
+           the Moon by roughly the Earth-EMB separation, thousands of
+           kilometres, with no error raised. To obtain a geocentric Moon,
+           combine this with the EMB state rather than using it directly.
+           Planet targets are **barycentres** (Mercury=1, Jupiter=5, ...),
+           matching the segments DE440s actually stores; querying planet
+           body centres (199, 599, ...) is a different quantity.
+
         .. note::
 
            ``julian_day`` here is **TDB**, unlike the MCP tools above (which
-           take UT1). This is a raw SPK segment query: the kernel's Chebyshev
-           coefficients are indexed by TDB seconds past J2000 and nothing on
-           this path applies a Delta T conversion, so the argument is passed
-           through to the kernel unchanged. :meth:`ephemeris_range` bounds are
-           on the same TDB scale.
+           take UT1). The kernel's Chebyshev coefficients are indexed by TDB
+           seconds past J2000 and nothing on this path applies a Delta T
+           conversion, so the argument is passed through to the kernel
+           unchanged. :meth:`ephemeris_range` bounds are on the same TDB
+           scale. Because no time-scale conversion happens here, this entry
+           point is the one to use when comparing against another ephemeris
+           implementation: addressing both sides in TDB removes Delta T from
+           the comparison entirely.
         """
         naif = body if isinstance(body, int) else NAIF_IDS[body.lower()]
         x, y, z, vx, vy, vz = self._engine.spk_state(naif, julian_day)
