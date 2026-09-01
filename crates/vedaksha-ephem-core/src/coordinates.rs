@@ -558,11 +558,17 @@ mod tests {
         // the Moon is NOT exempt from that path.
         //
         // Oracle: JPL Horizons DE441 apparent ecliptic longitude of the Moon at
-        //   J2000.0 (JD 2451545.0 TT) in the true ecliptic and equinox of date.
+        //   JD 2451545.0 **UT** (Horizons' own `Date_________JDUT` column, per
+        //   `scripts/generate_horizons_oracle.py`'s provenance record — not
+        //   TT, despite this being J2000.0; do not feed this value into
+        //   `ecliptic_position_tt`, which would introduce Delta T's ~32
+        //   arcsec-scale error at this epoch), in the true ecliptic and
+        //   equinox of date. `apparent_position` below is UT1-addressed and
+        //   converts internally, which is why it lands within tolerance.
         //   Query: COMMAND='301', CENTER='500@399', EPHEM_TYPE='OBSERVER',
         //   QUANTITIES='31', REF_PLANE='ECLIPTIC', STEP='1d', START='2000-01-01',
         //   STOP='2000-01-02'.
-        //   Result: apparent ecliptic longitude ≈ 223.3238° (J2000.0 TT).
+        //   Result: apparent ecliptic longitude ≈ 223.3238° (JD 2451545.0 UT).
         //   Source: NASA/JPL Horizons System (https://ssd.jpl.nasa.gov/horizons/).
         //   Tolerance: 0.006° (≈ 22 arcsec) accounts for ELP/MPP02 vs. DE441
         //   lunar theory residual (~17 arcsec max for modern dates) plus rounding.
@@ -583,6 +589,52 @@ mod tests {
         assert!(
             diff < 0.006,
             "Moon longitude at J2000.0 should be ≈223.3238° (JPL Horizons DE441); \
+             got {got_deg:.4}°, diff={diff:.4}°"
+        );
+    }
+
+    /// Absolute-oracle test for [`ecliptic_position_tt`] itself, not merely
+    /// for the UT1 sibling it is proved bit-identical to elsewhere in this
+    /// file. Every other check on the TT entry point is relative to the UT1
+    /// path (see `ecliptic_position_tt_matches_ut1_at_converted_time`), so a
+    /// bug shared by both — e.g. in `compute_ecliptic_with_frame`, which
+    /// both funnel through — would cancel out and go undetected. This test
+    /// calls `ecliptic_position_tt` directly and checks it against the same
+    /// external Horizons anchor the UT1 test above uses.
+    ///
+    /// The anchor (`moon_longitude_at_j2000_matches_jpl_horizons`, above) is
+    /// pinned at JD 2451545.0 **UT**, not TT (see that test's comment, and
+    /// item 4 of the adversarial-review report this test was added for).
+    /// There is no independently-fetched Horizons value at a *TT* epoch in
+    /// this repo, so this test reaches the same physical instant a different
+    /// way: `delta_t::ut1_to_tt(2451545.0)` is the TT Julian Day of that same
+    /// instant, using this engine's own (already-tested-elsewhere) Delta T
+    /// table — the same table `apparent_position` itself uses at its UT1
+    /// boundary. Calling `ecliptic_position_tt` at that TT instant and
+    /// checking it against the Horizons UT longitude is therefore a genuine
+    /// exercise of the TT code path against an external, non-self-referential
+    /// number; it is not the tautological substitution the sibling
+    /// bit-identity test performs, because it never calls the UT1-addressed
+    /// `ecliptic_position` at all.
+    #[test]
+    fn ecliptic_position_tt_matches_jpl_horizons_at_j2000() {
+        use crate::analytical::AnalyticalProvider;
+        let provider = AnalyticalProvider::new();
+        let jd_tt = delta_t::ut1_to_tt(2_451_545.0_f64);
+
+        let pos = ecliptic_position_tt(&provider, Body::Moon, jd_tt)
+            .expect("Moon position at J2000 (TT) should succeed");
+
+        let got_deg = pos.longitude.to_degrees();
+        let expected_deg = 223.3238_f64;
+        let mut diff = (got_deg - expected_deg).abs();
+        if diff > 180.0 {
+            diff = 360.0 - diff;
+        }
+        assert!(
+            diff < 0.006,
+            "ecliptic_position_tt(Moon, ut1_to_tt(2451545.0)) should be ≈223.3238° \
+             (JPL Horizons DE441, same physical instant as the UT1 anchor above); \
              got {got_deg:.4}°, diff={diff:.4}°"
         );
     }
@@ -615,12 +667,15 @@ mod tests {
         }
     }
 
-    /// Core correctness property of the TT entry point: it and the UT1 entry
-    /// point must differ *only* in what the caller supplies for the time
-    /// scale. Calling the TT sibling at `ut1_to_tt(x)` must be bit-identical
-    /// to calling the UT1 function at `x`, for every field, across a spread
-    /// of dates spanning well outside the measured-Delta-T era in both
-    /// directions.
+    /// Change-detector, not a correctness property: `ecliptic_position(x)`
+    /// reduces by substitution to `ecliptic_position_tt(ut1_to_tt(x))`, so
+    /// this holds for any implementation, correct or broken — it constrains
+    /// no value. It stays useful for catching an accidental behavioural
+    /// change between the two entry points (e.g. one gaining an extra
+    /// conversion, or the two diverging on which bodies error). Correctness
+    /// against an external oracle is [`moon_longitude_at_j2000_matches_jpl_horizons`]
+    /// for the UT1 path and `ecliptic_position_tt_matches_jpl_horizons_at_j2000`
+    /// for the TT path.
     #[test]
     fn ecliptic_position_tt_matches_ut1_at_converted_time() {
         use crate::analytical::AnalyticalProvider;
@@ -723,22 +778,31 @@ mod tests {
             "TT path appears to have applied a Delta T conversion internally"
         );
 
-        // The Moon's mean motion is ~13.176 deg/day; over `delta_t_days` that
-        // predicts roughly how far apart the two longitudes should land.
-        // Assert the observed gap is within an order of magnitude of that
-        // prediction, ruling out both "no-op" (already excluded above) and
-        // "wildly wrong" conversions.
-        let predicted_shift_deg = 13.176 * delta_t_days.abs();
+        // Use the Moon's own instantaneous longitude speed at this epoch
+        // (from `apparent_position`, not a hardcoded mean-motion constant) to
+        // predict the shift `delta_t_days` should produce. This is accurate
+        // to well under 1% over a single delta_t_days-sized step, so the
+        // tolerance below can be tight: a few percent catches a sign-flipped
+        // conversion (~200% off), a halved or doubled Delta T (~50%/100%
+        // off), or a wrong-body/wrong-epoch mixup, while still tolerating the
+        // second-order error from using the speed at `jd_ut1` rather than the
+        // true mean speed over the (jd_ut1, jd_ut1 + delta_t_days) interval.
+        let speed_deg_per_day = apparent_position(&provider, body, jd_ut1)
+            .expect("UT1 path speed")
+            .longitude_speed;
+        let predicted_shift_deg = speed_deg_per_day.abs() * delta_t_days.abs();
         let mut observed_shift_deg =
             (true_ut1.longitude.to_degrees() - misfed_tt.longitude.to_degrees()).abs();
         if observed_shift_deg > 180.0 {
             observed_shift_deg = 360.0 - observed_shift_deg;
         }
         assert!(
-            observed_shift_deg > predicted_shift_deg * 0.1
-                && observed_shift_deg < predicted_shift_deg * 10.0,
-            "observed shift {observed_shift_deg}deg not within an order of \
-             magnitude of the Delta-T-predicted shift {predicted_shift_deg}deg"
+            observed_shift_deg > predicted_shift_deg * 0.95
+                && observed_shift_deg < predicted_shift_deg * 1.05,
+            "observed shift {observed_shift_deg}deg is not within 5% of the \
+             Delta-T-predicted shift {predicted_shift_deg}deg (from the Moon's own \
+             longitude_speed at this epoch) — this band is tight enough to catch a \
+             sign-flipped conversion, or a halved/doubled Delta T, not just a no-op"
         );
     }
 }

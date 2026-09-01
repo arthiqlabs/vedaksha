@@ -16,7 +16,7 @@
 //! done. Every function returns an `i32`: `>= 0` is success (often a length),
 //! negative is an error code.
 //!
-//! ## Two surfaces
+//! ## Three surfaces
 //!
 //! * **MCP** — [`vk_mcp_request`]/[`vk_mcp_take`] wrap `McpServer::handle_request`,
 //!   exposing the engine's whole tool surface as JSON-RPC 2.0. The Python
@@ -271,8 +271,11 @@ pub unsafe extern "C" fn vk_spk_range(out: *mut f64) -> i32 {
 /// should be added here).
 ///
 /// Returns 0 on success, or a negative error: [`ERR_UNKNOWN_BODY`] (no such
-/// NAIF id, or a body the analytical tier does not model — e.g. Pluto),
-/// [`ERR_COMPUTE`] (date outside the analytical tier's supported range).
+/// NAIF id, or a body the analytical tier does not model — e.g. Pluto, which
+/// `coordinates::ecliptic_position_tt` reports as
+/// `ComputeError::BodyNotAvailable`, mapped here the same way an unrecognised
+/// NAIF id is), [`ERR_COMPUTE`] (date outside the analytical tier's supported
+/// range).
 ///
 /// # Safety
 /// `out` must point to space for 3 `f64` values in linear memory.
@@ -290,6 +293,7 @@ pub unsafe extern "C" fn vk_analytical_position_tt(naif_id: i32, jd_tt: f64, out
             dst[2] = pos.distance;
             0
         }
+        Err(vedaksha_ephem_core::error::ComputeError::BodyNotAvailable { .. }) => ERR_UNKNOWN_BODY,
         Err(_) => ERR_COMPUTE,
     }
 }

@@ -20,10 +20,14 @@ These must match `coordinates::apparent_position` exactly or the comparison
 is meaningless:
 
 * **Time scale — UT.** `apparent_position(provider, body, jd)` takes `jd` in
-  UT1 (see `compute_ecliptic_with_frame`, whose parameter is `jd_ut` and
-  which converts via `delta_t::ut1_to_tt`). Horizons OBSERVER tables read
-  input JD as UT and report `Date_________JDUT`. Both sides therefore speak
-  UT and no ΔT correction is applied here.
+  UT1 and converts to TT exactly once, at that public boundary, via
+  `delta_t::ut1_to_tt` — see `coordinates.rs`. Everything downstream of that
+  boundary (`compute_ecliptic_with_frame` and the analytical providers it
+  calls) is addressed in TT and performs no further conversion; its
+  parameter is named `jd_tt` precisely to mark that. Horizons OBSERVER
+  tables read input JD as UT and report `Date_________JDUT`. Both sides
+  therefore speak UT at the query boundary and no ΔT correction is applied
+  here.
 * **Target — barycentres.** `Body::naif_id()` returns barycentre IDs
   (Mercury=1, Venus=2, Mars=4, Jupiter=5 … Pluto=9), because `SpkReader`
   reads DE440s barycentre segments. We query the same IDs. Fetching planet
