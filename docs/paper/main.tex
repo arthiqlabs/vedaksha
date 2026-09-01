@@ -139,7 +139,13 @@ from the IAU 2000B truncated 77-term series.
 
 Vedic astrology charts are cast against the sidereal zodiac, which requires subtracting an
 ayanamsha --- the angular offset between the tropical and sidereal zero points --- from a tropical
-longitude. Vedaksha implements eleven ayanamsha systems, each derived forward from a named
+longitude. The quantity subtracted is the \emph{true} ayanamsha, the mean (precession-only) value
+plus nutation in longitude, rather than the mean value alone: the tropical longitudes it is
+applied to are apparent positions and therefore already carry nutation, so rotating them by a
+mean-only offset would leave an uncancelled nutation term of up to roughly 17--20 arcseconds in
+every sidereal position. Both quantities are exposed under explicitly named functions, since an
+engine that is silent about which one it returns invites comparison against the wrong column.
+Vedaksha implements eleven ayanamsha systems, each derived forward from a named
 primary source rather than reverse-engineered from another implementation's output. The
 normative derivation record is \texttt{docs/audit/2026-08-17-ayanamsha-cleanroom/spec.md}, with
 its machine-readable inputs in the same directory's \texttt{derivation-inputs.json}: the Indian
@@ -295,13 +301,13 @@ retrieval-augmented-generation (RAG) embedding text, so a downstream agent or gr
 query a chart's facts directly rather than parsing a bespoke, chart-specific response schema.
 
 The MCP surface is the primary agent-facing interface: 17 tools (\texttt{tools/mcp-tools.json},
-engine version 7.4.0), covering natal chart computation, dasha periods, karakas, combustion,
+engine version 9.0.0), covering natal chart computation, dasha periods, karakas, combustion,
 shadbala, divisional charts (vargas), the graph emitter above, transits and transit search,
 muhurta search, ashtakavarga, gochara, panchanga, drishti, bhavas, synastry, and composite charts,
 served over both stdio and HTTP with bearer-token authentication.
 
 Vedaksha is distributed across four language surfaces and one container registry, all currently
-at engine version 7.4.0:
+at engine version 9.0.0:
 
 \begin{table}[!htbp]
 \centering
@@ -321,7 +327,7 @@ GitHub & \url{https://github.com/arthiqlabs/vedaksha} & Source, issue tracker,
   \texttt{docs/audit/} clean-room evidence \\
 \bottomrule
 \end{tabular}
-\caption{Distribution surfaces, engine version 7.4.0.}
+\caption{Distribution surfaces, engine version 9.0.0.}
 \label{tab:availability}
 \end{table}
 
