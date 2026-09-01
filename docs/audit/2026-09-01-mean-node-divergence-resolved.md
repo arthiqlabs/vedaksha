@@ -7,7 +7,9 @@
 
 ## The finding, as originally reported
 
-An external parity-testing project measured Vedaksha's `MeanNode` **sidereal**
+A separate parity-testing project, maintained by the same authors as this
+engine and consuming it only through its published interfaces, measured
+Vedaksha's `MeanNode` **sidereal**
 longitude against an independent third-party implementation over 168 evaluable
 birth instants, 1899-1999 CE, with Vedaksha's `TrueChitra` ayanamsha configured
 to match that implementation's own convention. The signed difference correlated

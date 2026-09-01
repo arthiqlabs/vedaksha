@@ -21,8 +21,9 @@ in Rust. It computes planetary positions from the analytical VSOP87A and ELP/MPP
 from the JPL DE440s SPK numerical kernel --- validated against an independent JPL DE441
 ephemeris served by the NASA/JPL Horizons system to a mean residual of 0.103 arcseconds (maximum
 1.187 arcseconds) over 15,350 longitude comparisons across ten bodies spanning 1900--2025,
-re-measured for this paper, and independently cross-validated by a third party against two
-national-agency ephemerides from two different agencies (JPL DE440 and IMCCE INPOP21a). The
+re-measured for this paper, and cross-validated against two national-agency ephemerides from
+two different agencies (JPL DE440 and IMCCE INPOP21a) using a separate parity harness that
+consumes only the engine's published output. The
 analytical path, which needs no runtime data file, is separately characterised across
 1550--2650~CE with the time scale removed from the comparison by addressing both sides in
 Terrestrial Time: mean residuals remain sub-arcsecond for the Sun, Moon, Mercury, and Venus
@@ -267,7 +268,7 @@ from the mean 0.106 / max 1.184 arcseconds recorded when the fixture's README wa
 2026-07-16, because a since-released fix to Vedaksha's observer-position computation (not to the
 reference fixture itself) changed the computed positions being compared in the interim.
 
-\subsection{Independent cross-validation against a second agency}
+\subsection{Cross-validation against a second agency}
 
 The residuals above measure the numerical (SPK) path against a single reference lineage: JPL,
 via the Horizons service. Agreement with one agency's ephemeris leaves open whether the engine
@@ -276,7 +277,7 @@ leaves the \emph{analytical} path --- the VSOP87A/ELP-MPP02 pipeline that requir
 file, and which is what makes the WebAssembly and browser distributions possible --- unmeasured
 against any external reference in the account above.
 
-Both gaps were addressed by an independent measurement, performed by a separate parity-testing
+Both gaps were addressed by a measurement performed in a separate parity-testing
 project that consumes Vedaksha only through its published interfaces and holds its reference
 kernels locally rather than querying any service. That measurement compared the analytical path's
 tropical longitudes at 2{,}000 instants for nine bodies against two ephemerides produced by two
@@ -293,8 +294,8 @@ JPL DE440 (local kernel) & NASA/JPL & 13,874 & 0.130 & 2.940 (Moon) \\
 IMCCE INPOP21a (local kernel) & IMCCE & 11,732 & 0.115 & 1.270 (Jupiter) \\
 \bottomrule
 \end{tabular}
-\caption{Independent cross-validation of the \emph{analytical} ephemeris path against two
-national-agency ephemerides, measured externally. Counts are evaluable comparisons, which differ
+\caption{Cross-validation of the \emph{analytical} ephemeris path against two
+national-agency ephemerides. Counts are evaluable comparisons, which differ
 between references because each kernel's own coverage and body set differ.}
 \label{tab:crossval}
 \end{table}
@@ -307,8 +308,14 @@ paper makes, the agreement is not specific to JPL: an ephemeris independently pr
 places the same bodies within the same tolerance. The residual against INPOP21a is in fact
 marginally smaller than that against DE440.
 
-These figures were produced by a third party using its own toolchain and its own copies of the
-reference kernels, and are reported here as such rather than as a self-measurement.
+The provenance of these figures should be stated exactly. They were produced by a separate
+parity harness with its own toolchain and its own copies of the reference kernels, but that
+harness is maintained by the same authors as the engine. What is independent here is the
+methodology and the references, not the party: the harness reads only Vedaksha's published
+output and never its internals, and the reference ephemerides are produced by national agencies
+and are not under our control. The measurement itself is ours. The harness is intended for
+public release so that the comparison can be re-run by anyone, at which point these figures
+become independently reproducible rather than merely independently derived.
 
 \subsection{Component-level validation of the SPK reader}
 
@@ -325,7 +332,7 @@ a raw state vector with no apparent-place processing and no time-scale conversio
 implementations reading comparable kernels at the same TDB instant should therefore agree to
 within their shared numerical precision, with nothing else in the comparison at all.
 
-Measured externally by the same independent party, against two kernels' own raw segment
+Measured by the same parity harness, against two kernels' own raw segment
 evaluation: for nine of the ten bodies --- the Sun, Mercury, Venus, Mars, Jupiter, Saturn,
 Uranus, Neptune and Pluto --- agreement is sub-metre, and mostly sub-millimetre, against both
 references. The barycentre-target convention (Mars, Jupiter, Saturn, Uranus, Neptune and Pluto
@@ -588,7 +595,7 @@ convention be bounded and periodic, with no secular term: a smoothing of a quant
 away from it. The absence of secular drift is therefore testable without adopting anyone's
 definition, even though the value is not.
 
-That test has been performed independently, by the same third party as the cross-validation
+That test has been performed by the same parity harness as the cross-validation
 above. At 1,801 instants from 1900 to 2050, the Moon's Earth-relative state vector was read from
 DE440 and the osculating node computed from it directly, then expressed in two frames and
 regressed against time. In the properly precession-corrected mean ecliptic and equinox of date,
