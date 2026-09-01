@@ -20,8 +20,13 @@ from the JPL DE440s SPK numerical kernel --- validated against an independent JP
 ephemeris served by the NASA/JPL Horizons system to a mean residual of 0.103 arcseconds (maximum
 1.187 arcseconds) over 15,350 longitude comparisons across ten bodies spanning 1900--2025,
 re-measured for this paper, and independently cross-validated by a third party against two
-national-agency ephemerides from two different agencies (JPL DE440 and IMCCE INPOP21a) --- and
-derives from them the constructs used in
+national-agency ephemerides from two different agencies (JPL DE440 and IMCCE INPOP21a). The
+analytical path, which needs no runtime data file, is separately characterised across
+1550--2650~CE with the time scale removed from the comparison by addressing both sides in
+Terrestrial Time: mean residuals remain sub-arcsecond for the Sun, Moon, Mercury, and Venus
+across that entire span, while growing to several arcseconds for Uranus and Neptune at its
+extremes. The engine
+derives from these positions the constructs used in
 Vedic astrology --- nakshatras, dashas, vargas (divisional charts), panchanga, shadbala, and
 muhurta --- exposed through native Rust, Python, WebAssembly, and Model Context Protocol (MCP)
 interfaces.
@@ -452,24 +457,93 @@ apparent place --- light-time and aberration applied --- against the same kernel
 comparison is like-for-like with Vedaksha's apparent ecliptic output rather than against raw
 geometry.
 
-% Per-band, per-body residual table to be inserted here once the harness supplies the numeric
-% breakdown. The prose below states only what the qualitative result supports.
+The reference side was addressed in TT throughout, with no TDB anywhere in the measurement, so
+the sub-millisecond TT--TDB distinction discussed below does not enter these figures.
+Table~\ref{tab:fullrange} gives the result.
 
-Truncation error does grow with distance from J2000, and the growth is visible and largely
-monotonic. It is largest for Uranus and Neptune, for which the residual spans roughly an order of
-magnitude between the century-band nearest J2000 and the farthest sampled, counting both
-directions in time. It is present but substantially smaller for the Sun, the Moon, and the inner
-planets. This is the qualitative shape the analytical theories' construction would predict, and it
-is reported here as qualitative: the sampling is not yet dense enough to publish a per-band error
-model.
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Analytical-path longitude residuals against DE440, by distance from J2000.0. Both sides
+addressed in TT, so no $\Delta T$ model enters on either side. Each cell is mean\,/\,max in
+arcseconds. Sample counts fall in the outer bands as the kernel's coverage margin is approached.
+The maxima are lower bounds on the true worst case, not measured worst cases: see the discussion
+of aliasing below.}
+\label{tab:fullrange}
+\begin{tabular}{l cccccc}
+\toprule
+& \multicolumn{6}{c}{Distance from J2000.0 (years)} \\
+\cmidrule(lr){2-7}
+Body & 0--100 & 100--200 & 200--300 & 300--400 & 400--500 & 500--600 \\
+ & ($n=8$) & ($n=8$) & ($n=8$) & ($n=8$) & ($n=6$) & ($n=4$) \\
+\midrule
+Sun     & 0.084/0.102 & 0.094/0.147 & 0.121/0.189 & 0.156/0.249 & 0.160/0.273 & 0.145/0.165 \\
+Moon    & 0.009/0.019 & 0.017/0.027 & 0.046/0.088 & 0.078/0.168 & 0.242/0.350 & 0.509/0.603 \\
+Mercury & 0.084/0.119 & 0.103/0.157 & 0.124/0.246 & 0.138/0.227 & 0.177/0.353 & 0.151/0.225 \\
+Venus   & 0.080/0.102 & 0.091/0.136 & 0.115/0.186 & 0.135/0.221 & 0.196/0.358 & 0.109/0.144 \\
+Mars    & 0.065/0.113 & 0.115/0.302 & 0.221/0.646 & 0.366/0.758 & 1.259/3.794 & 2.299/6.277 \\
+Jupiter & 0.178/0.372 & 0.324/0.755 & 0.450/0.639 & 0.413/0.828 & 0.476/0.870 & 0.531/0.591 \\
+Saturn  & 0.192/0.302 & 0.224/0.432 & 0.360/0.585 & 0.499/0.702 & 0.780/1.027 & 1.181/1.325 \\
+Uranus  & 0.539/1.215 & 0.582/2.270 & 1.399/3.132 & 1.895/4.587 & 3.209/6.583 & 5.484/10.145 \\
+Neptune & 1.056/2.308 & 1.908/3.632 & 3.385/4.488 & 4.812/6.463 & 5.791/6.379 & 7.826/8.294 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-One departure from that pattern is recorded rather than smoothed away. Mars does not follow a
-clean monotonic trend: its 400--500 and 500--600 year bands both sit noticeably above what a
-smooth extrapolation from the nearer bands would predict. With roughly four sampled instants per
-century-band, this cannot presently be distinguished between a real feature of Mars's own
-truncation error and a small sample happening to fall near a resonance or a close approach. A
-finer sweep concentrated on 400--600 years from J2000 for Mars specifically would settle it; that
-has not been run, and the anomaly is stated here as unresolved rather than explained.
+Truncation error grows with distance from J2000, and the growth is strongly body-dependent. In
+absolute terms it is largest for the outer planets: Neptune rises from 1.056 to 7.826 arcseconds
+in the mean, and Uranus from 0.539 to 5.484, roughly a factor of seven to ten across the sampled
+range. In relative terms the steepest growth belongs to the Moon, whose mean residual is the
+smallest of any body in the nearest band at 0.009 arcseconds and rises to 0.509 --- a factor of
+almost sixty, though still sub-arcsecond at the farthest band. The Sun, Mercury, and Venus barely
+grow at all, remaining within roughly a factor of two across six centuries, and their apparent
+dip in the outermost band should not be read as improvement: with $n=4$ that band cannot resolve
+a change of that size.
+
+These figures are not directly comparable to the mean 0.239-arcsecond analytical residual
+reported earlier in this section, and the difference is not a discrepancy. That figure was
+measured against DE441 as served by Horizons, addressed in UT1, over 1,535 comparisons per body
+in 1900--2025; these are measured against DE440, addressed in TT, over at most eight instants per
+cell. The band figures rest on small samples and should be read as characterising the shape of
+the growth, not as competing precision claims.
+
+\subsubsection*{The Mars anomaly, resolved: a synodic-period term the grid could not see}
+
+An earlier pass over this data showed Mars departing from the otherwise monotonic pattern, with
+its 400--500 and 500--600 year bands sitting well above a smooth extrapolation. That anomaly has
+since been resolved, and the explanation revises how the entire max column of
+Table~\ref{tab:fullrange} should be read.
+
+Progressively finer sampling identified the cause. A five-year grid remained jagged and
+non-monotonic --- the signature of aliasing rather than of a resolved signal --- so a
+quarter-year scan was run across a single thirty-year window inside the anomalous band, 440 to
+470 years forward from J2000, at 121 points. The residual there is not noise but a clean periodic
+oscillation: sharp peaks reaching about 4.5 arcseconds separated by broad troughs around 0.5 to
+0.9 arcseconds. Measured directly from fourteen identified peaks, the mean peak-to-peak spacing
+is 2.154 years, with every one of the thirteen intervals falling between 2.00 and 2.25 years, a
+spread consistent with the scan's own grid resolution rather than with scatter. That matches the
+Mars--Earth synodic period, 779.94 days or approximately 2.135 years, to within about one
+percent. The identification rests on a published astronomical constant, not on any reference
+implementation's internals.
+
+The consequence is that the original 25-year grid steps through roughly 11.7 synodic cycles at a
+time, and the five-year grid through roughly 2.3, so both sample the oscillation at an
+effectively arbitrary phase --- which is precisely the aliasing both exhibited. This is also
+physically unsurprising: the geocentric angular error induced by a given heliocentric position
+error scales inversely with the Earth--Mars distance, so a residual governed by that distance
+should peak sharply near close approach and stay low between approaches.
+
+Two consequences follow for the table, and the second is the more important. First, the band-level
+growth for Mars is real, not an artefact. Second, and applying to every body, \emph{the maxima in
+Table~\ref{tab:fullrange} are lower bounds on the true worst case rather than measured worst
+cases}: a sparse grid rarely lands on a peak of a short-period term, so it systematically
+understates peak height. The other eight bodies were not tested for an analogous term in this
+cycle, and their maxima therefore carry the same caveat rather than a clean bill of health. Two
+questions remain open: whether the oscillation's amplitude envelope is itself smooth across the
+full 400--600 year range, only one thirty-year window having been densely scanned, and whether
+comparable short-period terms exist for other bodies at their own Earth-synodic periods ---
+approximately 1.09 years for Jupiter and 1.035 for Saturn --- which would be sampled even more
+coarsely by a 25-year grid.
 
 \subsection{Scope: what this validation does not cover}
 
