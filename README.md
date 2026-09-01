@@ -109,6 +109,31 @@ Until 2026-08-20 those figures were 2.06″ mean and 24.22″ worst, and this RE
 - **Dasha and nakshatra tests are invariant tests**, not external comparisons: they verify that BPHS constants sum to 120 years and that boundaries tile the circle.
 - **Two Shadbala components are partial, and the gap is in the tool description, not just here.** Sthana Bala carries four of its five sub-components — Uchcha, Ojhayugma, Kendradi and Drekkana — but not Saptavargaja Bala, which needs a Moolatrikona degree table and a panchadha maitri derivation we do not yet hold from a primary. Kala Bala covers Nathonnatha and Paksha only. Dig, Cheshta, Naisargika and Drik Bala are whole.
 
+## Technical report
+
+A full write-up of both ephemeris pipelines, their measured accuracy, and the clean-room
+provenance of every algorithm: [`docs/paper/main.tex`](docs/paper/main.tex) (build with
+`make -C docs/paper pdf`, requires `tectonic`).
+
+It goes well beyond the summary above, and reports several things that are stated nowhere else:
+
+- **Independent cross-validation by a third party** against two national-agency ephemerides from
+  two different agencies (JPL DE440 and IMCCE INPOP21a), rather than agreement with JPL alone.
+- **Analytical-path accuracy across 1550–2650 CE**, per body and per century-band of distance
+  from J2000, with the time scale removed from the comparison by addressing both sides in TT so
+  that ΔT divergence cannot contaminate the residual.
+- **Component-level validation of the SPK reader** against another implementation's read of a
+  comparable kernel, isolating the DAF/SPK parser and Chebyshev evaluation from the
+  apparent-place pipeline layered on top.
+- **A methodological note on reproducibility**: bit-level output is architecture-scoped, because
+  the SIMD trigonometric kernel maps to one AVX2 register but two NEON registers. Accuracy is
+  not — measured identical to a milliarcsecond on both.
+- **What is not validated, stated plainly**, including house cusps, the true node, and every
+  ayanamsha.
+
+**Status: not peer reviewed, and not submitted anywhere.** It is a technical report, not a
+preprint. Every measured figure in it is specific to the engine version named on its title page.
+
 ## What's inside
 
 **Two ephemeris providers.** `SpkReader` reads JPL DE440s (~31 MB) for sub-arcsecond work. `AnalyticalProvider` compiles VSOP87A + ELP/MPP02 to constants and needs no data files — for WASM, edge and Cloudflare Workers.
