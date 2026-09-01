@@ -18,6 +18,20 @@ This file lists every external data source the Vedaksha repository ingests, with
 | `tests/fixtures/lunar_legacy_oracle.bin` | Numerical outputs of the pre-rederivation contaminated lunar implementation, captured 2026-05-09 before quarantine | Tier-3 regression oracle. Numerical-only firewall crossing — the *values* cross (uncopyrightable facts), no source/structural information does. See [`tests/fixtures/lunar_legacy_oracle.README.md`](tests/fixtures/lunar_legacy_oracle.README.md) and [`docs/audit/2026-05-09-elp-mpp02-cleanroom/`](docs/audit/2026-05-09-elp-mpp02-cleanroom/). |
 | `tests/oracle_jpl/reference_positions.json` | Generated 2026-07-16 from NASA/JPL Horizons (DE441) by `scripts/generate_horizons_oracle.py` | Independent accuracy reference for `oracle_comparison.rs` (SpkReader) and `analytical_oracle.rs` (AnalyticalProvider). Horizons serves DE441 while `SpkReader` reads DE440s, so the comparison is against a separate kernel rather than our own input. Public-domain source, chosen over any third-party ephemeris library so no copyleft question touches the BUSL-1.1 clean-room position. See [`tests/oracle_jpl/README.md`](tests/oracle_jpl/README.md). |
 
+## External evidence tooling — not a data source, but feeds accuracy fixes below
+
+`vedaksha-parity` (<https://github.com/arthiqlabs/vedaksha-parity>) is a separate oracle-parity
+harness, maintained by the same authors as this engine, that calls Vedaksha through its published
+packages and checks the results against independent reference ephemerides and other engines. It
+is not something Vedaksha ingests — it consumes Vedaksha's public interfaces from outside — so it
+carries no row in the table above, but two of this project's own theory-review audits,
+[`docs/audit/2026-08-29-lunar-node-theory-review.md`](docs/audit/2026-08-29-lunar-node-theory-review.md)
+and
+[`docs/audit/2026-08-29-sidereal-nutation-and-karaka-review.md`](docs/audit/2026-08-29-sidereal-nutation-and-karaka-review.md),
+originated from findings it reported, and those reviews are the traceable source of Fixes 9-11
+below. What is independent is the harness's methodology and the reference ephemerides it checks
+against, not the party.
+
 ## Accuracy fixes — 2026-06-15
 
 ### Fix 1 — Moon Nutation (JPL Horizons test vector)

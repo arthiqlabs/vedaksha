@@ -16,3 +16,12 @@ have moved between releases.
 
 Build: `make pdf` (requires `tectonic`, installed via `brew install tectonic`). Output lands in
 `build/main.pdf`.
+
+The built `main.pdf` is also committed next to `main.tex` so it can be read on GitHub without a
+LaTeX toolchain. `main.tex.sha256` records the hash of the `main.tex` it was built from;
+`scripts/check_paper_pdf_fresh.py` (part of `make gate`) fails if the two drift apart. After
+editing `main.tex`, refresh both:
+
+```
+make pdf && cp build/main.pdf main.pdf && shasum -a 256 main.tex > main.tex.sha256
+```

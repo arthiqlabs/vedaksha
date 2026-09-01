@@ -40,6 +40,7 @@ gate:
 	$(PY) scripts/check_license_sync.py
 	$(PY) scripts/check_spdx_headers.py
 	$(PY) scripts/check_mcp_image_label.py
+	$(PY) scripts/check_paper_pdf_fresh.py
 	@echo "── tests ──"
 	$(CARGO) test --workspace --locked -- --skip analytical_oracle_regression
 	@echo ""
@@ -59,6 +60,7 @@ guards:
 	$(PY) scripts/check_license_sync.py
 	$(PY) scripts/check_spdx_headers.py
 	$(PY) scripts/check_mcp_image_label.py
+	$(PY) scripts/check_paper_pdf_fresh.py
 
 portability:
 	$(CARGO) check -p vedaksha-math --no-default-features --locked

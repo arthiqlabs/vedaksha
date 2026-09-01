@@ -1,8 +1,11 @@
 # Sidereal nutation and chara-karaka theory review — open questions
 
 **Date:** 2026-08-29
-**Origin:** the same independent oracle-parity harness (`vedaksha-parity`) as the lunar-node
-review, on Vedaksha v7.5.0. Per that harness's own discipline, every reference engine is a sealed
+**Origin:** the same oracle-parity harness (`vedaksha-parity`,
+<https://github.com/arthiqlabs/vedaksha-parity>) as the lunar-node review, on Vedaksha v7.5.0. That
+harness is maintained by the same authors as this engine; what is independent is the methodology
+and the reference ephemerides, not the party — it reads Vedaksha only through its published
+interfaces. Per that harness's own discipline, every reference engine is a sealed
 box — this document states quantities, values, deltas and theory questions only, never how a
 reference computes anything internally. **Unlike the two questions below, the first is fully
 resolved entirely from Vedaksha's own source** — no reference-engine data was needed to explain it,

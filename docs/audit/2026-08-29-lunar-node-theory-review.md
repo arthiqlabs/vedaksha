@@ -12,9 +12,13 @@
 > recorded as eliminated while still untested.
 
 **Date:** 2026-08-29
-**Origin:** an independent oracle-parity harness (`vedaksha-parity`) called Vedaksha through its
-published PyPI package (v7.4.0) and reported two measured divergences on real, third-party-sourced
-birth data. Per that harness's own discipline, every reference engine is treated as a sealed box —
+**Origin:** a separate oracle-parity harness (`vedaksha-parity`,
+<https://github.com/arthiqlabs/vedaksha-parity>), maintained by the same authors as this engine,
+called Vedaksha through its published PyPI package (v7.4.0) and reported two measured divergences
+on real, third-party-sourced birth data. What is independent is the methodology and the reference
+ephemerides it checks against, not the party: the harness reads Vedaksha only through its
+published interfaces and never its internals. Per that harness's own discipline, every reference
+engine is treated as a sealed box —
 this document states quantities, values, deltas and theory questions only, never how a reference
 computes anything internally. Nothing here is a claim that Vedaksha is wrong; it is a set of
 questions for Vedaksha's own theory review to resolve against published sources, the same

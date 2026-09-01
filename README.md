@@ -62,6 +62,10 @@ The Rust path is a compiled doctest in [`crates/vedaksha/src/lib.rs`](crates/ved
 
 ## Accuracy
 
+These figures are reproducible, not just asserted: [`vedaksha-parity`](https://github.com/arthiqlabs/vedaksha-parity)
+is a separate harness (maintained by the same authors as this engine) that anyone can run against
+their own copies of the reference kernels to check the published numbers below.
+
 Every figure is printed by a named test. Reproduce the ephemeris tables with `bash scripts/download_de440s.sh`, then `cargo test -p vedaksha-ephem-core --release -- --include-ignored --nocapture`; the ayanamsha figures come from `cargo test -p vedaksha-astro sidereal`, and the cross-check against an independent Python derivation of the same primaries from `cargo test -p vedaksha-astro --test ayanamsha_fixture`.
 
 **SpkReader vs JPL Horizons (DE441)** — `oracle_comparison.rs`, 24,350 committed rows (10 bodies × 2,435 dates, 1900–2100). Horizons serves DE441, so this measures our DE440s pipeline against an independent kernel.
