@@ -56,8 +56,21 @@ scripts/data/
 
 # Local agent workflow config + cleanroom approvals. Must never reach this
 # public repo — it is an AI-workflow marker, and cleanroom-approve appends to it.
+# AGENTS.md is the canonical file (CLAUDE.md is a local symlink to it, per the
+# harness-agnostic-architecture convention); both stay untracked here for the
+# same reason.
 CLAUDE.md
+AGENTS.md
 scripts/setup-hooks.sh
+
+# Local session-bridge memory (docs/memory/) and the cold-start agent brief.
+# Every other ArthIQ repo tracks these in git so they sync across
+# nodes/harnesses; vedaksha is public and stays at the same
+# zero-agent-tooling-footprint posture as CLAUDE.md/AGENTS.md, so both are
+# local-only convenience with no sync guarantee. See docs/memory/MEMORY.md's
+# own header for the full explanation.
+docs/memory/
+docs/AGENT-BRIEF.md
 
 # Internal planning docs — not for public repo
 docs/prompts/
