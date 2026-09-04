@@ -6,8 +6,8 @@
   "identifier": "https://github.com/arthiqlabs/vedaksha",
   "codeRepository": "https://github.com/arthiqlabs/vedaksha",
   "url": "https://vedaksha.net",
-  "softwareVersion": "9.1.0",
-  "dateModified": "2026-08-31",
+  "softwareVersion": "9.1.1",
+  "dateModified": "2026-09-04",
   "license": "https://spdx.org/licenses/BUSL-1.1.html",
   "programmingLanguage": [
     "Rust",
