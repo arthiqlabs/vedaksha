@@ -77,13 +77,18 @@ vedaksha call compute_vargas --args '{"julian_day":2451545.0,"latitude":28.6,"lo
 ## MCP server
 
 Self-host the engine as a [Model Context Protocol](https://modelcontextprotocol.io) server —
-the original motivation for this package, since it needs no Rust toolchain anywhere:
+the original motivation for this package, since it needs no Rust toolchain anywhere. Three
+equivalent ways to start it over stdio:
 
 ```bash
-# stdio (for Claude Desktop, Cursor, etc.)
+uvx vedaksha mcp      # no install — what the MCP Registry launches
+vedaksha-mcp          # after `pip install vedaksha`
 python -m vedaksha.mcp
+```
 
-# HTTP, bearer-token auth on by default, bound to localhost
+HTTP is available from the `python -m` form only, with bearer-token auth on by default:
+
+```bash
 VEDAKSHA_MCP_TOKEN=secret python -m vedaksha.mcp --http --port 3100
 ```
 

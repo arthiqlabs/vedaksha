@@ -39,6 +39,7 @@ dev = ["pytest>=8", "ruff>=0.6"]
 
 [project.scripts]
 vedaksha = "vedaksha.cli:main"
+vedaksha-mcp = "vedaksha.mcp.__main__:main"
 
 [project.urls]
 Homepage = "https://vedaksha.net"

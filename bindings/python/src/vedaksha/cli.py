@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("tools", help="list the engine's tool catalog")
+    sub.add_parser("mcp", help="run the MCP server over stdio (for MCP clients and registries)")
 
     p_chart = sub.add_parser("chart", help="compute a natal chart")
     _add_location(p_chart)
@@ -65,6 +66,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "mcp":
+        from .mcp.server import serve_stdio
+
+        serve_stdio()
+        return 0
     vk = Vedaksha()
     try:
         if args.command == "tools":

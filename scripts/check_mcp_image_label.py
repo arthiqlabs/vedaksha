@@ -18,6 +18,18 @@ None of the three rules that rejected v7.3.0 appear in the registry's own JSON
 Schema, which the file validated against cleanly. So this checks the two things
 that are checkable here: that the label exists, and that it agrees with
 server.json.
+
+It also asserts the OCI identifier's image tag matches server.json's own
+"version" field. The registry forbids a separate "version" key on an OCI
+package (see the `version` check below), so the tag inside the identifier
+string is the only place that version lives — and nothing was asserting it.
+It was last bumped by hand at v8.0.0 and then not touched through v8.1.0,
+v9.0.0 and v9.1.0 — three releases where the MCP Registry's Docker install
+instructions silently pointed at a stale image before anyone noticed by hand.
+
+For every non-OCI package (pypi, npm, ...), `version` is an ordinary field
+rather than a tag embedded in `identifier`, so it is asserted the same way
+directly against server.json's version.
 """
 
 from __future__ import annotations
@@ -62,7 +74,21 @@ def main() -> int:
         return 1
 
     for package in packages:
-        if package.get("registryType") != "oci":
+        registry_type = package.get("registryType")
+        if registry_type != "oci":
+            # Every other registryType (pypi, npm, nuget, ...) carries version
+            # as its own required field rather than baking it into identifier,
+            # so check that directly.
+            version = package.get("version")
+            if version is not None and version != server["version"]:
+                print(
+                    f"::error::{registry_type} package '{package.get('identifier')}' "
+                    f"declares version '{version}' but server.json version is "
+                    f"'{server['version']}'. Bump it alongside every other version "
+                    f"place.",
+                    file=sys.stderr,
+                )
+                return 1
             continue
         # Both rules the registry enforced against v7.3.0, and neither is in
         # its published schema — `version` is in fact REQUIRED there.
@@ -75,10 +101,21 @@ def main() -> int:
                     file=sys.stderr,
                 )
                 return 1
-        if ":" not in package.get("identifier", "").rsplit("/", 1)[-1]:
+        identifier = package.get("identifier", "")
+        tail = identifier.rsplit("/", 1)[-1]
+        if ":" not in tail:
             print(
-                f"::error::OCI identifier '{package.get('identifier')}' carries no "
+                f"::error::OCI identifier '{identifier}' carries no "
                 f"tag. The registry wants a canonical reference.",
+                file=sys.stderr,
+            )
+            return 1
+        tag = tail.rsplit(":", 1)[-1].lstrip("v")
+        if tag != server["version"]:
+            print(
+                f"::error::OCI identifier '{identifier}' is tagged "
+                f"'{tag}' but server.json version is '{server['version']}'. "
+                f"Bump the tag alongside every other version place.",
                 file=sys.stderr,
             )
             return 1
