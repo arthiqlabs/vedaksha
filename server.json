@@ -33,21 +33,6 @@
       "transport": {
         "type": "stdio"
       }
-    },
-    {
-      "registryType": "pypi",
-      "identifier": "vedaksha",
-      "version": "9.1.1",
-      "runtimeHint": "uvx",
-      "packageArguments": [
-        {
-          "type": "positional",
-          "value": "mcp"
-        }
-      ],
-      "transport": {
-        "type": "stdio"
-      }
     }
   ]
 }

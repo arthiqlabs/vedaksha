@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.arthiqlabs/vedaksha -->
+
 # Vedaksha for Python — Vedic astrology & ephemeris
 
 The clean-room [Vedaksha](https://vedaksha.net) Vedic-astronomy and Jyotish engine,
