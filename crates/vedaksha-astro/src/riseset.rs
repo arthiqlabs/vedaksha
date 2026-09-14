@@ -56,6 +56,9 @@
 //! `a_moon_like_body_is_measurably_outside_this_modules_scope` holds this
 //! paragraph to its numbers, and fails if they move in EITHER direction.
 //!
+//! For the Moon use [`crate::moon_riseset::moon_rise_set`], which is that
+//! bracketing search, held to its own scan oracle.
+//!
 //! # SCOPE: |lat| ≤ 89 is analytic; above it the SCAN is the implementation
 //!
 //! Above about |lat| 88 the rotational wobble in altitude (amplitude `cos φ`,

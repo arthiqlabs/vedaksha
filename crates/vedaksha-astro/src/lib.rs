@@ -32,6 +32,7 @@ pub mod chart;
 pub mod composite;
 pub mod dignity;
 pub mod houses;
+pub mod moon_riseset;
 pub mod riseset;
 pub mod sidereal;
 pub mod synastry;
