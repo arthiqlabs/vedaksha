@@ -81,6 +81,77 @@ pub struct CelestialFrame {
     dpsi: f64,
 }
 
+impl CelestialFrame {
+    /// True obliquity of date, in radians — the angle this frame rotates the
+    /// true equator of date onto the ecliptic of date by, and therefore the one
+    /// to pass to [`ecliptic_to_equatorial_deg`] for a position this pipeline
+    /// produced.
+    #[must_use]
+    pub fn true_obliquity(&self) -> f64 {
+        self.eps_true
+    }
+}
+
+/// Rotate ecliptic coordinates of date onto the equator of date.
+///
+/// Takes ecliptic longitude `lon_deg`, latitude `lat_deg` and the obliquity
+/// `obliquity_deg`, all in degrees, and returns `(right_ascension_deg ∈
+/// [0, 360), declination_deg ∈ [−90, 90])`:
+///
+/// `sin δ = sin β·cos ε + cos β·sin ε·sin λ`,
+/// `α = atan2(sin λ·cos ε − tan β·sin ε, cos λ)`.
+///
+/// Pass the **true** obliquity for apparent positions from
+/// [`ecliptic_position`] / [`apparent_position`] — that pipeline rotates the
+/// true equator onto the ecliptic by it (see [`CelestialFrame::true_obliquity`]),
+/// and this is the inverse of that rotation. Mean obliquity would leave the
+/// nutation in obliquity (up to ~9.2″) in the result.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 13, eqs. 13.3–13.4.
+#[must_use]
+pub fn ecliptic_to_equatorial_deg(lon_deg: f64, lat_deg: f64, obliquity_deg: f64) -> (f64, f64) {
+    let (lambda, beta, eps) = (
+        lon_deg.to_radians(),
+        lat_deg.to_radians(),
+        obliquity_deg.to_radians(),
+    );
+    let (sin_eps, cos_eps) = (libm::sin(eps), libm::cos(eps));
+    let ra = libm::atan2(
+        libm::sin(lambda) * cos_eps - libm::tan(beta) * sin_eps,
+        libm::cos(lambda),
+    );
+    (
+        ra.to_degrees().rem_euclid(360.0),
+        declination_deg(lon_deg, lat_deg, obliquity_deg),
+    )
+}
+
+/// Declination in degrees of a point at ecliptic longitude `lon_deg` and
+/// latitude `lat_deg`, for obliquity `obliquity_deg` (all degrees):
+/// `sin δ = sin β·cos ε + cos β·sin ε·sin λ`.
+///
+/// The declination half of [`ecliptic_to_equatorial_deg`] — see there for
+/// which obliquity to pass.
+///
+/// `lon_deg` must be **tropical** longitude of date. A sidereal longitude is
+/// offset by the ayanamsha (~24° today) and gives a wrong declination with no
+/// error: add the ayanamsha back first. Classical strength reckonings that depend on a
+/// graha's distance north or south of the equator (Ayana Bala, for one) want
+/// exactly this quantity.
+///
+/// Source: Meeus, *Astronomical Algorithms* 2nd ed., Ch. 13, eq. 13.4.
+#[must_use]
+pub fn declination_deg(lon_deg: f64, lat_deg: f64, obliquity_deg: f64) -> f64 {
+    let (lambda, beta, eps) = (
+        lon_deg.to_radians(),
+        lat_deg.to_radians(),
+        obliquity_deg.to_radians(),
+    );
+    let sin_dec =
+        libm::sin(beta) * libm::cos(eps) + libm::cos(beta) * libm::sin(eps) * libm::sin(lambda);
+    libm::asin(sin_dec.clamp(-1.0, 1.0)).to_degrees()
+}
+
 /// Build the [`CelestialFrame`] for a given TT Julian Day.
 ///
 /// Identical arithmetic to the inline form previously in `compute_ecliptic`;
@@ -480,6 +551,57 @@ pub fn apparent_positions(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// [`ecliptic_to_equatorial_deg`] must be the exact inverse of the rotation
+    /// the production pipeline applies (`Matrix3::rotation_x(eps_true)`, true
+    /// equator → ecliptic, in `compute_ecliptic_with_frame`). Build the
+    /// ecliptic unit vector, undo that rotation with the same matrix type, and
+    /// read RA/Dec off the equatorial vector: an independent formulation that
+    /// catches a sign or axis slip in the closed form.
+    #[test]
+    fn ecliptic_to_equatorial_inverts_the_pipeline_rotation() {
+        let mut worst = 0.0_f64;
+        let mut n = 0;
+        for eps in [0.0_f64, 23.439_291_1, 23.5, 24.2] {
+            for lat_i in -8..=8 {
+                let lat = f64::from(lat_i) * 10.0; // −80..80
+                for lon_i in 0..72 {
+                    let lon = f64::from(lon_i) * 5.0 + 0.37;
+                    let ecl = Vector3::new(
+                        libm::cos(lat.to_radians()) * libm::cos(lon.to_radians()),
+                        libm::cos(lat.to_radians()) * libm::sin(lon.to_radians()),
+                        libm::sin(lat.to_radians()),
+                    );
+                    let eq = Matrix3::rotation_x(eps.to_radians())
+                        .transpose()
+                        .apply(&ecl);
+                    let ra_ref = libm::atan2(eq.y, eq.x).to_degrees().rem_euclid(360.0);
+                    let dec_ref = libm::asin(eq.z).to_degrees();
+
+                    let (ra, dec) = ecliptic_to_equatorial_deg(lon, lat, eps);
+                    let dra = ((ra - ra_ref + 180.0).rem_euclid(360.0) - 180.0).abs();
+                    worst = worst.max(dra).max((dec - dec_ref).abs());
+                    assert!((declination_deg(lon, lat, eps) - dec).abs() < f64::EPSILON * 64.0);
+                    n += 1;
+                }
+            }
+        }
+        assert_eq!(n, 4 * 17 * 72);
+        assert!(worst < 1e-9, "worst RA/Dec disagreement {worst}°");
+    }
+
+    /// On the ecliptic at λ = 90° the declination is +ε, at λ = 270° it is −ε,
+    /// and at the equinoxes it is 0 — the solstice/equinox definitions.
+    #[test]
+    fn declination_at_the_solstices_is_the_obliquity() {
+        let eps = 23.439_291_1;
+        assert!((declination_deg(90.0, 0.0, eps) - eps).abs() < 1e-12);
+        assert!((declination_deg(270.0, 0.0, eps) + eps).abs() < 1e-12);
+        assert!(declination_deg(0.0, 0.0, eps).abs() < 1e-12);
+        assert!(declination_deg(180.0, 0.0, eps).abs() < 1e-12);
+        let (ra, _) = ecliptic_to_equatorial_deg(90.0, 0.0, eps);
+        assert!((ra - 90.0).abs() < 1e-12);
+    }
 
     #[test]
     fn emrat_is_positive() {
