@@ -689,6 +689,13 @@ pub type MoonAndSun = ((f64, f64), (f64, f64));
 /// entry point does, hoisting the per-timestamp frames and sharing one
 /// memoizing provider across the pair.
 ///
+/// # Walking successive ends
+///
+/// The refinement stops within 1e-6° of the boundary on either side, so the
+/// instant returned can sit a fraction of a second BEFORE it. Calling again
+/// from that instant can return the same end. To step to the next one, call
+/// from a moment after it (a second is ample).
+///
 /// # Errors / `None`
 /// Returns `None` if the callback yields `None` or the elongation rate
 /// vanishes.
@@ -713,6 +720,13 @@ pub fn compute_tithi_end(
 ///
 /// `moon` returns `(sidereal_longitude_deg, daily_motion_deg_per_day)`.
 ///
+/// # Walking successive ends
+///
+/// The refinement stops within 1e-6° of the boundary on either side, so the
+/// instant returned can sit a fraction of a second BEFORE it. Calling again
+/// from that instant can return the same end. To step to the next one, call
+/// from a moment after it (a second is ample).
+///
 /// # Errors / `None`
 /// Returns `None` if the callback yields `None` or the lunar rate vanishes.
 #[must_use]
@@ -727,6 +741,81 @@ pub fn compute_nakshatra_end(
     let angle_at = |t: f64| -> Option<(f64, f64)> {
         let (ml, ms) = moon(t)?;
         Some((ml.rem_euclid(360.0), ms))
+    };
+    refine_crossing(next_boundary, jd, &angle_at)
+}
+
+/// Julian Day at which the current panchanga **yoga** ends — when the sum of
+/// the Moon's and the Sun's sidereal longitudes reaches the next multiple of
+/// 360/27° — refined against true longitudes, the same way as
+/// [`compute_tithi_end`].
+///
+/// The yoga is the index [`crate::panchanga::compute_panchanga_yoga`] reports;
+/// the instant returned is where that index advances.
+///
+/// `moon_and_sun` returns both bodies at one instant — see [`MoonAndSun`] —
+/// and, unlike the tithi, **must be sidereal**: a sum does not cancel the
+/// ayanamsha, it doubles it.
+///
+/// # Walking successive ends
+///
+/// The refinement stops within 1e-6° of the boundary on either side, so the
+/// instant returned can sit a fraction of a second BEFORE it. Calling again
+/// from that instant can return the same end. To step to the next one, call
+/// from a moment after it (a second is ample).
+///
+/// # Errors / `None`
+/// Returns `None` if the callback yields `None` or the combined rate vanishes.
+#[must_use]
+pub fn compute_yoga_end(
+    jd: f64,
+    moon_and_sun: &(dyn Fn(f64) -> Option<MoonAndSun> + Sync),
+) -> Option<f64> {
+    const SPAN: f64 = 360.0 / 27.0;
+    let ((m0, _), (s0, _)) = moon_and_sun(jd)?;
+    let sum = (m0 + s0).rem_euclid(360.0);
+    let next_boundary = ((sum / SPAN).floor() + 1.0) * SPAN;
+    let angle_at = |t: f64| -> Option<(f64, f64)> {
+        let ((ml, ms), (sl, ss)) = moon_and_sun(t)?;
+        Some(((ml + sl).rem_euclid(360.0), ms + ss))
+    };
+    refine_crossing(next_boundary, jd, &angle_at)
+}
+
+/// Julian Day at which the current **karana** (half-tithi) ends — when the
+/// Moon–Sun elongation reaches the next multiple of 6° — refined against true
+/// longitudes, the same way as [`compute_tithi_end`].
+///
+/// The karana is the index [`crate::panchanga::compute_karana`] reports; the
+/// instant returned is where that index advances. Every second karana end is
+/// also a tithi end.
+///
+/// `moon_and_sun` returns both bodies at one instant — see [`MoonAndSun`].
+/// Tropical or sidereal input both work: the ayanamsha cancels in the
+/// elongation and its rate.
+///
+/// # Walking successive ends
+///
+/// The refinement stops within 1e-6° of the boundary on either side, so the
+/// instant returned can sit a fraction of a second BEFORE it. Calling again
+/// from that instant can return the same end. To step to the next one, call
+/// from a moment after it (a second is ample).
+///
+/// # Errors / `None`
+/// Returns `None` if the callback yields `None` or the elongation rate
+/// vanishes.
+#[must_use]
+pub fn compute_karana_end(
+    jd: f64,
+    moon_and_sun: &(dyn Fn(f64) -> Option<MoonAndSun> + Sync),
+) -> Option<f64> {
+    const SPAN: f64 = 6.0;
+    let ((m0, _), (s0, _)) = moon_and_sun(jd)?;
+    let elong = (m0 - s0).rem_euclid(360.0);
+    let next_boundary = ((elong / SPAN).floor() + 1.0) * SPAN;
+    let angle_at = |t: f64| -> Option<(f64, f64)> {
+        let ((ml, ms), (sl, ss)) = moon_and_sun(t)?;
+        Some(((ml - sl).rem_euclid(360.0), ms - ss))
     };
     refine_crossing(next_boundary, jd, &angle_at)
 }
@@ -2187,6 +2276,36 @@ mod tests {
         assert!((end - expected).abs() < 1e-9, "end {end} vs {expected}");
     }
 
+    #[test]
+    fn yoga_end_linear_synthetic() {
+        // Sum rate 13.176 + 0.985; both at 0° at j0 ⇒ sum 0, so the first
+        // boundary is one yoga span away.
+        let j0 = 2_451_545.0;
+        let moon_and_sun = |jd: f64| {
+            Some((
+                ((13.176 * (jd - j0)).rem_euclid(360.0), 13.176),
+                ((0.985 * (jd - j0)).rem_euclid(360.0), 0.985),
+            ))
+        };
+        let end = compute_yoga_end(j0, &moon_and_sun).expect("yoga end");
+        let expected = j0 + (360.0 / 27.0) / (13.176 + 0.985);
+        assert!((end - expected).abs() < 1e-9, "end {end} vs {expected}");
+    }
+
+    #[test]
+    fn karana_end_linear_synthetic() {
+        let j0 = 2_451_545.0;
+        let moon_and_sun = |jd: f64| {
+            Some((
+                ((13.176 * (jd - j0)).rem_euclid(360.0), 13.176),
+                ((0.985 * (jd - j0)).rem_euclid(360.0), 0.985),
+            ))
+        };
+        let end = compute_karana_end(j0, &moon_and_sun).expect("karana end");
+        let expected = j0 + 6.0 / (13.176 - 0.985);
+        assert!((end - expected).abs() < 1e-9, "end {end} vs {expected}");
+    }
+
     // --- kalam_windows ---
 
     /// Rahu Kalam is the Nth eighth of the daytime, counted from sunrise. Its
@@ -2701,5 +2820,80 @@ mod tests {
             off < 1e-4,
             "sidereal Moon {ms}° not on a nakshatra boundary (off {off}°)"
         );
+    }
+
+    /// Yoga and karana ends on the real ephemeris, held to the index functions
+    /// that name the limbs: across each returned instant the index
+    /// `panchanga` reports must advance by exactly one, and the index just
+    /// after the start must equal the index just before the returned instant,
+    /// so a solver that stepped over a boundary fails. Walks one more end than
+    /// each limb has (28 yogas, 61 karanas) from 2025-01-01, so each index
+    /// necessarily wraps to 0 once, and asserts that it did.
+    #[test]
+    fn yoga_karana_end_real_ephemeris_advance_the_panchanga_index() {
+        use crate::panchanga::{compute_karana, compute_panchanga_yoga};
+        use vedaksha_astro::sidereal::{Ayanamsha, true_tropical_to_sidereal};
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::coordinates::apparent_position;
+
+        let provider = AnalyticalProvider::new();
+        let sid = |body: Body, t: f64| {
+            apparent_position(&provider, body, t).ok().map(|p| {
+                let trop = p.ecliptic.longitude.to_degrees();
+                (
+                    true_tropical_to_sidereal(trop, Ayanamsha::IndianOfficial, t),
+                    p.longitude_speed,
+                )
+            })
+        };
+        let moon_and_sun = |t: f64| Some((sid(Body::Moon, t)?, sid(Body::Sun, t)?));
+        let yoga_at = |t: f64| {
+            let ((m, _), (s, _)) = moon_and_sun(t).unwrap();
+            u32::from(compute_panchanga_yoga(s, m).index)
+        };
+        let karana_at = |t: f64| {
+            let ((m, _), (s, _)) = moon_and_sun(t).unwrap();
+            u32::from(compute_karana(m, s).index)
+        };
+        // 1e-5 d ≈ 0.9 s: far above the refinement tolerance, far below the
+        // shortest limb (a karana is ≥ ~10 h).
+        const EPS: f64 = 1e-5;
+
+        for (label, end_fn, index_at, count) in [
+            (
+                "yoga",
+                compute_yoga_end as fn(_, _) -> _,
+                &yoga_at as &dyn Fn(f64) -> u32,
+                27,
+            ),
+            ("karana", compute_karana_end, &karana_at, 60),
+        ] {
+            let mut jd = 2_460_676.5;
+            let mut wrapped = false;
+            for step in 0..=count {
+                let end = end_fn(jd, &moon_and_sun).expect("end");
+                assert!(
+                    end > jd && end - jd < 1.5,
+                    "{label} #{step}: {} d",
+                    end - jd
+                );
+                let before = index_at(end - EPS);
+                let after = index_at(end + EPS);
+                assert_eq!(
+                    after,
+                    (before + 1) % count,
+                    "{label} #{step} at {end}: index {before} -> {after}"
+                );
+                assert_eq!(
+                    index_at(jd + EPS),
+                    before,
+                    "{label} #{step}: index changed before the returned end"
+                );
+                wrapped |= after == 0;
+                jd = end + EPS;
+            }
+            assert!(wrapped, "{label}: the walk never crossed the index wrap");
+        }
     }
 }
