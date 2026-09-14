@@ -503,38 +503,42 @@ fn compute_bhavas_surfaces_agree() {
     }
 }
 
-/// Combustion, covering all three states and the retrograde-narrowed orb.
+/// Combustion, covering all three states, the retrograde-narrowed orb, and the
+/// two orbs v9.2.0 moved.
 ///
 /// Derivation with the Sun at 100°. `combustion_state` compares the shortest
 /// arc to the graha's orb: `< orb/3` → DeeplyCombust, `< orb` → Combust, else
-/// None. Orbs are Moon 12°, Mars 17° direct / 8° retrograde, Mercury 14°/12°,
-/// Jupiter 11°, Venus 10°/8°, Saturn 16°.
-///   Moon    108.0° → sep 8.0°;  8 ≥ 12/3 = 4 and 8 < 12   → Combust
-///   Mars    109.0° → sep 9.0°;  retrograde orb 8, 9 ≥ 8   → None
-///                    (the discriminator: at the 17° direct orb this same
+/// None. Orbs (Surya Siddhanta IX.6-8, X.1) are Moon 12°, Mars 17°, Mercury
+/// 14° direct / 12° retrograde, Jupiter 11°, Venus 10°/8°, Saturn 15°.
+///   Moon    108.0° → sep 8.0°;  8 ≥ 12/3 = 4 and 8 < 12      → Combust
+///   Mars    109.0° → sep 9.0°;  retrograde, orb still 17     → Combust
+///                    (under the pre-v9.2.0 retrograde orb of 8° this read
+///                     None, so a regression to that table flips it)
+///   Mercury 113.0° → sep 13.0°; retrograde orb 12, 13 ≥ 12   → None
+///                    (the discriminator: at the 14° direct orb this same
 ///                     placement would be Combust, so a dropped or misspelled
-///                     `mars_retrograde` flips the answer)
-///   Mercury 102.0° → sep 2.0°;  2 < 14/3 = 4.666…         → DeeplyCombust
-///   Jupiter 150.0° → sep 50.0°                             → None
-///   Venus   107.5° → sep 7.5°;  7.5 ≥ 10/3 and 7.5 < 10   → Combust
-///   Saturn  200.0° → sep 100.0°                            → None
+///                     `mercury_retrograde` flips the answer)
+///   Jupiter 102.0° → sep 2.0°;  2 < 11/3 = 3.666…            → DeeplyCombust
+///   Venus   107.5° → sep 7.5°;  7.5 ≥ 10/3 and 7.5 < 10      → Combust
+///   Saturn  115.5° → sep 15.5°; 15.5 ≥ 15                    → None
+///                    (Combust under the pre-v9.2.0 orb of 16°)
 /// Six entries, always in the fixed Moon→Saturn order; the Sun is not one of
 /// them (it is never combust relative to itself).
 #[test]
 fn compute_combustion_surfaces_agree_across_all_three_states() {
     let out = vedaksha_wasm::compute_combustion(
-        r#"{"sun":100.0,"moon":108.0,"mars":109.0,"mercury":102.0,
-            "jupiter":150.0,"venus":107.5,"saturn":200.0}"#,
-        r#"{"mars":true}"#,
+        r#"{"sun":100.0,"moon":108.0,"mars":109.0,"mercury":113.0,
+            "jupiter":102.0,"venus":107.5,"saturn":115.5}"#,
+        r#"{"mars":true,"mercury":true}"#,
     )
     .expect("valid input");
     compare(
         "combustion",
         "compute_combustion",
         serde_json::json!({
-            "sun": 100.0, "moon": 108.0, "mars": 109.0, "mercury": 102.0,
-            "jupiter": 150.0, "venus": 107.5, "saturn": 200.0,
-            "mars_retrograde": true
+            "sun": 100.0, "moon": 108.0, "mars": 109.0, "mercury": 113.0,
+            "jupiter": 102.0, "venus": 107.5, "saturn": 115.5,
+            "mars_retrograde": true, "mercury_retrograde": true
         }),
         &out,
     );
@@ -544,11 +548,11 @@ fn compute_combustion_surfaces_agree_across_all_three_states() {
     assert_eq!(arr.len(), 6, "the six combustible grahas, got {v}");
     for (i, (name, state, sep)) in [
         ("Moon", "Combust", 8.0),
-        ("Mars", "None", 9.0),
-        ("Mercury", "DeeplyCombust", 2.0),
-        ("Jupiter", "None", 50.0),
+        ("Mars", "Combust", 9.0),
+        ("Mercury", "None", 13.0),
+        ("Jupiter", "DeeplyCombust", 2.0),
         ("Venus", "Combust", 7.5),
-        ("Saturn", "None", 100.0),
+        ("Saturn", "None", 15.5),
     ]
     .iter()
     .enumerate()
