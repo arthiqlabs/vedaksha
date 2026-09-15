@@ -44,10 +44,18 @@ pub enum CombustionState {
     DeeplyCombust,
 }
 
-/// Combustion orb in degrees. Returns `None` for Sun, Rahu, Ketu (never combust).
+/// Combustion orb in degrees — the separation from the Sun below which
+/// [`combustion_state`] reports [`CombustionState::Combust`]. Returns `None` for
+/// the Sun, Rahu and Ketu, which are never combust.
+///
+/// [`combustion_state`] reads this function and nothing else, so a caller that
+/// grades combustion more finely than the three states, or sizes a window from
+/// the orb, stays consistent with the engine. `DeeplyCombust` begins at a third
+/// of this value.
 ///
 /// Source: Surya Siddhanta IX.6-8 (planets) and X.1 (Moon).
-fn orb(planet: Graha, is_retrograde: bool) -> Option<f64> {
+#[must_use]
+pub fn combustion_orb_deg(planet: Graha, is_retrograde: bool) -> Option<f64> {
     match planet {
         Graha::Moon => Some(12.0),
         Graha::Mars => Some(17.0),
@@ -76,7 +84,7 @@ pub fn combustion_state(
     sun_lon: f64,
     is_retrograde: bool,
 ) -> CombustionState {
-    let Some(threshold) = orb(planet, is_retrograde) else {
+    let Some(threshold) = combustion_orb_deg(planet, is_retrograde) else {
         return CombustionState::None;
     };
     let sep = angular_separation(planet_lon, sun_lon);
@@ -92,6 +100,46 @@ pub fn combustion_state(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The published orb must be the boundary `combustion_state` actually
+    /// uses, for every graha in both motions: just inside the orb is combust,
+    /// the orb itself is not, and deep combustion ends exactly at a third of it.
+    #[test]
+    fn published_orb_is_the_boundary_combustion_state_uses() {
+        let grahas = [
+            Graha::Sun,
+            Graha::Moon,
+            Graha::Mars,
+            Graha::Mercury,
+            Graha::Jupiter,
+            Graha::Venus,
+            Graha::Saturn,
+            Graha::Rahu,
+            Graha::Ketu,
+        ];
+        let mut with_orb = 0;
+        for g in grahas {
+            for retro in [false, true] {
+                let Some(orb) = combustion_orb_deg(g, retro) else {
+                    for sep in [0.0, 1.0, 5.0] {
+                        assert_eq!(combustion_state(g, sep, 0.0, retro), CombustionState::None);
+                    }
+                    continue;
+                };
+                with_orb += 1;
+                let at = |sep: f64| combustion_state(g, sep, 0.0, retro);
+                assert_eq!(at(orb - 1e-9), CombustionState::Combust, "{g:?} r={retro}");
+                assert_eq!(at(orb), CombustionState::None, "{g:?} r={retro}");
+                assert_eq!(
+                    at(orb / 3.0 - 1e-9),
+                    CombustionState::DeeplyCombust,
+                    "{g:?} r={retro}"
+                );
+                assert_eq!(at(orb / 3.0), CombustionState::Combust, "{g:?} r={retro}");
+            }
+        }
+        assert_eq!(with_orb, 12, "six combustible grahas × two motions");
+    }
 
     #[test]
     fn sun_is_never_combust() {
