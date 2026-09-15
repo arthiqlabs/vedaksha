@@ -37,6 +37,7 @@ gate:
 	$(CARGO) check --workspace --no-default-features --locked
 	@echo "── guards ──"
 	$(PY) scripts/check_publish_order.py
+	$(PY) scripts/check_internal_dep_versions.py
 	$(PY) scripts/check_license_sync.py
 	$(PY) scripts/check_spdx_headers.py
 	$(PY) scripts/check_mcp_image_label.py
@@ -57,6 +58,7 @@ test:
 
 guards:
 	$(PY) scripts/check_publish_order.py
+	$(PY) scripts/check_internal_dep_versions.py
 	$(PY) scripts/check_license_sync.py
 	$(PY) scripts/check_spdx_headers.py
 	$(PY) scripts/check_mcp_image_label.py

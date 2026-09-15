@@ -217,6 +217,12 @@ jobs:
       # two of seven crates that way. Cheap check, expensive failure.
       - name: Check release.yml publishes in dependency order
         run: python3 scripts/check_publish_order.py
+      # Siblings build through `path` here, so their `version` requirement is
+      # never exercised until crates.io. v9.2.0 published vedaksha-astro
+      # requiring ephem-core ^9.0.0 while calling functions added in 9.2.0; a
+      # downstream consumer found it. Every pin must equal the workspace version.
+      - name: Intra-workspace dependency requirements equal the workspace version
+        run: python3 scripts/check_internal_dep_versions.py
       # Each crate carries its own LICENSE, and that copy -- not the workspace
       # root -- is what cargo archives into the .crate. The 6.0.1 licence fix
       # edited the root, passed every check here, and still left eight stale
