@@ -173,6 +173,7 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -eo pipefail
+          tag="${GITHUB_REF_NAME#v}"
           # ORDER IS DEPENDENCY ORDER, not alphabetical. Every crate must appear
           # after everything it depends on, because cargo resolves each
           # dependency against what is already ON crates.io -- a path dependency
@@ -207,7 +208,21 @@ jobs:
                 exit 1
               fi
             fi
-            sleep 60
+            # Wait for the sparse index to serve $crate@$tag instead of a
+            # fixed sleep: typical propagation is seconds (measured 2026-09-20
+            # at <1 s for vedaksha-math@9.4.1), timeout is 300 s, and the last
+            # crate needs no wait at all. The fixed `sleep 60` this replaces
+            # cost ~7 min per release, ~6 of them idle.
+            if [ "$crate" != "vedaksha" ]; then
+              for i in $(seq 1 60); do
+                idx="https://index.crates.io/$(printf '%s' "$crate" | cut -c1-2)/$(printf '%s' "$crate" | cut -c3-4)/$crate"
+                if curl -sf "$idx" 2>/dev/null | grep -q "\"vers\":\"$tag\""; then
+                  echo "indexed $crate@$tag after ~$((i * 5))s"
+                  break
+                fi
+                sleep 5
+              done
+            fi
           done
 
   publish-npm:
