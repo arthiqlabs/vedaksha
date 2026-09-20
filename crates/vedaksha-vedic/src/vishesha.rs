@@ -150,6 +150,11 @@ fn kala(lord: Graha) -> u32 {
 /// from Janma Lagna and from the Moon under the caller's school.
 ///
 /// Source: BPHS, the chapter on special ascendants.
+///
+/// # Panics
+///
+/// Panics when either lord is Rahu or Ketu (via [`kala`]) — the nodes own
+/// no sign, so there is no 9th-lordship to compute.
 #[must_use]
 pub fn indu_lagna(moon_rashi: u8, ninth_lord_from_lagna: Graha, ninth_lord_from_moon: Graha) -> u8 {
     let moon = moon_rashi % 12;
@@ -176,6 +181,11 @@ pub fn indu_lagna(moon_rashi: u8, ninth_lord_from_lagna: Graha, ninth_lord_from_
 /// even (wrapping past 12).
 ///
 /// Source: BPHS, the chapter on special ascendants.
+///
+/// # Panics
+///
+/// Panics when `is_odd_count` disagrees with `lagna_rashi`'s own parity —
+/// a caller bug, not a computable case.
 #[must_use]
 pub fn varnada_lagna(lagna_rashi: u8, hora_lagna_rashi: u8, is_odd_count: bool) -> u8 {
     let lagna = lagna_rashi % 12;
