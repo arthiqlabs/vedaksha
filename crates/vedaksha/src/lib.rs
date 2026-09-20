@@ -60,6 +60,13 @@
 //!     .to_degrees();
 //!
 //! // 3. The chart — sidereal (Lahiri) with whole-sign bhavas, i.e. a kundali.
+//! //
+//! // NOTE: the SAME true obliquity feeds both the RAMC above and
+//! // `compute_chart` below. The RAMC/obliquity transform that yields the
+//! // houses is defined against the apparent equinox of date, so passing the
+//! // mean obliquity here while the RAMC used the true one mixes two frames
+//! // and silently displaces every cusp by up to the nutation in obliquity
+//! // (~9 arcsec). An earlier revision of this block did exactly that.
 //! let config = ChartConfig {
 //!     house_system: HouseSystem::WholeSign,
 //!     ayanamsha: Some(Ayanamsha::IndianOfficial),
@@ -69,7 +76,7 @@
 //!     &planets,
 //!     ramc,
 //!     latitude,
-//!     obliquity::mean_obliquity(jd_tt).to_degrees(),
+//!     eps_true.to_degrees(),
 //!     jd,
 //!     &config,
 //! );

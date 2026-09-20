@@ -297,6 +297,28 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// lunar theory floor), so no accuracy claim in the repo moves.
 /// `analytical_oracle.rs` (21,915-row Horizons comparison) and
 /// `cargo test -p vedaksha-ephem-core` both stay green through this change.
+/// # Why this moved for the 1830–1900 ΔT fix (v9.4.0)
+///
+/// `delta_t.rs` stopped interpolating 5-year knots over 1830–1900 (they
+/// aliased the 1895 minimum, 2.5 s error) and evaluates the Espenak & Meeus
+/// polynomial there instead. `apparent_position` converts EACH of its three
+/// UT instants (jd−0.5, jd, jd+0.5) via `ut1_to_tt` separately, so the
+/// fixture's first date (1900-Jan-01) evaluates its `jd−0.5` leg at
+/// 1899-Dec-31 — inside the changed era — while the centre leg stays on the
+/// table. Measured by dumping all 21,915 rows either side with `--nocapture`:
+///
+/// - 9 of 21,915 rows differ: the 9 bodies' 1900-Jan-01 rows, and ONLY those.
+/// - Positions (lon/lat/dist) bit-identical everywhere; only
+///   `longitude_speed` moves, max 8.76e-6 °/day (Moon) — the ~0.2 s TT shift
+///   of one central-difference leg, exactly the corrected ΔT at Dec 1899.
+/// - No row at any other date moves: the fix's blast radius is one date's
+///   speeds, and the direction is toward the USNO historic rows (verified
+///   within 0.35 s by `delta_t_1890s_minimum_matches_usno`).
+///
+/// Accepted and re-pinned on aarch64 below. The x86_64 arm MUST be re-pinned
+/// from an x86_64 measurement in the same commit — same-era TT shift, same
+/// scoping argument, different SIMD bits. Do not ship one arch's value as
+/// the other's.
 /// # This pin is PER-ARCHITECTURE, and that is not a workaround
 ///
 /// The digest fingerprints `simd_trig::sincos_f64x4`, and `wide`'s `f64x4`
@@ -327,14 +349,18 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// run green — a mismatch *within* one architecture is the real regression this
 /// test exists to catch, and it is still caught.
 #[cfg(target_arch = "aarch64")]
-const EXPECTED_DIGEST: &str = "a6e4f3a47fd65c3de98e88eed980538f5c7b4a4e1b0097626593c9e09521e742";
+const EXPECTED_DIGEST: &str = "b8aecba3f726ebd2a516b5a63aee5a4647f45942bf3be6cc3e04c6b8d6701571";
 
 /// x86_64 counterpart of [`EXPECTED_DIGEST`] — see its doc comment.
 ///
-/// Measured 2026-08-31 at v8.1.0, and independently confirmed as the value CI's
-/// ubuntu runner produces for the same tree.
+/// Re-pinned at v9.4.0 for the 1830–1900 ΔT fix, measured under emulated
+/// x86_64 (QEMU): the v9.3.0 tree reproduced the old `a50d…` pin there
+/// exactly, so the emulation measures what CI's ubuntu runner measures.
+/// Same scope as aarch64, verified by diffing all 21,915 ROW lines either
+/// side: only the 9 bodies' 1900-Jan-01 speed components move, positions
+/// bit-identical everywhere.
 #[cfg(target_arch = "x86_64")]
-const EXPECTED_DIGEST: &str = "a50d155db570eadec2a85dc5a6136e0c8ed73a9e7f9c482c7a1198012d511572";
+const EXPECTED_DIGEST: &str = "64dcc4cf991cf5b087dde0492882157b64503d87468ddd51922e59cb2afa7ab2";
 
 /// Sentinel for an architecture with no measured pin — see [`EXPECTED_DIGEST`].
 ///

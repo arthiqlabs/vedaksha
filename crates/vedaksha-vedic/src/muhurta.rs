@@ -633,7 +633,19 @@ pub fn assess_muhurta(
 /// `angle_at(jd)` returns `(angle_deg ∈ [0, 360), rate_deg_per_day)` — the rate
 /// is the body's daily motion, i.e. the analytic derivative. The lunar and
 /// elongation angles are smooth and monotone, so this converges in a few steps.
-fn refine_crossing(
+///
+/// This is the engine's public longitude-crossing solver: callers bracket a
+/// crossing coarsely (the angle must be monotone across the bracket — a
+/// retrograde loop inside the bracket misleads Newton), then refine here.
+/// Returns `None` where the callback is unavailable or the rate vanishes.
+///
+/// # Walking successive crossings
+///
+/// The refinement stops within 1e-6° of the target on either side, so the
+/// instant returned can sit a fraction of a second BEFORE it. To step to the
+/// next crossing, call from a moment after it (a second is ample).
+#[must_use]
+pub fn refine_crossing(
     target_deg: f64,
     jd_init: f64,
     angle_at: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),

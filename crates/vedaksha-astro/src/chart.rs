@@ -123,7 +123,10 @@ pub struct ComputedChart {
 /// * `ramc`        — Right Ascension of MC in degrees (equatorial, tropical
 ///   frame — never ayanamsha-corrected).
 /// * `geo_latitude` — Geographic latitude in degrees.
-/// * `obliquity`   — Obliquity of the ecliptic in degrees.
+/// * `obliquity`   — True obliquity of the ecliptic in degrees (mean +
+///   nutation, the apparent equinox of date) — the SAME obliquity the
+///   caller's RAMC was computed with. Mixing a true-obliquity RAMC with a
+///   mean obliquity here displaces every cusp by up to ~9 arcsec.
 /// * `jd`          — Julian Day (for ayanamsha computation; used as the
 ///   nutation argument too — see [`crate::sidereal::true_ayanamsha_value`]).
 /// * `config`      — Chart configuration.

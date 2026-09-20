@@ -59,7 +59,8 @@ pub enum HouseSystem {
 /// # Arguments
 /// * `ramc` — Right Ascension of MC (RAMC) in degrees [0, 360)
 /// * `latitude` — geographic latitude in degrees [-90, +90]
-/// * `obliquity` — obliquity of the ecliptic in degrees
+/// * `obliquity` — true obliquity of the ecliptic in degrees (apparent
+///   equinox of date), consistent with `ramc`
 /// * `system` — which house system to use
 #[must_use]
 pub fn compute_houses(ramc: f64, latitude: f64, obliquity: f64, system: HouseSystem) -> HouseCusps {

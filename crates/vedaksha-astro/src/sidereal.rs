@@ -305,10 +305,17 @@ pub enum Ayanamsha {
     /// current determination of the quantity he named, and that choice is ours.
     FaganBradley,
 
-    /// Krishnamurti (KP).
+    /// Krishnamurti (KP) — the OLD (KSK's own stated) definition.
     ///
     /// Anchor 22°22'00" on the 1st of Chitra 1900, propagated at KSK's own
     /// stated 50.2388475"/yr. *Krishnamurti Padhdhati Vol-I*.
+    ///
+    /// The "old vs new KP" labels some software offers differ by ~30" (new
+    /// ≈ 22°22'30" at the same season): this member is the OLD one by value.
+    /// Caveat: the primaries publish arcminutes only (see the ayanamsha
+    /// derivation spec), so the old/new distinction itself is finer than the
+    /// sources' precision — treat this member as KSK's stated rule, not as
+    /// a measurement that could separate the two.
     ///
     /// KSK's three published numbers are mutually inconsistent: his anchor
     /// divided by his rate gives a zero year of 297.5 CE against the 291 AD he

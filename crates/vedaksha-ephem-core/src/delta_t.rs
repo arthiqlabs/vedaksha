@@ -5,15 +5,32 @@
 
 //! Delta T (TT − UT1) computation.
 //!
-//! Uses IERS measured values (1620–2025) and predictions (2025–2150) with linear interpolation,
-//! falling back to Espenak & Meeus polynomial expressions outside that range.
+//! Uses IERS measured values (1620–2025, outside 1830–1900) and predictions
+//! (2025–2150) with linear interpolation, the Espenak & Meeus (2006)
+//! polynomial fit to the Morrison & Stephenson series for 1830–1900, and
+//! Espenak & Meeus polynomial expressions outside the table range.
+//!
+//! # Node spacing per era
+//!
+//! - 1620–1825: 5-year knots (IERS). The curve is smooth there; linear
+//!   interpolation is sub-second.
+//! - 1830–1900: evaluated DIRECTLY from the Espenak & Meeus (2006)
+//!   1860–1900 polynomial, not interpolated — 5-year knots alias the real
+//!   minimum near 1895 (−6.2 s), reading −3.6 s there instead (2.5 s error).
+//!   Verified against the USNO historic half-year rows within 0.35 s over
+//!   1830–1955 (see `delta_t_1890s_minimum_matches_usno`).
+//! - 1900–2025: 5-year knots (IERS), sub-second.
+//! - 2025–2150: predictions from the 2005–2050 polynomial, ±2 s by 2050.
 
 use crate::julian;
 
-/// Delta T values at 5-year intervals from 1620 to 2050.
+/// Delta T values at 5-year intervals, except 1830–1900 (see below).
 ///
-/// 1620-2025: IERS measured values (astronomical facts).
-/// 2025-2050: Extrapolated predictions based on the Espenak & Meeus (2006)
+/// 1620–2025: IERS measured values (astronomical facts), at 5-year knots —
+/// EXCEPT 1830–1900, which carries no knots at all: [`delta_t`] evaluates
+/// that era directly from the Espenak & Meeus (2006) polynomial because
+/// 5-year knots alias the minimum near 1895 (see the module doc).
+/// 2025–2050: Extrapolated predictions based on the Espenak & Meeus (2006)
 ///            2005-2050 polynomial: `62.92 + 0.32217*t + 0.005589*t^2`
 ///            where t = year - 2000. These predictions should be updated
 ///            annually from IERS Bulletin A as new observations become available.
@@ -64,20 +81,7 @@ static DELTA_T_TABLE: &[(f64, f64)] = &[
     (1815.0, 12.2),
     (1820.0, 12.5),
     (1825.0, 13.1),
-    (1830.0, 7.7),
-    (1835.0, 5.0),
-    (1840.0, 6.5),
-    (1845.0, 7.5),
-    (1850.0, 6.8),
-    (1855.0, 7.5),
-    (1860.0, 7.6),
-    (1865.0, 5.7),
-    (1870.0, 1.3),
-    (1875.0, -3.2),
-    (1880.0, -5.4),
-    (1885.0, -5.8),
-    (1890.0, -5.9),
-    (1895.0, -3.8),
+    // 1830–1900: no knots — evaluated from the polynomial (see module doc).
     (1900.0, -2.7),
     (1905.0, 3.6),
     (1910.0, 10.4),
@@ -132,16 +136,25 @@ static DELTA_T_TABLE: &[(f64, f64)] = &[
 
 /// Compute Delta T (TT − UT1) in seconds for a given Julian Day.
 ///
-/// Uses IERS measured values with linear interpolation for 1620–2025,
+/// Uses IERS measured values with linear interpolation for 1620–2025
+/// (except 1830–1900, evaluated from the polynomial — see the module doc),
 /// predicted values for 2025–2150, and Espenak & Meeus polynomial
 /// expressions outside that range.
 ///
-/// Accuracy: sub-second for 1620–2025 (measured), ±2s for 2025–2050,
-/// ±30s for 2050–2150 (prediction uncertainty grows quadratically).
+/// Accuracy: sub-second for 1620–2025 (measured or polynomial-verified),
+/// ±2s for 2025–2050, ±30s for 2050–2150 (prediction uncertainty grows
+/// quadratically).
 #[must_use]
 pub fn delta_t(jd: f64) -> f64 {
     let (year, month, _) = julian::jd_to_calendar(jd);
     let y = f64::from(year) + (f64::from(month) - 0.5) / 12.0;
+
+    // 1830–1900 first: no table knots there (see the module doc). Five-year
+    // knots alias the 1890s minimum, so this era resolves through the
+    // Espenak & Meeus fit to the Morrison & Stephenson series instead.
+    if (1830.0..1900.0).contains(&y) {
+        return polynomial_delta_t(y);
+    }
 
     // Use lookup table for 1620-2150 (measured + predicted)
     if (1620.0..=2150.0).contains(&y) {
@@ -367,6 +380,30 @@ mod tests {
             (dt - 64.25).abs() < 0.5,
             "Delta T at ~2002.5 expected ~64.25s, got {dt:.3}s"
         );
+    }
+
+    /// The 1890s minimum: five-year knots aliased it (−3.6 s at 1895
+    /// against the observed −6.2 s). USNO historic half-year rows (the
+    /// Morrison & Stephenson series), sampled 9 November each year.
+    #[test]
+    fn delta_t_1890s_minimum_matches_usno() {
+        // (year, USNO ΔT in seconds, 9 November)
+        const ROWS: [(i32, f64); 6] = [
+            (1889, -5.840),
+            (1891, -6.238),
+            (1893, -6.497),
+            (1895, -6.152),
+            (1897, -4.806),
+            (1899, -2.843),
+        ];
+        for (year, expected) in ROWS {
+            let jd = julian::calendar_to_jd(year, 11, 9.0);
+            let dt = delta_t(jd);
+            assert!(
+                (dt - expected).abs() < 0.35,
+                "ΔT at 9 Nov {year}: expected {expected:.3}s (USNO), got {dt:.3}s"
+            );
+        }
     }
 
     #[test]
