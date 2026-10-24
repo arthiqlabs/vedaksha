@@ -1585,7 +1585,7 @@ pub fn cheshta_bala_at(planet: Graha, jd_tt: f64, true_tropical_longitude_deg: f
 /// exactly opposite one another (the fourth is 180 degrees from the tenth and
 /// the seventh from the first in the quadrant systems, but not in every
 /// system), and Dig Bala reads each one it is given.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct AngularCusps {
     /// The first bhava (lagna).
     pub first: f64,
@@ -1791,7 +1791,7 @@ pub fn drik_bala_sputa(
 // ── The complete form ───────────────────────────────────────────────
 
 /// The birth moment as Kala Bala needs it.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize)]
 pub struct KalaMoment {
     /// The birth, Julian Day (UT).
     pub jd: f64,

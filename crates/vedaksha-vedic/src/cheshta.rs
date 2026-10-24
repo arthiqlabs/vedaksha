@@ -49,9 +49,10 @@
 //! category (here) and the score (there).
 
 use crate::graha::Graha;
+use serde::Serialize;
 
 /// The eight classical motion states.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum Cheshta {
     /// Clearly retrograde (speed < −1'/day).
     Vakra,

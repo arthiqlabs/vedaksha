@@ -37,6 +37,7 @@ pub mod muhurta;
 pub mod nakshatra;
 pub mod panchanga;
 pub mod shadbala;
+pub mod shadbala_chart;
 pub mod upagraha;
 pub mod varga;
 pub mod vimshopaka;
