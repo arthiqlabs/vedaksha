@@ -128,18 +128,25 @@ const EXPECTED_ROWS: u64 = (FULL_RANGE_SAMPLES as u64 + CONTEMPORARY_SAMPLES as 
 /// decide whether it is acceptable, and re-pin in a commit that records the
 /// reason. Do not re-pin to make a red test green.
 ///
-/// **Pinned per architecture.** This digest fingerprints `sincos_f64x4`, and
-/// `wide`'s `f64x4` computes differently on AVX2 than on NEON, so there is no
-/// single correct value — see `analytical_bit_digest.rs`'s `EXPECTED_DIGEST`
-/// doc for the full explanation and for what that means for the phrase
-/// "bit-identical" elsewhere in this repository. Add an architecture by running
-/// the test there and adding an arm; never reuse another architecture's value.
-#[cfg(target_arch = "aarch64")]
-const EXPECTED_DIGEST: &str = "e8b21c8863fa0065e125e16a4b3396371f7de6a386d19f35f233c07ac5e1394b";
-
-/// x86_64 counterpart of [`EXPECTED_DIGEST`], measured 2026-08-31.
-#[cfg(target_arch = "x86_64")]
-const EXPECTED_DIGEST: &str = "a2af33c87957fd15249d6f5b714749a8623f0ad4593a1fbc1ce0d4b51c0cccfe";
+/// # Re-pinned at v9.5.0: angle addition, and one value for both architectures
+///
+/// ELP/MPP02's term phases are now built by angle addition from a few
+/// fundamental sines and cosines (`phase_graph`) instead of one `sincos` per
+/// term. Every row moved. Measured by dumping all 630,003 rows at v9.4.1 and
+/// here and comparing the position vectors: at most 7.5e-7 arcsec over 1610
+/// to 2390, and 1.2e-5 arcsec over the whole range (near -1340), against
+/// ELP/MPP02's own arcsecond-level fit.
+///
+/// The series no longer calls `simd_trig::sincos_f64x4`, so its bits no
+/// longer depend on the architecture: the same value was measured on aarch64
+/// and on x86_64 under Rosetta (`--target x86_64-apple-darwin`, after that
+/// build reproduced v9.4.1's three x86_64 pins exactly). Before v9.5.0 this
+/// constant had one arm per architecture, because `wide`'s `f64x4` computes
+/// differently on AVX2 than on NEON (see `analytical_bit_digest.rs`, whose
+/// pin still has two arms because VSOP87A still uses that kernel). An
+/// architecture outside those two has not been measured and is refused.
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
+const EXPECTED_DIGEST: &str = "181ab376450f17b5986e682b665cf8a217f5f137fcd4fec2e439a057e516313b";
 
 /// Sentinel for an unpinned architecture — the test panics on it. See
 /// [`EXPECTED_DIGEST`].
@@ -256,10 +263,10 @@ fn lunar_series_bit_digest() {
         !EXPECTED_DIGEST.is_empty(),
         "\n\nNo lunar-series digest is pinned for this architecture ({}).\n\n\
          measured sha256 {digest}\n\n\
-         The digest is architecture-specific; see analytical_bit_digest.rs's \
+         Each architecture is measured before it is pinned; see analytical_bit_digest.rs's \
          EXPECTED_DIGEST doc. This PANICS rather than skipping, because a skip \
          would report green having verified nothing. To pin: confirm the value \
-         above is stable across two runs, then add a cfg(target_arch) arm.\n",
+         above is stable across two runs, then add it to the cfg or give it an arm of its own.\n",
         std::env::consts::ARCH
     );
     assert_eq!(
@@ -296,15 +303,11 @@ const POSITION_ONLY_EXPECTED_ROWS: u64 =
 /// position half of the full computation.** Same investigation procedure as
 /// [`EXPECTED_DIGEST`]'s doc comment. Do not re-pin to make a red test green.
 ///
-/// **Pinned per architecture**, for the same reason as [`EXPECTED_DIGEST`].
-#[cfg(target_arch = "aarch64")]
+/// **Re-pinned at v9.5.0**, one value for both measured architectures, for
+/// the reasons under [`EXPECTED_DIGEST`].
+#[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 const POSITION_ONLY_EXPECTED_DIGEST: &str =
-    "6edec0b1dd362d83a0a31e993b940b1119d8a49a9062a4afbf9ecd53ec255e93";
-
-/// x86_64 counterpart of [`POSITION_ONLY_EXPECTED_DIGEST`], measured 2026-08-31.
-#[cfg(target_arch = "x86_64")]
-const POSITION_ONLY_EXPECTED_DIGEST: &str =
-    "57821af832a46e6de2cb9c6a20d1bbee6c4e654f55d7ec950850c8a699784363";
+    "53a769cb566760984de44bf9263e39dedd4b736d98bf349f2fe4cca519caa2e2";
 
 /// Sentinel for an unpinned architecture — the test panics on it.
 #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
@@ -378,7 +381,7 @@ fn lunar_series_position_only_bit_digest() {
          measured sha256 {digest}\n\n\
          See analytical_bit_digest.rs's EXPECTED_DIGEST doc. This PANICS rather \
          than skipping. To pin: confirm the value is stable across two runs, \
-         then add a cfg(target_arch) arm.\n",
+         then add it to the cfg or give it an arm of its own.\n",
         std::env::consts::ARCH
     );
     assert_eq!(

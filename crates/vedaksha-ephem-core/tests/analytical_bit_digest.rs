@@ -97,7 +97,36 @@ use vedaksha_ephem_core::jpl::EphemerisProvider;
 /// measurement — and one that would otherwise be silently accepted.
 const EXPECTED_ROWS: u32 = 21_915;
 
-/// Digest of all 21,915 rows, re-pinned at the observer-position correction.
+/// Digest of all 21,915 rows, re-pinned at v9.5.0.
+///
+/// # Why this moved at v9.5.0
+///
+/// Six deliberate changes in one release move the rows: Delta T read
+/// from the SMH2016 spline before 1962, the USNO monthly values to the present
+/// and the USNO predictions to 2033.75, then a polynomial shifted to meet
+/// them; 30 of the 77 IAU 2000B nutation rows corrected; the Sun's light
+/// deflection of the planets; VSOP87A rotated by its authors' published
+/// FK5 matrix instead of a plain 84381.448 arcsec x rotation; ELP/MPP02's
+/// phases built by angle addition (at most 3.75e-7 arcsec on its own). The
+/// Moon's light-time loop now reuses its evaluations, which is bit-neutral. Measured
+/// by dumping all 21,915 rows at v9.4.1 (which reproduced the previous pin)
+/// and here, aarch64, apparent longitude:
+///
+/// | era | Moon max / mean | Sun max / mean | Mars max / mean |
+/// |---|---|---|---|
+/// | 1900 to 1962 | 0.786" / 0.234" | 0.125" / 0.080" | 0.237" / 0.085" |
+/// | 1962 to 2026 | 0.528" / 0.063" | 0.127" / 0.092" | 0.232" / 0.092" |
+/// | 2026 to 2034 | 2.25" / 1.58" | 0.254" / 0.209" | 0.262" / 0.152" |
+/// | 2034 to 2100 | 32.8" / 11.6" | 2.12" / 0.83" | 1.47" / 0.47" |
+///
+/// The rows are addressed in UT, so a Delta T change of one second moves the
+/// Moon about 0.55". After 2034 Delta T is a prediction and the new
+/// extrapolation differs from the old by up to about a minute by 2099; that,
+/// not the theory, is the large row. Accuracy against Horizons is gated by
+/// `analytical_oracle.rs` and improved over the measured era.
+///
+/// The x86_64 arm was measured under Rosetta (`--target x86_64-apple-darwin`),
+/// after that build reproduced all three of v9.4.1's x86_64 pins exactly.
 ///
 /// # Why this moved on 2026-08-20
 ///
@@ -175,6 +204,8 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// encoded 84381.448 arcsec (IAU 1976), which is the frame VSOP87A and
 /// ELP/MPP02 are defined against; only `OBLIQUITY_J2000`'s own literal and the
 /// comments claimed otherwise, and those were corrected to match the values.
+/// (Since v9.5.0 VSOP87A no longer goes through that rotation; it takes its
+/// authors' published matrix. See "Why this moved at v9.5.0".)
 ///
 /// # Why this did NOT move at the EMB/Moon cancellation removal (2026-08-29)
 ///
@@ -349,18 +380,19 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// run green — a mismatch *within* one architecture is the real regression this
 /// test exists to catch, and it is still caught.
 #[cfg(target_arch = "aarch64")]
-const EXPECTED_DIGEST: &str = "b8aecba3f726ebd2a516b5a63aee5a4647f45942bf3be6cc3e04c6b8d6701571";
+const EXPECTED_DIGEST: &str = "732350622f43d4ee27f1a2d9e5288f2b503353cb1df59ee0c1b367168ab86298";
 
 /// x86_64 counterpart of [`EXPECTED_DIGEST`] — see its doc comment.
 ///
-/// Re-pinned at v9.4.0 for the 1830–1900 ΔT fix, measured under emulated
+/// Re-pinned at v9.5.0, measured under Rosetta; see "Why this moved at
+/// v9.5.0". Earlier, re-pinned at v9.4.0 for the 1830–1900 ΔT fix, measured under emulated
 /// x86_64 (QEMU): the v9.3.0 tree reproduced the old `a50d…` pin there
 /// exactly, so the emulation measures what CI's ubuntu runner measures.
 /// Same scope as aarch64, verified by diffing all 21,915 ROW lines either
 /// side: only the 9 bodies' 1900-Jan-01 speed components move, positions
 /// bit-identical everywhere.
 #[cfg(target_arch = "x86_64")]
-const EXPECTED_DIGEST: &str = "64dcc4cf991cf5b087dde0492882157b64503d87468ddd51922e59cb2afa7ab2";
+const EXPECTED_DIGEST: &str = "392fb9e71c3735dfda1fafc1798fd3dc094b6f93f2153f8c124fdf5c8468f3aa";
 
 /// Sentinel for an architecture with no measured pin — see [`EXPECTED_DIGEST`].
 ///
