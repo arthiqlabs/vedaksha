@@ -287,6 +287,37 @@ fn sun_altitude(p: &AnalyticalProvider, jd_ut: f64, lat: f64, lon: f64) -> f64 {
         .to_degrees()
 }
 
+/// The fraction of the Sun's diameter the Moon covers at `jd_ut` for the
+/// observer, `(s_sun + s_moon - separation) / (2 s_sun)`, from Meeus Ch. 40
+/// (the parallax in right ascension and declination from the observer's
+/// `rho sin phi'` and `rho cos phi'`, Ch. 11), written out here from the book's
+/// equations and not from the module's vector form.
+fn magnitude_at(p: &AnalyticalProvider, jd_ut: f64, lat: f64, lon: f64) -> f64 {
+    let g = solar_geometry(p, jd_ut).unwrap();
+    let b_over_a = 1.0 - 1.0 / 298.257_223;
+    let phi = lat.to_radians();
+    let u = (b_over_a * phi.tan()).atan();
+    let (rho_sin, rho_cos) = (b_over_a * u.sin(), u.cos());
+    let topo = |ra: f64, dec: f64, dist_au: f64| {
+        let sin_pi = 6378.137 / (dist_au * 149_597_870.7);
+        let h = (gmst(jd_ut).to_degrees() + lon - ra).to_radians();
+        let dec = dec.to_radians();
+        let d_ra = (-rho_cos * sin_pi * h.sin()).atan2(dec.cos() - rho_cos * sin_pi * h.cos());
+        let dec2 = ((dec.sin() - rho_sin * sin_pi) * d_ra.cos())
+            .atan2(dec.cos() - rho_cos * sin_pi * h.cos());
+        (ra.to_radians() + d_ra, dec2)
+    };
+    let (sa, sd) = topo(g.sun_ra_deg, g.sun_dec_deg, g.sun_dist_au);
+    let (ma, md) = topo(g.moon_ra_deg, g.moon_dec_deg, g.moon_dist_au);
+    let sep = (sd.sin() * md.sin() + sd.cos() * md.cos() * (sa - ma).cos())
+        .acos()
+        .to_degrees();
+    let semi =
+        |radius_km: f64, dist_au: f64| (radius_km / (dist_au * 149_597_870.7)).asin().to_degrees();
+    let (s_s, s_m) = (semi(695_700.0, g.sun_dist_au), semi(1737.4, g.moon_dist_au));
+    (s_s + s_m - sep) / (2.0 * s_s)
+}
+
 /// A solar-only search that looks at one new moon: the callback goes dark after
 /// `cutoff`, so a place without a visible eclipse at that syzygy returns `None`
 /// at once rather than walking on to the next.
@@ -477,93 +508,138 @@ fn the_2024_greatest_eclipse_point_is_total_with_the_catalogues_sun() {
     );
 }
 
-/// A grid of places for the 2024-04-08 syzygy: whatever the module reports must
-/// satisfy the horizon rule, tested against the Sun's altitude on a one-minute
-/// grid it does not share; and a place where the Sun is far below the horizon
-/// throughout reports nothing.
+/// Places across the 2024-04-08 eclipse, among them ones where it begins at
+/// sunrise, ends at sunset, or is greatest with the Sun down (every place
+/// where it is seen at all, from a 15 degree grid of longitudes, and a few more
+/// for company): whatever the module reports must satisfy the horizon rule,
+/// tested against the Sun's altitude on a one-minute grid it does not share.
 #[test]
-fn horizon_rule_holds_across_a_grid_of_places() {
+fn horizon_rule_holds_at_places_across_the_eclipse() {
     let p = AnalyticalProvider::new();
     let from = jd(2024, 4, 1, 0.0);
     let cutoff = jd(2024, 4, 11, 0.0);
-    let nasa_greatest = jd(2024, 4, 8, 18.3);
-    let (mut reported, mut dark, mut clipped) = (0, 0, 0);
-    for lat in [-60.0, -30.0, 0.0, 30.0, 50.0, 70.0] {
-        for lon in (-180..180).step_by(30) {
-            let lon = f64::from(lon);
-            let sun_at_greatest = sun_altitude(&p, nasa_greatest, lat, lon);
-            let g = solar_at(&p, from, cutoff, lat, lon);
-            let Some(g) = g else {
-                continue;
-            };
-            reported += 1;
-            let h = g.horizon.unwrap();
-            // Geometric contacts bracket the visible ones.
-            assert!(h.geometric_sparsha_jd <= g.sparsha_jd + 1e-9);
-            assert!(g.moksha_jd <= h.geometric_moksha_jd + 1e-9);
-            assert!(g.sparsha_jd <= g.moksha_jd);
-            // The Sun is up at both visible ends, and at the clipped ones it is
-            // on the standard horizon.
-            let up = |t: f64| sun_altitude(&p, t, lat, lon) - SUN_STANDARD_ALTITUDE_DEG;
+    let places = [
+        (-30.0, -150.0),
+        (0.0, -165.0),
+        (0.0, -150.0),
+        (20.0, -165.0),
+        (20.0, -30.0),
+        (30.0, -180.0),
+        (30.0, -30.0),
+        (30.0, -15.0),
+        (40.0, -30.0),
+        (40.0, -15.0),
+        (50.0, -30.0),
+        (50.0, -15.0),
+        (60.0, -15.0),
+        (60.0, 0.0),
+        (70.0, 0.0),
+        (25.0, -104.0),
+        (32.7767, -96.797),
+        (0.0, 100.0),
+        (-60.0, 30.0),
+    ];
+    let (mut reported, mut sunrise, mut sunset, mut hidden_max) = (0, 0, 0, 0);
+    for (lat, lon) in places {
+        let Some(g) = solar_at(&p, from, cutoff, lat, lon) else {
+            continue;
+        };
+        reported += 1;
+        let h = g.horizon.unwrap();
+        // Geometric contacts bracket the visible ones.
+        assert!(h.geometric_sparsha_jd <= g.sparsha_jd + 1e-9);
+        assert!(g.moksha_jd <= h.geometric_moksha_jd + 1e-9);
+        assert!(g.sparsha_jd <= g.moksha_jd);
+        // The Sun is up at both visible ends, and at the clipped ones it is on
+        // the standard horizon, with the Sun down just outside.
+        let up = |t: f64| sun_altitude(&p, t, lat, lon) - SUN_STANDARD_ALTITUDE_DEG;
+        assert!(
+            up(g.sparsha_jd) > -0.02 && up(g.moksha_jd) > -0.02,
+            "({lat}, {lon})"
+        );
+        if h.sparsha_at_sunrise {
+            sunrise += 1;
             assert!(
-                up(g.sparsha_jd) > -0.02 && up(g.moksha_jd) > -0.02,
-                "({lat}, {lon})"
+                up(g.sparsha_jd).abs() < 0.02,
+                "({lat}, {lon}): sparsha not on the horizon"
             );
-            if h.sparsha_at_sunrise {
-                clipped += 1;
-                assert!(
-                    up(g.sparsha_jd).abs() < 0.02,
-                    "({lat}, {lon}): sparsha not on the horizon"
-                );
-                // Just before it the Sun is down.
-                assert!(up(g.sparsha_jd - 0.002) < 0.0, "({lat}, {lon})");
-            } else {
-                assert_eq!(g.sparsha_jd, h.geometric_sparsha_jd);
-            }
-            if h.moksha_at_sunset {
-                clipped += 1;
-                assert!(
-                    up(g.moksha_jd).abs() < 0.02,
-                    "({lat}, {lon}): moksha not on the horizon"
-                );
-                assert!(up(g.moksha_jd + 0.002) < 0.0, "({lat}, {lon})");
-            } else {
-                assert_eq!(g.moksha_jd, h.geometric_moksha_jd);
-            }
-            // Madhya visibility is the Sun's altitude there, and the visible
-            // magnitude never exceeds the whole.
-            assert_eq!(h.madhya_visible, up(g.madhya_jd) >= 0.0, "({lat}, {lon})");
-            assert!(h.visible_magnitude <= g.magnitude + 1e-12);
-            if h.madhya_visible {
-                assert_eq!(h.visible_magnitude, g.magnitude);
-            }
-            // Nowhere reported has the Sun below the horizon for all of it: on
-            // a one-minute grid some minute is up.
-            let steps = ((h.geometric_moksha_jd - h.geometric_sparsha_jd) * 1440.0).ceil() as usize;
-            let any_up = (0..=steps).any(|i| {
-                up(h.geometric_sparsha_jd
-                    + (h.geometric_moksha_jd - h.geometric_sparsha_jd) * i as f64 / steps as f64)
-                    >= 0.0
-            });
-            assert!(
-                any_up,
-                "({lat}, {lon}): reported with the Sun down throughout"
-            );
-            if sun_at_greatest < -30.0 {
-                dark += 1;
-            }
+            assert!(up(g.sparsha_jd - 0.002) < 0.0, "({lat}, {lon})");
+        } else {
+            assert_eq!(g.sparsha_jd, h.geometric_sparsha_jd);
         }
+        if h.moksha_at_sunset {
+            sunset += 1;
+            assert!(
+                up(g.moksha_jd).abs() < 0.02,
+                "({lat}, {lon}): moksha not on the horizon"
+            );
+            assert!(up(g.moksha_jd + 0.002) < 0.0, "({lat}, {lon})");
+        } else {
+            assert_eq!(g.moksha_jd, h.geometric_moksha_jd);
+        }
+        // Madhya visibility is the Sun's altitude there. When it is down, the
+        // largest visible magnitude is the part reached at the clipped end, less
+        // than the whole and still positive; when up it is the whole.
+        assert_eq!(h.madhya_visible, up(g.madhya_jd) >= 0.0, "({lat}, {lon})");
+        if h.madhya_visible {
+            assert_eq!(h.visible_magnitude, g.magnitude);
+        } else {
+            hidden_max += 1;
+            assert!(
+                h.visible_magnitude > 0.0 && h.visible_magnitude < g.magnitude,
+                "({lat}, {lon}): visible magnitude {} of {}",
+                h.visible_magnitude,
+                g.magnitude
+            );
+        }
+        // Nowhere reported has the Sun below the horizon for all of it: on a
+        // one-minute grid some minute is up.
+        let (a, b) = (h.geometric_sparsha_jd, h.geometric_moksha_jd);
+        let steps = ((b - a) * 1440.0).ceil() as usize;
+        let at = |i: usize| a + (b - a) * i as f64 / steps as f64;
+        let any_up = (0..=steps).any(|i| up(at(i)) >= 0.0);
+        assert!(
+            any_up,
+            "({lat}, {lon}): reported with the Sun down throughout"
+        );
+        // The magnitudes against Meeus Ch. 40 on that grid: the whole is the
+        // largest over the eclipse, the visible one the largest while the Sun is
+        // up, and the magnitude vanishes at the geometric contacts.
+        let whole = (0..=steps)
+            .map(|i| magnitude_at(&p, at(i), lat, lon))
+            .fold(f64::MIN, f64::max);
+        // (The visible ends are the sunrise and sunset themselves, which the
+        // one-minute grid straddles, and the magnitude there changes by 0.008 a
+        // minute: they are sampled too.)
+        let seen = (0..=steps)
+            .map(at)
+            .filter(|&t| up(t) >= 0.0)
+            .chain([g.sparsha_jd, g.moksha_jd])
+            .map(|t| magnitude_at(&p, t, lat, lon))
+            .fold(f64::MIN, f64::max);
+        assert!(
+            (g.magnitude - whole).abs() < 2.0e-3,
+            "({lat}, {lon}): magnitude {} against {whole}",
+            g.magnitude
+        );
+        assert!(
+            (h.visible_magnitude - seen).abs() < 2.0e-3,
+            "({lat}, {lon}): visible magnitude {} against {seen}",
+            h.visible_magnitude
+        );
+        assert!(
+            magnitude_at(&p, a, lat, lon).abs() < 2.0e-3
+                && magnitude_at(&p, b, lat, lon).abs() < 2.0e-3,
+            "({lat}, {lon}): not zero at the geometric contacts"
+        );
     }
     println!(
-        "grid: {reported} places saw the eclipse, {clipped} clipped ends, {dark} dark at NASA's greatest"
+        "{reported} places, {sunrise} cut by sunrise, {sunset} by sunset, {hidden_max} with the Sun down at the greatest"
     );
+    assert!(reported >= 14, "{reported} places saw it");
     assert!(
-        reported >= 4,
-        "only {reported} places saw it; the grid is too thin to test anything"
-    );
-    assert!(
-        clipped >= 1,
-        "no place on the grid had the eclipse cut by sunrise or sunset"
+        sunrise >= 3 && sunset >= 6 && hidden_max >= 4,
+        "{sunrise} {sunset} {hidden_max}"
     );
 }
 
