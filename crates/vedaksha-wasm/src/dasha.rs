@@ -410,23 +410,22 @@ fn jaimini_rashi_dasha(
         }
         System::Maheshwara => {
             let options = MaheshwaraOptions::default();
-            match compute_maheshwara(&placements, atmakaraka, input.birth_jd, &options, &strength) {
-                Some(dasha) => {
-                    let mut v = serde_json::to_value(dasha)?;
-                    v["no_brahma"] = serde_json::Value::Bool(false);
-                    Ok(v)
-                }
+            if let Some(dasha) =
+                compute_maheshwara(&placements, atmakaraka, input.birth_jd, &options, &strength)
+            {
+                let mut v = serde_json::to_value(dasha)?;
+                v["no_brahma"] = serde_json::Value::Bool(false);
+                Ok(v)
+            } else {
                 // The Maheshwara graha does not depend on Brahma; only the
                 // sthira dasha its life span is read from does.
-                None => {
-                    let graha = maheshwara_graha(&placements, atmakaraka, &strength, options.rules);
-                    Ok(serde_json::json!({
-                        "no_brahma": true,
-                        "message": NO_BRAHMA,
-                        "maheshwara": graha,
-                        "rashi": placements.sign_of(graha),
-                    }))
-                }
+                let graha = maheshwara_graha(&placements, atmakaraka, &strength, options.rules);
+                Ok(serde_json::json!({
+                    "no_brahma": true,
+                    "message": NO_BRAHMA,
+                    "maheshwara": graha,
+                    "rashi": placements.sign_of(graha),
+                }))
             }
         }
         _ => unreachable!("compute_dasha_inner sends only the Jaimini rashi dashas here"),
