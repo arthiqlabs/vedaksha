@@ -52,13 +52,13 @@
 //!   brother, and not for the other two, which the same pattern implies.
 //! - **2.2.1 to 2.2.11** instead name the parents' karakas (the stronger of
 //!   Surya and Shukra for the father, of Chandra and Mangala for the mother,
-//!   Guru for a wife, the chara karaka for others) and have the death in the
+//!   Guru for a wife, the respective karaka for others) and have the death in the
 //!   trikona dashas of the rashi that karaka occupies. That is
 //!   [`ShoolaAnchor::Explicit`] with the karaka's rashi, which the caller
 //!   picks (the stronger-of-two choice is [`Strength::stronger_graha`]).
 //!
 //! BPHS's own *shoola dasha* (ch. 46 in the recension this crate follows,
-//! slokas 181 and 182, *nirnayasya vicharartham kaishchic chhoola-dasha
+//! slokas 181 and 182, *niryanasya vicharartham kaischit shula-dasha
 //! smrita*) is a different figure: from the stronger of the eighth from the
 //! lagna and the eighth from the seventh (the second and eighth rashis, in
 //! the recension's own English), forward from an odd rashi and in reverse

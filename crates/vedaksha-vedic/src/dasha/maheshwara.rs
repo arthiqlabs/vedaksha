@@ -190,8 +190,9 @@ pub struct MaheshwaraDasha {
 /// Maheshwara, the span of life to the end of his rashi's sthira period, and
 /// the antardashas of that period that can carry death.
 ///
-/// `None` only if the sthira anchor is [`super::sthira::SthiraAnchor::
-/// Brahma`] and the chart has no Brahma graha.
+/// `None` only if the sthira anchor is the Brahma graha
+/// ([`SthiraAnchor::Brahma`](super::sthira::SthiraAnchor::Brahma)) and the
+/// chart has none.
 #[must_use]
 pub fn compute_maheshwara(
     placements: &NatalPlacements,

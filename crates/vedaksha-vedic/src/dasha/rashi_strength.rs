@@ -33,9 +33,10 @@
 //! first test that separates them decides:
 //!
 //! 1. *karaka-yogah prathamo bhanam* (2.3.6): a rashi holding grahas beats
-//!    one holding none. The text states the same principle for grahas as
-//!    *agrahat sagraho jyayan* (quoted at 2.3.9 and applied to the parents'
-//!    karakas at 2.2.2). Grade (a).
+//!    one holding none. The commentary quotes an elders' verse that states
+//!    the same principle for grahas, *agrahat sagraho jyayan* (at 2.3.9), and
+//!    relies on it to choose between the parents' karakas (at 2.2.2).
+//!    Grade (a).
 //! 2. *samye bhuyasa* (2.3.7): with both occupied, the one with more
 //!    grahas. Grade (a).
 //! 3. *tatas tungadih* (2.3.8): then a rashi holding an exalted graha. The
@@ -141,7 +142,8 @@ pub const fn modality(sign: u8) -> Modality {
 /// Leo, Libra, Sagittarius, Aquarius. Zero-based, so sign 0 is odd.
 #[must_use]
 pub const fn is_odd_sign(sign: u8) -> bool {
-    sign % 2 == 0
+    // Sign 0 (Aries) is the first, odd; the low bit tells which.
+    sign & 1 == 0
 }
 
 /// The grahas that rule a zero-based sign.

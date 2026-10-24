@@ -36,7 +36,7 @@
 //!   recension reads into 46.169, and what the critical edition's commentary
 //!   gives for every antardasha series (2.3.1 and 2.3.2). The other options
 //!   are rules in circulation: chara's vishama-pada test at the ninth from
-//!   the lagna (2.3.32, which names the *chara* dasha), the modality of the
+//!   the lagna (2.3.32, read with 2.3.33 as the chara dasha's own rule), the modality of the
 //!   anchor (forward from a movable or dual rashi, reverse from a fixed
 //!   one), and an explicit direction.
 //! - **Antardashas.** BPHS 51.5 to 51.9 give the antar rule, and slokas 11 and
@@ -60,8 +60,8 @@
 //!    lagna and the first to sixth as the back of the seventh, i.e. the six
 //!    rashis before the base ([`BrahmaWindow::BehindExclusive`], the
 //!    default). The worked example printed with BPHS 46.171 to 173 counts the
-//!    base rashi itself as the first of the six ([`BrahmaWindow::
-//!    BehindInclusive`]). Grade (b): the sutra's *anucara* does not settle
+//!    base rashi itself as the first of the six
+//!    ([`BrahmaWindow::BehindInclusive`]). Grade (b): the sutra's *anucara* does not settle
 //!    which. Treating the three marks (a lord of the sixth, eighth or
 //!    twelfth; odd; behind) as filters, with "strong" as the arbiter between
 //!    survivors, follows BPHS 46.173, *bahavo lakshanakranta*, "many endowed
@@ -99,7 +99,7 @@ use super::rashi_antar::{
     sthira_years, walk,
 };
 use super::rashi_strength::{
-    GRAHA_CYCLE, Modality, NatalPlacements, Strength, graha_after, is_odd_sign, modality,
+    Modality, NatalPlacements, Strength, graha_after, graha_index, is_odd_sign, modality,
     rashi_lords,
 };
 use crate::graha::Graha;
@@ -174,7 +174,7 @@ pub fn brahma_graha(
                 }
             }
         }
-        candidates.sort_by_key(|&g| GRAHA_CYCLE.iter().position(|&c| c == g));
+        candidates.sort_by_key(|&g| graha_index(g));
         pick_among(&candidates, p, strength)?
     };
 

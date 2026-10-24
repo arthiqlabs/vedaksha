@@ -72,9 +72,6 @@ use super::rashi_strength::{Modality, NatalPlacements, Strength, is_odd_sign, mo
 /// Dasha year length in days (Julian year), as every dasha here uses.
 pub const DASHA_YEAR_DAYS: f64 = 365.25;
 
-/// Sum of the sthira years of the twelve rashis (4 x (7 + 8 + 9)).
-const STHIRA_TOTAL_YEARS: f64 = 96.0;
-
 /// Which way a dasha walks the zodiac.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DashaDirection {
@@ -255,7 +252,6 @@ pub fn antar_sequence(dasha_sign: u8, start_sign: u8, order: AntarOrder) -> [u8;
 /// `start_jd`, the last ends at `end_jd`, and each shares its bound with the
 /// next. `maha_years` is the period's length in years.
 #[must_use]
-#[allow(clippy::too_many_arguments)]
 pub fn build_antars(
     dasha_sign: u8,
     start_jd: f64,
@@ -278,7 +274,7 @@ pub fn build_antars(
     let mut out = Vec::with_capacity(12);
     let mut cumulative = 0.0;
     let mut previous_end = start_jd;
-    for (k, &sign) in signs.iter().enumerate() {
+    for &sign in &signs {
         let w = weight(sign);
         cumulative += w;
         // At the last antar `cumulative` is the same running sum as `total`,
@@ -297,17 +293,6 @@ pub fn build_antars(
     }
     out
 }
-
-// Keep the constant honest: it is the sum over twelve signs.
-const _: () = {
-    let mut sum = 0.0;
-    let mut s = 0u8;
-    while s < 12 {
-        sum += sthira_years(s);
-        s += 1;
-    }
-    assert!(sum == STHIRA_TOTAL_YEARS);
-};
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
