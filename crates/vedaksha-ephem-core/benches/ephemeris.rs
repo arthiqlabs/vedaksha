@@ -11,7 +11,9 @@
 //!   3. Full chart via `apparent_position` (`apparent_position_full_chart`)
 //!   4. A 365-day lunar scan, modelling transit/dasha sweeps (`moon_scan_365d`)
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use std::hint::black_box;
+
+use criterion::{Criterion, criterion_group, criterion_main};
 
 use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::analytical::elp_mpp02::elp_geocentric;
