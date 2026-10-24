@@ -31,6 +31,7 @@ pub mod kala_khanda;
 pub mod kala_mana;
 pub mod karaka;
 pub mod khagola;
+pub mod mean_motion;
 pub mod muhurta;
 pub mod nakshatra;
 pub mod panchanga;
