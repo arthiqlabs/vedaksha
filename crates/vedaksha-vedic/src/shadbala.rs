@@ -847,13 +847,13 @@ pub fn panchadha_maitri(of: Graha, to: Graha, of_sign: u8, to_sign: u8) -> Optio
     Some(match (natural, temporary) {
         (Friendship::Friend, Friendship::Friend) => Maitri::AdhiMitra,
         (Friendship::Neutral, Friendship::Friend) => Maitri::Mitra,
-        (Friendship::Friend, Friendship::Enemy) | (Friendship::Enemy, Friendship::Friend) => {
-            Maitri::Sama
-        }
         (Friendship::Neutral, Friendship::Enemy) => Maitri::Shatru,
         (Friendship::Enemy, Friendship::Enemy) => Maitri::AdhiShatru,
-        // The temporary relation is never neutral.
-        (_, Friendship::Neutral) => Maitri::Sama,
+        // A friend by one measure and an enemy by the other. The temporary
+        // relation is never neutral; that arm only completes the match.
+        (Friendship::Friend, Friendship::Enemy)
+        | (Friendship::Enemy, Friendship::Friend)
+        | (_, Friendship::Neutral) => Maitri::Sama,
     })
 }
 
@@ -1165,9 +1165,7 @@ pub fn ahargana_from_jdn(jdn: i64) -> i64 {
 /// that began at the previous sunrise.
 #[must_use]
 pub fn hindu_day_jdn(jd_sunrise: f64, utc_offset_hours: f64) -> i64 {
-    #[allow(clippy::cast_possible_truncation)]
-    let jdn = (jd_sunrise + 0.5 + utc_offset_hours / 24.0).floor() as i64;
-    jdn
+    (jd_sunrise + 0.5 + utc_offset_hours / 24.0).floor() as i64
 }
 
 /// The graha ruling the seven-day cycle position `r` as the Surya Siddhanta
@@ -3279,6 +3277,30 @@ mod tests {
         }
         // The 25th hora would be Monday's first: the Moon.
         assert_eq!(sunday[24 % 7], Graha::Moon);
+        // Every day lord, not only the Sun: the first hora is the day lord's
+        // and the order is Saturn, Jupiter, Mars, Sun, Venus, Mercury, Moon
+        // (SS XII.79), wrapping.
+        let chaldean = [
+            Graha::Saturn,
+            Graha::Jupiter,
+            Graha::Mars,
+            Graha::Sun,
+            Graha::Venus,
+            Graha::Mercury,
+            Graha::Moon,
+        ];
+        for vara in CLASSICAL {
+            let start = chaldean.iter().position(|&g| g == vara).expect("in order");
+            for hour in 0..24usize {
+                let jd = (hour as f64 + 0.5) / 24.0;
+                assert_eq!(
+                    hora_lord(HoraKind::Equal, jd, sr, ss, nsr, vara),
+                    Some(chaldean[(start + hour) % 7]),
+                    "{vara:?}, hora {}",
+                    hour + 1
+                );
+            }
+        }
         // Another day starts from its own lord.
         assert_eq!(
             hora_lord(HoraKind::Equal, 0.01, sr, ss, nsr, Graha::Moon),

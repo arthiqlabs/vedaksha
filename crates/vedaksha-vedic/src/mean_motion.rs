@@ -23,9 +23,11 @@
 //! (`t = (JD - 2451545.0) / 365250`), with the constant term in degrees and
 //! the coefficient of `t^n` in arcseconds. The same elements, refitted as a
 //! cubic in Julian centuries, are tabulated in Meeus, *Astronomical
-//! Algorithms*, 2nd ed., Table 31.A; the two agree in the linear coefficient
-//! to about 1e-4 degree per century and the paper is used here because it is
-//! the primary and carries the higher terms.
+//! Algorithms*, 2nd ed., Table 31.A. This module reads the primary, which
+//! carries the terms to the sixth power of `t`, so a value read from Meeus's
+//! cubic can differ from it in the last digits. The test module checks the
+//! transcription against the paper's own Section 5.8 (the same elements at the
+//! J2000 equinox) and against the planets' sidereal periods.
 //!
 //! Time is taken as TT. TDB and TT differ by at most 2 ms, far below what a
 //! mean longitude can resolve.
