@@ -44,8 +44,9 @@
 //! would put a new transitive tree through `deny.toml` for 60 lines of FIPS
 //! 180-4 that cannot drift.
 //!
-//! Restrict to the lunar theory — the only consumer of `simd_trig`/`wide` — by
-//! inserting `| grep ' Moon '` before the `tr`.
+//! Restrict to one body by inserting, for example, `| grep ' Moon '` before
+//! the `tr`. Since v9.5.0 VSOP87A is the only consumer of `simd_trig`/`wide`;
+//! the lunar series no longer calls it.
 //!
 //! # Why this test is `#[ignore]`d — measured, not assumed
 //!

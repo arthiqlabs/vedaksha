@@ -53,9 +53,8 @@ pub fn definition() -> super::ToolDefinition {
         description: "Search for auspicious time windows (muhurta) within a given period for a \
             geographic location. Returns ranked muhurta candidates with quality scores based on \
             tithi, nakshatra, yoga, karana, and planetary positions. The search window is capped \
-            at 30 days (see MUHURTA_SEARCH_RANGE_TOO_LARGE) — the per-candidate vara and \
-            tithi/nakshatra refinement make this tool far more expensive per day of range than \
-            a transit search, so a wider span would make a single call take minutes.",
+            at 30 days (see MUHURTA_SEARCH_RANGE_TOO_LARGE), a scope limit; for a longer \
+            horizon, issue several searches.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
