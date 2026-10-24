@@ -18,8 +18,8 @@
 use serde::Deserialize;
 
 /// The Julian Day range `vedaksha-mcp` accepts (about 1800 to 2400 CE).
-const JD_MIN: f64 = 2_378_496.5;
-const JD_MAX: f64 = 2_597_641.5;
+pub(crate) const JD_MIN: f64 = 2_378_496.5;
+pub(crate) const JD_MAX: f64 = 2_597_641.5;
 
 /// The most nested levels a Moon-based system may ask for.
 const MAX_LEVELS: u8 = 5;

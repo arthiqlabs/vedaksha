@@ -788,8 +788,6 @@ const SHADBALA_TROPICAL_REFUSED: &str = "Shadbala is defined on sidereal positio
     gives no Shadbala; pass one of the sidereal systems, for example IndianOfficial";
 
 fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
-    use vedaksha_ephem_core::analytical::AnalyticalProvider;
-    use vedaksha_ephem_core::jpl::EphemerisProvider as _;
     use vedaksha_vedic::shadbala::ShadbalaOptions;
     use vedaksha_vedic::shadbala_chart::{
         ChartShadbalaRequest, RAHU_BODY_NAME, shadbala_for_chart,
@@ -800,10 +798,11 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
 
     // The same bounds the MCP tool's `validate` applies, so one input is
     // accepted or refused alike on both surfaces.
-    let (jd_min, jd_max) = AnalyticalProvider.time_range();
-    if !input.julian_day.is_finite() || input.julian_day < jd_min || input.julian_day > jd_max {
+    let (jd_min, jd_max) = (dasha::JD_MIN, dasha::JD_MAX);
+    if !input.julian_day.is_finite() || !(jd_min..=jd_max).contains(&input.julian_day) {
         return Err(format!(
-            "julian_day must be a finite Julian Day in [{jd_min:.1}, {jd_max:.1}]"
+            "Julian Day {} is outside valid range [{jd_min}, {jd_max}]",
+            input.julian_day
         ));
     }
     if !input.latitude.is_finite() || !(-90.0..=90.0).contains(&input.latitude) {
@@ -1565,6 +1564,34 @@ mod tests {
         }
 
         #[test]
+        fn compute_shadbala_accepts_the_julian_days_the_mcp_tool_accepts() {
+            // The analytical provider spans far wider than the tool's range,
+            // so a day just outside it is where the two surfaces could part.
+            let server = vedaksha_mcp::server::McpServer::new();
+            for jd in [dasha::JD_MIN - 1.0, dasha::JD_MIN, dasha::JD_MAX, dasha::JD_MAX + 1.0] {
+                let mut a: serde_json::Value = serde_json::from_str(INPUT).unwrap();
+                a["julian_day"] = jd.into();
+                let wasm = compute_shadbala_inner(&a.to_string());
+                let request = serde_json::json!({
+                    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": { "name": "compute_shadbala", "arguments": a }
+                });
+                let response: serde_json::Value =
+                    serde_json::from_str(&server.handle_request(&request.to_string())).unwrap();
+                match wasm {
+                    Ok(_) => assert!(response["error"].is_null(), "{jd}: MCP refused {response}"),
+                    Err(e) => {
+                        assert_eq!(response["error"]["data"]["error_code"], "DATE_OUT_OF_RANGE");
+                        assert_eq!(response["error"]["message"].as_str().unwrap(), e, "{jd}");
+                    }
+                }
+            }
+            let mut a: serde_json::Value = serde_json::from_str(INPUT).unwrap();
+            a["julian_day"] = (dasha::JD_MIN - 1.0).into();
+            assert!(compute_shadbala_inner(&a.to_string()).is_err());
+        }
+
+        #[test]
         fn compute_shadbala_refuses_the_earlier_shape_and_bad_input() {
             // The earlier planets-and-flags input.
             let old = r#"{"planets": [], "is_daytime": true}"#;
@@ -1579,7 +1606,7 @@ mod tests {
             assert!(with("longitude", 181.0.into()).contains("longitude"));
             assert!(with("elevation_m", 1e9.into()).contains("elevation_m"));
             assert!(with("tz_offset_minutes", 900.into()).contains("tz_offset_minutes"));
-            assert!(with("julian_day", 1.0.into()).contains("julian_day"));
+            assert!(with("julian_day", 1.0.into()).contains("Julian Day"));
             assert!(with("house_system", "Nonsense".into()).contains("Nonsense"));
             assert!(with("ayanamsha", "NoSuchSystem".into()).contains("NoSuchSystem"));
             // The ayanamsha is required.
