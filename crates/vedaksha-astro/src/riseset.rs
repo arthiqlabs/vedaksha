@@ -3249,7 +3249,7 @@ mod tests {
     /// | after | **4.656 612 873 077 393e-10 d** = one ULP, at lat −89.0 |
     ///
     /// The before row is the wrong-rotation case in full: `previous_rise`
-    /// returned JD 2 451 616.975 991 497 where the scan finds
+    /// returned JD 2 451 616.975 991 497 where the scan then found
     /// JD 2 451 617.472 676 599 4 — half a day, and a different weekday. It is
     /// pinned by `a_polar_sunrise_is_never_attributed_to_the_wrong_rotation`
     /// and it is why [`ANALYTIC_LATITUDE_LIMIT_DEG`] exists.
@@ -3381,7 +3381,7 @@ mod tests {
     ///
     /// * **Row 8** — lat 68 N, lon 0, JD 2,433,282.5. The polar night has not
     ///   ended, so `previous_rise` is `None`, but it ends 3.49 days later and
-    ///   `next_rise` is `Some(2433285.9891851256)`. A draft returned `None`
+    ///   `next_rise` is `Some(2433285.989197797)`. A draft returned `None`
     ///   for BOTH, because it tested `cos H₀` at an arbitrary phase of each
     ///   rotation, where the declination was still 0.07° short of admitting a
     ///   crossing. See [`event_on_transits_rotation`].
@@ -3402,9 +3402,10 @@ mod tests {
     ///   three sit beyond |lat| 89, which is where the sweep grid used to stop.
     ///   MUTATION-CHECK: restoring `REFINE_ITERS = 24` fails this test on all
     ///   three rows.
-    /// **Regenerated 2026-10-24.** Moved when the apparent place gained the
-    /// Sun's light deflection (planets only, so not here), Delta T was read
-    /// from the USNO tables and 30 nutation rows were corrected. Chennai moves
+    /// **Regenerated 2026-10-24.** Moved when Delta T was read from the USNO
+    /// tables and their predictions, 30 nutation rows were corrected and the
+    /// VSOP87A-to-FK5 rotation took the published matrix (the light
+    /// deflection added then is the planets', so not here). Chennai moves
     /// under 0.2 ms; the polar rows up to 20 ms. Regenerated from the scan by
     /// `record_the_real_sun_scan_oracle_table`, tolerance untouched.
     ///
@@ -3426,26 +3427,26 @@ mod tests {
     fn analytic_rise_reproduces_the_scan_oracle_for_the_real_sun() {
         /// Scan-oracle answers for [`REAL_SUN_CASES`], in the same order.
         const ORACLE: [(Option<f64>, Option<f64>); 20] = [
-            (Some(2_451_544.542_331_182_4), Some(2_451_545.542_601_586_3)),
-            (Some(2_459_015.159_161_604), Some(2_459_016.159_258_032)),
-            (Some(2_461_099.781_586_561_4), Some(2_461_100.780_100_932_3)),
-            (Some(2_433_282.282_300_993), Some(2_433_283.282_814_773_7)),
-            (Some(2_488_068.969_568_780_6), Some(2_488_069.968_922_613)),
-            (Some(2_451_543.879_412_278_5), Some(2_451_544.878_057_618_6)),
+            (Some(2_451_544.542_331_096), Some(2_451_545.542_601_499)),
+            (Some(2_459_015.159_161_542_5), Some(2_459_016.159_257_971_7)),
+            (Some(2_461_099.781_586_468), Some(2_461_100.780_100_841)),
+            (Some(2_433_282.282_300_930_5), Some(2_433_283.282_814_711_3)),
+            (Some(2_488_068.969_569_870_3), Some(2_488_069.968_923_652_5)),
+            (Some(2_451_543.879_411_955_4), Some(2_451_544.878_057_304)),
             (None, None),
-            (None, Some(2_433_285.989_198_805)),
+            (None, Some(2_433_285.989_197_797)),
             (None, None),
             (None, None),
             (None, None),
-            (Some(2_451_543.749_339_890_7), Some(2_451_544.749_673_595_7)),
-            (Some(2_459_112.499_996_962), Some(2_459_113.499_580_552)),
-            (Some(2_459_015.448_315_991), Some(2_459_016.448_388_719)),
-            (Some(2_488_069.204_681_013), Some(2_488_070.205_312_500_7)),
-            (Some(2_451_808.980_384_419_7), Some(2_451_809.992_979_698)),
+            (Some(2_451_543.749_339_812_4), Some(2_451_544.749_673_517_4)),
+            (Some(2_459_112.499_996_885_7), Some(2_459_113.499_580_474_6)),
+            (Some(2_459_015.448_315_938), Some(2_459_016.448_388_665)),
+            (Some(2_488_069.204_683_010_5), Some(2_488_070.205_314_513_3)),
+            (Some(2_451_808.980_384_35), Some(2_451_809.992_979_622_4)),
             (None, None),
-            (Some(2_459_286.996_145_900_3), Some(2_459_287.906_249_508_3)),
-            (Some(2_459_293.534_225_139), None),
-            (Some(2_488_342.377_678_285_4), None),
+            (Some(2_459_286.996_144_796_7), Some(2_459_287.906_249_290_3)),
+            (Some(2_459_293.534_224_993_5), None),
+            (Some(2_488_342.378_718_521_4), None),
         ];
 
         let provider = real_sun_provider();
@@ -3841,7 +3842,7 @@ mod tests {
     ///
     /// The anchor is 2000-03-17. Measured with this module's own scan: the
     /// Sun's declination there is −1.310 095°, and it passes `h₀` upward at
-    /// JD 2 451 621.706 381 838, 1.21 days later — inside the four-day search
+    /// JD 2 451 621.707 306 345, 1.21 days later — inside the four-day search
     /// bound.
     #[test]
     fn the_geographic_pole_has_no_hour_angle_root_and_is_scanned_instead() {
@@ -3861,7 +3862,7 @@ mod tests {
         let scanned = scan_reference::next_rise_by_scan(jd, 90.0, 0.0, 0.0, &real_sun);
         assert_eq!(
             scanned,
-            Some(2_451_621.707_307_261_4),
+            Some(2_451_621.707_306_345),
             "the scan must find the ANNUAL crossing at the north pole three days \
              before the March equinox; if it does not, this test has stopped \
              exercising the case it exists for"
@@ -4195,7 +4196,7 @@ mod tests {
     /// This is that case at its worst measured point, from the polar-band
     /// measurement's own output: lat 89.9 N, lon 0, 3650 m, anchored on
     /// JD 2 451 617.5. The walk answered JD 2 451 616.975 991 497; the scan
-    /// oracle answers JD 2 451 617.472 676 599 4 — **0.496 685 102 d**
+    /// oracle then answered JD 2 451 617.472 676 599 4 — **0.496 685 102 d**
     /// apart, which straddles a UT midnight and therefore changes the weekday
     /// outright at half the timezone offsets the surfaces accept.
     ///
@@ -4215,7 +4216,7 @@ mod tests {
         let real_sun = |jd: f64| sun_equatorial_deg(&provider, jd);
         let (lat, lon, elevation, jd) = (89.9_f64, 0.0_f64, 3_650.0_f64, 2_451_617.5_f64);
 
-        const ORACLE: f64 = 2_451_617.474_921_093_3;
+        const ORACLE: f64 = 2_451_617.474_917_104_5;
         const THE_WRONG_ROTATION: f64 = 2_451_616.975_991_497;
 
         let got = previous_rise(jd, lat, lon, elevation, &real_sun)
