@@ -49,3 +49,4 @@ pub mod obliquity;
 pub mod precession;
 pub mod sidereal_time;
 pub mod stars;
+pub mod walk;
