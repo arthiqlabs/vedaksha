@@ -1820,6 +1820,21 @@ mod tests {
             "{} reads",
             n.load(Ordering::Relaxed)
         );
+        // A steeply convex function, on which plain regula falsi leaves one end
+        // of the bracket where it is for dozens of passes: exp(10 x) - 2 on
+        // [0, 1], whose root is ln(2) / 10.
+        let m = AtomicU32::new(0);
+        let h = |x: f64| {
+            m.fetch_add(1, Ordering::Relaxed);
+            Some((10.0 * x).exp() - 2.0)
+        };
+        let root = illinois(&h, 0.0, 1.0, 1.0e-12).unwrap();
+        assert!((root - 2.0_f64.ln() / 10.0).abs() < 1.0e-9, "root = {root}");
+        assert!(
+            m.load(Ordering::Relaxed) < 20,
+            "{} reads",
+            m.load(Ordering::Relaxed)
+        );
         // Falling through zero as well as rising.
         let g = |x: f64| Some(2.0 - x * x * x);
         let root = illinois(&g, 1.0, 2.0, 1.0e-12).unwrap();
