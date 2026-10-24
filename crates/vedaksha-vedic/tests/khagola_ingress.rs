@@ -166,8 +166,14 @@ fn degenerate_ranges_are_empty() {
     let from = jd(2001, 1, 1, 0.0);
     let f = |t: f64| longitude_and_rate(&p, Body::Saturn, t);
     // End at or before the start.
-    assert!(graha_ingresses(from, from, Graha::Saturn, AYAN, &f).is_empty());
-    assert!(graha_ingresses(from, from - 10.0, Graha::Saturn, AYAN, &f).is_empty());
+    assert_eq!(
+        graha_ingresses(from, from, Graha::Saturn, AYAN, &f),
+        Vec::<(f64, u8)>::new()
+    );
+    assert_eq!(
+        graha_ingresses(from, from - 10.0, Graha::Saturn, AYAN, &f),
+        Vec::<(f64, u8)>::new()
+    );
     // A span inside one stay: from a second past an entry to a few days before
     // the next, which the one-day walk locates.
     let walk = reseeded_walk(Graha::Saturn, &f, from, from + 4000.0);
@@ -176,7 +182,10 @@ fn degenerate_ranges_are_empty() {
     assert!(quiet.is_empty(), "{quiet:?}");
     // No callback, no entries.
     let none = |_: f64| None;
-    assert!(graha_ingresses(from, from + 400.0, Graha::Saturn, AYAN, &none).is_empty());
+    assert_eq!(
+        graha_ingresses(from, from + 400.0, Graha::Saturn, AYAN, &none),
+        Vec::<(f64, u8)>::new()
+    );
 }
 
 /// A range that ends just before an entry omits it, and one that ends just

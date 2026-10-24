@@ -3538,7 +3538,10 @@ mod tests {
             yuddha_adjustments(&luminary, YuddhaRule::NorthernLatitude),
             vec![0.0, 0.0, 0.0]
         );
-        assert!(yuddha_adjustments(&[], YuddhaRule::Brighter).is_empty());
+        assert_eq!(
+            yuddha_adjustments(&[], YuddhaRule::Brighter),
+            Vec::<f64>::new()
+        );
     }
 
     #[test]

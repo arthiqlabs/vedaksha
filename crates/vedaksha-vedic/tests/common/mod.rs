@@ -9,12 +9,12 @@
 
 #![allow(dead_code)]
 
-use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates::{
     apparent_position, apparent_positions, ecliptic_to_equatorial_deg, frame_for,
 };
 use vedaksha_ephem_core::delta_t;
+use vedaksha_ephem_core::jpl::EphemerisProvider;
 use vedaksha_vedic::khagola::{LunarGeometry, SolarGeometry};
 
 /// Julian Day of a Gregorian calendar date and fractional hours (Meeus Ch. 7).
@@ -36,7 +36,7 @@ pub fn delta_t_s(jd_ut: f64) -> f64 {
 }
 
 /// The Sun's and Moon's apparent ecliptic geometry at a UT1 instant.
-pub fn lunar_geometry(p: &AnalyticalProvider, jd_ut: f64) -> Option<LunarGeometry> {
+pub fn lunar_geometry(p: &(dyn EphemerisProvider + Sync), jd_ut: f64) -> Option<LunarGeometry> {
     let r = apparent_positions(p, &[Body::Sun, Body::Moon], jd_ut);
     let sun = r[0].1.as_ref().ok()?;
     let moon = r[1].1.as_ref().ok()?;
@@ -51,7 +51,7 @@ pub fn lunar_geometry(p: &AnalyticalProvider, jd_ut: f64) -> Option<LunarGeometr
 
 /// The Sun's and Moon's apparent equatorial geometry at a UT1 instant, the
 /// ecliptic positions rotated by the true obliquity of date.
-pub fn solar_geometry(p: &AnalyticalProvider, jd_ut: f64) -> Option<SolarGeometry> {
+pub fn solar_geometry(p: &(dyn EphemerisProvider + Sync), jd_ut: f64) -> Option<SolarGeometry> {
     let r = apparent_positions(p, &[Body::Sun, Body::Moon], jd_ut);
     let sun = r[0].1.as_ref().ok()?;
     let moon = r[1].1.as_ref().ok()?;
@@ -74,13 +74,21 @@ pub fn solar_geometry(p: &AnalyticalProvider, jd_ut: f64) -> Option<SolarGeometr
 }
 
 /// A body's apparent tropical longitude and daily motion, degrees.
-pub fn longitude_and_rate(p: &AnalyticalProvider, body: Body, jd_ut: f64) -> Option<(f64, f64)> {
+pub fn longitude_and_rate(
+    p: &(dyn EphemerisProvider + Sync),
+    body: Body,
+    jd_ut: f64,
+) -> Option<(f64, f64)> {
     let a = apparent_position(p, body, jd_ut).ok()?;
     Some((a.ecliptic.longitude.to_degrees(), a.longitude_speed))
 }
 
 /// A body's apparent `(right ascension, declination)`, degrees.
-pub fn equatorial(p: &AnalyticalProvider, body: Body, jd_ut: f64) -> Option<(f64, f64)> {
+pub fn equatorial(
+    p: &(dyn EphemerisProvider + Sync),
+    body: Body,
+    jd_ut: f64,
+) -> Option<(f64, f64)> {
     let a = apparent_position(p, body, jd_ut).ok()?;
     let eps = frame_for(delta_t::ut1_to_tt(jd_ut))
         .true_obliquity()

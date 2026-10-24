@@ -185,11 +185,14 @@ fn a_known_rate_has_its_stations_where_it_crosses_zero() {
         assert!((t - want).abs() < 1.0e-6, "station {i}: {t} vs {want}");
     }
     // Half open at the end, and starting where it is told.
-    assert!(stations(t0, t0 + 24.0, Graha::Mars, &f).is_empty());
+    assert_eq!(stations(t0, t0 + 24.0, Graha::Mars, &f), Vec::<f64>::new());
     assert_eq!(stations(t0, t0 + 26.0, Graha::Mars, &f).len(), 1);
     assert_eq!(stations(t0 + 26.0, t0 + 200.0, Graha::Mars, &f).len(), 3);
-    assert!(stations(t0, t0, Graha::Mars, &f).is_empty());
-    assert!(stations(t0, t0 + 100.0, Graha::Mars, &|_| None).is_empty());
+    assert_eq!(stations(t0, t0, Graha::Mars, &f), Vec::<f64>::new());
+    assert_eq!(
+        stations(t0, t0 + 100.0, Graha::Mars, &|_| None),
+        Vec::<f64>::new()
+    );
 }
 
 /// A rate that is exactly zero at a sample instant is a station there, once.

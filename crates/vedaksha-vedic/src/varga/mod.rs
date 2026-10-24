@@ -12,6 +12,7 @@
 //!
 //! Source: BPHS Ch. 6-7.
 
+use serde::Serialize;
 use vedaksha_math::angle::normalize_degrees;
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -34,7 +35,7 @@ pub enum VargaTradition {
 
 /// Varga (divisional chart) type — represents one of the 16 standard Shodasha
 /// Vargas used in Parashari Jyotish.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum VargaType {
     /// D-1: The birth chart itself (identity / personality).
     Rashi,

@@ -495,10 +495,10 @@ mod tests {
                 let allowed = match (plain, at) {
                     // Retrograde sliver: proxy Anuvakra -> station.
                     (Cheshta::Anuvakra, Cheshta::Vikala) => speed.abs() <= KALA_DEG,
-                    // Clear retrograde crossing a boundary.
-                    (Cheshta::Vakra, Cheshta::Anuvakra) => crossing,
-                    // Accelerated direct motion.
-                    (Cheshta::Chara | Cheshta::Atichara, Cheshta::Atichara) => crossing,
+                    // Clear retrograde, or accelerated direct motion, crossing a
+                    // boundary.
+                    (Cheshta::Vakra, Cheshta::Anuvakra)
+                    | (Cheshta::Chara | Cheshta::Atichara, Cheshta::Atichara) => crossing,
                     (Cheshta::Atichara, Cheshta::Chara) => !crossing,
                     _ => false,
                 };

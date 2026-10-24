@@ -337,21 +337,21 @@ impl<'a> JaiminiStrength<'a> {
         Self { placements }
     }
 
-    fn exalted_in(&self, sign: u8) -> bool {
+    fn exalted_in(self, sign: u8) -> bool {
         self.placements
             .occupants_of(sign)
             .iter()
             .any(|&g| self.placements.sign_of(g) == exaltation_sign(g))
     }
 
-    fn lord_stands_in_own_rashi(&self, sign: u8) -> bool {
+    fn lord_stands_in_own_rashi(self, sign: u8) -> bool {
         rashi_lords(sign)
             .iter()
             .any(|&l| self.placements.sign_of(l) == sign)
     }
 
     /// Degrees "advanced" in the sign; a node's are counted from the far end.
-    fn advanced_degrees(&self, graha: Graha) -> Option<f64> {
+    fn advanced_degrees(self, graha: Graha) -> Option<f64> {
         let d = self.placements.degrees_of(graha)?;
         Some(match graha {
             Graha::Rahu | Graha::Ketu if d < 1e-9 => 0.0,
@@ -415,7 +415,7 @@ impl Strength for JaiminiStrength<'_> {
 
 impl JaiminiStrength<'_> {
     /// The stronger of two grahas, or `None` when no test separates them.
-    fn graha_edge(&self, a: Graha, b: Graha) -> Option<Graha> {
+    fn graha_edge(self, a: Graha, b: Graha) -> Option<Graha> {
         if a == b {
             return None;
         }

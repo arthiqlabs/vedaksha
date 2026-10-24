@@ -212,10 +212,10 @@ fn sign_lord(sign: u8) -> Graha {
 /// The value a caller supplied for `graha`, or a panic naming what is
 /// missing (a caller bug, in every profile).
 fn value_for(list: &[(Graha, f64)], graha: Graha, what: &str) -> f64 {
-    list.iter()
-        .find(|&&(g, _)| g == graha)
-        .map(|&(_, v)| v)
-        .unwrap_or_else(|| panic!("bhava bala needs a {what} for {graha:?}"))
+    list.iter().find(|&&(g, _)| g == graha).map_or_else(
+        || panic!("bhava bala needs a {what} for {graha:?}"),
+        |&(_, v)| v,
+    )
 }
 
 /// Bhava dig bala of 27.26-28: the short arc from the rashi group's powerless

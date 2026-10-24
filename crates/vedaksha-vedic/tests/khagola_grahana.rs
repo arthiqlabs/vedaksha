@@ -39,6 +39,7 @@ mod common;
 use common::{delta_t_s, jd, lunar_geometry, solar_geometry};
 use vedaksha_astro::riseset::{SUN_STANDARD_ALTITUDE_DEG, next_rise, sun_rise_set};
 use vedaksha_ephem_core::analytical::AnalyticalProvider;
+use vedaksha_ephem_core::jpl::EphemerisProvider;
 use vedaksha_ephem_core::sidereal_time::gmst;
 use vedaksha_vedic::khagola::{
     Grahana, GrahanaKind, LunarGeometry, ShadowEnlargement, SolarGeometry, grahana, grahana_with,
@@ -115,7 +116,7 @@ const MAG_TOL: f64 = 0.0015;
 /// The lunar eclipse nearest NASA's greatest eclipse, searching from 12 days
 /// before it.
 fn lunar_near(
-    p: &AnalyticalProvider,
+    p: &(dyn EphemerisProvider + Sync),
     row: &NasaLunar,
     shadow: ShadowEnlargement,
 ) -> Option<Grahana> {
@@ -232,7 +233,7 @@ fn the_shallowest_penumbral_eclipses_are_found_and_not_promoted() {
 /// The Sun's geometric altitude at `jd_ut` for the observer, degrees, from the
 /// engine's apparent geocentric right ascension and declination (Meeus Ch. 13;
 /// the parallax of the Sun, 8.8 arcseconds, is ignored).
-fn sun_altitude(p: &AnalyticalProvider, jd_ut: f64, lat: f64, lon: f64) -> f64 {
+fn sun_altitude(p: &(dyn EphemerisProvider + Sync), jd_ut: f64, lat: f64, lon: f64) -> f64 {
     let g = solar_geometry(p, jd_ut).unwrap();
     let h = (gmst(jd_ut).to_degrees() + lon - g.sun_ra_deg).to_radians();
     let (phi, dec) = (lat.to_radians(), g.sun_dec_deg.to_radians());
@@ -246,7 +247,7 @@ fn sun_altitude(p: &AnalyticalProvider, jd_ut: f64, lat: f64, lon: f64) -> f64 {
 /// (the parallax in right ascension and declination from the observer's
 /// `rho sin phi'` and `rho cos phi'`, Ch. 11), written out here from the book's
 /// equations and not from the module's vector form.
-fn magnitude_at(p: &AnalyticalProvider, jd_ut: f64, lat: f64, lon: f64) -> f64 {
+fn magnitude_at(p: &(dyn EphemerisProvider + Sync), jd_ut: f64, lat: f64, lon: f64) -> f64 {
     let g = solar_geometry(p, jd_ut).unwrap();
     let b_over_a = 1.0 - 1.0 / 298.257_223;
     let phi = lat.to_radians();
@@ -275,7 +276,13 @@ fn magnitude_at(p: &AnalyticalProvider, jd_ut: f64, lat: f64, lon: f64) -> f64 {
 /// A solar-only search that looks at one new moon: the callback goes dark after
 /// `cutoff`, so a place without a visible eclipse at that syzygy returns `None`
 /// at once rather than walking on to the next.
-fn solar_at(p: &AnalyticalProvider, from: f64, cutoff: f64, lat: f64, lon: f64) -> Option<Grahana> {
+fn solar_at(
+    p: &(dyn EphemerisProvider + Sync),
+    from: f64,
+    cutoff: f64,
+    lat: f64,
+    lon: f64,
+) -> Option<Grahana> {
     let solar = |t: f64| {
         if t > cutoff {
             None

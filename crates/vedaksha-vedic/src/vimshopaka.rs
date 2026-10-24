@@ -87,6 +87,7 @@
 
 use crate::graha::Graha;
 use crate::varga::{VargaTradition, VargaType, varga_sign_with_tradition};
+use serde::Serialize;
 
 /// The shadvarga weights of BPHS 7.17: rashi 6, hora 2, drekkana 4,
 /// navamsha 5, dvadashamsha 2, trimshamsha 1.
@@ -167,7 +168,7 @@ pub const SHODASHAVARGA: [(VargaType, f64); 16] = [
 
 /// The varga viswa of BPHS 7.24-25: the value, out of 20, of the relation a
 /// graha holds to the rashi it stands in, in a varga.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub enum VargaRelation {
     /// In its own varga rashi: 20.
     Own,
@@ -199,7 +200,7 @@ impl VargaRelation {
 }
 
 /// One varga's part of a graha's vimshopaka.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct VimshopakaVarga {
     /// Which varga.
     pub varga: VargaType,
@@ -214,7 +215,7 @@ pub struct VimshopakaVarga {
 }
 
 /// A graha's vimshopaka across one scheme.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Vimshopaka {
     /// The graha.
     pub graha: Graha,

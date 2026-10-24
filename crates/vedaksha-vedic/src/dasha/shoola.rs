@@ -382,8 +382,8 @@ mod tests {
         )
     }
 
-    fn run(p: &NatalPlacements, options: &ShoolaOptions) -> ShoolaDasha {
-        compute_niryana_shoola(p, TEST_JD, options, &JaiminiStrength::new(p))
+    fn run(p: &NatalPlacements, options: ShoolaOptions) -> ShoolaDasha {
+        compute_niryana_shoola(p, TEST_JD, &options, &JaiminiStrength::new(p))
     }
 
     fn signs_of(d: &ShoolaDasha) -> Vec<u8> {
@@ -405,7 +405,7 @@ mod tests {
     #[test]
     fn trikona_groups_from_an_odd_anchor() {
         let p = chart(0, [0; 8]);
-        let d = run(&p, &explicit(0, ShoolaOrder::TrikonaGroups));
+        let d = run(&p, explicit(0, ShoolaOrder::TrikonaGroups));
         assert_eq!(signs_of(&d), vec![0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]);
         let years: Vec<f64> = d.periods.iter().map(|x| x.duration_years).collect();
         assert_eq!(
@@ -421,7 +421,7 @@ mod tests {
     #[test]
     fn trikona_groups_from_an_even_anchor_mirror() {
         let p = chart(0, [0; 8]);
-        let d = run(&p, &explicit(1, ShoolaOrder::TrikonaGroups));
+        let d = run(&p, explicit(1, ShoolaOrder::TrikonaGroups));
         assert_eq!(signs_of(&d), vec![1, 9, 5, 0, 8, 4, 11, 7, 3, 10, 6, 2]);
         assert_eq!(d.direction, DashaDirection::AntiZodiacal);
     }
@@ -430,11 +430,11 @@ mod tests {
     #[test]
     fn consecutive_order_is_the_bphs_shoola() {
         let p = chart(0, [0; 8]);
-        let odd = run(&p, &explicit(2, ShoolaOrder::Consecutive));
+        let odd = run(&p, explicit(2, ShoolaOrder::Consecutive));
         assert_eq!(signs_of(&odd), vec![2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1]);
         // The recension's own worked example runs from Pisces(11) in
         // reverse: Pisces 9, Aquarius 8, Capricorn 7, Sagittarius 9, ...
-        let even = run(&p, &explicit(11, ShoolaOrder::Consecutive));
+        let even = run(&p, explicit(11, ShoolaOrder::Consecutive));
         assert_eq!(signs_of(&even), vec![11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
         let years: Vec<f64> = even.periods.iter().map(|x| x.duration_years).collect();
         assert_eq!(
@@ -463,7 +463,7 @@ mod tests {
         let anchor = |a: ShoolaAnchor| {
             run(
                 &p,
-                &ShoolaOptions {
+                ShoolaOptions {
                     anchor: a,
                     ..ShoolaOptions::default()
                 },
@@ -481,7 +481,7 @@ mod tests {
     #[test]
     fn the_seventh_can_be_the_anchor() {
         let p = chart(0, [6, 6, 6, 3, 3, 3, 9, 11]);
-        let d = run(&p, &ShoolaOptions::default());
+        let d = run(&p, ShoolaOptions::default());
         assert_eq!(d.anchor_sign, 6);
         assert_eq!(d.periods[0].sign_index, 6);
     }
@@ -504,7 +504,7 @@ mod tests {
         let p = chart(0, [0; 8]);
         let d = run(
             &p,
-            &ShoolaOptions {
+            ShoolaOptions {
                 anchor: ShoolaAnchor::Relative(ShoolaRelative::Mother),
                 ..ShoolaOptions::default()
             },
@@ -518,7 +518,7 @@ mod tests {
         let p = chart(0, [8, 8, 2, 2, 2, 11, 4, 4]);
         let d = run(
             &p,
-            &ShoolaOptions {
+            ShoolaOptions {
                 antar: AntarRules {
                     start: AntarStart::RashiItself,
                     ..AntarRules::default()
