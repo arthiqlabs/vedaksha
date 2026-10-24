@@ -451,11 +451,13 @@ impl EphemerisProvider for AnalyticalProvider {
     ///
     /// # What it costs, and what it buys
     ///
-    /// `moon_state` is a full ELP/MPP02 evaluation: 35,758 trig terms, ~260 µs
-    /// measured. The default body pulls it **twice** — once inside
-    /// `compute_state(EarthMoonBarycenter, ·)` and once for
-    /// `compute_state(Moon, ·)` — to produce a number that VSOP87A's 2,202-term
-    /// Earth series (~11 µs) already determines. `ecliptic_position(Sun, jd)`,
+    /// `moon_state` is a full ELP/MPP02 evaluation: 35,758 series terms, 56 µs
+    /// measured at v9.5.0 (188 µs at v9.4.1, before the series was built by angle
+    /// addition; criterion medians of `elp_mpp02_moon`). The default body pulls
+    /// it **twice** — once inside `compute_state(EarthMoonBarycenter, ·)` and once
+    /// for `compute_state(Moon, ·)` — to produce a number that VSOP87A's
+    /// 2,202-term Earth series (2.9 µs at v9.5.0, 6.1 µs at v9.4.1) already
+    /// determines. `ecliptic_position(Sun, jd)`,
     /// the workhorse of `search_transits` and `search_muhurta`'s solar scan,
     /// pays exactly that and nothing else of consequence.
     ///
@@ -467,8 +469,8 @@ impl EphemerisProvider for AnalyticalProvider {
     /// the ~1 AU vector-magnitude scale that governs the addition's rounding.
     /// That fixes the addition's rounding error at `|δ| ≤ ulp(1 AU)/2 ≈
     /// 1.66e-5 m` (0.03 **mm**) — an *absolute* bound that holds everywhere in
-    /// the supported range, ten orders of magnitude inside VSOP87A's own
-    /// 0.164″ mean residual against Horizons. This path removes the two
+    /// the supported range, ten orders of magnitude inside the analytical
+    /// path's own mean residual against Horizons (0.160″ at v9.5.0). This path removes the two
     /// roundings rather than introducing one, so where it differs at all it
     /// is the *more* accurate of the two.
     ///
