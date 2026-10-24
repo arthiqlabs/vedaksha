@@ -5,7 +5,7 @@
 ## Checklist
 
 - [ ] `cargo test --workspace` passes
-- [ ] `cargo clippy --workspace -- -D warnings` is clean
+- [ ] `cargo clippy --workspace --all-targets --all-features -- -D warnings` is clean
 - [ ] `cargo fmt --all -- --check` is clean
 - [ ] New public items carry a `///` doc comment citing a primary source
 - [ ] Tests added, and each one was **watched to fail** against the defect it targets

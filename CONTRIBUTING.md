@@ -24,7 +24,7 @@ Labs LLC. You retain copyright of your original work.
 All contributions must:
 
 1. **Pass all tests:** `cargo test --workspace`
-2. **Pass clippy with zero warnings:** `cargo clippy --workspace -- -D warnings`
+2. **Pass clippy with zero warnings:** `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 3. **Be formatted:** `cargo fmt --all -- --check`
 4. **Include tests** for new functionality
 5. **Include doc comments** on all public items
@@ -91,7 +91,7 @@ Every source file must include:
 2. Create a feature branch: `git checkout -b feature/your-feature`
 3. Make your changes following the requirements above
 4. Run the full test suite: `cargo test --workspace`
-5. Run clippy: `cargo clippy --workspace -- -D warnings`
+5. Run clippy: `cargo clippy --workspace --all-targets --all-features -- -D warnings`
 6. Run format check: `cargo fmt --all -- --check`
 7. Submit a pull request with a clear description of the change
 

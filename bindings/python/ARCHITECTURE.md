@@ -13,7 +13,7 @@ WebAssembly module, and the Python package loads that module with
   `py3-none-any` and depends only on `wasmtime`, whose own wheels cover Linux
   (glibc + musl), macOS, Windows and Android, on x86-64 and arm64.
 - **No logic written twice.** A pure-Python reimplementation would duplicate
-  ~29,000 lines of astronomy and Jyotish code and then have to prove the two
+  tens of thousands of lines of astronomy and Jyotish code and then have to prove the two
   agree forever. Hosting the compiled engine means there is exactly one
   implementation; the binding is a transport.
 - **Bit-identical results.** Because it *is* the engine, the wasm output matches
@@ -65,7 +65,8 @@ commit it was built from; there is no separate pin to drift.
 ## Ephemeris tiers
 
 - **Analytical** (default) — VSOP87A + ELP/MPP02, embedded in the wasm module,
-  no external data. Every tool call works on this tier (< 25″ planets, < 1″ Moon).
+  no external data. Every tool call works on this tier (against JPL Horizons over 1900 to 2025:
+  0.160″ mean and 1.473″ worst case across nine bodies; the Moon 0.094″ mean).
 - **SPK** — sub-arcsecond, requires a DE440s kernel (~32 MB) the caller feeds to
   `load_ephemeris`; the host copies it into wasm memory. Not bundled.
 

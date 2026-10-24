@@ -8,7 +8,8 @@
 //! # What it is for
 //!
 //! One lunar position from the ELP/MPP02 series costs about 40 µs and a planet
-//! from VSOP87A 6 to 20 µs. A polynomial evaluation costs about 50 ns. A
+//! from VSOP87A 2 to 6 µs (measured for Mercury, Earth, Neptune and Jupiter at
+//! v9.5.0: 1.8, 2.9, 3.5 and 6.0 µs). A polynomial evaluation costs about 50 ns. A
 //! workload that asks for many positions close together in time (a scan of
 //! rashi or nakshatra ingresses, a transit search at a fine step, the
 //! bisection that refines an event) pays for each series evaluation again,

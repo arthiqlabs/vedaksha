@@ -6,8 +6,9 @@ The clean-room [Vedaksha](https://vedaksha.net) Vedic-astronomy and Jyotish engi
 runnable from Python with **no Rust toolchain and no per-platform build**. Compute
 **kundali / janam kundali** (natal charts), **panchanga**, **vimshottari and other
 dashas**, **nakshatras**, **vargas** (divisional charts), **shadbala**, **ashtakavarga**,
-**muhurta**, and **transits / gochara** — from a sub-arcsecond ephemeris (VSOP87A,
-ELP/MPP02, JPL DE440s/DE441).
+**muhurta**, and **transits / gochara** — from a sub-arcsecond ephemeris (JPL
+DE440s/DE441, worst case 0.272″ against Horizons) or from the data-file-free VSOP87A and
+ELP/MPP02 series (mean 0.160″, worst case 1.473″ over 1900–2025).
 
 This package is not a reimplementation. It ships the real Rust engine compiled to
 WebAssembly and runs it via [`wasmtime`](https://pypi.org/project/wasmtime/). Every value it
@@ -59,8 +60,10 @@ shadbala = vk.call_tool("compute_shadbala", julian_day=2461338.0,
 
 ### Sub-arcsecond positions (SPK tier)
 
-The tool surface uses the built-in analytical ephemeris (< 25″ planets, < 1″ Moon), which
-needs no data files. For sub-arcsecond accuracy, supply a JPL DE440s kernel:
+The tool surface uses the built-in analytical ephemeris, which needs no data files. Against
+JPL Horizons over 1900 to 2025 it measures 0.160″ mean and 1.473″ worst case across nine bodies
+(the Moon 0.094″ mean, 0.276″ worst case). For the 0.096″ mean and 0.272″ worst case the JPL
+DE440s kernel measures against the same reference, supply that kernel:
 
 ```python
 with open("de440s.bsp", "rb") as f:
