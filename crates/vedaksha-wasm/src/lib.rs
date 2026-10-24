@@ -793,11 +793,30 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
         ChartShadbalaRequest, RAHU_BODY_NAME, shadbala_for_chart,
     };
 
+    // Every refusal below is the MCP `compute_shadbala` tool's, in its words
+    // and in its order (argument shape, the tropical ayanamsha, the Julian
+    // Day, latitude, longitude, elevation, clock offset, the house system,
+    // then the ayanamsha name), so one input is refused alike on both
+    // surfaces; `refuses_what_the_mcp_tool_refuses_in_its_words` holds it.
+    // Through a `Value`, as the MCP server reads its arguments, so a serde
+    // error carries no line and column the other surface has not got.
+    let value: serde_json::Value =
+        serde_json::from_str(input_json).map_err(|e| format!("invalid JSON: {e}"))?;
     let input: ShadbalaInput =
-        serde_json::from_str(input_json).map_err(|e| format!("invalid input: {e}"))?;
+        serde_json::from_value(value).map_err(|e| format!("Invalid parameter 'arguments': {e}"))?;
 
-    // The same bounds the MCP tool's `validate` applies, so one input is
-    // accepted or refused alike on both surfaces.
+    let parsed_ayanamsha = {
+        use core::str::FromStr as _;
+        vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
+    };
+    if matches!(
+        parsed_ayanamsha,
+        Ok(vedaksha_astro::sidereal::Ayanamsha::Tropical)
+    ) {
+        return Err(format!(
+            "Invalid parameter 'ayanamsha': {SHADBALA_TROPICAL_REFUSED}"
+        ));
+    }
     let (jd_min, jd_max) = (dasha::JD_MIN, dasha::JD_MAX);
     if !input.julian_day.is_finite() || !(jd_min..=jd_max).contains(&input.julian_day) {
         return Err(format!(
@@ -806,35 +825,37 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
         ));
     }
     if !input.latitude.is_finite() || !(-90.0..=90.0).contains(&input.latitude) {
-        return Err("latitude must be a finite number in [-90, 90]".to_string());
+        return Err(format!(
+            "Latitude {} is outside valid range [-90, +90]",
+            input.latitude
+        ));
     }
     if !input.longitude.is_finite() || !(-180.0..=180.0).contains(&input.longitude) {
-        return Err("longitude must be a finite number in [-180, 180]".to_string());
+        return Err(format!(
+            "Longitude {} is outside valid range [-180, +180]",
+            input.longitude
+        ));
     }
     if !input.elevation_m.is_finite() || !(-500.0..=9000.0).contains(&input.elevation_m) {
         return Err(
-            "elevation_m must be a finite number of metres above sea level in [-500, 9000]"
+            "Invalid parameter 'elevation_m': must be a finite number of metres above \
+             sea level between -500 (below the Dead Sea shore) and 9000 (above Everest)"
                 .to_string(),
         );
     }
     if !(-720..=840).contains(&input.tz_offset_minutes) {
         return Err(
-            "tz_offset_minutes must be between -720 and 840 (UTC-12:00 to UTC+14:00)".to_string(),
+            "Invalid parameter 'tz_offset_minutes': must be between -720 and 840 \
+             (UTC-12:00 to UTC+14:00)"
+                .to_string(),
         );
     }
-    let ayanamsha = {
-        use core::str::FromStr as _;
-        vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
-            .map_err(|e| e.to_string())?
+    let house_system = match input.house_system.as_deref() {
+        Some(name) => house_system_from_str(name)
+            .map_err(|_| format!("Invalid parameter 'house_system': Unknown: {name}"))?,
+        None => vedaksha_astro::houses::HouseSystem::Placidus,
     };
-    if ayanamsha == vedaksha_astro::sidereal::Ayanamsha::Tropical {
-        return Err(format!(
-            "Invalid parameter 'ayanamsha': {SHADBALA_TROPICAL_REFUSED}"
-        ));
-    }
-    let house_name = input.house_system.as_deref().unwrap_or("Placidus");
-    let house_system = house_system_from_str(house_name)
-        .map_err(|_| format!("Unknown house system: {house_name}"))?;
+    let ayanamsha = parsed_ayanamsha.map_err(|e| format!("Invalid parameter 'ayanamsha': {e}"))?;
 
     // The seven grahas and the mean node (Rahu), cast as `compute_natal_chart`
     // casts them: the chart is the same routine.
@@ -875,7 +896,7 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
         },
         &ShadbalaOptions::default(),
     )
-    .map_err(|e| e.to_string())?;
+    .map_err(|e| format!("Computation failed: {e}"))?;
 
     let output = serde_json::json!({
         "julian_day": input.julian_day,
@@ -1564,6 +1585,72 @@ mod tests {
             assert!(compute_shadbala_inner(INPUT).is_ok());
         }
 
+        /// One input, both surfaces: the same verdict, and for a refusal the
+        /// same words. Several inputs are wrong twice over, so the order of
+        /// the checks is held as well as each message.
+        #[test]
+        fn refuses_what_the_mcp_tool_refuses_in_its_words() {
+            let server = vedaksha_mcp::server::McpServer::new();
+            let with = |pairs: &[(&str, serde_json::Value)]| {
+                let mut a: serde_json::Value = serde_json::from_str(INPUT).unwrap();
+                for (k, v) in pairs {
+                    if v.is_null() {
+                        a.as_object_mut().unwrap().remove(*k);
+                    } else {
+                        a[*k] = v.clone();
+                    }
+                }
+                a
+            };
+            let cases: Vec<serde_json::Value> = vec![
+                with(&[]),
+                with(&[("ayanamsha", "Tropical".into()), ("latitude", 95.0.into())]),
+                with(&[("ayanamsha", "Nonsense".into()), ("latitude", 95.0.into())]),
+                with(&[("ayanamsha", "Nonsense".into())]),
+                with(&[
+                    ("ayanamsha", "Nonsense".into()),
+                    ("house_system", "X".into()),
+                ]),
+                with(&[("house_system", "X".into())]),
+                with(&[("house_system", "whole_sign".into())]),
+                with(&[("latitude", 95.0.into()), ("longitude", 200.0.into())]),
+                with(&[("longitude", 200.0.into())]),
+                with(&[("julian_day", 1.0.into()), ("latitude", 95.0.into())]),
+                with(&[("elevation_m", 9001.0.into())]),
+                with(&[
+                    ("elevation_m", 9001.0.into()),
+                    ("tz_offset_minutes", 900.into()),
+                ]),
+                with(&[("tz_offset_minutes", 900.into())]),
+                with(&[("latitude", 89.9.into())]),
+                with(&[("latitude", serde_json::Value::Null)]),
+                with(&[("planets", serde_json::json!([]))]),
+                with(&[("latitude", "north".into())]),
+            ];
+            let mut refusals = 0;
+            for a in cases {
+                let wasm = compute_shadbala_inner(&a.to_string());
+                let request = serde_json::json!({
+                    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": { "name": "compute_shadbala", "arguments": a }
+                });
+                let response: serde_json::Value =
+                    serde_json::from_str(&server.handle_request(&request.to_string())).unwrap();
+                match wasm {
+                    Ok(_) => assert!(response["error"].is_null(), "{a}: MCP refused {response}"),
+                    Err(e) => {
+                        refusals += 1;
+                        assert_eq!(
+                            response["error"]["message"].as_str(),
+                            Some(e.as_str()),
+                            "{a}: the surfaces refuse differently"
+                        );
+                    }
+                }
+            }
+            assert!(refusals >= 14, "only {refusals} refusals exercised");
+        }
+
         #[test]
         fn compute_shadbala_accepts_the_julian_days_the_mcp_tool_accepts() {
             // The analytical provider spans far wider than the tool's range,
@@ -1608,8 +1695,8 @@ mod tests {
                 a[k] = v;
                 compute_shadbala_inner(&a.to_string()).unwrap_err()
             };
-            assert!(with("latitude", 95.0.into()).contains("latitude"));
-            assert!(with("longitude", 181.0.into()).contains("longitude"));
+            assert!(with("latitude", 95.0.into()).contains("Latitude"));
+            assert!(with("longitude", 181.0.into()).contains("Longitude"));
             assert!(with("elevation_m", 1e9.into()).contains("elevation_m"));
             assert!(with("tz_offset_minutes", 900.into()).contains("tz_offset_minutes"));
             assert!(with("julian_day", 1.0.into()).contains("Julian Day"));
