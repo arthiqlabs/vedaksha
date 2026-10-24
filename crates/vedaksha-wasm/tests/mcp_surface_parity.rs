@@ -841,69 +841,118 @@ fn compute_karakas_surfaces_agree_on_the_eight_graha_scheme() {
     }
 }
 
-/// Shadbala, with both optional flags set and non-zero aspect counts so the
-/// kala and drik components are live rather than sitting on their defaults.
+/// Shadbala, complete form, for a moment and place. The arguments are the MCP
+/// tool's, key for key, so the same object goes to both surfaces.
 ///
-/// Derivation of the asserted figures — the two that are fixed constants and
-/// the two that are structural identities:
+/// Two calls. The first leaves every optional argument at its default. The
+/// second sets all three (`house_system`, `elevation_m`, `tz_offset_minutes`)
+/// to values that are not the defaults and that each move a different part of
+/// the payload (the cusps, the sunrise and the Hindu day label), in the
+/// southern hemisphere, so an argument dropped on one surface changes the
+/// payload instead of landing on the same default.
+///
+/// Derivation of the asserted figures, which are the constants and identities
+/// of the rules and are checked for every graha in the payload:
 ///   `naisargika_bala` is a per-graha constant: Sun 60.0, Saturn 8.57.
-///   `total` is defined as naisargika + dig + sthana + kala + cheshta + drik,
-///     so it must equal the sum of the six emitted components exactly.
-///   `uccha_bala` is the same value as `sthana_bala`.
-/// Those hold for every graha in the payload, so they are checked for all
-/// three rather than for a chosen one. Output order follows input order.
+///   `total` is defined as sthana + dig + kala + cheshta + naisargika + drik,
+///     and `sthana.total` and `kala.total` as the sum of their parts.
+///   `ishta_phala` + `kashta_phala` is 60 (BPHS 28.6).
+///   `dig_bala` runs from 0 to 60 (an arc over 3, folded to 180 degrees).
+///   The Hindu day is bracketed by the sunrise and the next sunrise, with the
+///   sunset between them.
+/// Output order is Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn.
 #[test]
 fn compute_shadbala_surfaces_agree() {
-    let args = serde_json::json!({
-        "planets": [
-            { "planet": "Sun", "sign": 2, "longitude": 60.6, "bhava": 10,
-              "speed": 0.9556, "average_speed": 0.9856,
-              "benefic_aspect_count": 1, "malefic_aspect_count": 2 },
-            { "planet": "Moon", "sign": 5, "longitude": 165.0, "bhava": 12,
-              "speed": 13.2, "average_speed": 13.176,
-              "benefic_aspect_count": 2, "malefic_aspect_count": 0 },
-            { "planet": "Saturn", "sign": 7, "longitude": 225.0, "bhava": 4,
-              "speed": -0.05, "average_speed": 0.033,
-              "benefic_aspect_count": 0, "malefic_aspect_count": 1 }
-        ],
-        "is_daytime": true,
-        "moon_phase_waxing": true
-    });
-    let out = vedaksha_wasm::compute_shadbala(&args.to_string()).expect("valid input");
-    compare("shadbala", "compute_shadbala", args, &out);
+    let calls = [
+        (
+            "chennai-defaults",
+            serde_json::json!({
+                "julian_day": 2_461_338.0, "latitude": 13.08, "longitude": 80.27,
+                "ayanamsha": "IndianOfficial"
+            }),
+        ),
+        (
+            "sydney-every-option",
+            serde_json::json!({
+                "julian_day": 2_461_338.25, "latitude": -33.87, "longitude": 151.21,
+                "ayanamsha": "Lahiri", "house_system": "WholeSign",
+                "elevation_m": 500.0, "tz_offset_minutes": 660
+            }),
+        ),
+    ];
+    for (label, args) in calls {
+        let out = vedaksha_wasm::compute_shadbala(&args.to_string()).expect("valid input");
+        compare(label, "compute_shadbala", args.clone(), &out);
 
-    let v: Value = serde_json::from_str(&out).unwrap();
-    let arr = v.as_array().expect("array");
-    assert_eq!(arr.len(), 3, "one row per supplied graha, got {v}");
-    assert_eq!(arr[0]["planet"], "Sun");
-    assert_eq!(arr[1]["planet"], "Moon");
-    assert_eq!(arr[2]["planet"], "Saturn");
-    assert!((arr[0]["naisargika_bala"].as_f64().unwrap() - 60.0).abs() < 1e-9);
-    assert!((arr[2]["naisargika_bala"].as_f64().unwrap() - 8.57).abs() < 1e-9);
-    for row in arr {
-        let f = |k: &str| row[k].as_f64().unwrap();
-        let six = f("sthana_bala")
-            + f("dig_bala")
-            + f("kala_bala")
-            + f("cheshta_bala")
-            + f("naisargika_bala")
-            + f("drik_bala");
-        assert!(
-            (f("total") - six).abs() < 1e-9,
-            "total must be the sum of the six components: {row}"
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let arr = v["planets"].as_array().expect("planets array");
+        let names: Vec<&str> = arr.iter().map(|r| r["planet"].as_str().unwrap()).collect();
+        assert_eq!(
+            names,
+            [
+                "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"
+            ],
+            "[{label}]"
         );
-        // Uchcha Bala is one of four sub-components of Sthana Bala, not a
-        // second name for it. Through v7.1.1 the two carried the same number
-        // and this assertion read `uccha_bala == sthana_bala`.
-        let sthana_parts =
-            f("uccha_bala") + f("ojhayugma_bala") + f("kendradi_bala") + f("drekkana_bala");
-        assert!(
-            (f("sthana_bala") - sthana_parts).abs() < 1e-9,
-            "sthana_bala must be the sum of its four sub-components: {row}"
+        assert!((arr[0]["naisargika_bala"].as_f64().unwrap() - 60.0).abs() < 1e-9);
+        assert!((arr[6]["naisargika_bala"].as_f64().unwrap() - 8.57).abs() < 1e-9);
+        for row in arr {
+            let f = |v: &Value| v.as_f64().unwrap();
+            let sum = |obj: &Value, keys: &[&str]| keys.iter().map(|k| f(&obj[*k])).sum::<f64>();
+            let sthana = sum(
+                &row["sthana"],
+                &["uccha", "saptavargaja", "ojhayugma", "kendradi", "drekkana"],
+            );
+            assert!(
+                (f(&row["sthana"]["total"]) - sthana).abs() < 1e-9,
+                "[{label}] {row}"
+            );
+            let kala = sum(
+                &row["kala"],
+                &[
+                    "nathonnata",
+                    "paksha",
+                    "tribhaga",
+                    "abda",
+                    "masa",
+                    "vara",
+                    "hora",
+                    "ayana",
+                    "yuddha",
+                ],
+            );
+            assert!(
+                (f(&row["kala"]["total"]) - kala).abs() < 1e-9,
+                "[{label}] {row}"
+            );
+            let six = sthana
+                + f(&row["dig_bala"])
+                + kala
+                + f(&row["cheshta_bala"])
+                + f(&row["naisargika_bala"])
+                + f(&row["drik_bala"]);
+            assert!(
+                (f(&row["total"]) - six).abs() < 1e-9,
+                "[{label}] total must be the sum of the six: {row}"
+            );
+            assert!(
+                (f(&row["ishta_phala"]) + f(&row["kashta_phala"]) - 60.0).abs() < 1e-9,
+                "[{label}] {row}"
+            );
+            assert!(
+                (0.0..=60.0).contains(&f(&row["dig_bala"])),
+                "[{label}] {row}"
+            );
+        }
+        let m = &v["moment"];
+        let (rise, set, next) = (
+            m["jd_sunrise"].as_f64().unwrap(),
+            m["jd_sunset"].as_f64().unwrap(),
+            m["jd_next_sunrise"].as_f64().unwrap(),
         );
         assert!(
-            f("uccha_bala") < f("sthana_bala"),
-            "uccha_bala must be a proper part of sthana_bala: {row}"
+            rise <= m["jd"].as_f64().unwrap() && rise < set && set < next,
+            "[{label}] {m}"
         );
     }
 }
