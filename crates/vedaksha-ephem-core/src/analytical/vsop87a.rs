@@ -680,9 +680,9 @@ mod tests {
                 let want = reference_position(planet, jd, true);
                 let old = reference_position(planet, jd, false);
                 let (got, _) = vsop87a_heliocentric(planet, jd);
-                for c in 0..3 {
-                    planet_new = planet_new.max((got[c] - want[c]).abs() * au_m);
-                    planet_old = planet_old.max((old[c] - want[c]).abs() * au_m);
+                for ((g, w), o) in got.iter().zip(&want).zip(&old) {
+                    planet_new = planet_new.max((g - w).abs() * au_m);
+                    planet_old = planet_old.max((o - w).abs() * au_m);
                 }
             }
             println!(

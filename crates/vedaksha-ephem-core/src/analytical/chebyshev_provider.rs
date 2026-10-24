@@ -646,7 +646,7 @@ mod tests {
             for t in 0..4 {
                 let (shared, jds, single) = (&shared, &jds, &single);
                 scope.spawn(move || {
-                    for k in (0..jds.len()).rev().skip(t).step_by(1) {
+                    for k in (0..jds.len()).rev().skip(t) {
                         let s = shared.compute_state(Body::Moon, jds[k]).unwrap().position;
                         assert_eq!([s.x.to_bits(), s.y.to_bits(), s.z.to_bits()], single[k]);
                     }
@@ -655,7 +655,7 @@ mod tests {
         });
     }
 
-    /// The first and last instants of the range, where the segment is clipped.
+    /// The first and last instants of the range, where a segment overhangs it.
     #[test]
     fn the_range_edges_are_served_and_beyond_them_is_refused() {
         let exact = AnalyticalProvider::new();

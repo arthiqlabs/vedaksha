@@ -207,17 +207,11 @@ fn clenshaw<const C: usize>(a: &[[f64; C]], x: f64) -> [f64; C] {
     let mut b1 = [0.0_f64; C];
     let mut b2 = [0.0_f64; C];
     for coeff in a.iter().skip(1).rev() {
-        for c in 0..C {
-            let b0 = coeff[c] + 2.0 * x * b1[c] - b2[c];
-            b2[c] = b1[c];
-            b1[c] = b0;
-        }
+        let b0: [f64; C] = core::array::from_fn(|c| coeff[c] + 2.0 * x * b1[c] - b2[c]);
+        b2 = b1;
+        b1 = b0;
     }
-    let mut out = [0.0_f64; C];
-    for c in 0..C {
-        out[c] = a[0][c] + x * b1[c] - b2[c];
-    }
-    out
+    core::array::from_fn(|c| a[0][c] + x * b1[c] - b2[c])
 }
 
 /// Chebyshev coefficients of the derivative with respect to `x`, in the same
@@ -228,13 +222,13 @@ fn derivative_coefficients<const C: usize>(a: &[[f64; C]]) -> Vec<[f64; C]> {
     // three-term recurrence is uniform, then halve it back.
     let mut d = vec![[0.0_f64; C]; n + 1];
     for j in (1..n).rev() {
-        for c in 0..C {
-            d[j - 1][c] = d[j + 1][c] + 2.0 * (j as f64) * a[j][c];
-        }
+        let jf = j as f64;
+        let above = d[j + 1];
+        d[j - 1] = core::array::from_fn(|c| above[c] + 2.0 * jf * a[j][c]);
     }
     d.truncate(n.max(2) - 1);
-    for c in 0..C {
-        d[0][c] *= 0.5;
+    for v in &mut d[0] {
+        *v *= 0.5;
     }
     d
 }
