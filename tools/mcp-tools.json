@@ -591,6 +591,11 @@
           },
           {
             "description": "Twelve periods of 7, 8 or 9 years in trikona groups from the stronger of the lagna and the seventh, each with twelve antardashas.",
+            "not": {
+              "required": [
+                "no_brahma"
+              ]
+            },
             "properties": {
               "anchor_sign": {
                 "type": "integer"

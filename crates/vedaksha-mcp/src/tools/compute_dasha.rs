@@ -540,7 +540,10 @@ pub fn definition() -> super::ToolDefinition {
                         "direction": { "type": "string" },
                         "periods": { "type": "array", "items": { "type": "object" } }
                     },
-                    "required": ["anchor_sign", "direction", "periods"]
+                    "required": ["anchor_sign", "direction", "periods"],
+                    // Sthira's envelope carries the same three keys plus
+                    // `no_brahma`; this is what keeps `oneOf` to one match.
+                    "not": { "required": ["no_brahma"] }
                 },
                 {
                     "title": "Maheshwara",

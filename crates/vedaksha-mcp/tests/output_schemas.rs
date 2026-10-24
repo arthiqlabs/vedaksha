@@ -13,9 +13,10 @@
 //!
 //! The validator below covers the JSON Schema subset these schemas use:
 //! `type` (one name, or a list such as `["integer", "null"]`), `properties`,
-//! `required`, `items` and `oneOf` (read as "at least one variant conforms",
-//! which is all the envelope of `compute_dasha` needs). It is deliberately
-//! small, and [`validator_rejects_what_it_should`] plants six defects to prove
+//! `required`, `items`, `not` and `oneOf` (exactly one variant conforms, as
+//! JSON Schema defines it: a strict client rejects a response two variants
+//! accept). It is deliberately
+//! small, and [`validator_rejects_what_it_should`] plants eight defects to prove
 //! it can fail — a validator that returns "valid" for everything would make
 //! every assertion here meaningless. Before `oneOf` and type lists were read,
 //! the five-variant envelope of `compute_dasha` was checked against nothing.
@@ -66,8 +67,27 @@ fn violation(value: &Value, schema: &Value, path: &str) -> Option<String> {
     }
 
     if let Some(variants) = schema.get("oneOf").and_then(Value::as_array) {
-        if !variants.iter().any(|v| violation(value, v, path).is_none()) {
-            return Some(format!("{path}: conforms to none of the oneOf variants"));
+        let matching: Vec<&str> = variants
+            .iter()
+            .filter(|v| violation(value, v, path).is_none())
+            .map(|v| v.get("title").and_then(Value::as_str).unwrap_or("untitled"))
+            .collect();
+        match matching.len() {
+            0 => return Some(format!("{path}: conforms to none of the oneOf variants")),
+            1 => {}
+            _ => {
+                return Some(format!(
+                    "{path}: conforms to {} oneOf variants ({}), and oneOf allows exactly one",
+                    matching.len(),
+                    matching.join(", ")
+                ));
+            }
+        }
+    }
+
+    if let Some(negated) = schema.get("not") {
+        if violation(value, negated, path).is_none() {
+            return Some(format!("{path}: conforms to the schema under `not`"));
         }
     }
 
@@ -372,6 +392,7 @@ fn validator_rejects_what_it_should() {
         "required": ["count", "items"]
     });
     let nullable = json!({ "type": ["integer", "null"] });
+    let excluding = json!({ "type": "object", "not": { "required": ["a"] } });
     let variants = json!({
         "oneOf": [
             { "type": "object", "required": ["a"] },
@@ -391,6 +412,7 @@ fn validator_rejects_what_it_should() {
     assert_eq!(violation(&json!(null), &nullable, "$"), None);
     assert_eq!(violation(&json!(3), &nullable, "$"), None);
     assert_eq!(violation(&json!({ "b": 1 }), &variants, "$"), None);
+    assert_eq!(violation(&json!({ "b": 1 }), &excluding, "$"), None);
 
     for (bad, against, expected) in [
         (
@@ -415,6 +437,8 @@ fn validator_rejects_what_it_should() {
         ),
         (json!("three"), &nullable, "expected one of"),
         (json!({ "c": 1 }), &variants, "none of the oneOf variants"),
+        (json!({ "a": 1, "b": 1 }), &variants, "allows exactly one"),
+        (json!({ "a": 1 }), &excluding, "under `not`"),
     ] {
         let found = violation(&bad, against, "$").expect("planted defect must be caught");
         assert!(
