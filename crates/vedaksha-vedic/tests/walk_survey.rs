@@ -7,21 +7,6 @@
 //! scans of this crate and of `vedaksha-astro`, and what it would do to their
 //! answers.
 //!
-//! # Why a stand-in walk
-//!
-//! Every callback these scans take is `&(dyn Fn(..) + Sync)`. `BodyWalk` is
-//! neither `Send` nor `Sync` (it holds a `&dyn EphemerisProvider`, which has no
-//! `Sync` bound, and a `OnceCell`), so a closure over it is refused:
-//! `OnceCell<Option<Chebyshev<3>>> cannot be shared between threads safely`.
-//! [`syncwalk::SyncWalk`] below is `BodyWalk` with exactly two edits, the
-//! provider typed `&dyn EphemerisProvider + Sync` and `OnceLock` for `OnceCell`;
-//! `the_stand_in_is_the_real_walk_bit_for_bit` asserts that it answers with the
-//! same bits. With that, a walk-backed callback is a plain `Sync` closure and
-//! the survey can drive the real scans, threaded ones included.
-//!
-//! When `BodyWalk` itself is made `Sync`, delete [`syncwalk`] and import the
-//! real one: nothing else here changes.
-//!
 //! # What it measures
 //!
 //! Reads (invocations of the callback), provider calls (`compute_state`,
@@ -67,137 +52,14 @@ use vedaksha_vedic::muhurta::{
     compute_yoga_end, search_muhurta,
 };
 
-use syncwalk::{SyncWalk, WalkSpec};
+use vedaksha_ephem_core::walk::{BodyWalk, WalkSpec};
 
+/// Nodes per segment of every walk the survey builds.
+const NODES: usize = 12;
 const AYAN: Ayanamsha = Ayanamsha::IndianOfficial;
 /// New Delhi, the observer the other khagola tests use.
 const LAT: f64 = 28.6139;
 const LON: f64 = 77.2090;
-
-// ── a Sync BodyWalk ─────────────────────────────────────────────
-
-/// `vedaksha_ephem_core::walk::BodyWalk` with two edits: the provider is
-/// `&dyn EphemerisProvider + Sync` and the segments are `OnceLock`s. Those two
-/// make it `Send + Sync`. Everything else is a verbatim copy, comments aside.
-mod syncwalk {
-    use core::f64::consts::{PI, TAU};
-    use std::sync::OnceLock;
-
-    use vedaksha_ephem_core::bodies::Body;
-    use vedaksha_ephem_core::chebyshev::Chebyshev;
-    use vedaksha_ephem_core::coordinates::{EclipticCoords, ecliptic_position_tt};
-    use vedaksha_ephem_core::delta_t::ut1_to_tt;
-    use vedaksha_ephem_core::jpl::EphemerisProvider;
-    pub use vedaksha_ephem_core::walk::WalkSpec;
-
-    const GRID_ORIGIN_JD: f64 = 2_451_545.0;
-
-    type Segment = Chebyshev<3>;
-
-    pub struct SyncWalk<'p> {
-        provider: &'p (dyn EphemerisProvider + Sync),
-        body: Body,
-        spec: WalkSpec,
-        start: f64,
-        end: f64,
-        first_index: i64,
-        segments: Vec<OnceLock<Option<Segment>>>,
-    }
-
-    impl<'p> SyncWalk<'p> {
-        pub fn moon(
-            provider: &'p (dyn EphemerisProvider + Sync),
-            jd_ut_start: f64,
-            jd_ut_end: f64,
-        ) -> Self {
-            Self::with_spec(provider, Body::Moon, jd_ut_start, jd_ut_end, WalkSpec::MOON)
-        }
-
-        pub fn with_spec(
-            provider: &'p (dyn EphemerisProvider + Sync),
-            body: Body,
-            jd_ut_start: f64,
-            jd_ut_end: f64,
-            spec: WalkSpec,
-        ) -> Self {
-            assert!(jd_ut_end >= jd_ut_start, "a walk needs end >= start");
-            assert!(spec.days > 0.0 && spec.nodes >= 2, "invalid walk spec");
-            let first_index = index_of(ut1_to_tt(jd_ut_start), spec.days);
-            let last_index = index_of(ut1_to_tt(jd_ut_end), spec.days);
-            let count = (last_index - first_index + 1) as usize;
-            Self {
-                provider,
-                body,
-                spec,
-                start: jd_ut_start,
-                end: jd_ut_end,
-                first_index,
-                segments: (0..count).map(|_| OnceLock::new()).collect(),
-            }
-        }
-
-        pub fn segments_fitted(&self) -> usize {
-            self.segments.iter().filter(|c| c.get().is_some()).count()
-        }
-
-        pub fn nodes(&self) -> usize {
-            self.spec.nodes
-        }
-
-        fn segment(&self, jd_ut: f64, jd_tt: f64) -> Option<&Segment> {
-            if !(jd_ut >= self.start && jd_ut <= self.end) {
-                return None;
-            }
-            let index = index_of(jd_tt, self.spec.days);
-            let cell = self.segments.get((index - self.first_index) as usize)?;
-            cell.get_or_init(|| self.fit(index)).as_ref()
-        }
-
-        fn fit(&self, index: i64) -> Option<Segment> {
-            let lo = GRID_ORIGIN_JD + index as f64 * self.spec.days;
-            let hi = GRID_ORIGIN_JD + (index + 1) as f64 * self.spec.days;
-            let mut previous: Option<f64> = None;
-            let sample = |jd: f64| -> Result<[f64; 3], ()> {
-                let c = ecliptic_position_tt(self.provider, self.body, jd).map_err(|_| ())?;
-                let longitude = match previous {
-                    None => c.longitude,
-                    Some(p) => p + wrap_signed(c.longitude - p),
-                };
-                previous = Some(longitude);
-                Ok([longitude, c.latitude, c.distance])
-            };
-            Segment::try_fit(lo, hi, self.spec.nodes, sample).ok()
-        }
-
-        pub fn ecliptic(&self, jd_ut: f64) -> Option<EclipticCoords> {
-            let jd_tt = ut1_to_tt(jd_ut);
-            let [longitude, latitude, distance] = self.segment(jd_ut, jd_tt)?.value(jd_tt);
-            Some(EclipticCoords {
-                longitude: longitude.rem_euclid(TAU),
-                latitude,
-                distance,
-            })
-        }
-
-        pub fn longitude_speed(&self, jd_ut: f64) -> Option<f64> {
-            let jd_tt = ut1_to_tt(jd_ut);
-            let rate = self.segment(jd_ut, jd_tt)?.derivative(jd_tt)[0];
-            Some(rate * 180.0 / PI)
-        }
-    }
-
-    fn index_of(jd: f64, days: f64) -> i64 {
-        ((jd - GRID_ORIGIN_JD) / days).floor() as i64
-    }
-
-    fn wrap_signed(x: f64) -> f64 {
-        let mut y = x.rem_euclid(TAU);
-        if y > PI {
-            y -= TAU;
-        }
-        y
-    }
-}
 
 // ── a counting provider ─────────────────────────────────────────
 
@@ -278,9 +140,9 @@ impl Calls {
 
 /// Walks for the bodies a scan reads, over one span.
 struct Walked {
-    moon: SyncWalk<'static>,
-    sun: SyncWalk<'static>,
-    planets: Vec<(Body, SyncWalk<'static>)>,
+    moon: BodyWalk<'static>,
+    sun: BodyWalk<'static>,
+    planets: Vec<(Body, BodyWalk<'static>)>,
     fallbacks: AtomicU64,
 }
 
@@ -288,20 +150,20 @@ impl Walked {
     fn new(start: f64, end: f64, planets: &[Body]) -> Self {
         let slow = WalkSpec {
             days: 8.0,
-            nodes: 12,
+            nodes: NODES,
         };
         Self {
-            moon: SyncWalk::moon(&PROVIDER, start, end),
-            sun: SyncWalk::with_spec(&PROVIDER, Body::Sun, start, end, slow),
+            moon: BodyWalk::moon(&PROVIDER, start, end),
+            sun: BodyWalk::with_spec(&PROVIDER, Body::Sun, start, end, slow),
             planets: planets
                 .iter()
-                .map(|&b| (b, SyncWalk::with_spec(&PROVIDER, b, start, end, slow)))
+                .map(|&b| (b, BodyWalk::with_spec(&PROVIDER, b, start, end, slow)))
                 .collect(),
             fallbacks: AtomicU64::new(0),
         }
     }
 
-    fn walk(&self, body: Body) -> Option<&SyncWalk<'static>> {
+    fn walk(&self, body: Body) -> Option<&BodyWalk<'static>> {
         match body {
             Body::Moon => Some(&self.moon),
             Body::Sun => Some(&self.sun),
@@ -335,11 +197,11 @@ impl Walked {
 
     fn segments(&self) -> (usize, usize) {
         let mut segs = self.moon.segments_fitted() + self.sun.segments_fitted();
-        let mut fitted_nodes = self.moon.segments_fitted() * self.moon.nodes()
-            + self.sun.segments_fitted() * self.sun.nodes();
+        let mut fitted_nodes =
+            self.moon.segments_fitted() * NODES + self.sun.segments_fitted() * NODES;
         for (_, w) in &self.planets {
             segs += w.segments_fitted();
-            fitted_nodes += w.segments_fitted() * w.nodes();
+            fitted_nodes += w.segments_fitted() * NODES;
         }
         (segs, fitted_nodes)
     }
@@ -659,6 +521,7 @@ fn survey_raw(
     let before = Calls::now();
     let a = scan(&direct);
     let calls_direct = Calls::now().since(before);
+    dump(name, &a);
 
     let walk = Src::walk(start, end, planets);
     let before = Calls::now();
@@ -683,11 +546,31 @@ fn survey_raw(
     (row, a, b)
 }
 
+/// Append a scan's direct-path answers to the file named by `WALK_SURVEY_DUMP`,
+/// one line per scan, so two builds of the library can be compared answer by
+/// answer (see `walk_survey_compare`).
+fn dump(name: &str, values: &[f64]) {
+    use std::io::Write as _;
+    let Ok(path) = std::env::var("WALK_SURVEY_DUMP") else {
+        return;
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .expect("dump file");
+    let bits: Vec<String> = values
+        .iter()
+        .map(|v| format!("{:x}", v.to_bits()))
+        .collect();
+    writeln!(file, "{name}\t{}", bits.join(" ")).expect("write");
+}
+
 fn flat(options: impl IntoIterator<Item = Option<f64>>) -> Vec<f64> {
     options.into_iter().flatten().collect()
 }
 
-// ── the stand-in is the real walk ───────────────────────────────
+// ── helpers ─────────────────────────────────────────────────────
 
 fn instants(seed: u64, count: usize, lo: f64, hi: f64) -> Vec<f64> {
     let mut state = seed;
@@ -699,47 +582,6 @@ fn instants(seed: u64, count: usize, lo: f64, hi: f64) -> Vec<f64> {
             lo + (state >> 11) as f64 / (1_u64 << 53) as f64 * (hi - lo)
         })
         .collect()
-}
-
-/// `SyncWalk` is `BodyWalk` with two type edits, so it must answer with the same
-/// bits. If this fails the survey below measures a different walk.
-#[test]
-fn the_stand_in_is_the_real_walk_bit_for_bit() {
-    use vedaksha_ephem_core::walk::BodyWalk;
-
-    let provider = AnalyticalProvider::new();
-    let (lo, hi) = (2_455_000.0, 2_465_000.0);
-    let real = BodyWalk::moon(&provider, lo, hi);
-    let stand_in = SyncWalk::moon(&PROVIDER, lo, hi);
-    let spec = WalkSpec {
-        days: 8.0,
-        nodes: 12,
-    };
-    let real_sun = BodyWalk::with_spec(&provider, Body::Sun, lo, hi, spec);
-    let stand_in_sun = SyncWalk::with_spec(&PROVIDER, Body::Sun, lo, hi, spec);
-    for t in instants(0x5EED, 300, lo, hi) {
-        let (a, b) = (real.ecliptic(t).unwrap(), stand_in.ecliptic(t).unwrap());
-        assert_eq!(a.longitude.to_bits(), b.longitude.to_bits(), "moon lon {t}");
-        assert_eq!(a.latitude.to_bits(), b.latitude.to_bits(), "moon lat {t}");
-        assert_eq!(a.distance.to_bits(), b.distance.to_bits(), "moon dist {t}");
-        assert_eq!(
-            real.longitude_speed(t).unwrap().to_bits(),
-            stand_in.longitude_speed(t).unwrap().to_bits(),
-            "moon speed {t}"
-        );
-        let (a, b) = (
-            real_sun.ecliptic(t).unwrap(),
-            stand_in_sun.ecliptic(t).unwrap(),
-        );
-        assert_eq!(a.longitude.to_bits(), b.longitude.to_bits(), "sun lon {t}");
-    }
-}
-
-/// The stand-in can be shared between threads; that is its whole point.
-#[test]
-fn the_stand_in_is_send_and_sync() {
-    fn both<T: Send + Sync>() {}
-    both::<SyncWalk<'static>>();
 }
 
 // ── the scans ───────────────────────────────────────────────────
@@ -810,7 +652,7 @@ fn planet_spec_sweep() {
     ] {
         let mut line = format!("    {body:?}:");
         for (days, nodes) in [(8.0, 12), (4.0, 12), (2.0, 12), (4.0, 16), (2.0, 16)] {
-            let w = SyncWalk::with_spec(&PROVIDER, body, lo, hi, WalkSpec { days, nodes });
+            let w = BodyWalk::with_spec(&PROVIDER, body, lo, hi, WalkSpec { days, nodes });
             let mut worst = 0.0_f64;
             for t in instants(0xAB5 ^ body as u64, 300, lo, hi) {
                 let want = ecliptic_position(&PROVIDER, body, t).unwrap().longitude;
@@ -1025,6 +867,10 @@ fn walk_survey() {
                 .flat_map(|s| [s.start_jd, s.end_jd])
                 .collect()
         };
+        dump(
+            "lunar_month_span, Amanta, every 4th day for a year",
+            &times(&a),
+        );
         // Spans repeat across the calls that fall in one lunation; compare per call.
         let mut worst = 0.0_f64;
         let mut masa_differs = 0;
@@ -1452,6 +1298,10 @@ fn transit_survey(y0: f64) {
         let mut diff = compare_times(
             &a.iter().map(|e| e.exact_jd).collect::<Vec<_>>(),
             &b.iter().map(|e| e.exact_jd).collect::<Vec<_>>(),
+        );
+        dump(
+            &format!("search_transits, {label}"),
+            &a.iter().map(|e| e.exact_jd).collect::<Vec<_>>(),
         );
         // The pairing above is by time alone; pair by (body, natal, aspect) too.
         let mut keyed_worst = 0.0_f64;
