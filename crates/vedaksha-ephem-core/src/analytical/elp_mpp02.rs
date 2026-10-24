@@ -266,6 +266,45 @@ pub fn elp_geocentric_distance(jd: f64) -> f64 {
     (r_main + r_pert) * RA0
 }
 
+/// Mean longitude `W₁` of the Moon, referred to the mean ecliptic and equinox
+/// of **date** (LLR fit), with its rate: `(longitude_deg, rate_deg_per_day)`.
+///
+/// This is the secular polynomial the longitude series is built on — the
+/// constant `W₁` of elpmpp02.pdf Table 1 plus its per-fit corrections, with no
+/// periodic term — moved to the equinox of date by the same precession
+/// polynomial [`elp_geocentric_of_date`] adds to `V`. It is therefore the mean
+/// that the true longitude from [`elp_geocentric_position_of_date`] oscillates
+/// about, and the two are in one frame by construction.
+///
+/// The longitude is normalised to `[0, 360)`; the rate is the analytic
+/// derivative of the same polynomial, in degrees per day.
+///
+/// It exists so a consumer that needs the Moon's mean longitude (the Jyotish
+/// mean-motion table) reads the value this theory already carries instead of
+/// restating a second set of lunar constants.
+#[must_use]
+pub fn mean_longitude_of_date(jd: f64) -> (f64, f64) {
+    let args = args_for(Fit::Llr);
+    let tau = (jd - J2000) / DAYS_PER_CENTURY;
+
+    let prec = (P_PA_LIN + P_PA_DELTA) * tau
+        + P_PA_QUAD * tau * tau
+        + P_PA_CUBE * tau * tau * tau
+        + P_PA_QUART * tau * tau * tau * tau;
+    let prec_dot = (P_PA_LIN + P_PA_DELTA)
+        + 2.0 * P_PA_QUAD * tau
+        + 3.0 * P_PA_CUBE * tau * tau
+        + 4.0 * P_PA_QUART * tau * tau * tau;
+
+    let lon_rad = eval_poly(&args.w1, tau) + prec;
+    let rate_rad_per_cy = eval_poly_dot(&args.w1, tau) + prec_dot;
+
+    (
+        lon_rad.to_degrees().rem_euclid(360.0),
+        rate_rad_per_cy.to_degrees() / DAYS_PER_CENTURY,
+    )
+}
+
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const J2000: f64 = 2_451_545.0;
@@ -1865,6 +1904,73 @@ mod tests {
             (50_000.0..=150_000.0).contains(&v),
             "|v| = {v:.3} km/day out of expected range"
         );
+    }
+
+    /// Wrap a longitude difference into `(-180, 180]`.
+    fn wrap180(d: f64) -> f64 {
+        let r = d.rem_euclid(360.0);
+        if r > 180.0 { r - 360.0 } else { r }
+    }
+
+    #[test]
+    fn mean_longitude_of_date_at_j2000_is_w1_and_its_rate() {
+        // At tau = 0 the precession shift vanishes, so the value is W1's
+        // constant: 218 deg 18' (59.95571 - 0.10525)" for the LLR fit.
+        let (lon, rate) = mean_longitude_of_date(J2000);
+        let expected = 218.0 + 18.0 / 60.0 + (59.95571 - 0.10525) / 3600.0;
+        assert!((lon - expected).abs() < 1e-9, "{lon} != {expected}");
+        // Rate: (1_732_559_343.73604 - 0.32311 + 5029.0966 - 0.29965) arcsec
+        // per century, over 36525 days.
+        let expected_rate =
+            (1_732_559_343.73604 - 0.32311 + 5029.0966 - 0.29965) / 3600.0 / DAYS_PER_CENTURY;
+        assert!(
+            (rate - expected_rate).abs() < 1e-9,
+            "{rate} != {expected_rate}"
+        );
+        // And it is the Moon's familiar 13.176 deg/day.
+        assert!((rate - 13.1764).abs() < 1e-4);
+    }
+
+    #[test]
+    fn mean_longitude_of_date_rate_is_the_derivative_of_the_longitude() {
+        for jd in [2_415_020.5, 2_440_000.5, J2000, 2_460_000.5, 2_488_069.5] {
+            let (_, rate) = mean_longitude_of_date(jd);
+            let (a, _) = mean_longitude_of_date(jd - 0.5);
+            let (b, _) = mean_longitude_of_date(jd + 0.5);
+            let numeric = wrap180(b - a);
+            // 13.18 deg/day against a 1-day difference of a smooth
+            // polynomial: only rounding and a vanishing cubic term remain.
+            assert!(
+                (numeric - rate).abs() < 1e-8,
+                "jd {jd}: analytic {rate} vs difference {numeric}"
+            );
+        }
+    }
+
+    #[test]
+    fn mean_longitude_of_date_is_the_mean_the_true_longitude_swings_about() {
+        // Same frame (equinox of date) by construction: the true longitude
+        // from the series must stay within the Moon's total periodic swing of
+        // the mean (equation of the centre 6.3 deg, evection 1.3 deg,
+        // variation 0.7 deg, plus smaller terms) -- and must actually use
+        // that swing, or the test would pass for any constant near it.
+        let mut max_abs = 0.0_f64;
+        let mut saw_ahead = false;
+        let mut saw_behind = false;
+        let mut jd = 2_415_020.5;
+        while jd < 2_488_069.5 {
+            let (x, y, _) = elp_geocentric_position_of_date(jd);
+            let true_lon = libm::atan2(y, x).to_degrees().rem_euclid(360.0);
+            let (mean, _) = mean_longitude_of_date(jd);
+            let d = wrap180(true_lon - mean);
+            assert!(d.abs() < 8.5, "jd {jd}: true - mean = {d} deg");
+            max_abs = max_abs.max(d.abs());
+            saw_ahead |= d > 3.0;
+            saw_behind |= d < -3.0;
+            jd += 37.3;
+        }
+        assert!(max_abs > 6.0, "swing never exceeded {max_abs} deg");
+        assert!(saw_ahead && saw_behind);
     }
 
     /// [`elp_geocentric_position`] must be bit-for-bit `(x, y, z)` of
