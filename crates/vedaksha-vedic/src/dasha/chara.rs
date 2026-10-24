@@ -26,13 +26,17 @@
 //! determined per-sign (see below). A sign whose lord occupies the sign
 //! itself gets **12 years**, not 0 and not 1.
 //!
-//! Attestation: Jaimini Upadesha Sutras A1P1, sutra *nathantah samah
-//! prayena*, whose Sanskrit commentary glosses it *svasvadhipashritarashi*
-//! ("the sign occupied by its own lord"); independently corroborated by
-//! Brihat Parashara Hora Shastra ch. 46 ("reckoned from the Rasi up to the
-//! house in which its lord is posited" — verse numbering for this passage is
-//! unstable across recensions, hence cited by chapter and description rather
-//! than a bare number). Grade (a).
+//! Attestation: Jaimini Upadesha Sutras 1.1.28, *nathantah samah prayena*
+//! (the years are, in general, up to the lord). The commentary on it has the
+//! count run up to the rashi the rashi's lord occupies (*rashi-svami-
+//! adhishthita-rashy-antam*) and takes "in general" to cover the lord at
+//! home, the exalted and the debilitated lord, and the sign with two lords.
+//! Brihat Parashara Hora Shastra ch. 46, slokas 155 and 156, states the count
+//! (*lagnadi-vyaya-paryantam bhanam chara-dasham bruve; tasmat tad-isha-
+//! paryantam samkhyam atra dasham viduh*), as does the fifth of the old
+//! verses (the *vriddha-karikas*) edited with the sutras on 1.1. BPHS verse
+//! numbers here are those of the recension this crate follows, and the
+//! verses are also given by their incipit. Grade (a).
 //!
 //! **Per-sign counting direction — do not conflate with [`chara_direction`].**
 //! [`chara_direction`] decides one global thing: which way the *sequence* of
@@ -52,64 +56,69 @@
 //! membership only, applied to a different subject (the sign being timed,
 //! not the 9th-from-lagna sign).
 //!
-//! **Dual lordship.** Scorpio has co-lords Mars and Ketu; Aquarius has
-//! co-lords Saturn and Rahu (attested by a *vriddha-karika* and by Brihat
-//! Parashara Hora Shastra independently; the polarity — Rahu with Aquarius,
-//! not Scorpio — is frequently inverted in secondary sources, so it is
-//! stated explicitly here). Resolution, in the order below:
+//! **Dual lordship.** Scorpio has the co-lords Mars and Ketu, Aquarius Saturn
+//! and Rahu (BPHS 46.157, *vrishchikadhipati dvau cha ketu-bhaumau smritau
+//! dvija; shani-rahu cha kumbhasya svaminau parikirtitau*; the old verses
+//! say the same at 1.1.6). The polarity, Rahu with Aquarius and not Scorpio,
+//! is frequently inverted in secondary sources, so it is stated explicitly
+//! here. Which co-lord's rashi the count runs to is decided by BPHS 46.158 to
+//! 166 and by the old verses at 1.1.7 to 1.1.13, which are the same verses
+//! (another recension of BPHS sets them in its chapter on length of life, at
+//! 31.77 to 86). The decision, in order:
 //!
-//! 1. Both co-lords occupy the sign itself -> 12 years.
-//! 2. One co-lord occupies the sign itself, the other does not -> ignore the
-//!    one in the sign, count to the other.
-//! 3. Both occupy some other sign -> count to the **stronger** by this
-//!    cascade:
-//!    1. conjoined with another graha beats not conjoined;
-//!    2. if both conjoined, more conjoined grahas wins;
-//!    3. the co-lord giving the **larger** duration wins;
-//!    4. rashi-bala of the co-lord's occupied sign: dual > fixed > movable;
-//!    5. an exalted co-lord wins.
+//! 1. Both co-lords stand in the sign itself -> 12 years (*dvav evadhipati
+//!    vipra yuktau svarkshe sthitau yadi; varsham dvadashakam tatra*).
+//! 2. One stands in the sign, the other does not -> count to the other
+//!    (*ekah svakshetrago 'nyas tu paratra yadi samsthitah; tadanyatra
+//!    sthitam natham parigrihya dasham nayet*).
+//! 3. Both stand elsewhere -> count to the **stronger** (*tayor madhye cha yo
+//!    bali*), by the first of these tests that separates them:
+//!    1. a co-lord with another graha in its rashi beats one with none, and
+//!       with grahas in both, the one with more (*agrahat sagraho bali; dvav
+//!       eva sagrahau tau chet bali tatradhikagrahah*);
+//!    2. the nature of the rashi it stands in, dual over fixed over movable
+//!       (*grahayoga-samanatve jneyam rashi-balad balam; jneyash chara-sthira-
+//!       dvandvah kramato bala-shalinah*);
+//!    3. an exalted co-lord over one that is not (where this test falls is
+//!       the one open point; see below);
+//!    4. the rashi that gives the **larger** count (*rashi-sattva-samanatve
+//!       bahuvarsho bali bhavet*).
 //!
-//! **Cascade ordering is not the textually stated order** — see below.
+//! Grade (a) for the cases and for tests 1, 2 and 4, and for their order. The
+//! larger count comes last, not first. Two different rashis always give
+//! different counts (over the eleven rashis other than the one being timed
+//! the count takes each value from 1 to 11 once), so test 4 settles whatever
+//! the first three leave open, and the cascade has no tie to break by
+//! position. "Another graha in its rashi" means any of the other eight,
+//! nodes included; the co-lord itself cannot count, since every co-lord's
+//! rashi holds it and test 1 would then never separate two of them.
 //!
-//! **The cascade ordering was determined empirically against Brihat
-//! Parashara Hora Shastra ch. 46's own worked Aquarius-lagna example, which
-//! gives all twelve durations** (encoded as [`tests::bphs_46_worked_example`]
-//! below). That chart's two dual-lord signs constrain the cascade:
+//! **Where the exalted co-lord's test falls (grade (b)).** The verses state
+//! it as a case of its own, *ekah svochchagatash chanyah paratra yadi
+//! samsthitah; grihniyad uchchakhetastham rashim anyam vihaya vai* (46.164;
+//! 1.1.10 and 11 of the old verses): if one co-lord is exalted and the other
+//! is merely elsewhere, take the exalted one's rashi. They set it behind the
+//! larger count. A rule that waits behind a test which always decides could
+//! never apply, and the recension at 31.81 and 82 says what the order is
+//! meant to be: the exalted co-lord prevails over the larger count, even when
+//! it gives fewer years (*yadyalpavarshado vipra tadapi tungago bali*), and
+//! that place is directly after the nature of the rashi, since the larger
+//! count is only reached when the rashis tie. This is
+//! [`ExaltationRank::AfterRashiBala`], the default. The other reading takes
+//! the verse as free-standing: whenever exactly one co-lord is exalted, its
+//! rashi is taken, ahead of every other test ([`ExaltationRank::Decisive`]).
+//! Exaltation of Rahu and Ketu is itself contested across traditions; the
+//! pairing used is `rashi_strength::exaltation_sign`'s.
 //!
-//! - **Aquarius -> 8 years**, which requires counting to Rahu (in Gemini),
-//!   not Saturn (in Leo). This case **discriminates nothing**: Rahu wins
-//!   under step 1 (it is conjoined with Moon in Gemini, Saturn is alone in
-//!   Leo), *and* under step 3 (8 years vs. Saturn's 6), *and* under step 4
-//!   (Gemini is dual, Leo is fixed). All three agree, so the case is
-//!   consistent with the implemented order but is not evidence for it.
-//! - **Scorpio -> 6 years**, which requires counting to Mars (in Taurus),
-//!   not Ketu (in Sagittarius). Neither is conjoined with anything, so steps
-//!   1-2 tie. The stated textual order would apply rashi-bala next and
-//!   favour Ketu (Sagittarius is a dual sign, Taurus is fixed) — but the
-//!   worked example needs Mars. The "larger duration wins" step, applied
-//!   *before* rashi-bala, gives Mars (6 years, vs. Ketu's 1) and reproduces
-//!   the example.
-//!
-//! So the textual source lists rashi-bala before the duration comparison,
-//! but the worked example only reproduces if duration is compared **first**,
-//! ahead of rashi-bala. That is the ordering implemented here: conjunction,
-//! conjunction-count, duration, rashi-bala, exaltation.
-//!
-//! **Be precise about how little the fixture actually proves.** Scorpio is
-//! the only discriminating case, and the single constraint it establishes is
-//! that *duration outranks rashi-bala*. It says nothing about whether
-//! conjunction precedes duration, whether conjunction-count is a distinct
-//! step at all, or where exaltation belongs — indeed the bare one-step rule
-//! "larger duration wins" reproduces both dual-lord signs of this fixture on
-//! its own. Steps 1, 2 and 5 are carried over from the prose source's stated
-//! order and are unexercised here: partly grade (d), not (a). Exaltation of
-//! Rahu/Ketu (itself contested across traditions) is implemented but never
-//! reached by the fixture. A second worked chart whose dual-lord signs
-//! separate these criteria would be worth encoding if one is found.
+//! **Not implemented: 1.1.14 and 1.1.15 of the old verses.** BPHS does not
+//! carry them. The first appears to take the rashi without a graha when the
+//! lord of that rashi is exalted, the second to prefer "the earlier" rashi to
+//! a conjunction of two grahas. Their wording is too compressed to apply with
+//! confidence, so the cascade above does not use them.
 //!
 //! **Deliberately NOT implemented: the exaltation/debilitation +-1 year
-//! adjustment.** A well-attested classical rule (a Brihat Parashara Hora
-//! Shastra verse plus a *vriddha-karika*) adds one year to a sign's duration
+//! adjustment.** A well-attested classical rule (BPHS 46.165 plus the
+//! *vriddha-karika* at 1.1.13) adds one year to a sign's duration
 //! when its lord is exalted, and subtracts one when the lord is debilitated.
 //! Amit has decided not to implement it here, following a named
 //! 20th-century teaching lineage that dropped the adjustment precisely
@@ -117,8 +126,8 @@
 //! Capricorn) or a 13-year dasha (Virgo, when Mercury is in Virgo) — both
 //! outside the system's own stated 1-12 year range. This is a deliberate,
 //! cited omission of an attested rule, not an oversight. It is a different
-//! rule from the exaltation tiebreak in the dual-lordship cascade above
-//! (step 5), which is retained.
+//! rule from the exaltation test in the dual-lordship cascade above, which is
+//! implemented.
 //!
 //! **Direction — tested at the 9th sign from the lagna, not the lagna itself.**
 //! The governing sutra is in Adhyaya 2, Pada 3 (its own number is unstable
@@ -190,7 +199,10 @@
 use serde::{Deserialize, Serialize};
 
 use super::rashi_antar::{AntarLength, AntarRules, RashiPeriod, build_antars};
-use super::rashi_strength::{JaiminiStrength, NatalPlacements, Strength};
+use super::rashi_strength::{
+    JaiminiStrength, NatalPlacements, Strength, exaltation_sign, natural_rank, rashi_lords,
+};
+use crate::graha::Graha;
 
 /// Dasha year length in days (Julian year).
 const DASHA_YEAR_DAYS: f64 = 365.25;
@@ -247,72 +259,28 @@ impl GrahaSigns {
     }
 }
 
-/// One of the nine grahas used in dual-lordship resolution.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Graha {
-    Sun,
-    Moon,
-    Mars,
-    Mercury,
-    Jupiter,
-    Venus,
-    Saturn,
-    Rahu,
-    Ketu,
+/// Where an exalted co-lord's test falls among the tests that choose between
+/// the two lords of Scorpio or Aquarius. See the module doc.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ExaltationRank {
+    /// After the nature of the rashi and ahead of the larger count: the
+    /// exalted co-lord prevails over a co-lord that merely gives more years
+    /// (BPHS 46.164, read with the recension that states it at 31.81 and 82).
+    /// Grade (b). The default.
+    #[default]
+    AfterRashiBala,
+    /// Ahead of every other test: whenever exactly one co-lord is exalted,
+    /// its rashi is taken (BPHS 46.164 read as a free-standing rule). Grade
+    /// (b).
+    Decisive,
 }
 
-/// All nine graha (sign, identity) pairs, for conjunction counting.
-fn all_grahas(pos: GrahaSigns) -> [(Graha, u8); 9] {
-    [
-        (Graha::Sun, pos.sun),
-        (Graha::Moon, pos.moon),
-        (Graha::Mars, pos.mars),
-        (Graha::Mercury, pos.mercury),
-        (Graha::Jupiter, pos.jupiter),
-        (Graha::Venus, pos.venus),
-        (Graha::Saturn, pos.saturn),
-        (Graha::Rahu, pos.rahu),
-        (Graha::Ketu, pos.ketu()),
-    ]
-}
-
-/// Number of *other* grahas sharing `candidate`'s sign (conjunction count).
-fn conjunction_count(candidate: Graha, candidate_sign: u8, all: &[(Graha, u8); 9]) -> usize {
-    all.iter()
-        .filter(|&&(g, s)| g != candidate && s == candidate_sign)
-        .count()
-}
-
-/// Classical exaltation sign for a graha. Rahu/Ketu exaltation is genuinely
-/// contested across traditions (this uses the *vriddha-karika* pairing —
-/// Rahu exalted in Taurus, Ketu exalted in Scorpio — consistent with the
-/// same source attesting the Scorpio/Aquarius dual lordships above); it is
-/// exercised by no fixture in this module and sits at the bottom of the
-/// dual-lordship cascade, so it decides no case in practice unless every
-/// stronger criterion ties.
-fn exaltation_sign(graha: Graha) -> u8 {
-    match graha {
-        Graha::Sun => 0,                // Aries
-        Graha::Moon | Graha::Rahu => 1, // Taurus (Rahu shares Moon's exaltation sign)
-        Graha::Mars => 9,               // Capricorn
-        Graha::Mercury => 5,            // Virgo
-        Graha::Jupiter => 3,            // Cancer
-        Graha::Venus => 11,             // Pisces
-        Graha::Saturn => 6,             // Libra
-        Graha::Ketu => 7,               // Scorpio
-    }
-}
-
-/// Rashi-bala rank of a sign by modality: dual (mutable) > fixed > movable
-/// (cardinal). Higher is stronger.
-fn rashi_bala_rank(sign: u8) -> u8 {
-    match sign % 3 {
-        // 0-indexed from Aries: movable signs are 0,3,6,9; fixed 1,4,7,10;
-        // dual 2,5,8,11 -- i.e. sign % 3 == 2 is dual, == 1 is fixed, == 0 is movable.
-        2 => 2, // dual
-        1 => 1, // fixed
-        _ => 0, // movable
-    }
+/// The readings the verses leave open when choosing between the two lords of
+/// Scorpio or Aquarius.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct DualLordRules {
+    /// Where the exalted co-lord's test falls.
+    pub exaltation: ExaltationRank,
 }
 
 /// A single Chara Dasha sign period.
@@ -346,8 +314,24 @@ pub struct CharaPeriod {
 /// direction given by [`chara_direction`] (forward or backward, tested at
 /// the 9th sign from the lagna; see the module doc for the sutra and its
 /// confidence grading).
+///
+/// The two-lord signs are resolved by [`DualLordRules::default`]; use
+/// [`compute_chara_with`] to choose another reading.
 #[must_use]
 pub fn compute_chara(lagna_sign: u8, birth_jd: f64, positions: GrahaSigns) -> Vec<CharaPeriod> {
+    compute_chara_with(lagna_sign, birth_jd, positions, DualLordRules::default())
+}
+
+/// [`compute_chara`] with the reading of the two-lord signs chosen by
+/// `rules`. Only Scorpio and Aquarius can differ from [`compute_chara`], and
+/// only where both co-lords stand outside the sign.
+#[must_use]
+pub fn compute_chara_with(
+    lagna_sign: u8,
+    birth_jd: f64,
+    positions: GrahaSigns,
+    rules: DualLordRules,
+) -> Vec<CharaPeriod> {
     let lagna_sign = lagna_sign % 12;
     let direction = chara_direction(lagna_sign);
     let mut periods = Vec::with_capacity(12);
@@ -358,7 +342,7 @@ pub fn compute_chara(lagna_sign: u8, birth_jd: f64, positions: GrahaSigns) -> Ve
             Direction::Forward => (lagna_sign + i) % 12,
             Direction::Backward => (lagna_sign + 12 - i) % 12,
         };
-        let lord_sign = lord_sign_for(sign, positions);
+        let lord_sign = lord_sign_with(sign, positions, rules);
         let duration_years = f64::from(duration_for(sign, lord_sign));
         let duration_days = duration_years * DASHA_YEAR_DAYS;
 
@@ -488,76 +472,76 @@ fn chara_direction(lagna: u8) -> Direction {
 }
 
 /// Resolve the sign occupied by `sign`'s lord (or lords), given natal graha
-/// positions. See the module doc for the full dual-lordship rule.
+/// positions, by [`DualLordRules::default`]. See the module doc for the full
+/// dual-lordship rule.
 pub(crate) fn lord_sign_for(sign: u8, pos: GrahaSigns) -> u8 {
-    match sign {
-        0 => pos.mars,        // Aries -> Mars
-        1 | 6 => pos.venus,   // Taurus -> Venus, Libra -> Venus
-        2 | 5 => pos.mercury, // Gemini -> Mercury, Virgo -> Mercury
-        3 => pos.moon,        // Cancer -> Moon
-        4 => pos.sun,         // Leo -> Sun
-        7 => resolve_dual_lord(sign, Graha::Mars, pos.mars, Graha::Ketu, pos.ketu(), pos), // Scorpio -> Mars/Ketu
-        8 | 11 => pos.jupiter, // Sagittarius -> Jupiter, Pisces -> Jupiter
-        9 => pos.saturn,       // Capricorn -> Saturn
-        10 => resolve_dual_lord(sign, Graha::Saturn, pos.saturn, Graha::Rahu, pos.rahu, pos), // Aquarius -> Saturn/Rahu
-        _ => unreachable!("sign is always reduced mod 12"),
+    lord_sign_with(sign, pos, DualLordRules::default())
+}
+
+/// [`lord_sign_for`] with the reading of the two-lord signs chosen by `rules`.
+pub(crate) fn lord_sign_with(sign: u8, pos: GrahaSigns, rules: DualLordRules) -> u8 {
+    let sign = sign % 12;
+    // The lagna plays no part in any lord's placement.
+    let placements = NatalPlacements::from_signs(0, pos);
+    match *rashi_lords(sign) {
+        [only] => placements.sign_of(only),
+        [first, second] => {
+            let stronger = stronger_co_lord(sign, first, second, &placements, rules);
+            placements.sign_of(stronger)
+        }
+        _ => unreachable!("every rashi has one lord or two"),
     }
 }
 
-/// Resolve a dual-lordship sign (Scorpio: Mars/Ketu; Aquarius: Saturn/Rahu)
-/// to a single lord's sign, per the cascade documented at the top of this
-/// module.
-fn resolve_dual_lord(sign: u8, a: Graha, a_sign: u8, b: Graha, b_sign: u8, pos: GrahaSigns) -> u8 {
-    let a_in_sign = a_sign == sign;
-    let b_in_sign = b_sign == sign;
+/// The co-lord whose rashi the count runs to for a two-lord `sign`
+/// (Scorpio: Mars and Ketu; Aquarius: Saturn and Rahu), by the cases and
+/// tests of the module doc. `first` wins when the two stand in one rashi,
+/// where the choice cannot change the count.
+fn stronger_co_lord(
+    sign: u8,
+    first: Graha,
+    second: Graha,
+    placements: &NatalPlacements,
+    rules: DualLordRules,
+) -> Graha {
+    let at_home = |g: Graha| placements.sign_of(g) == sign;
+    match (at_home(first), at_home(second)) {
+        // Only the first at home -> ignore it, count to the second.
+        (true, false) => return second,
+        // Both at home (12 years: the count is to the sign itself), or only
+        // the second -> the first.
+        (true, true) | (false, true) => return first,
+        (false, false) => {}
+    }
+    if co_lord_key(sign, first, placements, rules) >= co_lord_key(sign, second, placements, rules) {
+        first
+    } else {
+        second
+    }
+}
 
-    if a_in_sign && b_in_sign {
-        // Both co-lords occupy the sign itself -> own-sign rule (12 years).
-        return sign;
+/// The tests that choose between two co-lords standing outside the sign, as
+/// a key that compares in the order the tests apply: the larger key is the
+/// stronger co-lord. Each element is one test of the module doc; a pair of
+/// co-lords the first leaves tied goes to the second element, and so on.
+fn co_lord_key(
+    sign: u8,
+    lord: Graha,
+    placements: &NatalPlacements,
+    rules: DualLordRules,
+) -> [u8; 4] {
+    let lord_sign = placements.sign_of(lord);
+    // Other grahas in the lord's rashi: presence and number in one figure,
+    // since none is the fewest. At most eight others, so it fits in a byte.
+    let companions = placements.companions_of(lord) as u8;
+    let nature = natural_rank(lord_sign);
+    let exalted = u8::from(lord_sign == exaltation_sign(lord));
+    // 1 to 11, and different for different rashis.
+    let years = duration_for(sign, lord_sign);
+    match rules.exaltation {
+        ExaltationRank::AfterRashiBala => [companions, nature, exalted, years],
+        ExaltationRank::Decisive => [exalted, companions, nature, years],
     }
-    if a_in_sign {
-        // Ignore the co-lord in the sign; count to the other.
-        return b_sign;
-    }
-    if b_in_sign {
-        return a_sign;
-    }
-
-    // Both co-lords occupy some other sign: cascade to the stronger.
-    let all = all_grahas(pos);
-
-    let a_conj = conjunction_count(a, a_sign, &all);
-    let b_conj = conjunction_count(b, b_sign, &all);
-    if (a_conj > 0) != (b_conj > 0) {
-        return if a_conj > 0 { a_sign } else { b_sign };
-    }
-    if a_conj != b_conj {
-        return if a_conj > b_conj { a_sign } else { b_sign };
-    }
-
-    // Duration comparison, ahead of rashi-bala -- see module doc for why
-    // this ordering (not the textually stated one) is what the BPHS 46
-    // worked example requires.
-    let a_dur = duration_for(sign, a_sign);
-    let b_dur = duration_for(sign, b_sign);
-    if a_dur != b_dur {
-        return if a_dur > b_dur { a_sign } else { b_sign };
-    }
-
-    let a_bala = rashi_bala_rank(a_sign);
-    let b_bala = rashi_bala_rank(b_sign);
-    if a_bala != b_bala {
-        return if a_bala > b_bala { a_sign } else { b_sign };
-    }
-
-    let a_exalted = a_sign == exaltation_sign(a);
-    let b_exalted = b_sign == exaltation_sign(b);
-    if a_exalted != b_exalted {
-        return if a_exalted { a_sign } else { b_sign };
-    }
-
-    // Total tie on every criterion: not reached by any known worked example.
-    a_sign
 }
 
 /// Duration (in years, 1-12) for `sign`, given the sign its resolved lord
@@ -608,10 +592,10 @@ mod tests {
         rahu: 0,
     };
 
-    /// Brihat Parashara Hora Shastra ch. 46's worked Aquarius-lagna example,
-    /// used throughout this module as the conformance oracle for the
-    /// duration rule (see module doc for citation and confidence grading).
-    const BPHS_46_CHART: GrahaSigns = GrahaSigns {
+    /// An Aquarius-lagna chart for the duration and antardasha tests. Every
+    /// duration it gives is derived by hand from the rule in
+    /// `all_twelve_durations_derived_by_hand`.
+    const CHART_A: GrahaSigns = GrahaSigns {
         sun: 9,      // Capricorn
         moon: 2,     // Gemini
         mars: 1,     // Taurus
@@ -620,6 +604,43 @@ mod tests {
         venus: 10,   // Aquarius
         saturn: 4,   // Leo
         rahu: 2,     // Gemini (Ketu derives to Sagittarius, 8)
+    };
+
+    /// A chart from the eight placements, in the order of [`GrahaSigns`].
+    fn chart(
+        sun: u8,
+        moon: u8,
+        mars: u8,
+        mercury: u8,
+        jupiter: u8,
+        venus: u8,
+        saturn: u8,
+        rahu: u8,
+    ) -> GrahaSigns {
+        GrahaSigns {
+            sun,
+            moon,
+            mars,
+            mercury,
+            jupiter,
+            venus,
+            saturn,
+            rahu,
+        }
+    }
+
+    /// Years the default rules give `sign` in `pos`.
+    fn years(sign: u8, pos: GrahaSigns) -> u8 {
+        duration_for(sign, lord_sign_for(sign, pos))
+    }
+
+    /// Years `rules` give `sign` in `pos`.
+    fn years_with(sign: u8, pos: GrahaSigns, rules: DualLordRules) -> u8 {
+        duration_for(sign, lord_sign_with(sign, pos, rules))
+    }
+
+    const DECISIVE: DualLordRules = DualLordRules {
+        exaltation: ExaltationRank::Decisive,
     };
 
     // 1. Chara dasha produces exactly 12 sign periods
@@ -681,12 +702,34 @@ mod tests {
         assert_eq!(pos2.ketu(), 4, "Ketu should be Leo, opposite Aquarius");
     }
 
-    // 5. The BPHS ch. 46 worked example: all twelve durations, exactly.
-    // This is the conformance oracle for the whole duration rule -- forward
-    // and reverse per-sign counting, own-sign, and both dual-lord signs.
+    // 5. All twelve durations of one chart, derived by hand from the rule.
+    // CHART_A: Sun Capricorn(9), Moon Gemini(2), Mars Taurus(1), Mercury,
+    // Jupiter and Venus Aquarius(10), Saturn Leo(4), Rahu Gemini(2), so Ketu
+    // Sagittarius(8). A sign's count runs forward to its lord's sign for
+    // Aries, Taurus, Gemini, Libra, Scorpio, Sagittarius ((lord - sign)
+    // mod 12) and backward for the rest ((sign - lord) mod 12); a lord at
+    // home gives 12.
+    //   Aries(0)       lord Mars in Taurus(1):        1 - 0        = 1
+    //   Taurus(1)      lord Venus in Aquarius(10):    10 - 1       = 9
+    //   Gemini(2)      lord Mercury in Aquarius(10):  10 - 2       = 8
+    //   Cancer(3)      lord Moon in Gemini(2):        3 - 2        = 1
+    //   Leo(4)         lord Sun in Capricorn(9):      (4 - 9) % 12 = 7
+    //   Virgo(5)       lord Mercury in Aquarius(10):  (5 - 10) % 12 = 7
+    //   Libra(6)       lord Venus in Aquarius(10):    10 - 6       = 4
+    //   Scorpio(7)     Mars in Taurus(1), Ketu in Sagittarius(8), neither at
+    //                  home. Nothing else stands in either rashi (Taurus holds
+    //                  Mars only, Sagittarius Ketu only), so test 1 ties; the
+    //                  nature of the rashi decides, Sagittarius (dual) over
+    //                  Taurus (fixed): Ketu. 8 - 7                  = 1
+    //   Sagittarius(8) lord Jupiter in Aquarius(10):  10 - 8       = 2
+    //   Capricorn(9)   lord Saturn in Leo(4):         9 - 4        = 5
+    //   Aquarius(10)   Saturn in Leo(4) alone, Rahu in Gemini(2) with the
+    //                  Moon: Rahu has a companion, Saturn none: Rahu.
+    //                  10 - 2                                       = 8
+    //   Pisces(11)     lord Jupiter in Aquarius(10):  11 - 10      = 1
     #[test]
-    fn bphs_46_worked_example_all_twelve_durations() {
-        let periods = compute_chara(10, TEST_JD, BPHS_46_CHART); // Aquarius lagna
+    fn all_twelve_durations_derived_by_hand() {
+        let periods = compute_chara(10, TEST_JD, CHART_A); // Aquarius lagna
         let mut by_sign = [0.0f64; 12];
         for p in &periods {
             by_sign[p.sign_index as usize] = p.duration_years;
@@ -699,16 +742,13 @@ mod tests {
             7.0, // Leo
             7.0, // Virgo
             4.0, // Libra
-            6.0, // Scorpio
+            1.0, // Scorpio
             2.0, // Sagittarius
             5.0, // Capricorn
             8.0, // Aquarius
             1.0, // Pisces
         ];
-        assert_eq!(
-            by_sign, expected,
-            "BPHS ch. 46 worked example durations do not match"
-        );
+        assert_eq!(by_sign, expected);
     }
 
     // 6. Forward-pada sign duration direction (Aries: forward/zodiacal).
@@ -737,26 +777,34 @@ mod tests {
         assert_eq!(duration_for(3, 3), 12, "reverse-pada own-sign");
     }
 
-    // 9. Scorpio dual lordship (Mars/Ketu): resolves to Mars per the BPHS
-    // worked example, via the duration-comparison cascade step.
+    // 9. Scorpio (Mars/Ketu) in CHART_A: neither stands at home, neither has
+    // a companion, so the nature of the rashi decides. Ketu in Sagittarius
+    // (dual) beats Mars in Taurus (fixed) although Mars would give 6 years
+    // and Ketu 1: the longer count is the last test, not the first.
     #[test]
-    fn scorpio_dual_lordship_resolves_to_mars() {
-        let lord_sign = lord_sign_for(7, BPHS_46_CHART);
+    fn scorpio_nature_of_the_rashi_outranks_the_longer_count() {
+        let lord_sign = lord_sign_for(7, CHART_A);
         assert_eq!(
-            lord_sign, 1,
-            "Scorpio's lord should resolve to Mars's sign (Taurus)"
+            lord_sign, 8,
+            "Scorpio's count should run to Ketu's sign (Sagittarius)"
         );
-        assert_eq!(duration_for(7, lord_sign), 6);
+        assert_eq!(duration_for(7, lord_sign), 1);
+        // Mars's sign would have given 6.
+        assert_eq!(duration_for(7, 1), 6);
     }
 
-    // 10. Aquarius dual lordship (Saturn/Rahu): resolves to Rahu per the
-    // BPHS worked example, via the conjunction cascade step.
+    // 10. Aquarius (Saturn/Rahu) in CHART_A: Rahu in Gemini with the Moon,
+    // Saturn alone in Leo. Every test happens to point the same way here
+    // (companion, dual over fixed, 8 years over 6), so this guards the
+    // pairing of Rahu with Aquarius rather than the order of the tests: with
+    // the nodes' pairing inverted (Ketu with Aquarius), Sagittarius would
+    // stand against Leo and the count would run there.
     #[test]
-    fn aquarius_dual_lordship_resolves_to_rahu() {
-        let lord_sign = lord_sign_for(10, BPHS_46_CHART);
+    fn aquarius_resolves_to_rahu_in_chart_a() {
+        let lord_sign = lord_sign_for(10, CHART_A);
         assert_eq!(
             lord_sign, 2,
-            "Aquarius's lord should resolve to Rahu's sign (Gemini)"
+            "Aquarius's count should run to Rahu's sign (Gemini)"
         );
         assert_eq!(duration_for(10, lord_sign), 8);
     }
@@ -791,6 +839,250 @@ mod tests {
             lord_sign, 2,
             "Saturn (in the sign) should be ignored in favour of Rahu"
         );
+    }
+
+    // 12b. The order of the tests that choose between two co-lords standing
+    // outside the sign. Scorpio counts forward, so the years it gives for a
+    // lord in sign L are (L - 7) mod 12; Aquarius counts backward, (10 - L)
+    // mod 12. Each chart is built so that every test but the one named is
+    // tied, or points the other way, and the working is shown.
+
+    // Test 1: a companion beats the nature of the rashi.
+    // Mars in Taurus(1) with the Moon; Ketu (Rahu in Gemini(2)) in
+    // Sagittarius(8) alone. Mars has one companion, Ketu none, so the count
+    // runs to Taurus: (1 - 7) mod 12 = 6. Nature alone would give Sagittarius
+    // (dual over fixed), 1 year.
+    #[test]
+    fn a_companion_outranks_the_nature_of_the_rashi() {
+        let pos = chart(0, 1, 1, 5, 6, 9, 10, 2);
+        assert_eq!(pos.ketu(), 8);
+        assert_eq!(lord_sign_for(7, pos), 1);
+        assert_eq!(years(7, pos), 6);
+        // Aquarius: Saturn in Leo(4) with the Sun, Rahu in Gemini(2) alone
+        // (Moon 0, Mars 1, Mercury 5, Jupiter 6, Venus 9): Saturn has the
+        // companion, so (10 - 4) = 6, although Gemini is dual and Leo fixed.
+        let pos = chart(4, 0, 1, 5, 6, 9, 4, 2);
+        assert_eq!(lord_sign_for(10, pos), 4);
+        assert_eq!(years(10, pos), 6);
+    }
+
+    // Test 1: more companions beat fewer.
+    // Mars in Taurus(1) with the Sun and the Moon (two companions); Ketu in
+    // Sagittarius(8) with Venus (one). Both have a companion, so presence
+    // alone ties and the nature of the rashi would pick Ketu; the number
+    // picks Mars: (1 - 7) mod 12 = 6.
+    #[test]
+    fn more_companions_outrank_fewer() {
+        let pos = chart(1, 1, 1, 5, 6, 8, 10, 2);
+        assert_eq!(pos.ketu(), 8);
+        assert_eq!(lord_sign_for(7, pos), 1);
+        assert_eq!(years(7, pos), 6);
+    }
+
+    // Test 2: the nature of the rashi beats the longer count, all three ways.
+    // (a) Mars in Cancer(3, movable) years (3 - 7) mod 12 = 8; Ketu in
+    //     Taurus(1, fixed) (Rahu in Scorpio(7)) years (1 - 7) mod 12 = 6.
+    //     Nothing else stands in either rashi (Sun 0, Moon 9, Mercury 5,
+    //     Jupiter 11, Venus 10, Saturn 4). Fixed over movable: 6, not 8.
+    // (b) Mars in Pisces(11, dual) years (11 - 7) = 4; Ketu in Libra(6,
+    //     movable) (Rahu in Aries(0)) years (6 - 7) mod 12 = 11. Dual over
+    //     movable: 4, not 11.
+    // (c) Aquarius: Saturn in Gemini(2, dual) years (10 - 2) = 8; Rahu in
+    //     Aries(0, movable) years (10 - 0) = 10. Dual over movable: 8, not
+    //     10. (Sun 1, Moon 4, Mars 5, Mercury 7, Jupiter 9, Venus 11; Ketu
+    //     is in Libra.)
+    // Dual over fixed is `scorpio_nature_of_the_rashi_outranks_the_longer_count`.
+    #[test]
+    fn nature_of_the_rashi_outranks_the_longer_count() {
+        let a = chart(0, 9, 3, 5, 11, 10, 4, 7);
+        assert_eq!(a.ketu(), 1);
+        assert_eq!(years(7, a), 6);
+        let b = chart(1, 2, 11, 3, 4, 5, 8, 0);
+        assert_eq!(b.ketu(), 6);
+        assert_eq!(years(7, b), 4);
+        let c = chart(1, 4, 5, 7, 9, 11, 2, 0);
+        assert_eq!(c.ketu(), 6);
+        assert_eq!(years(10, c), 8);
+    }
+
+    // Test 3: an exalted co-lord beats the longer count.
+    // (a) Mars in Capricorn(9, exalted, movable) years (9 - 7) = 2; Ketu in
+    //     Libra(6, movable) (Rahu in Aries(0)) years (6 - 7) mod 12 = 11. No
+    //     companions (Sun 1, Moon 4, Mercury 5, Jupiter 11, Venus 3, Saturn
+    //     8), both movable, so the nature ties and exaltation decides: 2,
+    //     not the 11 that the longer count would give.
+    // (b) Aquarius: Saturn in Libra(6, exalted, movable) years (10 - 6) = 4;
+    //     Rahu in Cancer(3, movable) years (10 - 3) = 7; Ketu is in
+    //     Capricorn. Nothing else in Libra or Cancer (Sun 0, Moon 1, Mars 2,
+    //     Mercury 4, Jupiter 5, Venus 11). Saturn's exaltation decides: 4,
+    //     not 7.
+    #[test]
+    fn an_exalted_co_lord_outranks_the_longer_count() {
+        let a = chart(1, 4, 9, 5, 11, 3, 8, 0);
+        assert_eq!(a.ketu(), 6);
+        assert_eq!(lord_sign_for(7, a), 9);
+        assert_eq!(years(7, a), 2);
+        let b = chart(0, 1, 2, 4, 5, 11, 6, 3);
+        assert_eq!(b.ketu(), 9);
+        assert_eq!(lord_sign_for(10, b), 6);
+        assert_eq!(years(10, b), 4);
+    }
+
+    // Test 4: with nothing else to separate them, the longer count.
+    // Mars in Aries(0) years (0 - 7) mod 12 = 5; Ketu in Cancer(3) (Rahu in
+    // Capricorn(9)) years (3 - 7) mod 12 = 8. Both movable, no companions
+    // (Sun 1, Moon 4, Mercury 5, Jupiter 6, Venus 11, Saturn 10), and
+    // neither exalted (Mars exalts in Capricorn, Ketu in Scorpio): 8.
+    #[test]
+    fn the_longer_count_decides_last() {
+        let pos = chart(1, 4, 0, 5, 6, 11, 10, 9);
+        assert_eq!(pos.ketu(), 3);
+        assert_eq!(lord_sign_for(7, pos), 3);
+        assert_eq!(years(7, pos), 8);
+    }
+
+    // The readings of the exalted co-lord's place.
+    // (a) Mars exalted in Capricorn(9) alone, Ketu in Sagittarius(8) alone
+    //     (Rahu in Gemini(2); Sun 0, Moon 3, Mercury 5, Jupiter 6, Venus 11,
+    //     Saturn 10). The nature of the rashi comes first by default: dual
+    //     Sagittarius over movable Capricorn, (8 - 7) = 1. Decisive takes the
+    //     exalted Mars: (9 - 7) = 2.
+    // (b) Mars exalted in Capricorn(9) alone, Ketu (Rahu in Scorpio(7)) in
+    //     Taurus(1) with the Moon (Sun 0, Mercury 5, Jupiter 3, Venus 11,
+    //     Saturn 10). By default the companion decides: (1 - 7) mod 12 = 6.
+    //     Decisive takes Mars: 2.
+    #[test]
+    fn the_place_of_the_exalted_co_lord_is_a_parameter() {
+        let a = chart(0, 3, 9, 5, 6, 11, 10, 2);
+        assert_eq!(a.ketu(), 8);
+        assert_eq!(years(7, a), 1);
+        assert_eq!(years_with(7, a, DualLordRules::default()), 1);
+        assert_eq!(years_with(7, a, DECISIVE), 2);
+        let b = chart(0, 1, 9, 5, 3, 11, 10, 7);
+        assert_eq!(b.ketu(), 1);
+        assert_eq!(years(7, b), 6);
+        assert_eq!(years_with(7, b, DECISIVE), 2);
+    }
+
+    // The reading changes only the two-lord signs: in chart (a) above, with
+    // Saturn at home in Aquarius the count there runs to Rahu either way, so
+    // only Scorpio's duration differs between the two readings.
+    #[test]
+    fn the_readings_differ_only_in_the_two_lord_signs() {
+        let a = chart(0, 3, 9, 5, 6, 11, 10, 2);
+        let by_sign = |rules: DualLordRules| {
+            let mut out = [0.0f64; 12];
+            for p in compute_chara_with(10, TEST_JD, a, rules) {
+                out[p.sign_index as usize] = p.duration_years;
+            }
+            out
+        };
+        let default = by_sign(DualLordRules::default());
+        let decisive = by_sign(DECISIVE);
+        for sign in 0..12 {
+            if sign == 7 {
+                assert_eq!((default[sign], decisive[sign]), (1.0, 2.0));
+            } else {
+                assert_eq!(default[sign], decisive[sign], "sign {sign}");
+            }
+        }
+    }
+
+    // `compute_chara` is `compute_chara_with` under the default rules, bit
+    // for bit, on charts where the dual-lord signs are decided by different
+    // tests.
+    #[test]
+    fn compute_chara_is_the_default_rules() {
+        for pos in [CHART_A, chart(0, 3, 9, 5, 6, 11, 10, 2), ALL_ARIES] {
+            for lagna in 0..12u8 {
+                let plain = compute_chara(lagna, TEST_JD, pos);
+                let with = compute_chara_with(lagna, TEST_JD, pos, DualLordRules::default());
+                assert_eq!(plain.len(), with.len());
+                for (a, b) in plain.iter().zip(&with) {
+                    assert_eq!(a.sign_index, b.sign_index);
+                    assert_eq!(a.start_jd.to_bits(), b.start_jd.to_bits());
+                    assert_eq!(a.end_jd.to_bits(), b.end_jd.to_bits());
+                    assert_eq!(a.duration_years.to_bits(), b.duration_years.to_bits());
+                }
+            }
+        }
+    }
+
+    // The longer count always separates two different rashis: the count
+    // from a sign to each of the eleven others takes every value from 1 to
+    // 11 once, in either direction. This is why the cascade needs no
+    // position tie-break, and why an exaltation test placed behind the
+    // longer count could never apply.
+    #[test]
+    fn counts_to_different_rashis_are_different() {
+        for sign in 0u8..12 {
+            let mut counts: Vec<u8> = (0u8..12)
+                .filter(|&l| l != sign)
+                .map(|l| duration_for(sign, l))
+                .collect();
+            counts.sort_unstable();
+            assert_eq!(counts, (1u8..=11).collect::<Vec<_>>(), "sign {sign}");
+        }
+    }
+
+    // Where the verses and the strength section both speak, they agree: when
+    // the two co-lords' companions differ, and when they tie with no
+    // difference of exaltation and a difference in the nature of the rashi,
+    // the co-lord the strength section calls stronger is the one the count
+    // runs to. A sweep of charts from a fixed generator, with the number of
+    // cases of each kind counted so that the check cannot pass on none.
+    #[test]
+    fn agrees_with_the_strength_section_where_both_apply() {
+        use crate::dasha::rashi_strength::{JaiminiStrength, NatalPlacements, Strength};
+        let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            (state % 12) as u8
+        };
+        let (mut by_companions, mut by_nature) = (0u32, 0u32);
+        for _ in 0..6000 {
+            let pos = chart(
+                next(),
+                next(),
+                next(),
+                next(),
+                next(),
+                next(),
+                next(),
+                next(),
+            );
+            let placements = NatalPlacements::from_signs(0, pos);
+            let jaimini = JaiminiStrength::new(&placements);
+            for sign in [7u8, 10] {
+                let &[first, second] = rashi_lords(sign) else {
+                    unreachable!()
+                };
+                let (sa, sb) = (placements.sign_of(first), placements.sign_of(second));
+                if sa == sign || sb == sign {
+                    continue;
+                }
+                let (ca, cb) = (
+                    placements.companions_of(first),
+                    placements.companions_of(second),
+                );
+                let exalted = |g: Graha| placements.sign_of(g) == exaltation_sign(g);
+                let separated_by_companions = ca != cb;
+                let separated_by_nature = ca == cb
+                    && exalted(first) == exalted(second)
+                    && natural_rank(sa) != natural_rank(sb);
+                if !(separated_by_companions || separated_by_nature) {
+                    continue;
+                }
+                by_companions += u32::from(separated_by_companions);
+                by_nature += u32::from(separated_by_nature);
+                let expected = placements.sign_of(jaimini.stronger_graha(first, second));
+                assert_eq!(lord_sign_for(sign, pos), expected, "sign {sign}, {pos:?}");
+            }
+        }
+        assert!(by_companions > 500, "only {by_companions} companion cases");
+        assert!(by_nature > 100, "only {by_nature} nature cases");
     }
 
     // 5-16 (direction). For every lagna, tested at the 9th sign from the
@@ -964,7 +1256,7 @@ mod tests {
     // bit for bit, for every lagna and two charts.
     #[test]
     fn antar_variant_leaves_the_mahadashas_untouched() {
-        for chart in [ALL_ARIES, BPHS_46_CHART] {
+        for chart in [ALL_ARIES, CHART_A] {
             for lagna in 0..12u8 {
                 let plain = compute_chara(lagna, TEST_JD, chart);
                 let full = compute_chara_with_antars(lagna, TEST_JD, chart);
@@ -985,7 +1277,7 @@ mod tests {
     #[test]
     fn antars_tile_each_mahadasha_and_name_every_rashi_once() {
         for lagna in 0..12u8 {
-            for p in compute_chara_with_antars(lagna, TEST_JD, BPHS_46_CHART) {
+            for p in compute_chara_with_antars(lagna, TEST_JD, CHART_A) {
                 assert_eq!(p.antar.len(), 12);
                 assert_eq!(p.antar[0].start_jd, p.start_jd);
                 assert_eq!(p.antar[11].end_jd, p.end_jd);
@@ -1002,7 +1294,7 @@ mod tests {
         }
     }
 
-    // 21. BPHS ch. 46's chart (Aquarius lagna) with ch. 51's antar rule.
+    // 21. CHART_A (Aquarius lagna) with ch. 51's antar rule.
     // The mahadashas run Aquarius (8 years), Pisces (1), Aries (1), ...
     //
     // Aquarius is fixed and odd: from its own rashi, every sixth, forward:
@@ -1024,7 +1316,7 @@ mod tests {
     // 10 11 0 1 2 3 4 5.
     #[test]
     fn bphs_51_worked_examples_through_the_default_rule() {
-        let periods = compute_chara_with_antars(10, TEST_JD, BPHS_46_CHART);
+        let periods = compute_chara_with_antars(10, TEST_JD, CHART_A);
         let signs = |p: &RashiPeriod| p.antar.iter().map(|a| a.sign_index).collect::<Vec<_>>();
         assert_eq!(periods[0].sign_index, 10);
         assert_eq!(
@@ -1052,10 +1344,10 @@ mod tests {
     // worked example; consecutive order ignores the sixth-sixth shape.
     #[test]
     fn antar_rules_change_the_series() {
-        let placements = NatalPlacements::from_signs(10, BPHS_46_CHART);
+        let placements = NatalPlacements::from_signs(10, CHART_A);
         let strength = JaiminiStrength::new(&placements);
         let series = |rules: AntarRules| {
-            compute_chara_antar(10, TEST_JD, BPHS_46_CHART, rules, &strength)[0]
+            compute_chara_antar(10, TEST_JD, CHART_A, rules, &strength)[0]
                 .antar
                 .iter()
                 .map(|a| a.sign_index)
