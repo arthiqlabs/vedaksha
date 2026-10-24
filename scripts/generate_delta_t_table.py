@@ -276,6 +276,7 @@ def render(
         "\n"
         "/// Table S15 intervals 1 to "
         f"{len(spline)}, -720.0 to {HISTORIC_FIRST}, contiguous and increasing.\n"
+        "#[rustfmt::skip]\n"
         "pub(super) static SPLINE: &[SplineRow] = &[\n"
     )
     for k0, k1, a0, a1, a2, a3 in spline:
