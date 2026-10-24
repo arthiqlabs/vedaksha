@@ -16,7 +16,9 @@ Both come from the committed `tools/mcp-tools.json` at the tag, which the drift
 guard holds equal to what the binary answers to `tools/list`, so the card
 Smithery shows is the surface the binary serves.
 
-Usage: build_smithery_release.py VERSION BIN_DIR OUT_DIR
+Usage: build_smithery_release.py VERSION BIN_DIR OUT_DIR [SOURCE_DIR]
+  SOURCE_DIR is a checkout of the tag (default: this script's repository),
+  so a tag cut before this script existed can still be republished.
   BIN_DIR holds vedaksha-mcp-x86_64-unknown-linux-gnu and
   vedaksha-mcp-aarch64-apple-darwin, as attached to the GitHub Release.
   Writes OUT_DIR/bundle/ (manifest.json + server/) and OUT_DIR/payload.json.
@@ -49,16 +51,17 @@ CARD_TOOL_KEYS = (
 
 
 def main(argv: list[str]) -> int:
-    if len(argv) != 4:
+    if len(argv) not in (4, 5):
         print(__doc__, file=sys.stderr)
         return 1
     version, bin_dir, out_dir = argv[1], pathlib.Path(argv[2]), pathlib.Path(argv[3])
+    source = pathlib.Path(argv[4]) if len(argv) == 5 else ROOT
 
-    snapshot = json.loads((ROOT / "tools" / "mcp-tools.json").read_text())
+    snapshot = json.loads((source / "tools" / "mcp-tools.json").read_text())
     if snapshot["engineVersion"] != version:
         print(f"tools/mcp-tools.json is {snapshot['engineVersion']}, not {version}", file=sys.stderr)
         return 1
-    server = json.loads((ROOT / "server.json").read_text())
+    server = json.loads((source / "server.json").read_text())
     if server["version"] != version:
         print(f"server.json is {server['version']}, not {version}", file=sys.stderr)
         return 1

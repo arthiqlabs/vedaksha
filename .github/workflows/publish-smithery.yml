@@ -40,9 +40,13 @@ jobs:
       VERSION: ${{ inputs.version }}
       SERVER: arthiq-labs%2Fvedaksha
     steps:
+      # The scripts come from this workflow's own commit; the tool list and
+      # server.json come from the tag, which may predate the scripts.
+      - uses: actions/checkout@v4
       - uses: actions/checkout@v4
         with:
           ref: v${{ inputs.version }}
+          path: tag
       - name: Download the release binaries
         env:
           GH_TOKEN: ${{ github.token }}
@@ -52,7 +56,7 @@ jobs:
             -p vedaksha-mcp-x86_64-unknown-linux-gnu \
             -p vedaksha-mcp-aarch64-apple-darwin
       - name: Lay out the bundle and payload
-        run: python3 scripts/build_smithery_release.py "$VERSION" bin out
+        run: python3 scripts/build_smithery_release.py "$VERSION" bin out tag
       - name: Smoke-test the Linux binary from the bundle
         run: |
           printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
