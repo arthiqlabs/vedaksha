@@ -580,18 +580,14 @@ fn compute_combustion_surfaces_agree_across_all_three_states() {
 #[test]
 fn compute_dasha_surfaces_agree() {
     let birth_jd = 2_446_231.937_5_f64;
-    let out = vedaksha_wasm::compute_dasha(100.0, birth_jd, 2).expect("valid input");
-    compare(
-        "dasha-vimshottari",
-        "compute_dasha",
-        serde_json::json!({
-            "system": "Vimshottari",
-            "moon_longitude": 100.0,
-            "birth_jd": birth_jd,
-            "levels": 2
-        }),
-        &out,
-    );
+    let args = serde_json::json!({
+        "system": "Vimshottari",
+        "moon_longitude": 100.0,
+        "birth_jd": birth_jd,
+        "levels": 2
+    });
+    let out = vedaksha_wasm::compute_dasha(&args.to_string()).expect("valid input");
+    compare("dasha-vimshottari", "compute_dasha", args, &out);
 
     let v: Value = serde_json::from_str(&out).unwrap();
     assert_eq!(v["moon_nakshatra"], "Pushya");
@@ -613,6 +609,163 @@ fn compute_dasha_surfaces_agree() {
         antar[0]["sub_periods"].as_array().unwrap().is_empty(),
         "levels = 2 must stop at antar"
     );
+}
+
+/// The sign indices of the chart of BPHS chapter 46 (Aquarius lagna), as
+/// `compute_dasha` takes them for Chara and Narayana.
+fn chara_signs() -> Value {
+    serde_json::json!({
+        "sun": 9, "moon": 2, "mars": 1, "mercury": 10,
+        "jupiter": 10, "venus": 10, "saturn": 4, "rahu": 2
+    })
+}
+
+/// Longitudes, Aries lagna, whose Brahma graha is Jupiter in Sagittarius.
+fn brahma_chart() -> Value {
+    serde_json::json!({
+        "sun": 29.0, "moon": 95.0, "mars": 100.0, "mercury": 38.0,
+        "jupiter": 252.0, "venus": 63.0, "saturn": 124.0, "rahu": 350.0
+    })
+}
+
+/// Every dasha system, with the options that change which answer it gives, on
+/// both surfaces. Each call is sent as one object to the wasm export and to
+/// the MCP tool, and the two payloads must carry the same leaves.
+///
+/// What each call is chosen to catch, so that an argument dropped or
+/// defaulted on one surface changes the payload instead of landing on the
+/// same answer:
+///   * `levels` 2 (not the default 3) for Ashtottari and Yogini.
+///   * `rounds` 2 for Yogini: the cycle repeats, so the maha count doubles to
+///     16, and `until` is a second call that produces its own tree.
+///   * `antardashas` true for Chara (adds `antar` to each period), and a
+///     second Chara call without it, which must not carry any.
+///   * `karaka_scheme` "8" for Sthira and Maheshwara, which adds Rahu to the
+///     atmakaraka contest.
+///   * a chart with no Brahma graha for Sthira and Maheshwara, which has its
+///     own envelope (`no_brahma` true, the message, no periods).
+/// The structure asserted below is hand-derived: Yogini has 8 mahas a round,
+/// Chara, Narayana, Sthira and Niryana Shoola 12 periods, and the Chara
+/// antardashas are 12 per period (BPHS 51.5-51.9).
+#[test]
+fn compute_dasha_surfaces_agree_for_every_system() {
+    let birth_jd = 2_451_545.0_f64;
+    let no_brahma = {
+        let mut c = brahma_chart();
+        c["mercury"] = 8.0.into();
+        c["jupiter"] = 112.0.into();
+        c
+    };
+    let calls: Vec<(&str, Value)> = vec![
+        (
+            "vimshottari-default-levels",
+            serde_json::json!({ "moon_longitude": 123.45, "birth_jd": birth_jd }),
+        ),
+        (
+            "ashtottari",
+            serde_json::json!({ "system": "Ashtottari", "moon_longitude": 200.0,
+                "birth_jd": birth_jd, "levels": 2 }),
+        ),
+        (
+            "yogini-one-round",
+            serde_json::json!({ "system": "Yogini", "moon_longitude": 45.0,
+                "birth_jd": birth_jd, "levels": 2 }),
+        ),
+        (
+            "yogini-rounds",
+            serde_json::json!({ "system": "Yogini", "moon_longitude": 45.0,
+                "birth_jd": birth_jd, "levels": 2, "rounds": 2 }),
+        ),
+        (
+            "yogini-until",
+            serde_json::json!({ "system": "yogini", "moon_longitude": 45.0,
+                "birth_jd": birth_jd, "levels": 1,
+                "until": birth_jd + 60.0 * 365.25 }),
+        ),
+        (
+            "chara",
+            serde_json::json!({ "system": "Chara", "lagna_sign": 10,
+                "birth_jd": birth_jd, "graha_signs": chara_signs() }),
+        ),
+        (
+            "chara-antardashas",
+            serde_json::json!({ "system": "Chara", "lagna_sign": 10,
+                "birth_jd": birth_jd, "antardashas": true, "graha_signs": chara_signs() }),
+        ),
+        (
+            "narayana",
+            serde_json::json!({ "system": "Narayana", "lagna_sign": 10,
+                "birth_jd": birth_jd, "graha_signs": chara_signs() }),
+        ),
+        (
+            "sthira",
+            serde_json::json!({ "system": "Sthira", "lagna_sign": 0,
+                "birth_jd": birth_jd, "graha_longitudes": brahma_chart() }),
+        ),
+        (
+            "sthira-eight-karakas",
+            serde_json::json!({ "system": "Sthira", "lagna_sign": 0,
+                "birth_jd": birth_jd, "karaka_scheme": "8",
+                "graha_longitudes": brahma_chart() }),
+        ),
+        (
+            "sthira-no-brahma",
+            serde_json::json!({ "system": "Sthira", "lagna_sign": 0,
+                "birth_jd": birth_jd, "graha_longitudes": no_brahma }),
+        ),
+        (
+            "niryana-shoola",
+            serde_json::json!({ "system": "niryana_shoola", "lagna_sign": 0,
+                "birth_jd": birth_jd, "graha_longitudes": brahma_chart() }),
+        ),
+        (
+            "maheshwara",
+            serde_json::json!({ "system": "Maheshwara", "lagna_sign": 0,
+                "birth_jd": birth_jd, "graha_longitudes": brahma_chart() }),
+        ),
+        (
+            "maheshwara-eight-karakas",
+            serde_json::json!({ "system": "Maheshwara", "lagna_sign": 0,
+                "birth_jd": birth_jd, "karaka_scheme": "8",
+                "graha_longitudes": brahma_chart() }),
+        ),
+        (
+            "maheshwara-no-brahma",
+            serde_json::json!({ "system": "Maheshwara", "lagna_sign": 0,
+                "birth_jd": birth_jd, "graha_longitudes": no_brahma }),
+        ),
+    ];
+
+    let mut payloads = std::collections::BTreeMap::new();
+    for (label, args) in calls {
+        let out = vedaksha_wasm::compute_dasha(&args.to_string()).expect("valid input");
+        compare(label, "compute_dasha", args, &out);
+        payloads.insert(label, serde_json::from_str::<Value>(&out).unwrap());
+    }
+
+    let count = |label: &str, key: &str| payloads[label][key].as_array().unwrap().len();
+    assert_eq!(count("yogini-one-round", "maha_periods"), 8);
+    assert_eq!(count("yogini-rounds", "maha_periods"), 16);
+    assert!(count("yogini-until", "maha_periods") > 8);
+    for label in ["chara", "chara-antardashas", "narayana"] {
+        assert_eq!(count(label, "periods"), 12, "{label}");
+    }
+    for label in ["sthira", "sthira-eight-karakas", "niryana-shoola"] {
+        assert_eq!(count(label, "periods"), 12, "{label}");
+    }
+    let periods = payloads["chara-antardashas"]["periods"].as_array().unwrap();
+    assert!(
+        periods
+            .iter()
+            .all(|p| p["antar"].as_array().unwrap().len() == 12)
+    );
+    let plain = payloads["chara"]["periods"].as_array().unwrap();
+    assert!(plain.iter().all(|p| p.get("antar").is_none()));
+    for label in ["sthira-no-brahma", "maheshwara-no-brahma"] {
+        assert_eq!(payloads[label]["no_brahma"], true, "{label}");
+    }
+    assert_eq!(payloads["sthira"]["no_brahma"], false);
+    assert_eq!(payloads["maheshwara"]["no_brahma"], false);
 }
 
 /// Graded graha drishti, covering the plain grade and all three overrides.

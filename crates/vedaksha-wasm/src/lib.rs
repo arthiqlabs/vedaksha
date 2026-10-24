@@ -10,29 +10,35 @@
 
 use wasm_bindgen::prelude::*;
 
-/// Compute Vimshottari Dasha periods from Moon's sidereal longitude.
+mod dasha;
+
+/// Compute a Vedic dasha (planetary period) tree, any of the eight systems.
 ///
 /// # Arguments
-/// * `moon_longitude` — Moon's sidereal longitude in degrees [0, 360)
-/// * `birth_jd` — Julian Day of birth, in **UT1** (Universal Time) — not TT,
-///   not TDB, i.e. the same scale the MCP `compute_dasha` tool takes. Dasha
-///   computation is ephemeris-free, so the epoch is carried through rather
-///   than converted and every returned `start_jd`/`end_jd` is on this same
-///   UT1 scale.
-/// * `levels` — Depth of sub-periods (1-5, default 3)
+/// * `input_json` — JSON object with the arguments of the MCP `compute_dasha`
+///   tool, key for key: `birth_jd` (required; **UT1**, not TT or TDB — dasha
+///   computation is ephemeris-free, so the epoch is carried through rather than
+///   converted and every returned `start_jd`/`end_jd` is on this same UT1
+///   scale), `system` (`Vimshottari` by default, `Ashtottari`, `Yogini`,
+///   `Chara`, `Narayana`, `Sthira`, `NiryanaShoola`, `Maheshwara`), and, by
+///   system, `moon_longitude` (Vimshottari, Ashtottari, Yogini), `lagna_sign`
+///   with `graha_signs` (Chara, Narayana), `lagna_sign` with `graha_longitudes`
+///   (Sthira, NiryanaShoola, Maheshwara), `levels` (1 to 5, default 3),
+///   `rounds` or `until` (Yogini), `antardashas` (Chara) and `karaka_scheme`
+///   (Sthira, Maheshwara).
 ///
 /// # Returns
-/// JSON string with the complete dasha tree.
+/// JSON string with the dasha tree, the payload of the MCP tool for the same
+/// arguments: its envelope depends on `system`.
 ///
 /// # Errors
-/// Errors if the dasha tree cannot be serialised to JSON. `levels` is clamped to
-/// 1..=5 rather than rejected.
+/// Errors, in the words of the MCP tool, if `input_json` is malformed, if a
+/// field is missing, out of range or does not apply to the system (including
+/// `levels` outside 1 to 5, which is no longer clamped), or if a Yogini request
+/// would carry more than 50,000 periods.
 #[wasm_bindgen]
-pub fn compute_dasha(moon_longitude: f64, birth_jd: f64, levels: u8) -> Result<String, JsError> {
-    let levels = levels.clamp(1, 5);
-    let dasha =
-        vedaksha_vedic::dasha::vimshottari::compute_vimshottari(moon_longitude, birth_jd, levels);
-    serde_json::to_string(&dasha).map_err(|e| JsError::new(&e.to_string()))
+pub fn compute_dasha(input_json: &str) -> Result<String, JsError> {
+    dasha::compute_dasha_inner(input_json).map_err(|e| JsError::new(&e))
 }
 
 /// Get the nakshatra and pada for a sidereal longitude.
@@ -774,6 +780,13 @@ struct ShadbalaInput {
     tz_offset_minutes: i32,
 }
 
+/// Why `Tropical` is refused: the words of the MCP tool's refusal
+/// (`vedaksha_mcp::tools::compute_shadbala::TROPICAL_REFUSED`); a unit test
+/// holds the two together.
+const SHADBALA_TROPICAL_REFUSED: &str = "Shadbala is defined on sidereal positions (the signs, \
+    houses and vargas it reads are those of the sidereal zodiac), so a tropical ayanamsha \
+    gives no Shadbala; pass one of the sidereal systems, for example IndianOfficial";
+
 fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
     use vedaksha_ephem_core::analytical::AnalyticalProvider;
     use vedaksha_ephem_core::jpl::EphemerisProvider as _;
@@ -815,6 +828,11 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
         vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
             .map_err(|e| e.to_string())?
     };
+    if ayanamsha == vedaksha_astro::sidereal::Ayanamsha::Tropical {
+        return Err(format!(
+            "Invalid parameter 'ayanamsha': {SHADBALA_TROPICAL_REFUSED}"
+        ));
+    }
     let house_name = input.house_system.as_deref().unwrap_or("Placidus");
     let house_system = house_system_from_str(house_name)
         .map_err(|_| format!("Unknown house system: {house_name}"))?;
@@ -878,7 +896,8 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
 /// # Arguments
 /// * `input_json` — JSON object with the arguments of the MCP
 ///   `compute_shadbala` tool, key for key: `julian_day` (UT1), `latitude`,
-///   `longitude` (east positive) and `ayanamsha` (all required), and optional
+///   `longitude` (east positive) and `ayanamsha` (all required; a sidereal
+///   system, `Tropical` is refused), and optional
 ///   `house_system` (default `"Placidus"`), `elevation_m` (default 0) and
 ///   `tz_offset_minutes` (default 0).
 ///
@@ -896,7 +915,8 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
 /// Errors if `input_json` is malformed or carries a field the tool does not
 /// have (including the earlier `planets` array), if a coordinate, elevation or
 /// clock offset is out of range, if the ayanamsha or house system is not
-/// known, or if the Sun does not both rise and set at the place (the polar day
+/// known or the ayanamsha is `Tropical` (Shadbala is defined on sidereal
+/// positions), or if the Sun does not both rise and set at the place (the polar day
 /// or night, which has no Hindu day to divide).
 #[wasm_bindgen]
 pub fn compute_shadbala(input_json: &str) -> Result<String, JsError> {
@@ -1514,6 +1534,34 @@ mod tests {
                 assert!((ishta + kashta - 60.0).abs() < 1e-9);
             }
             assert!(out["moment"]["jd_sunrise"].as_f64().unwrap() < 2_461_338.0);
+        }
+
+        /// Shadbala is defined on sidereal positions: `Tropical` (under either
+        /// spelling) is refused in the MCP tool's words, and every sidereal
+        /// system is not.
+        #[test]
+        fn compute_shadbala_refuses_the_tropical_ayanamsha_as_the_mcp_tool_does() {
+            for name in ["Tropical", "tropical", "None"] {
+                let mut a: serde_json::Value = serde_json::from_str(INPUT).unwrap();
+                a["ayanamsha"] = name.into();
+                let wasm = compute_shadbala_inner(&a.to_string()).unwrap_err();
+
+                let server = vedaksha_mcp::server::McpServer::new();
+                let request = serde_json::json!({
+                    "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                    "params": { "name": "compute_shadbala", "arguments": a }
+                });
+                let response: serde_json::Value =
+                    serde_json::from_str(&server.handle_request(&request.to_string())).unwrap();
+                assert_eq!(response["error"]["data"]["error_code"], "INVALID_PARAMETER");
+                assert_eq!(
+                    response["error"]["message"].as_str().unwrap(),
+                    wasm,
+                    "{name}: the surfaces refuse in different words"
+                );
+                assert!(wasm.contains("sidereal"), "{wasm}");
+            }
+            assert!(compute_shadbala_inner(INPUT).is_ok());
         }
 
         #[test]

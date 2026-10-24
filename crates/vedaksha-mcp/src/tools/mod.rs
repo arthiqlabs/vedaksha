@@ -166,6 +166,37 @@ pub fn ayanamsha_schema_enum() -> serde_json::Value {
     )
 }
 
+/// The `enum` of an ayanamsha parameter that must be sidereal: the eleven
+/// sidereal systems, without `Tropical`. For a tool whose quantity is defined
+/// on sidereal positions (Shadbala), so the schema does not offer a value the
+/// tool refuses.
+#[must_use]
+pub fn ayanamsha_sidereal_schema_enum() -> serde_json::Value {
+    serde_json::Value::Array(
+        vedaksha_astro::sidereal::Ayanamsha::SIDEREAL
+            .iter()
+            .map(|a| serde_json::Value::String(a.key().to_string()))
+            .collect(),
+    )
+}
+
+/// [`ayanamsha_schema_description`] for a parameter that must be sidereal: the
+/// same systems and primaries, with the offer of `Tropical` replaced by the
+/// statement that it is refused.
+#[must_use]
+pub fn ayanamsha_sidereal_schema_description() -> String {
+    let full = ayanamsha_schema_description();
+    let offer = "Pass Tropical for no rotation.";
+    assert!(
+        full.contains(offer),
+        "ayanamsha_schema_description no longer offers Tropical in the words this replaces"
+    );
+    full.replace(
+        offer,
+        "Tropical is refused: this tool is defined on sidereal positions.",
+    )
+}
+
 /// A description of the ayanamsha parameter that names every system and the
 /// primary it is derived from.
 ///

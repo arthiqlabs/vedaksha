@@ -93,8 +93,8 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "ayanamsha": {
                     "type": "string",
-                    "description": crate::tools::ayanamsha_schema_description(),
-                    "enum": crate::tools::ayanamsha_schema_enum()
+                    "description": crate::tools::ayanamsha_sidereal_schema_description(),
+                    "enum": crate::tools::ayanamsha_sidereal_schema_enum()
                 },
                 "house_system": {
                     "type": "string",
@@ -133,7 +133,7 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "true_ayanamsha_value": {
                     "type": "number",
-                    "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees. Zero for a tropical chart."
+                    "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees."
                 },
                 "house_system": {
                     "type": "string",
@@ -242,6 +242,12 @@ pub fn definition() -> super::ToolDefinition {
     }
 }
 
+/// Why `Tropical` is refused. The `vedaksha-wasm` `compute_shadbala` export
+/// carries the same words; its parity test compares them.
+pub const TROPICAL_REFUSED: &str = "Shadbala is defined on sidereal positions (the signs, \
+    houses and vargas it reads are those of the sidereal zodiac), so a tropical ayanamsha \
+    gives no Shadbala; pass one of the sidereal systems, for example IndianOfficial";
+
 /// Validate a [`ComputeShadbalaInput`].
 ///
 /// The ayanamsha and house-system names are resolved by the handler, with the
@@ -250,8 +256,18 @@ pub fn definition() -> super::ToolDefinition {
 ///
 /// # Errors
 /// Returns [`McpError`] for a Julian Day, latitude, longitude, elevation or
-/// clock offset out of range.
+/// clock offset out of range, and for the `Tropical` ayanamsha: Shadbala is
+/// defined on sidereal positions, so a chart without the ayanamsha rotation
+/// has none to give, and a number computed from it would read as one.
 pub fn validate(input: &ComputeShadbalaInput) -> Result<(), McpError> {
+    if matches!(
+        input
+            .ayanamsha
+            .parse::<vedaksha_astro::sidereal::Ayanamsha>(),
+        Ok(vedaksha_astro::sidereal::Ayanamsha::Tropical)
+    ) {
+        return Err(McpError::invalid_parameter("ayanamsha", TROPICAL_REFUSED));
+    }
     validation::validate_jd(input.julian_day)?;
     validation::validate_latitude(input.latitude)?;
     validation::validate_longitude(input.longitude)?;
@@ -294,6 +310,46 @@ mod tests {
             break_it(&mut input);
             assert_eq!(validate(&input).unwrap_err().error_code, code);
         }
+    }
+
+    #[test]
+    fn validate_refuses_the_tropical_ayanamsha_under_every_spelling() {
+        for name in ["Tropical", "tropical", "TROPICAL", "None", "none"] {
+            let mut input = valid();
+            input.ayanamsha = name.to_string();
+            let err = validate(&input).unwrap_err();
+            assert_eq!(err.error_code, "INVALID_PARAMETER", "{name}");
+            assert!(err.message.contains("ayanamsha"), "{name}: {}", err.message);
+            assert!(err.message.contains("sidereal"), "{name}: {}", err.message);
+        }
+        // Every sidereal system is still accepted, and an unknown name is left
+        // to the handler's own parser (and its own message).
+        for a in vedaksha_astro::sidereal::Ayanamsha::SIDEREAL {
+            let mut input = valid();
+            input.ayanamsha = a.key().to_string();
+            assert!(validate(&input).is_ok(), "{}", a.key());
+        }
+        let mut unknown = valid();
+        unknown.ayanamsha = "NoSuchSystem".to_string();
+        assert!(validate(&unknown).is_ok());
+    }
+
+    #[test]
+    fn the_schema_offers_only_the_sidereal_systems() {
+        let def = definition();
+        let offered = def.input_schema["properties"]["ayanamsha"]["enum"]
+            .as_array()
+            .unwrap();
+        assert_eq!(
+            offered.len(),
+            vedaksha_astro::sidereal::Ayanamsha::SIDEREAL.len()
+        );
+        assert!(!offered.iter().any(|v| v == "Tropical"));
+        let text = def.input_schema["properties"]["ayanamsha"]["description"]
+            .as_str()
+            .unwrap();
+        assert!(!text.contains("Pass Tropical"), "{text}");
+        assert!(text.contains("Tropical is refused"), "{text}");
     }
 
     #[test]
