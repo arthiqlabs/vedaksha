@@ -655,6 +655,36 @@ fn venus_has_its_four_events_in_order_with_the_right_motion() {
     for (i, (t, name)) in events.iter().enumerate() {
         assert_eq!(*name, order[(first + i) % 4], "event {i} at {t}");
     }
+    // Each event is a change of the kalamsha across the graha's limit, which is
+    // 8 while Venus is retrograde and 10 while direct (IX.2-3 and IX.7): at the
+    // event it is at least the limit, and on the neighbouring day (the day before
+    // an udaya, the day after an asta) it is under it. Found without the
+    // module's formula.
+    for (t, name) in &events {
+        let (side, udaya) = match *name {
+            "udaya east" => (HeliacalSide::East, true),
+            "asta east" => (HeliacalSide::East, false),
+            "udaya west" => (HeliacalSide::West, true),
+            _ => (HeliacalSide::West, false),
+        };
+        let limit = if rate(*t) < 0.0 { 8.0 } else { 10.0 };
+        let neighbour = sun_event_near(&sky, if udaya { *t - 1.0 } else { *t + 1.0 }, side);
+        let (k, k_next) = (
+            independent_kalamsha(&sky, Body::Venus, *t, side),
+            independent_kalamsha(&sky, Body::Venus, neighbour, side),
+        );
+        assert!(
+            k >= limit - 1.0e-6,
+            "{name} at {t}: kalamsha {k}, limit {limit}"
+        );
+        // Venus may change motion between the two days; the neighbour is judged
+        // against the limit of the motion it has then.
+        let limit_next = if rate(neighbour) < 0.0 { 8.0 } else { 10.0 };
+        assert!(
+            k_next < limit_next,
+            "{name} at {t}: neighbouring day {k_next}, limit {limit_next}"
+        );
+    }
     // A cycle apart.
     let gap = events[4].0 - events[0].0;
     assert!(
