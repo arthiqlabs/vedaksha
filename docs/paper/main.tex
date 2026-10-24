@@ -431,8 +431,11 @@ correction toward any modern ephemeris. For the outer planets over 1900--2100, t
 untruncated series gives the same residuals to four decimals (\texttt{MAINTENANCE.md}
 \S10), so truncation is not the cause there; that check was not repeated at these
 epochs. Applications needing sub-arcsecond planetary positions centuries from J2000.0
-should use the numerical SPK path with a kernel covering the interval; that combination
-was not measured here. Addressing both sides in TT removes $\Delta T$ from this
+should use the numerical SPK path with a kernel covering the interval. At the same 43
+instants, the SPK path loaded with the full DE440 kernel agrees with Skyfield's apparent
+place from that kernel to 0.003 arcseconds at worst, with no growth away from J2000.0.
+Because both sides read one kernel, this checks only the apparent-place pipeline, not
+the kernel's own accuracy. Addressing both sides in TT removes $\Delta T$ from this
 experiment but does not eliminate differences in apparent-place conventions.
 
 \subsection{Scope and other checks}
