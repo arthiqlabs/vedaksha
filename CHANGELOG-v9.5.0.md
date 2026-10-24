@@ -9,7 +9,9 @@ Accuracy, speed, and a much larger Vedic surface, in one release.
   to get there; see "Changed answers, the engine".
 - **Speed.** The analytical Moon is about three times faster, a nine-body
   chart about three and a half times, and the long Vedic scans make a tenth
-  to a twentieth of the ephemeris calls they did. See "Performance".
+  to a twentieth of the ephemeris calls they did. A batch of MCP muhurta and
+  transit searches runs in 0.46 s where v9.4.1 took 17.5 s. See
+  "Performance".
 - **Vedic.** The complete shadbala of BPHS 27, bhava bala, vimshopaka, sputa
   drishti, four upagrahas, the Sthira, Niryana Shoola and Maheshwara dashas,
   Yogini beyond its first round, Chara antardashas, and eclipse, ingress,
@@ -147,11 +149,16 @@ average of 10 to 22. The ratio from the other run is in brackets.
 | Sun, `ecliptic_position` | 6.06 µs | 2.90 µs | 2.1× |
 | VSOP87A Mercury / Earth / Jupiter / Neptune | 4.6 / 6.1 / 12.8 / 6.4 µs | 1.8 / 2.9 / 6.0 / 3.5 µs | 1.8× to 2.5× |
 
-The Sun's other run was disturbed by load and is not quoted. The MCP
-`search_muhurta` and `search_transits` tools together ran a batch of 25
-requests in 0.47 s, where the same release without the walk took 2.94 s
-(measured once at a load of 38, so treat that ratio as rough; against v9.4.1
-the gap is wider, since the series beneath the walk is faster too).
+The Sun's other run was disturbed by load and is not quoted.
+
+End to end over MCP: one batch of 25 requests (20 `search_muhurta` windows of
+30 days at four places and five dates, and five one-year `search_transits`
+scans of the Moon, the Sun and Mars), the same 1,220 windows and 928 events
+from both releases, best of three runs at a load of 13 to 17:
+
+| | v9.4.1 | v9.5.0 |
+|---|---|---|
+| Wall time | 17.5 s | 0.46 s |
 
 How it is done, none of it an approximation of the answer:
 
