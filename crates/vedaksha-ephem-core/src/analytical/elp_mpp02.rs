@@ -80,7 +80,6 @@ use std::sync::LazyLock;
 
 use crate::analytical::coefficients::loader::{ElpMainTerm, ElpPertTerm};
 use crate::analytical::coefficients::{moon_distance, moon_latitude, moon_longitude};
-use crate::analytical::fused::mul_add;
 use crate::analytical::phase_graph::{Multipliers, N_ARGS, Pair, PhaseGraph};
 
 /// Count of ELP/MPP02 evaluations performed by this process.
@@ -1191,9 +1190,9 @@ fn eval_main_series<const VELOCITY: bool>(
         for (lane, (&id, &a)) in ic.iter().zip(ac).enumerate() {
             let id = id as usize;
             let p = pool[id];
-            value[lane] = mul_add(a, p[value_col], value[lane]);
+            value[lane] += a * p[value_col];
             if VELOCITY {
-                dot[lane] = mul_add(a * omega[id], p[dot_col], dot[lane]);
+                dot[lane] += a * omega[id] * p[dot_col];
             }
         }
     }
@@ -1202,9 +1201,9 @@ fn eval_main_series<const VELOCITY: bool>(
     for (&id, &a) in id_rest.iter().zip(amp_rest) {
         let id = id as usize;
         let p = pool[id];
-        v = mul_add(a, p[value_col], v);
+        v += a * p[value_col];
         if VELOCITY {
-            d = mul_add(a * omega[id], p[dot_col], d);
+            d += a * omega[id] * p[dot_col];
         }
     }
 
@@ -1233,10 +1232,10 @@ fn eval_pert_group<const VELOCITY: bool>(
         for (lane, (&id, &[s, c])) in ic.iter().zip(scc).enumerate() {
             let id = id as usize;
             let p = pool[id];
-            inner_sum[lane] += mul_add(c, p[1], s * p[0]);
+            inner_sum[lane] += s * p[0] + c * p[1];
             if VELOCITY {
-                let inner_dot = mul_add(s, p[1], -(c * p[0]));
-                omega_sum[lane] = mul_add(omega[id], inner_dot, omega_sum[lane]);
+                let inner_dot = s * p[1] - c * p[0];
+                omega_sum[lane] += omega[id] * inner_dot;
             }
         }
     }
@@ -1245,10 +1244,10 @@ fn eval_pert_group<const VELOCITY: bool>(
     for (&id, &[s, c]) in id_rest.iter().zip(sc_rest) {
         let id = id as usize;
         let p = pool[id];
-        inner += mul_add(c, p[1], s * p[0]);
+        inner += s * p[0] + c * p[1];
         if VELOCITY {
-            let inner_dot = mul_add(s, p[1], -(c * p[0]));
-            w = mul_add(omega[id], inner_dot, w);
+            let inner_dot = s * p[1] - c * p[0];
+            w += omega[id] * inner_dot;
         }
     }
     (inner, w)

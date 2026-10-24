@@ -64,8 +64,6 @@
 //! The two therefore differ by the *old* route's phase rounding, which grows
 //! with `|t|`; `elp_mpp02.rs` measures it end to end.
 
-use super::fused::mul_add;
-
 /// Number of base arguments a multiplier vector can reference.
 pub(crate) const N_ARGS: usize = 13;
 
@@ -83,10 +81,7 @@ pub(crate) type Pair = [f64; 2];
 /// Multiply two unit-circle pairs: the pair of the summed angle.
 #[inline(always)]
 fn rotate(a: Pair, b: Pair) -> Pair {
-    [
-        mul_add(a[0], b[1], a[1] * b[0]),
-        mul_add(a[1], b[1], -(a[0] * b[0])),
-    ]
+    [a[0] * b[1] + a[1] * b[0], a[1] * b[1] - a[0] * b[0]]
 }
 
 /// Prefix tree over multiplier vectors, evaluated into a flat pool of
