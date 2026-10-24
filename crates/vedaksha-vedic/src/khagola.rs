@@ -1804,44 +1804,38 @@ mod tests {
     #[test]
     fn illinois_finds_a_nonlinear_root_in_a_few_reads() {
         use core::sync::atomic::{AtomicU32, Ordering};
-        // x^3 - 2 on [1, 2]: the cube root of 2, 1.259 921 049 894 873.
-        let n = AtomicU32::new(0);
-        let f = |x: f64| {
-            n.fetch_add(1, Ordering::Relaxed);
-            Some(x * x * x - 2.0)
-        };
-        let root = illinois(&f, 1.0, 2.0, 1.0e-12).unwrap();
-        assert!(
-            (root - 1.259_921_049_894_873).abs() < 1.0e-9,
-            "root = {root}"
-        );
-        assert!(
-            n.load(Ordering::Relaxed) < 20,
-            "{} reads",
-            n.load(Ordering::Relaxed)
-        );
-        // A steeply convex function, on which plain regula falsi leaves one end
-        // of the bracket where it is for dozens of passes: exp(10 x) - 2 on
-        // [0, 1], whose root is ln(2) / 10.
-        let m = AtomicU32::new(0);
-        let h = |x: f64| {
-            m.fetch_add(1, Ordering::Relaxed);
-            Some((10.0 * x).exp() - 2.0)
-        };
-        let root = illinois(&h, 0.0, 1.0, 1.0e-12).unwrap();
-        assert!((root - 2.0_f64.ln() / 10.0).abs() < 1.0e-9, "root = {root}");
-        assert!(
-            m.load(Ordering::Relaxed) < 20,
-            "{} reads",
-            m.load(Ordering::Relaxed)
-        );
-        // Falling through zero as well as rising.
-        let g = |x: f64| Some(2.0 - x * x * x);
-        let root = illinois(&g, 1.0, 2.0, 1.0e-12).unwrap();
-        assert!(
-            (root - 1.259_921_049_894_873).abs() < 1.0e-9,
-            "root = {root}"
-        );
+        // x^3 - 2 on [1, 2] (root 1.259 921 049 894 873) and exp(10 x) - 2 on
+        // [0, 1] (root ln(2) / 10), both convex and rising, and each reflected
+        // in x so that it is convex and falling. Plain regula falsi leaves one
+        // end of the bracket where it is for dozens of passes on a convex
+        // function, and which end depends on the direction, so every one of the
+        // four is run; Illinois needs about 20 reads to a 1e-12 residual where
+        // plain regula falsi needs over 30.
+        let cases: [(fn(f64) -> f64, f64, f64, f64); 2] = [
+            (|x| x * x * x - 2.0, 1.0, 2.0, 1.259_921_049_894_873),
+            (|x| (10.0 * x).exp() - 2.0, 0.0, 1.0, 2.0_f64.ln() / 10.0),
+        ];
+        for (f, a, b, root) in cases {
+            for mirrored in [false, true] {
+                let n = AtomicU32::new(0);
+                let g = |x: f64| {
+                    n.fetch_add(1, Ordering::Relaxed);
+                    Some(if mirrored { f(-x) } else { f(x) })
+                };
+                let (lo, hi) = if mirrored { (-b, -a) } else { (a, b) };
+                let found = illinois(&g, lo, hi, 1.0e-12).unwrap();
+                let want = if mirrored { -root } else { root };
+                let reads = n.load(Ordering::Relaxed);
+                assert!(
+                    (found - want).abs() < 1.0e-9,
+                    "root = {found}, wanted {want}"
+                );
+                assert!(
+                    reads <= 22,
+                    "{reads} reads, mirrored {mirrored}, on [{lo}, {hi}]"
+                );
+            }
+        }
     }
 
     #[test]
