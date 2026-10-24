@@ -881,6 +881,7 @@ fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
         "julian_day": input.julian_day,
         "true_ayanamsha_value": ayanamsha_value,
         "house_system": format!("{:?}", chart.houses.system),
+        "polar_fallback": chart.houses.polar_fallback,
         "moment": result.moment,
         "cusps": result.cusps,
         "planets": result.planets,

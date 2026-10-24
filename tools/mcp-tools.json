@@ -973,7 +973,7 @@
             "type": "object"
           },
           "house_system": {
-            "description": "The house system the cusps and house placements come from.",
+            "description": "The house system requested. When `polar_fallback` is true it was undefined at this latitude, and the cusps and house placements come from the fallback the natal chart uses.",
             "type": "string"
           },
           "julian_day": {
@@ -1196,6 +1196,10 @@
             },
             "type": "array"
           },
+          "polar_fallback": {
+            "description": "True when the requested house system was undefined at this latitude and a fallback was used, so Dig Bala and Kendradi Bala are read from the fallback's cusps and houses.",
+            "type": "boolean"
+          },
           "true_ayanamsha_value": {
             "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees.",
             "type": "number"
@@ -1205,6 +1209,7 @@
           "julian_day",
           "true_ayanamsha_value",
           "house_system",
+          "polar_fallback",
           "moment",
           "cusps",
           "planets"

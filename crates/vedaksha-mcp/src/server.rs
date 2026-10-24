@@ -1143,6 +1143,7 @@ impl McpServer {
             "julian_day": input.julian_day,
             "true_ayanamsha_value": ayanamsha_value,
             "house_system": format!("{:?}", chart.houses.system),
+            "polar_fallback": chart.houses.polar_fallback,
             "moment": result.moment,
             "cusps": result.cusps,
             "planets": result.planets,
@@ -3313,6 +3314,23 @@ mod tests {
     /// Shadbala is defined on sidereal positions, so the tropical zodiac is
     /// refused rather than answered with a number that reads as Jyotish. Through
     /// the request path, so the error a client sees is the one asserted.
+    /// Where Placidus is undefined the chart falls back, and the cusps Dig
+    /// Bala reads are the fallback's; the response must say so rather than
+    /// label them Placidus alone.
+    #[test]
+    fn compute_shadbala_reports_the_polar_house_fallback() {
+        let at = |latitude: f64| {
+            let mut args = shadbala_args();
+            args["julian_day"] = 2_460_390.0.into();
+            args["latitude"] = latitude.into();
+            args["longitude"] = 20.0.into();
+            McpServer::call_compute_shadbala(&args).unwrap()
+        };
+        let polar = at(70.0);
+        assert_eq!(polar["polar_fallback"], true, "{}", polar["cusps"]);
+        assert_eq!(at(13.0)["polar_fallback"], false);
+    }
+
     #[test]
     fn compute_shadbala_refuses_the_tropical_ayanamsha() {
         for name in ["Tropical", "tropical", "None"] {

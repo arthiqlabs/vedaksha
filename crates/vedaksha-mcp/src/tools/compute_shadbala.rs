@@ -137,7 +137,15 @@ pub fn definition() -> super::ToolDefinition {
                 },
                 "house_system": {
                     "type": "string",
-                    "description": "The house system the cusps and house placements come from."
+                    "description": "The house system requested. When `polar_fallback` is \
+                        true it was undefined at this latitude, and the cusps and house \
+                        placements come from the fallback the natal chart uses."
+                },
+                "polar_fallback": {
+                    "type": "boolean",
+                    "description": "True when the requested house system was undefined at \
+                        this latitude and a fallback was used, so Dig Bala and Kendradi \
+                        Bala are read from the fallback's cusps and houses."
                 },
                 "moment": {
                     "type": "object",
@@ -234,8 +242,8 @@ pub fn definition() -> super::ToolDefinition {
                 }
             },
             "required": [
-                "julian_day", "true_ayanamsha_value", "house_system", "moment",
-                "cusps", "planets"
+                "julian_day", "true_ayanamsha_value", "house_system", "polar_fallback",
+                "moment", "cusps", "planets"
             ]
         })),
         structured_key: None,
