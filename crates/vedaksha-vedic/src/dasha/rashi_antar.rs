@@ -30,9 +30,8 @@
 //! (ch. 50 in the same recension, slokas 90 and 91) instead starts the
 //! antars at the rashi the dasha rashi's lord occupies
 //! ([`AntarStart::LordOccupied`]); the two chapters are in conflict and
-//! neither says which governs, so that is a parameter. The worked examples
-//! of ch. 51 start every antar series at the dasha rashi itself
-//! ([`AntarStart::RashiItself`]).
+//! neither says which governs, so that is a parameter. Always starting at
+//! the dasha rashi itself is a third reading ([`AntarStart::RashiItself`]).
 //!
 //! **Order from the start.** Slokas 6 to 9 give a shape by the modality of
 //! the dasha rashi and a direction by its parity:
@@ -50,9 +49,8 @@
 //!   backward as well.
 //!
 //! Grade (a) for the shapes and the direction; the sloka numbers 7 to 9
-//! belong to the verses as the recension prints them, and the worked
-//! examples of that chapter (an Aquarius and a Pisces dasha) reproduce
-//! exactly as the module tests show. The same three shapes appear in the
+//! belong to the verses as the recension prints them, and the module tests
+//! derive an Aquarius and a Pisces series from them by hand. The same three shapes appear in the
 //! critical edition of the Upadesha Sutras at 2.4.8 to 2.4.10 (*prathame
 //! prak-pratyaktvam*, *dvitiye ravitah*, *prithak-kramena trtiye
 //! catushtayadi*), where the commentary extends them to every rashi dasha
@@ -165,7 +163,8 @@ pub enum AntarStart {
     /// Grade (b); in conflict with the default. A rashi with two lords uses
     /// the one `dasha::chara` resolves to for its duration.
     LordOccupied,
-    /// The dasha rashi itself, as the worked examples of BPHS ch. 51 do.
+    /// The dasha rashi itself, whatever the strength of its seventh. Grade
+    /// (c): a reading, not a rule either chapter states.
     RashiItself,
 }
 

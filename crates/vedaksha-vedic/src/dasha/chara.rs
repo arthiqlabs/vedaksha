@@ -189,8 +189,8 @@
 //! kramena trtiye catushtayadi* (2.4.10), numbering of the critical edition
 //! used throughout `dasha::rashi_antar`, whose commentary says these three
 //! give the order "everywhere in the chara-paryaya dasha". Grade (a) for the
-//! BPHS rule, whose own worked examples are encoded as tests in
-//! `dasha::rashi_antar`; grade (b) for the sutras (the commentary's
+//! BPHS rule, whose series the tests in `dasha::rashi_antar` derive from
+//! the verses by hand; grade (b) for the sutras (the commentary's
 //! extension to every chara dasha is the commentator's). The rules that the
 //! texts leave open (where the series starts when the chapters conflict,
 //! whether to keep the sixth-sixth and kendra shapes) are
@@ -1315,7 +1315,7 @@ mod tests {
     // lord is the stronger by 2.3.10 and the series starts at Libra: 6 7 8 9
     // 10 11 0 1 2 3 4 5.
     #[test]
-    fn bphs_51_worked_examples_through_the_default_rule() {
+    fn bphs_51_series_through_the_default_rule() {
         let periods = compute_chara_with_antars(10, TEST_JD, CHART_A);
         let signs = |p: &RashiPeriod| p.antar.iter().map(|a| a.sign_index).collect::<Vec<_>>();
         assert_eq!(periods[0].sign_index, 10);
@@ -1340,8 +1340,8 @@ mod tests {
     // 22. The start rules differ where the two BPHS chapters conflict.
     // Aquarius's lord resolves to Rahu in Gemini(2) for this chart (see the
     // duration tests), so the lord-occupied start gives every sixth from
-    // Gemini: 2 7 0 5 10 3 8 1 6 11 4 9. The itself-always start gives the
-    // worked example; consecutive order ignores the sixth-sixth shape.
+    // Gemini: 2 7 0 5 10 3 8 1 6 11 4 9. The itself-always start gives
+    // Aquarius's own series; consecutive order ignores the sixth-sixth shape.
     #[test]
     fn antar_rules_change_the_series() {
         let placements = NatalPlacements::from_signs(10, CHART_A);

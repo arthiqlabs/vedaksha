@@ -332,6 +332,8 @@ Dual lordship is resolved for the two signs that have it — Scorpio (Mars and K
 the classical strength cascade, with one documented divergence: the texts list rashi-bala before the
 "larger number of years" criterion, but the classical worked example below requires the reverse
 order, so the implementation follows the worked example and says so.
+**The order of that cascade is superseded by Fix 14 below**, which follows the verses' own order;
+the conformance-oracle paragraph that follows no longer describes the code.
 **Verified against a classical conformance oracle.** The BPHS chapter carries a worked chart giving
 all twelve dasha lengths; the implemented rule reproduces all twelve exactly, exercising forward and
 reverse counting, the own-sign case, and both dual-lord signs. It is encoded as a regression test.
@@ -358,6 +360,30 @@ late-20th-century work by a living author. Its duration rule is identical to Cha
 found, so it receives the identical corrected computation. Its one genuinely distinguishing feature
 (a different starting-sign rule) is deliberately not implemented: its only written source is a
 modern copyrighted work, which is out of bounds for this project's clean-room position.
+
+### Fix 14 — Chara Dasha's two-lord strength tests follow the verses' order
+
+For Scorpio (Mars and Ketu) and Aquarius (Saturn and Rahu), the dual-lord choice is stated in BPHS
+46.158 to 166 (the recension this crate follows) and in the *vriddha-karikas* printed with the
+Upadesha Sutras at 1.1.7 to 13, read in Sanskrit from page images; a second BPHS recension (ch. 31.77
+to 86) agrees. Both lords in the sign give 12 years; one in it gives the count to the other; both
+elsewhere give the count to the stronger, judged in this order: a companion over none and more
+companions over fewer, then the nature of the rashi (dual over fixed over movable), then an exalted
+lord, then the larger count, last (46.163b, *rashi-sattva-samanatve bahu-varsho bali bhavet*).
+
+Fix 13 compared the counts first. Because two different signs always give different counts, that
+step always decided and the rashi and exaltation tests could never be reached; the order had been
+fitted to an example chart that is not part of the Sanskrit text. The verses' order is now the
+default and the earlier order is removed, having no primary support. Where the exalted lord stands is
+the one open point: the verses place it after the nature of the rashi, while the other recension's
+31.82 (*yady alpa-varshado vipra tadapi tunga-go bali*) reads it as winning even with the fewer
+years; that reading is `ExaltationRank::Decisive`.
+
+Answers change only for those two signs, and only when both lords stand outside the sign and tie on
+companions. Counted exactly over every placement of the eight grahas with each sign equally likely
+(not real-chart frequencies): Scorpio's duration changes in 14.16% of placements and Aquarius's in
+11.42%. Every later period of a changed chart moves by the difference in years. Narayana Dasha, an
+alias of Chara, changes identically.
 
 ## Standing rules
 
