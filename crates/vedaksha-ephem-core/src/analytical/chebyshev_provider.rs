@@ -206,15 +206,15 @@ impl SegmentCache {
 
         // Not cached: fit outside the lock. Two threads may fit the same
         // segment; they get the same polynomial, so whichever is stored wins.
-        let lo = (GRID_ORIGIN_JD + index as f64 * self.spec.days).max(JD_MIN);
-        let hi = (GRID_ORIGIN_JD + (index + 1) as f64 * self.spec.days).min(JD_MAX);
-        // A segment clipped to nothing (an index boundary exactly on the edge
-        // of the range) borrows the interval just inside it.
-        let (lo, hi) = if hi - lo < 1e-6 {
-            (hi - self.spec.days, hi)
-        } else {
-            (lo, hi)
-        };
+        //
+        // The segment is the whole grid interval even where it overhangs the
+        // supported range: the series evaluate at any date, so the nodes past
+        // the edge are samples of the same smooth function, and a query only
+        // ever reads the polynomial inside the range. (Clipping the interval
+        // to the range was tried and a mutation test showed nothing depended
+        // on it.)
+        let lo = GRID_ORIGIN_JD + index as f64 * self.spec.days;
+        let hi = GRID_ORIGIN_JD + (index + 1) as f64 * self.spec.days;
         let fit = Chebyshev::<3>::try_fit(lo, hi, self.spec.nodes, sample)?;
         self.fits.fetch_add(1, Ordering::Relaxed);
         let out = Self::read(&fit, jd, with_velocity);
