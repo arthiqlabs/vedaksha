@@ -127,7 +127,7 @@ fn rashi_idx(lon_deg: f64) -> u8 {
 /// (angle, rate) adapter over a position-only callback, rate by central
 /// difference (h = 0.002 d ≈ 3 min), branch-cut unwrapped. For the smooth
 /// scanning angles here (Sun, Moon, elongation) the truncation error is
-/// ~1e-7 °/day — far below the 1e-6° refinement stop.
+/// ~1e-7 °/day — and the rate only steers the refinement, never sets its root.
 fn numeric_angle_rate(pos: &(dyn Fn(f64) -> Option<f64> + Sync), t: f64) -> Option<(f64, f64)> {
     let h = 0.002;
     let (a0, a1) = (pos(t - h)?, pos(t + h)?);
@@ -472,7 +472,8 @@ pub const fn ingress_speed_bound_deg_per_day(graha: Graha) -> f64 {
 /// refine from the same one, so they agree to the bit (`tests/khagola_ingress.rs`
 /// walks nine spans of 6 months to 10 years across every graha and finds no
 /// difference);
-/// at worst they differ by the refinement's own 1e-6 degree. The cost differs: where [`graha_ingress`] reads the callback once a day, this
+/// at worst they differ by the refinement's own resolution, about 0.1 ms. The cost
+/// differs: where [`graha_ingress`] reads the callback once a day, this
 /// steps as many whole days as the nearer rashi edge is away at the graha's
 /// speed bound ([`ingress_speed_bound_deg_per_day`]), and reads it daily only
 /// within a day's travel of an edge. Measured on this crate's analytical
