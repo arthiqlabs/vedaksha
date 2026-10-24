@@ -11,8 +11,8 @@
 //!
 //! ## HTTP (Streamable HTTP transport)
 //! Listens on a configurable port and accepts POST requests with JSON-RPC
-//! bodies. Returns JSON responses. Compatible with Smithery, ChatGPT Actions,
-//! and any MCP client supporting the Streamable HTTP transport.
+//! bodies. Returns JSON responses. Compatible with any MCP client supporting
+//! the Streamable HTTP transport.
 //!
 //! ### HTTP authentication (on by default)
 //! In HTTP mode every `POST` must carry `Authorization: Bearer <token>`, where
