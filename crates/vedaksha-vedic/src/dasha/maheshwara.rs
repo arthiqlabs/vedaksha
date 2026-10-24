@@ -19,24 +19,24 @@
 //! - **2.1.50**, *svochche sa-grahe ripu-bhava-isha-prani*: when the
 //!   atmakaraka's rashi of exaltation holds grahas, the stronger of the lords
 //!   of the twelfth (*ripu*) and the eighth from the atmakaraka. Grade (b):
-//!   the critical edition's commentary reads *sa-grahe* as the exaltation
-//!   rashi holding a graha, and its English as one *other* than the
-//!   atmakaraka; [`MaheshwaraRules::count_atmakaraka`] admits the atmakaraka
-//!   itself. A manuscript variant, *svabhe*, "in its own rashi", is
-//!   recorded in the edition and not implemented.
+//!   *sa-grahe* is read as the exaltation rashi holding a graha other than
+//!   the atmakaraka; [`MaheshwaraRules::count_atmakaraka`] admits the
+//!   atmakaraka itself. A manuscript variant, *svabhe*, "in its own rashi",
+//!   is not implemented.
 //! - **2.1.51**, *patabhyam yoge svasya tayor va roge tatah*: when the
 //!   atmakaraka is conjoined with Rahu or Ketu, or a node stands in the
 //!   eighth (*roga*) from it, the substitute *tatah* names. Grade (b): the
-//!   word is the open point, and the commentary offers three readings.
-//!   [`MaheshwaraSubstitute`] carries them. The default is the sixth graha
-//!   from the atmakaraka, because the same formula at 2.1.53 (*brahmani
-//!   shanau patayor va tatah*) is read "the sixth graha from him" by BPHS
-//!   (46.172, *tat-shashtha-khecharah*), and because decoding *tatah* with the
-//!   letter-to-numeral rule the sutras state (*sarvatra savarna bhava
-//!   rashayash cha*; see `docs/audit/2026-08-31-chara-dasha-panchame-
-//!   cipher.md`) gives 66, which is 6 mod 12. The reading that repeats
-//!   2.1.50's pair is the critical edition's own translation. If both 2.1.50
-//!   and 2.1.51 apply, 2.1.51, the later and more specific, governs.
+//!   word is the open point, and it admits three readings, which
+//!   [`MaheshwaraSubstitute`] carries. The default is the sixth graha from
+//!   the atmakaraka, because the same formula at 2.1.53 (*brahmani shanau
+//!   patayor va tatah*) is read "the sixth graha from him" by BPHS (46.172,
+//!   *tat-shashtha-khecharah*). Decoding *tatah* with the letter-to-numeral
+//!   rule the sutras state (*sarvatra savarna bhava rashayash cha*; see
+//!   `docs/audit/2026-08-31-chara-dasha-panchame-cipher.md`) gives 66, which
+//!   counted through the nine grahas is the third, not the sixth: that is
+//!   [`MaheshwaraSubstitute::ThirdFromAtmakaraka`]. The third reading repeats
+//!   2.1.50's pair. If both 2.1.50 and 2.1.51 apply, 2.1.51, the later and
+//!   more specific, governs.
 //!
 //! # What the sutras read from it
 //!
@@ -88,10 +88,10 @@ pub enum MaheshwaraSubstitute {
     #[default]
     SixthFromAtmakaraka,
     /// The stronger of the lords of the eighth and twelfth from the
-    /// atmakaraka (the critical edition's translation).
+    /// atmakaraka, repeating 2.1.50's pair.
     StrongerOfEighthAndTwelfthLords,
-    /// The third graha from the atmakaraka, in the same cycle (the
-    /// commentary's reading of *tatah* modulo nine).
+    /// The third graha from the atmakaraka, in the same cycle (*tatah*
+    /// decoded as 66, modulo nine).
     ThirdFromAtmakaraka,
 }
 
@@ -415,8 +415,7 @@ mod tests {
         );
     }
 
-    // 4b. The request's two births, re-derived by hand under this module's
-    // reading (not the request's own numbering).
+    // 4b. Two births, worked by hand under this module's reading.
     //
     // F1: lagna Leo, atmakaraka Mercury in Aries(0); Sun and Jupiter in
     // Taurus, Moon in Libra, Mars, Mercury and Venus in Aries, Saturn in
@@ -427,8 +426,7 @@ mod tests {
     // The eighth lord is the stronger of Mars (Aries, with Mercury and Venus:
     // two companions) and Ketu (Pisces, alone): Mars. Against Jupiter
     // (Taurus, with the Sun: one companion), Mars has more. Maheshwara is
-    // Mars. (The request guessed Jupiter if its 2.1.45 applied; here the
-    // companions decide for Mars.)
+    // Mars: the companions decide.
     //
     // F2: lagna Pisces, atmakaraka the Moon in Virgo(5); Sun, Moon and
     // Mercury in Virgo, Mars in Libra, Jupiter and Venus in Leo, Saturn in
@@ -436,7 +434,7 @@ mod tests {
     // is Aries, lord Mars. The Moon's exaltation rashi, Taurus, is empty and
     // no node is with the Moon or in Aries: 2.1.49 alone, Mars.
     #[test]
-    fn request_births_f1_and_f2() {
+    fn two_births_worked_by_hand() {
         let f1 = chart(4, [1, 6, 0, 0, 1, 0, 3, 5]);
         assert_eq!(
             maheshwara(&f1, Graha::Mercury, MaheshwaraRules::default()),
@@ -535,9 +533,9 @@ mod tests {
         );
     }
 
-    // 8. The commentators' window. Its antar cycles are the ones the request
-    // gives for its two births (Scorpio, Cancer, Pisces repeating; Aries,
-    // Leo, Sagittarius repeating). The chara dasha here is from an Aries
+    // 8. The commentators' window. Its antar cycles run through one trikona
+    // (Scorpio, Cancer, Pisces repeating; Aries, Leo, Sagittarius
+    // repeating). The chara dasha here is from an Aries
     // lagna with every graha in Aries. The window of a rashi opens at its
     // chara period and lasts twelve years of twelve one-year antars cycling
     // its trikona: Scorpio(7), even, in reverse: 7 3 11 repeating; Aries(0),

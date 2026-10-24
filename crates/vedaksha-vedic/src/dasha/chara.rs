@@ -1031,7 +1031,7 @@ mod tests {
             signs(&periods[0]),
             vec![10, 3, 8, 1, 6, 11, 4, 9, 2, 7, 0, 5]
         );
-        // Eight years in twelve equal parts: "8 months each".
+        // Eight years in twelve equal parts is eight months each.
         assert_eq!(periods[0].antar[0].duration_years * 12.0, 8.0);
         assert_eq!(periods[1].sign_index, 11);
         assert_eq!(

@@ -624,6 +624,11 @@ pub fn stations(
     let Some(step) = station_step_days(graha) else {
         return found;
     };
+    // Half-open: an empty or inverted range holds nothing, not even a zero
+    // rate at `jd_from`.
+    if jd_from >= jd_to {
+        return found;
+    }
     let rate = |t: f64| longitude(t).map(|(_, r)| r);
     let mut t0 = jd_from;
     let Some(mut r0) = rate(t0) else {

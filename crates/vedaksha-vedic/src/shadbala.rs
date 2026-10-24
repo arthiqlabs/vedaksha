@@ -1154,6 +1154,11 @@ pub const AHARGANA_AT_KALI_EPOCH: i64 = 714_402_296_627;
 
 /// The ahargana at the beginning (midnight) of the civil day with Julian Day
 /// Number `jdn`: the days elapsed before it.
+///
+/// # Panics
+///
+/// In a debug build, on overflow, which needs `jdn` within about 7e11 of
+/// `i64::MAX`; [`compute_shadbala_complete`] rejects such a moment first.
 #[must_use]
 pub fn ahargana_from_jdn(jdn: i64) -> i64 {
     AHARGANA_AT_KALI_EPOCH + (jdn - KALI_EPOCH_JDN)
@@ -1719,7 +1724,14 @@ fn validate_moment(m: &KalaMoment) -> Result<(), ShadbalaError> {
     .all(|x| x.is_finite());
     let ordered = m.jd_sunrise < m.jd_sunset && m.jd_sunset < m.jd_next_sunrise;
     let inside = m.jd_sunrise <= m.jd && m.jd < m.jd_next_sunrise;
-    if finite && ordered && inside {
+    // A day label far outside any calendar (an infinite JD saturates the cast
+    // in `hindu_day_jdn`) would overflow the ahargana.
+    let labelled = m
+        .hindu_day_jdn
+        .checked_sub(KALI_EPOCH_JDN)
+        .and_then(i64::checked_abs)
+        .is_some_and(|d| d < 1_000_000_000_000);
+    if finite && ordered && inside && labelled {
         Ok(())
     } else {
         Err(ShadbalaError::BadMoment)
@@ -4059,6 +4071,16 @@ mod tests {
             compute_shadbala_complete(&planets, &nan, &opts).unwrap_err(),
             ShadbalaError::BadMoment
         );
+        // A day label no calendar reaches, as an infinite JD casts to: it
+        // would overflow the ahargana.
+        for label in [i64::MAX, i64::MIN] {
+            let mut far = ctx;
+            far.moment.hindu_day_jdn = label;
+            assert_eq!(
+                compute_shadbala_complete(&planets, &far, &opts).unwrap_err(),
+                ShadbalaError::BadMoment
+            );
+        }
 
         // The declination reading without a declination.
         let mut no_decl = planets.clone();

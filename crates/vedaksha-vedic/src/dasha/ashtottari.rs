@@ -104,8 +104,6 @@ pub const ASHTOTTARI_SEQUENCE: [AshtottariLord; 8] = [
 /// Sun, Moon, Mars, Mercury, Saturn, Jupiter, Rahu, Venus (then wraps back).
 ///
 /// Source: BPHS, Ch. 35, vv. 17–20 (Ardradi Ashtottari variant).
-/// Translation: S.P. Tata, referenced in astrojyoti.com/bphspage6.htm.
-/// License: Public domain (BPHS is ancient Vedic literature).
 pub const ASHTOTTARI_LORDS_BY_NAK: [AshtottariLord; 27] = [
     // 0  Ashwini         1  Bharani
     AshtottariLord::Rahu,

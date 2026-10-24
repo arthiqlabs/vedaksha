@@ -32,9 +32,8 @@
 //!   odd anchor and in reverse from an even one. It is what the same chapter
 //!   states, in so many words, for the mandooka and shoola dashas, both with
 //!   years as in sthira (BPHS 46.180 and 46.182), and for the trikona dasha
-//!   (46.184); what the English of the recension reads into 46.169 itself;
-//!   and what the critical edition's commentary reports commentators giving
-//!   for every antardasha series (2.3.1 and 2.3.2). The other options are
+//!   (46.184), and what the sutras' own odd-and-even rule for the
+//!   antardasha series gives (2.3.1 and 2.3.2). The other options are
 //!   rules in circulation: chara's vishama-pada test at the ninth from the
 //!   lagna (2.3.32, read with 2.3.33 as the chara dasha's own rule), the
 //!   modality of the anchor (forward from a movable or dual rashi, reverse
@@ -55,13 +54,12 @@
 //! 1. The candidates are the lords of the sixth, eighth and twelfth rashis
 //!    from the lagna (a rashi with two lords contributes both) that stand in
 //!    an odd rashi inside the *window* behind the base. The base is the
-//!    stronger of the lagna and its seventh. "Behind" is *prishtha-bhaga*;
-//!    the commentary counts the seventh to twelfth houses as the back of the
-//!    lagna and the first to sixth as the back of the seventh, i.e. the six
-//!    rashis before the base ([`BrahmaWindow::BehindExclusive`], the
-//!    default). The worked example printed with BPHS 46.171 to 173 counts the
-//!    base rashi itself as the first of the six
-//!    ([`BrahmaWindow::BehindInclusive`]). Grade (b): the sutra's *anucara* does not settle
+//!    stronger of the lagna and its seventh. "Behind" is *prishtha-bhaga*,
+//!    read as the seventh to twelfth houses for the lagna and the first to
+//!    sixth for the seventh, i.e. the six rashis before the base
+//!    ([`BrahmaWindow::BehindExclusive`], the default). Counting the base
+//!    rashi itself as the first of the six is
+//!    [`BrahmaWindow::BehindInclusive`]. Grade (b): the sutra's *anucara* does not settle
 //!    which. Treating the three marks (a lord of the sixth, eighth or
 //!    twelfth; odd; behind) as filters, with "strong" as the arbiter between
 //!    survivors, follows BPHS 46.173, *bahavo lakshanakranta*, "many endowed
@@ -90,11 +88,9 @@
 //! The marks can leave no graha: this function then returns `None`, and
 //! [`compute_sthira`] with the Brahma anchor returns `None` with it. The text
 //! does not say what a chart without a Brahma uses; choose another anchor.
-//! How often that happens was measured once, on 100,000 charts whose lagna
-//! and grahas were each drawn uniformly over the twelve signs (not real
-//! charts, whose placements are not independent): about 38% with the default
-//! window and about 30% with [`BrahmaWindow::BehindInclusive`]. Treat the
-//! `None` as the common case for the Brahma anchor, not an edge.
+//! It is common, not an edge: a one-off sampling of charts with lagna and
+//! grahas drawn uniformly over the signs (not real charts, and not
+//! reproduced by any test) found no Brahma in roughly a third of them.
 
 use serde::{Deserialize, Serialize};
 
@@ -113,11 +109,10 @@ use crate::graha::Graha;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum BrahmaWindow {
     /// The six rashis before the base: the base minus one through the base
-    /// minus six. The critical edition's commentary on 2.1.52. The default.
+    /// minus six. The default.
     #[default]
     BehindExclusive,
-    /// The base and the five before it, as the worked example printed with
-    /// BPHS 46.171 to 173 counts.
+    /// The base and the five before it.
     BehindInclusive,
 }
 
@@ -554,14 +549,14 @@ mod tests {
         }
     }
 
-    // 8. The request's F1 vector, re-derived by hand. Lagna Leo(4), anchored
+    // 8. A Leo lagna, worked by hand. Lagna Leo(4), anchored
     // on the lagna, direction from the anchor's modality (Leo is fixed, so
     // in reverse), proportional antars from the dasha rashi itself.
     // Leo 8, Cancer 7, Gemini 9, Taurus 8, Aries 7, Pisces 9, Aquarius 8,
     // Capricorn 7, Sagittarius 9, Scorpio 8, Libra 7, Virgo 9. The first
     // antar of Leo is its own, 8 x 8 / 96 = 2/3 year.
     #[test]
-    fn request_vector_f1_leo_lagna_modality_walk_proportional_antars() {
+    fn leo_lagna_modality_walk_proportional_antars() {
         let p = chart(4, [1, 6, 0, 0, 1, 0, 3, 5]);
         let options = SthiraOptions {
             anchor: SthiraAnchor::Lagna,
@@ -608,12 +603,12 @@ mod tests {
         assert_eq!(d.periods[0].antar[0].duration_years, 8.0 * 8.0 / 96.0);
     }
 
-    // 9. The request's F2 vector. Lagna Pisces(11), dual, so forward.
+    // 9. A Pisces lagna, worked by hand. Pisces(11) is dual, so forward.
     // Pisces 9, Aries 7, Taurus 8, Gemini 9, Cancer 7, Leo 8, Virgo 9,
     // Libra 7, Scorpio 8, Sagittarius 9, Capricorn 7, Aquarius 8. First
     // antar of Pisces: 9 x 9 / 96 = 0.84375 year.
     #[test]
-    fn request_vector_f2_pisces_lagna_modality_walk_proportional_antars() {
+    fn pisces_lagna_modality_walk_proportional_antars() {
         let p = chart(11, [5, 5, 6, 5, 4, 4, 9, 8]);
         let options = SthiraOptions {
             anchor: SthiraAnchor::Lagna,

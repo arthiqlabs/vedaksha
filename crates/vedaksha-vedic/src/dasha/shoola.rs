@@ -20,13 +20,13 @@
 //!   the seventh (*adarsha*, the facing), goes by trikona groups in a
 //!   four-fold round, and has its direction from odd and even
 //!   (*vaishamya-ashraya*). The Sanskrit commentary says only "trikona after
-//!   trikona, in four ways"; the critical edition's English spells the shape
-//!   as the lagna, fifth and ninth, then the second, sixth and tenth, then
-//!   the third, seventh and eleventh, then the fourth, eighth and twelfth,
-//!   which is what [`ShoolaOrder::TrikonaGroups`] runs. Grade (a) for years
-//!   and anchor; (b) for the group order and the direction: the example is
-//!   the editor's, and "odd and even" is not spelled out for the even case,
-//!   so an even anchor mirrors the whole figure (the fifth and ninth are then
+//!   trikona, in four ways". Read as the anchor's trikona and then the
+//!   trikonas of the next three rashis (the lagna, fifth and ninth, then the
+//!   second, sixth and tenth, then the third, seventh and eleventh, then the
+//!   fourth, eighth and twelfth), that is what [`ShoolaOrder::TrikonaGroups`]
+//!   runs. Grade (a) for years and anchor; (b) for the group order and the
+//!   direction: "odd and even" is not spelled out for the even case, so an
+//!   even anchor mirrors the whole figure (the fifth and ninth are then
 //!   counted backward).
 //! - **2.4.16**, *niryana-labha-adih shoola-dasha phale*: the shoola dasha is
 //!   this same figure ("like the manduka-trikuta", in the four-fold round of
@@ -62,8 +62,8 @@
 //! BPHS's own *shoola dasha* (ch. 46 in the recension this crate follows,
 //! slokas 181 and 182, *niryanasya vicharartham kaischit shula-dasha
 //! smrita*) is a different figure: from the stronger of the eighth from the
-//! lagna and the eighth from the seventh (the second and eighth rashis, in
-//! the recension's own English), forward from an odd rashi and in reverse
+//! lagna and the eighth from the seventh (the eighth and the second rashis),
+//! forward from an odd rashi and in reverse
 //! from an even one, the twelve rashis in unbroken order, years as in sthira
 //! ([`ShoolaAnchor::SecondOrEighth`] with [`ShoolaOrder::Consecutive`]). Grade
 //! (a) for BPHS's statement. It is not the default because the dasha named
@@ -432,8 +432,9 @@ mod tests {
         let p = chart(0, [0; 8]);
         let odd = run(&p, explicit(2, ShoolaOrder::Consecutive));
         assert_eq!(signs_of(&odd), vec![2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1]);
-        // The recension's own worked example runs from Pisces(11) in
-        // reverse: Pisces 9, Aquarius 8, Capricorn 7, Sagittarius 9, ...
+        // From an even rashi the order is reversed (46.182, *kramad utkramatah
+        // same*); the years are sthira's by modality: Pisces 9, Aquarius 8,
+        // Capricorn 7, Sagittarius 9, ...
         let even = run(&p, explicit(11, ShoolaOrder::Consecutive));
         assert_eq!(signs_of(&even), vec![11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0]);
         let years: Vec<f64> = even.periods.iter().map(|x| x.duration_years).collect();

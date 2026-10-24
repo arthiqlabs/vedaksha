@@ -178,8 +178,7 @@ pub enum AntarOrder {
     #[default]
     ByModality,
     /// An unbroken run of twelve whatever the modality, direction by parity.
-    /// A reading the critical edition's commentary on 2.3.1 and 2.3.2
-    /// reports. Grade (c).
+    /// A reading in circulation for 2.3.1 and 2.3.2. Grade (c).
     Consecutive,
 }
 
@@ -341,13 +340,11 @@ mod tests {
         )
     }
 
-    // 1. BPHS ch. 51's own worked example, fixed rashi: "Aquarius is a fixed
-    // and odd rasi. Therefore, starting from Aquarius there will be in
-    // onwards the Antardasa of every sixth Rasi. Thus the first Antardasa
-    // will be of Aquarius, then of Cancer, the sixth rasi from it, and later
-    // of Sagittarius, the sixth rasi from Cancer, and so on", tabulated:
-    // Aquarius Cancer Sagittarius Taurus Libra Pisces Leo Capricorn Gemini
-    // Scorpio Aries Virgo. Zero-based: 10 3 8 1 6 11 4 9 2 7 0 5.
+    // 1. Fixed rashi, from the rule of BPHS 51.8 to 51.9 (*shashtha-shashthadikah
+    // sthire*; forward from an odd rashi). Aquarius is fixed and odd, so every
+    // sixth rashi forward from it: Aquarius Cancer Sagittarius Taurus Libra
+    // Pisces Leo Capricorn Gemini Scorpio Aries Virgo. Zero-based:
+    // 10 3 8 1 6 11 4 9 2 7 0 5.
     #[test]
     fn fixed_odd_dasha_runs_every_sixth_rashi() {
         assert_eq!(
@@ -356,13 +353,12 @@ mod tests {
         );
     }
 
-    // 2. The same chapter's dual, even example: Pisces. "In its Dasa the
-    // first Antardasa will be of Pisces itself. Then in the reverse order
-    // there will be Antardasas of its kendra rasis; namely, Sagittarius,
-    // Virgo and Gemini. After that ... the kendra rasis from the 5th rasi
-    // from it (Scorpio), namely Scorpio, Leo, Taurus and Aquarius. Lastly
-    // ... the kendra rasis of the 9th from Pisces (Cancer) namely, Cancer,
-    // Aries, Capricorn and Libra." Zero-based: 11 | 8 5 2 | 7 4 1 10 | 3 0 9 6.
+    // 2. Dual rashi, from the same rule (*ubhaye kantakaj jneya
+    // lagna-pancha-bhagyatah*; reverse from an even rashi). Pisces is dual and
+    // even: its own kendras counted backward (Pisces, Sagittarius, Virgo,
+    // Gemini), then those of the fifth from it counted backward (Scorpio, Leo,
+    // Taurus, Aquarius), then of the ninth (Cancer, Aries, Capricorn, Libra).
+    // Zero-based: 11 8 5 2 | 7 4 1 10 | 3 0 9 6.
     #[test]
     fn dual_even_dasha_runs_kendra_groups_in_reverse() {
         assert_eq!(
@@ -371,8 +367,8 @@ mod tests {
         );
     }
 
-    // 3. A movable odd dasha (Aries): "in onwards order as Aries is
-    // Moveable and odd sign".
+    // 3. A movable odd dasha (Aries): unbroken and forward
+    // (*chare 'nujjhita-margah*).
     #[test]
     fn movable_odd_dasha_runs_forward() {
         assert_eq!(

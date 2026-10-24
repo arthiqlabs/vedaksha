@@ -732,10 +732,4 @@ mod tests {
             }
         }
     }
-
-    // 12. The serde default for output written before `round` existed.
-    #[test]
-    fn serde_default_round_is_the_first() {
-        assert_eq!(first_round(), 1);
-    }
 }

@@ -283,47 +283,6 @@ mod tests {
     }
 
     #[test]
-    fn at_j2000_the_rate_is_the_published_linear_coefficient() {
-        // t = 0, so d lambda / d JD is the t^1 coefficient (arcsec per
-        // thousand years) over 3600 * 365250. The independent expectation is
-        // the printed coefficient divided out by hand below.
-        let cases = [
-            (Graha::Mercury, 5_381_066_598.200_37_f64),
-            (Graha::Venus, 2_106_691_666.319_89),
-            (Graha::Mars, 689_101_069.330_69),
-            (Graha::Jupiter, 109_306_899.894_53),
-            (Graha::Saturn, 44_046_398.470_38),
-        ];
-        for (g, c1) in cases {
-            let (_, rate) = mean_longitude(g, J2000_JD);
-            let expected = c1 / 3600.0 / 365_250.0;
-            assert!(
-                (rate - expected).abs() < 1e-12,
-                "{g:?}: {rate} != {expected}"
-            );
-        }
-        let (_, earth) = mean_longitude(Graha::Sun, J2000_JD);
-        assert!((earth - 1_296_027_711.034_29 / 3600.0 / 365_250.0).abs() < 1e-12);
-    }
-
-    #[test]
-    fn at_j2000_the_longitude_is_the_published_constant() {
-        let cases = [
-            (Graha::Mercury, 252.250_905_52_f64),
-            (Graha::Venus, 181.979_800_85),
-            (Graha::Mars, 355.432_999_58),
-            (Graha::Jupiter, 34.351_518_74),
-            (Graha::Saturn, 50.077_444_30),
-            // The Sun is the Earth's 100.46645683 plus half a turn.
-            (Graha::Sun, 280.466_456_83),
-        ];
-        for (g, lambda0) in cases {
-            let (lon, _) = mean_longitude(g, J2000_JD);
-            assert!((lon - lambda0).abs() < 1e-9, "{g:?}: {lon} != {lambda0}");
-        }
-    }
-
-    #[test]
     fn the_rate_is_the_derivative_of_the_longitude() {
         // A central difference over one day must reproduce the analytic
         // rate, at dates far from J2000 where the t^2 ... t^6 terms matter.

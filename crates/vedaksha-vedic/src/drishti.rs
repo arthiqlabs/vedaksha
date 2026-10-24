@@ -44,10 +44,9 @@
 //!   four: take the degrees from five signs' worth (150 degrees minus `x`).
 //!   Over three: take `x` from four signs, halve it and add 30. Over two:
 //!   drop the signs and add 15 to the degrees. Over one: drop the signs and
-//!   halve the degrees. At one sign or less the verses give nothing, and the
-//!   same edition's commentary and worked example treat a difference over ten
-//!   signs as nil (the ten-sign subtraction would go negative); this module
-//!   does both.
+//!   halve the degrees. At one sign or less the verses give nothing, and a
+//!   difference over ten signs is read as nil because the ten-sign
+//!   subtraction would go negative; this module does both.
 //!   Every branch meets its neighbours, so the curve is continuous: 0 at 30
 //!   degrees, 15 at 60, 45 at 90, 30 at 120, 0 at 150, 60 at 180 (the 7th,
 //!   full), 0 at 300.

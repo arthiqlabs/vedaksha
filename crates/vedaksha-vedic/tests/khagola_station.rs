@@ -208,4 +208,7 @@ fn a_rate_exactly_zero_at_a_sample_is_one_station() {
     assert_eq!(at_start, vec![t0]);
     // `station` agrees about both.
     assert_eq!(station(t0, Graha::Mars, &g), Some(t0));
+    // An empty range holds no station, even one exactly at its start.
+    assert_eq!(stations(t0, t0, Graha::Mars, &g), Vec::<f64>::new());
+    assert_eq!(stations(t0, t0 - 1.0, Graha::Mars, &g), Vec::<f64>::new());
 }
