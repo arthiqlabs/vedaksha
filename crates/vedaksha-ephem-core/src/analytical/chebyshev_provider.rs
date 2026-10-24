@@ -540,7 +540,7 @@ mod tests {
         // their apparent error is dominated by the rounding floor of the fit.
         let mut worst = [0.0_f64; 3];
         for body in [Body::Moon, Body::Sun, Body::Mars, Body::Saturn] {
-            for jd in instants(0xA11_CE, 150, MODERN.0, MODERN.1) {
+            for jd in instants(0x000A_11CE, 150, MODERN.0, MODERN.1) {
                 let a = ecliptic_position(&exact, body, jd).unwrap();
                 let b = ecliptic_position(&fitted, body, jd).unwrap();
                 let mut dlon = (a.longitude - b.longitude).abs();

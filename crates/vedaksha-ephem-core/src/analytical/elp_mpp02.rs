@@ -1222,10 +1222,9 @@ fn eval_main_series<const VELOCITY: bool>(
 
     let mut value = [0.0_f64; 4];
     let mut dot = [0.0_f64; 4];
-    let id_chunks = ids.chunks_exact(4);
-    let amp_chunks = amps.chunks_exact(4);
-    let (id_rest, amp_rest) = (id_chunks.remainder(), amp_chunks.remainder());
-    for (ic, ac) in id_chunks.zip(amp_chunks) {
+    let (id_chunks, id_rest) = ids.as_chunks::<4>();
+    let (amp_chunks, amp_rest) = amps.as_chunks::<4>();
+    for (ic, ac) in id_chunks.iter().zip(amp_chunks) {
         for (lane, (&id, &a)) in ic.iter().zip(ac).enumerate() {
             let id = id as usize;
             let p = pool[id];
@@ -1264,10 +1263,9 @@ fn eval_pert_group<const VELOCITY: bool>(
 ) -> (f64, f64) {
     let mut inner_sum = [0.0_f64; 4];
     let mut omega_sum = [0.0_f64; 4];
-    let id_chunks = group.node.chunks_exact(4);
-    let sc_chunks = group.sc.chunks_exact(4);
-    let (id_rest, sc_rest) = (id_chunks.remainder(), sc_chunks.remainder());
-    for (ic, scc) in id_chunks.zip(sc_chunks) {
+    let (id_chunks, id_rest) = group.node.as_chunks::<4>();
+    let (sc_chunks, sc_rest) = group.sc.as_chunks::<4>();
+    for (ic, scc) in id_chunks.iter().zip(sc_chunks) {
         for (lane, (&id, &[s, c])) in ic.iter().zip(scc).enumerate() {
             let id = id as usize;
             let p = pool[id];

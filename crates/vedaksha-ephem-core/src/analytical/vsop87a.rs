@@ -159,10 +159,9 @@ thread_local! {
 fn group_sums(group: &Group, trig: &[[f64; 2]]) -> (f64, f64) {
     let mut pos = [0.0_f64; 4];
     let mut vel = [0.0_f64; 4];
-    let idx = group.freq.chunks_exact(4);
-    let coef = group.coef.chunks_exact(4);
-    let (idx_rest, coef_rest) = (idx.remainder(), coef.remainder());
-    for (ic, cc) in idx.zip(coef) {
+    let (idx, idx_rest) = group.freq.as_chunks::<4>();
+    let (coef, coef_rest) = group.coef.as_chunks::<4>();
+    for (ic, cc) in idx.iter().zip(coef) {
         for (lane, (&k, c)) in ic.iter().zip(cc).enumerate() {
             let [sin_ct, cos_ct] = trig[k as usize];
             pos[lane] += c[0] * cos_ct + c[1] * sin_ct;
