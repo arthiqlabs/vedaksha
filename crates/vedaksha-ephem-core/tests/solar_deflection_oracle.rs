@@ -88,7 +88,7 @@ fn planets_near_the_sun_agree_with_horizons() {
     let fixture: Fixture =
         serde_json::from_str(&std::fs::read_to_string(common::horizons_oracle_path()).unwrap())
             .unwrap();
-    let reader = SpkReader::open(&common::bsp_path()).unwrap();
+    let reader = SpkReader::open(common::bsp_path()).unwrap();
 
     // Horizons' own Sun, by instant.
     let sun: std::collections::HashMap<u64, (f64, f64)> = fixture
