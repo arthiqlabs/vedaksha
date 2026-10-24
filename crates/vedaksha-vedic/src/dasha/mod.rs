@@ -8,5 +8,8 @@
 pub mod ashtottari;
 pub mod chara;
 pub mod narayana;
+pub mod rashi_antar;
+pub mod rashi_strength;
+pub mod sthira;
 pub mod vimshottari;
 pub mod yogini;
