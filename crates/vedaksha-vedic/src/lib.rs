@@ -21,6 +21,7 @@
 pub mod arudha;
 pub mod ashtakavarga;
 pub mod bhava;
+pub mod bhava_bala;
 pub mod cheshta;
 pub mod combustion;
 pub mod dasha;
@@ -37,4 +38,5 @@ pub mod panchanga;
 pub mod shadbala;
 pub mod upagraha;
 pub mod varga;
+pub mod vimshopaka;
 pub mod vishesha;
