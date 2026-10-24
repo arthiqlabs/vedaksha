@@ -331,7 +331,11 @@ jobs:
     name: Create GitHub Release
     needs: [build-mcp, wasm, test]
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
@@ -346,3 +350,13 @@ jobs:
           files: |
             mcp-*/**/*
             vedaksha-wasm/**/*
+
+  # Needs the GitHub Release, because the bundle is built from its binaries.
+  publish-smithery:
+    name: Publish to Smithery
+    needs: [github-release, test]
+    uses: ./.github/workflows/publish-smithery.yml
+    with:
+      version: ${{ needs.github-release.outputs.version }}
+    secrets:
+      SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
