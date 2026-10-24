@@ -22,6 +22,7 @@ use vedaksha_astro::sidereal::{Ayanamsha, true_ayanamsha_value};
 use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates::ecliptic_position;
+use vedaksha_ephem_core::jpl::EphemerisProvider;
 use vedaksha_vedic::muhurta::{
     MoonAndSun, compute_karana_end, compute_nakshatra_end, compute_tithi_end, compute_yoga_end,
 };
@@ -31,7 +32,7 @@ const AYAN: Ayanamsha = Ayanamsha::IndianOfficial;
 /// Two Julian Day quanta near 2.46 million is 9.3e-10 day; four is the bound.
 const TOLERANCE_DAYS: f64 = 2.0e-9;
 
-fn lon(p: &AnalyticalProvider, body: Body, t: f64) -> f64 {
+fn lon(p: &(dyn EphemerisProvider + Sync), body: Body, t: f64) -> f64 {
     ecliptic_position(p, body, t)
         .unwrap()
         .longitude
@@ -107,7 +108,7 @@ fn the_nakshatra_end_is_the_bisected_root() {
     });
 }
 
-fn pair(p: &AnalyticalProvider, t: f64) -> Option<MoonAndSun> {
+fn pair(p: &(dyn EphemerisProvider + Sync), t: f64) -> Option<MoonAndSun> {
     Some((
         longitude_and_rate(p, Body::Moon, t)?,
         longitude_and_rate(p, Body::Sun, t)?,

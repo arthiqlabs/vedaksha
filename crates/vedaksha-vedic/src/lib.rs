@@ -41,3 +41,4 @@ pub mod upagraha;
 pub mod varga;
 pub mod vimshopaka;
 pub mod vishesha;
+pub mod walked;

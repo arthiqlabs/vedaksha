@@ -150,16 +150,49 @@ pub fn moon_equatorial(
     provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
     jd_ut: f64,
 ) -> Option<(f64, f64, f64)> {
-    use vedaksha_ephem_core::{bodies::Body, coordinates, delta_t, jpl::AU_KM};
+    use vedaksha_ephem_core::{bodies::Body, coordinates};
 
     let pos = coordinates::ecliptic_position(provider, Body::Moon, jd_ut).ok()?;
+    Some(moon_equatorial_of(&pos, jd_ut))
+}
+
+/// [`moon_equatorial`] with the Moon's apparent place read from `walk`, a
+/// [`BodyWalk::moon`](vedaksha_ephem_core::walk::BodyWalk::moon) on `provider`,
+/// instead of computed. Sixty days of moonrise and moonset ask for about fifty
+/// reads a day; measured on the analytical provider this makes a sixteenth of
+/// the provider calls, and every rise, set and transit comes out within 0.1 ms
+/// (two Julian Day quanta) of the direct search. The true obliquity of date is
+/// still computed per read.
+///
+/// A time outside the walk's span is read from `provider` directly, which is
+/// [`moon_equatorial`] itself.
+#[must_use]
+pub fn moon_equatorial_walked(
+    walk: &vedaksha_ephem_core::walk::BodyWalk<'_>,
+    provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
+    jd_ut: f64,
+) -> Option<(f64, f64, f64)> {
+    match walk.ecliptic(jd_ut) {
+        Some(pos) => Some(moon_equatorial_of(&pos, jd_ut)),
+        None => moon_equatorial(provider, jd_ut),
+    }
+}
+
+/// `(right_ascension_deg, declination_deg, distance_km)` of an apparent
+/// ecliptic position by the true obliquity of date.
+fn moon_equatorial_of(
+    pos: &vedaksha_ephem_core::coordinates::EclipticCoords,
+    jd_ut: f64,
+) -> (f64, f64, f64) {
+    use vedaksha_ephem_core::{coordinates, delta_t, jpl::AU_KM};
+
     let eps = coordinates::frame_for(delta_t::ut1_to_tt(jd_ut)).true_obliquity();
     let (ra, dec) = coordinates::ecliptic_to_equatorial_deg(
         pos.longitude.to_degrees(),
         pos.latitude.to_degrees(),
         eps.to_degrees(),
     );
-    Some((ra, dec, pos.distance * AU_KM))
+    (ra, dec, pos.distance * AU_KM)
 }
 
 /// Moonrise, moonset and the Moon's upper-meridian transit in the 24 hours

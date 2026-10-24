@@ -27,19 +27,17 @@ mod common;
 use std::fmt::Write as _;
 use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
-use common::jd;
+use common::{Counting, jd};
 use vedaksha_astro::moon_riseset::{moon_equatorial, moon_rise_set};
 use vedaksha_astro::riseset::{RiseSet, sun_equatorial_deg, sun_rise_set};
 use vedaksha_astro::sidereal::{Ayanamsha, true_ayanamsha_value, true_tropical_to_sidereal};
 use vedaksha_astro::transits::{TransitEvent, TransitSearchConfig, lunar_return, search_transits};
-use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates::{
     apparent_positions, ecliptic_position, ecliptic_to_equatorial_deg, frame_for,
 };
 use vedaksha_ephem_core::delta_t::ut1_to_tt;
-use vedaksha_ephem_core::error::ComputeError;
-use vedaksha_ephem_core::jpl::{AU_KM, EphemerisProvider, Position, StateVector};
+use vedaksha_ephem_core::jpl::AU_KM;
 use vedaksha_ephem_core::obliquity::mean_obliquity;
 use vedaksha_vedic::graha::Graha;
 use vedaksha_vedic::kala_mana::{MasaScheme, MasaSpan, lunar_month_span, year_turnover};
@@ -62,47 +60,6 @@ const LAT: f64 = 28.6139;
 const LON: f64 = 77.2090;
 
 // ── a counting provider ─────────────────────────────────────────
-
-/// `AnalyticalProvider`, counting every call that reaches it.
-struct Counting {
-    state: AtomicU64,
-    earth: AtomicU64,
-    moon_position: AtomicU64,
-    moon_distance: AtomicU64,
-}
-
-impl Counting {
-    const fn new() -> Self {
-        Self {
-            state: AtomicU64::new(0),
-            earth: AtomicU64::new(0),
-            moon_position: AtomicU64::new(0),
-            moon_distance: AtomicU64::new(0),
-        }
-    }
-}
-
-impl EphemerisProvider for Counting {
-    fn compute_state(&self, body: Body, jd: f64) -> Result<StateVector, ComputeError> {
-        self.state.fetch_add(1, Relaxed);
-        AnalyticalProvider.compute_state(body, jd)
-    }
-    fn earth_state(&self, jd: f64) -> Result<StateVector, ComputeError> {
-        self.earth.fetch_add(1, Relaxed);
-        AnalyticalProvider.earth_state(jd)
-    }
-    fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
-        self.moon_position.fetch_add(1, Relaxed);
-        AnalyticalProvider.moon_position(jd)
-    }
-    fn moon_distance(&self, jd: f64) -> Option<f64> {
-        self.moon_distance.fetch_add(1, Relaxed);
-        AnalyticalProvider.moon_distance(jd)
-    }
-    fn time_range(&self) -> (f64, f64) {
-        AnalyticalProvider.time_range()
-    }
-}
 
 static PROVIDER: Counting = Counting::new();
 

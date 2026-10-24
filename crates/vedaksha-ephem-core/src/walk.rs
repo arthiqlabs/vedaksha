@@ -585,7 +585,7 @@ mod tests {
     }
 
     /// Elongation from the Sun in degrees, from the exact apparent places.
-    fn elongation_deg(exact: &AnalyticalProvider, body: Body, jd: f64) -> f64 {
+    fn elongation_deg(exact: &dyn EphemerisProvider, body: Body, jd: f64) -> f64 {
         let a = ecliptic_position(exact, body, jd).unwrap();
         let s = ecliptic_position(exact, Body::Sun, jd).unwrap();
         let cos = a.latitude.sin() * s.latitude.sin()

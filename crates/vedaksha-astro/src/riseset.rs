@@ -1080,10 +1080,42 @@ pub fn sun_equatorial_deg(
     provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
     jd_ut: f64,
 ) -> Option<(f64, f64)> {
-    use vedaksha_ephem_core::{bodies::Body, coordinates, delta_t, obliquity};
+    use vedaksha_ephem_core::{bodies::Body, coordinates};
 
     let pos = coordinates::ecliptic_position(provider, Body::Sun, jd_ut).ok()?;
-    let (lambda, beta) = (pos.longitude, pos.latitude);
+    Some(sun_equatorial_of(pos.longitude, pos.latitude, jd_ut))
+}
+
+/// [`sun_equatorial_deg`] with the Sun's apparent place read from `walk`, a
+/// [`BodyWalk`](vedaksha_ephem_core::walk::BodyWalk) of the Sun, instead of
+/// computed: the same closure for [`rise_set`] and [`sun_rise_set`] at the cost
+/// of a polynomial per read. A year of daily sunrises asks for about fifteen
+/// reads a day; measured on the analytical provider it makes a tenth of the
+/// provider calls, and sunrise, sunset and transit come out to the bit.
+///
+/// The walk must be of [`Body::Sun`](vedaksha_ephem_core::bodies::Body::Sun) on
+/// `provider`, with segments the Sun's apparent place is smooth on (8 days and
+/// 12 nodes is off by 1e-7 arcsec; see
+/// `vedaksha_vedic::walked::WalkedSky::SUN_LONGITUDE_ERROR_ARCSEC`). A time
+/// outside the walk's span is read from `provider` directly, which is
+/// [`sun_equatorial_deg`] itself.
+#[must_use]
+pub fn sun_equatorial_deg_walked(
+    walk: &vedaksha_ephem_core::walk::BodyWalk<'_>,
+    provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
+    jd_ut: f64,
+) -> Option<(f64, f64)> {
+    match walk.ecliptic(jd_ut) {
+        Some(pos) => Some(sun_equatorial_of(pos.longitude, pos.latitude, jd_ut)),
+        None => sun_equatorial_deg(provider, jd_ut),
+    }
+}
+
+/// The Sun's `(right_ascension, declination)` in degrees from its apparent
+/// ecliptic longitude and latitude in radians, by the mean obliquity at `jd_ut`.
+fn sun_equatorial_of(lambda: f64, beta: f64, jd_ut: f64) -> (f64, f64) {
+    use vedaksha_ephem_core::{delta_t, obliquity};
+
     let jd_tt = delta_t::ut1_to_tt(jd_ut);
     let eps = obliquity::mean_obliquity(jd_tt);
 
@@ -1095,7 +1127,7 @@ pub fn sun_equatorial_deg(
         libm::cos(lambda),
     );
 
-    Some((normalize_degrees(rad_to_deg(ra)), rad_to_deg(dec)))
+    (normalize_degrees(rad_to_deg(ra)), rad_to_deg(dec))
 }
 
 /// [`rise_set`] specialised to the Sun: applies the standard −0°50′ altitude
