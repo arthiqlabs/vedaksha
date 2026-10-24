@@ -76,13 +76,22 @@ jobs:
         run: |
           # The key goes through a mode-600 curl config, never argv, so it
           # cannot appear in a process listing.
+          if [ -z "$SMITHERY_API_KEY" ]; then
+            echo "SMITHERY_API_KEY is empty; set the repository secret" >&2
+            exit 1
+          fi
           umask 077
           printf 'header = "Authorization: Bearer %s"\n' "$SMITHERY_API_KEY" > "$RUNNER_TEMP/smithery.curl"
-          curl -sS --fail-with-body -K "$RUNNER_TEMP/smithery.curl" -X PUT \
+          # Smithery's error body says why a release was refused, so print it
+          # whether or not the request succeeded.
+          code=$(curl -sS -K "$RUNNER_TEMP/smithery.curl" -X PUT \
             "https://api.smithery.ai/servers/$SERVER/releases" \
             -F "payload=<out/payload.json" \
-            -F "bundle=@out/vedaksha-$VERSION.mcpb" > release.json
+            -F "bundle=@out/vedaksha-$VERSION.mcpb" \
+            -o release.json -w '%{http_code}')
+          echo "HTTP $code"
           cat release.json
+          [ "$code" = 202 ]
       - name: Wait for the release to finish
         env:
           SMITHERY_API_KEY: ${{ secrets.SMITHERY_API_KEY }}
