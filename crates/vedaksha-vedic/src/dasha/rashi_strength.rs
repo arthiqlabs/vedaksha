@@ -555,6 +555,30 @@ mod tests {
         assert_eq!(chart_a().degrees_of(Graha::Sun), None);
     }
 
+    // 3b. The signs the chara dasha takes round-trip through the placements,
+    // each graha in its own slot (all eight distinct, so a swap shows).
+    #[test]
+    fn graha_signs_round_trip() {
+        let given = signs(1, 2, 3, 4, 5, 6, 7, 8);
+        let p = NatalPlacements::from_signs(9, given);
+        assert_eq!(p.graha_signs(), given);
+        assert_eq!(p.lagna_sign(), 9);
+        let order = [
+            (Graha::Sun, 1),
+            (Graha::Moon, 2),
+            (Graha::Mars, 3),
+            (Graha::Mercury, 4),
+            (Graha::Jupiter, 5),
+            (Graha::Venus, 6),
+            (Graha::Saturn, 7),
+            (Graha::Rahu, 8),
+            (Graha::Ketu, 2),
+        ];
+        for (g, sign) in order {
+            assert_eq!(p.sign_of(g), sign, "{g:?}");
+        }
+    }
+
     // 4. 2.3.6: a rashi with grahas beats one without; 2.3.7: more beats
     // fewer. Chart A: Cancer(3 grahas) > Aries(2) > Gemini(1) > Taurus(0).
     #[test]

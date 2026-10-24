@@ -711,6 +711,30 @@ mod tests {
         assert!(compute_sthira(&p, Graha::Sun, TEST_JD, &SthiraOptions::default(), &s).is_none());
     }
 
+    // 11b. The antar rules reach every period. Every graha in Aries(0), Ketu
+    // in Libra; anchor Taurus(1), whose lord Venus stands in Aries. With the
+    // dasha rashi as the start the first antar is Taurus; with the lord's
+    // rashi it is Aries.
+    #[test]
+    fn antar_rules_reach_each_period() {
+        let p = chart(0, [0; 8]);
+        let s = JaiminiStrength::new(&p);
+        let first_antar = |start| {
+            let options = SthiraOptions {
+                anchor: SthiraAnchor::Explicit(1),
+                antar: AntarRules {
+                    start,
+                    ..AntarRules::default()
+                },
+                ..SthiraOptions::default()
+            };
+            let d = compute_sthira(&p, Graha::Sun, TEST_JD, &options, &s).unwrap();
+            d.periods[0].antar[0].sign_index
+        };
+        assert_eq!(first_antar(AntarStart::RashiItself), 1);
+        assert_eq!(first_antar(AntarStart::LordOccupied), 0);
+    }
+
     // 12. Periods are contiguous from birth and each one's antars tile it.
     #[test]
     fn periods_are_contiguous_and_antars_tile() {
