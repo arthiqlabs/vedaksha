@@ -9,8 +9,8 @@ name: CI
 #     tests actually execute instead of skipping; sets
 #     VEDAKSHA_REQUIRE_FIXTURES=1 so a missing fixture is red, not green;
 #     runs the #[ignore]d tiers via --include-ignored (JPL Horizons
-#     live-fetch, the legacy lunar oracle, the multi-hour riseset scan
-#     sweeps, the MCP 365-day transit search) plus the unskipped
+#     live-fetch, the multi-hour riseset scan sweeps, the MCP 365-day
+#     transit search; not the one-time legacy lunar oracle) plus the unskipped
 #     analytical_oracle_regression; and re-fetches the IMCCE primary
 #     distributions to verify the coefficient blobs have not drifted.
 #     Clippy is NOT in that list any more — it runs here too, on every push,
