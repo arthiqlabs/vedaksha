@@ -20,6 +20,8 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod tai_utc;
+
 /// Workspace root, resolved from this crate's manifest directory.
 pub fn workspace_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -89,4 +91,43 @@ pub fn require_horizons_oracle() -> bool {
         "Horizons oracle fixture",
         "run python3 scripts/generate_horizons_oracle.py",
     )
+}
+
+/// First Julian Day at which JPL Horizons treats the "UT" of its observer tables
+/// as UTC rather than UT1: 1962-01-20, where its EOP file begins ("EOP coverage:
+/// DATA-BASED 1962-JAN-20 TO ..." in every Horizons header). Its manual
+/// (<https://ssd.jpl.nasa.gov/horizons/manual.html>): "prior to 1962, UT means
+/// UT1. After 1962, UT means UTC", and for the future "the closest known
+/// leap-second correction is used".
+pub const HORIZONS_UTC_START_JD: f64 = 2_437_684.5;
+
+/// `TAI - UTC` in seconds at a UTC Julian Day, from USNO's `tai-utc.dat`
+/// (see `tai_utc.rs`). Before 1961 there is no such quantity and this is
+/// `None`; after the last leap second (2017-01-01, 37 s) the last row stays in
+/// force, as it does in Horizons.
+pub fn tai_minus_utc(jd_utc: f64) -> Option<f64> {
+    let &(_, a, mjd0, rate) = tai_utc::TAI_UTC
+        .iter()
+        .rev()
+        .find(|&&(start, ..)| start <= jd_utc)?;
+    Some(a + (jd_utc - 2_400_000.5 - mjd0) * rate)
+}
+
+/// The Terrestrial Time Julian Day of a Horizons oracle row, where Horizons'
+/// time tag is UTC: `TT = UTC + 32.184 s + (TAI - UTC)`. `None` for rows before
+/// [`HORIZONS_UTC_START_JD`], whose tag is UT1 and which go through the engine's
+/// own UT1 to TT conversion instead.
+///
+/// This is what makes the comparison like for like. The engine is handed UT1 and
+/// carries no UT1 - UTC (up to 0.9 s, 0.5 arcsec of Moon longitude), so
+/// feeding it Horizons' UTC tag as if it were UT1 measured the sum of the
+/// engine's error and that difference. Converting to TT here, with the leap-second
+/// count, removes Delta T and UT1 - UTC from the comparison altogether, the way
+/// `ecliptic_position_tt` was written to allow.
+pub fn horizons_jd_tt(jd_ut: f64) -> Option<f64> {
+    if jd_ut < HORIZONS_UTC_START_JD {
+        return None;
+    }
+    let tai_utc = tai_minus_utc(jd_ut)?;
+    Some(jd_ut + (32.184 + tai_utc) / 86_400.0)
 }

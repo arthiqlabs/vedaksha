@@ -45,6 +45,17 @@
 //!
 //! If a change touches `analytical/`, this digest is the wrong instrument. Use
 //! `analytical_oracle.rs` for accuracy and `analytical_bit_digest.rs` for bits.
+//!
+//! # Time scale
+//!
+//! Horizons' "UT" is UT1 before 1962-01-20 and UTC from then (its manual and EOP
+//! file header). The engine is handed UT1 and has no UT1 − UTC, up to 0.9 s or
+//! 0.5″ of Moon longitude, so feeding it the UTC tag as UT1 compared two
+//! different instants. Rows from 1962-01-20 are therefore converted to TT with
+//! `TT = UTC + 32.184 s + (TAI − UTC)` (`common::horizons_jd_tt`, checked against
+//! Horizons' own `TDB-UT` in `oracle_time_scale.rs`) and read with
+//! `ecliptic_position_tt`; earlier rows go through `apparent_position` and the
+//! engine's Delta T as before. The report splits the measured era at that date.
 
 mod common;
 
@@ -77,39 +88,57 @@ struct OracleDataPoint {
     ref_speed: f64,
 }
 
-/// JD of 2026-01-01 — the boundary between ΔT that is *measured* and ΔT that
-/// is *predicted*. `delta_t.rs` now carries USNO measured values to 2026-10 and
-/// extrapolates after; the cut stays at 2026-01-01 so the published
-/// 1900–2025 figure keeps its definition.
+/// JD of 2026-01-01 — the end of the era the published figure covers, 1900 to
+/// 2025. It was where the engine's ΔT stopped being measured data; the cut stays
+/// so the published count and definition keep their meaning (`delta_t.rs` now
+/// carries USNO measurements to 2026-10 and predictions to 2033).
 ///
-/// This split matters. At or before this epoch the residual against Horizons
-/// reflects our ephemeris and apparent-place pipeline, and is sub-arcsecond.
-/// After it, our Espenak & Meeus ΔT extrapolation and Horizons' own ΔT
-/// prediction diverge — by ~68 s at 2099 — and that time offset shows up as a
-/// longitude error proportional to each body's angular rate. The Moon, at
-/// ~0.64″/s, picks up ~45″ of it; Pluto, at ~0.0003″/s, essentially none.
-/// Confirmed empirically: at 2099-02-06 the Sun, Moon, Mercury, Venus and Mars
-/// — rates spanning 0.03–0.64″/s — all imply the same 66–71 s offset.
-///
-/// So a future-date residual is a ΔT-prediction disagreement, not an ephemeris
-/// error, and the two get separate budgets rather than one meaningless bound.
+/// What the two sides of it mean changed with the time scale. Rows from
+/// 1962-01-20 carry Horizons' UTC time tag and are converted to TT with the
+/// leap-second count (`common::horizons_jd_tt`), so neither the engine's ΔT nor
+/// UT1 − UTC is in the comparison and the residual is ephemeris and
+/// apparent-place pipeline alone. Before that the tag is UT1 and the engine's ΔT
+/// is in it. Past 2026 Horizons holds the last leap-second count (37 s)
+/// constant, as the conversion does, so those rows are like for like too: the
+/// 45″ Moon divergence this test used to see in 2099 was ΔT prediction against
+/// ΔT prediction, and is gone with the mismatch that produced it.
 const MEASURED_DT_JD: f64 = 2_461_041.5;
 
-/// Per-point ceiling over the measured-ΔT era. Observed max is 0.501″: the Moon
-/// in 1906, where Horizons' pre-1962 ΔT (Stephenson, Morrison & Hohenkerk 2016)
-/// sits about 1 s above the USNO series `delta_t.rs` uses, and the Moon moves
-/// 0.55″ per second of time. Without the Moon the worst point is 0.266″
-/// (Mercury). It was 1.187″ (Uranus, 0.36° from the Sun) until the Sun's light
-/// deflection was added to the pipeline, and the old 2.0″ ceiling would not have
-/// noticed that coming back; 0.6″ would.
-const MEASURED_MAX_ARCSEC: f64 = 0.6;
+/// Per-point ceiling over the measured-ΔT era. Observed max is 0.272″: the Moon
+/// at 1962-01-06, one of the 19 days between 1962-01-01, where the engine hands
+/// over from the SMH2016 spline to the IERS-based USNO rows, and 1962-01-20, where
+/// Horizons does; across that handover the two series differ by 0.371 s, which is
+/// 0.2″ of Moon (`delta_t.rs`, "The joins"). Without that row the worst point is
+/// 0.251″ (Pluto), and the Moon's worst is 0.225″ (1900-05-31), the same as
+/// every other body's, which is the frame offset of 1900. It was 1.187″ (Uranus, 0.36° from
+/// the Sun) until the Sun's light deflection was added to the pipeline, and the old
+/// 2.0″ ceiling would not have noticed that coming back; 0.35″, 28 percent over the
+/// observed, would.
+const MEASURED_MAX_ARCSEC: f64 = 0.35;
 
-/// Mean ceiling over the measured-ΔT era. Observed mean is 0.099″.
-const MEASURED_MEAN_ARCSEC: f64 = 0.15;
+/// Mean ceiling over the measured-ΔT era. Observed mean is 0.096″; 0.12″ is 25
+/// percent over it. Most of it is a frame offset before 1962 (0.14″, the
+/// difference between IAU 2006 / 2000 and Horizons' IAU 1976 / 1980 conventions)
+/// and the same after (0.05″).
+const MEASURED_MEAN_ARCSEC: f64 = 0.12;
 
-/// Per-point ceiling over the predicted-ΔT era, sized by the ΔT divergence
-/// rather than by our ephemeris. Observed max is 44.9″ (Moon, 2099).
-const PREDICTED_MAX_ARCSEC: f64 = 60.0;
+/// Per-point ceiling over the measured-ΔT era from 1962-01-20 (UTC tags, converted
+/// with the leap-second count). Observed max is 0.062″ (Pluto): a frame offset of
+/// about 0.05″ shared by every body, which is the difference between this
+/// engine's IAU 2006 / 2000 conventions and Horizons' IAU 1976 / 1980 ones, and
+/// nothing else. 0.10″ leaves 60 percent over it and fails on any ephemeris or
+/// pipeline error of a twentieth of an arcsecond.
+const POST_1962_MAX_ARCSEC: f64 = 0.10;
+
+/// Mean ceiling over the same rows. Observed mean is 0.049″; 0.07″ is 40 percent
+/// over it.
+const POST_1962_MEAN_ARCSEC: f64 = 0.07;
+
+/// Per-point ceiling over the rows after 2025, converted like the rows above.
+/// Observed max is 0.189″ (Moon, 2099-Oct), which is the frame offset plus the
+/// small drift between the DE440s the engine reads and the DE441 Horizons
+/// serves; 0.30″ leaves 60 percent over it.
+const PREDICTED_MAX_ARCSEC: f64 = 0.30;
 
 fn body_from_name(name: &str) -> Option<Body> {
     match name {
@@ -195,6 +224,11 @@ fn compare_against_reference() {
     let mut per_body: std::collections::BTreeMap<String, (u32, f64, f64)> =
         std::collections::BTreeMap::new();
 
+    // Measured-ΔT era split at the oracle's time-scale boundary, 1962-01-20:
+    // (post-1962?, body) -> (count, sum_arcsec, max_arcsec).
+    let mut split: std::collections::BTreeMap<(bool, String), (u32, f64, f64)> =
+        std::collections::BTreeMap::new();
+
     // Predicted-ΔT era: tracked only to report and to bound the ΔT divergence.
     let mut p_max: f64 = 0.0;
     let mut p_max_body = String::new();
@@ -212,10 +246,15 @@ fn compare_against_reference() {
             continue;
         }
 
-        // Compute using Vedaksha
-        let result = coordinates::apparent_position(&reader, body, dp.jd);
+        // Compute using Vedaksha, in Horizons' own time scale: rows from
+        // 1962-01-20 carry a UTC tag and are converted to TT with the leap-second
+        // count; earlier rows carry UT1 and go through the engine's Delta T.
+        let result = match common::horizons_jd_tt(dp.jd) {
+            Some(jd_tt) => coordinates::ecliptic_position_tt(&reader, body, jd_tt),
+            None => coordinates::apparent_position(&reader, body, dp.jd).map(|p| p.ecliptic),
+        };
         let vedaksha_lon = match result {
-            Ok(pos) => pos.ecliptic.longitude.to_degrees(),
+            Ok(pos) => pos.longitude.to_degrees(),
             Err(e) => {
                 eprintln!(
                     "  ERROR: {} at {} (JD {}): {:?}",
@@ -266,6 +305,12 @@ fn compare_against_reference() {
             }
             let e = per_body
                 .entry(dp.body.clone())
+                .or_insert((0u32, 0.0f64, 0.0f64));
+            e.0 += 1;
+            e.1 += diff_arcsec;
+            e.2 = e.2.max(diff_arcsec);
+            let e = split
+                .entry((dp.jd >= common::HORIZONS_UTC_START_JD, dp.body.clone()))
                 .or_insert((0u32, 0.0f64, 0.0f64));
             e.0 += 1;
             e.1 += diff_arcsec;
@@ -366,8 +411,29 @@ fn compare_against_reference() {
             max
         );
     }
-    eprintln!("\n--- Predicted-ΔT era (2026+; residual is ΔT divergence, not ephemeris) ---");
+    eprintln!(
+        "\n--- Predicted-ΔT era (2026+; UTC tags converted with the leap-second count, so ΔT is not exercised) ---"
+    );
     eprintln!("Max error:            {p_max:.3} arcseconds ({p_max_body} at {p_max_date})");
+
+    // The measured-ΔT era split where Horizons' UT changes meaning. Before
+    // 1962-01-20 it is UT1 and the engine's Delta T is in the comparison; from
+    // then it is UTC and Delta T and UT1 - UTC are out of it.
+    eprintln!("\nSPLIT AT 1962-01-20 (measured-ΔT era)");
+    eprintln!(
+        "\n{:<10} {:<10} {:>7} {:>10} {:>10}",
+        "Body", "Era", "n", "mean\"", "max\""
+    );
+    for ((post, body), (n, sum, max)) in &split {
+        eprintln!(
+            "{:<10} {:<10} {:>7} {:>10.3} {:>10.3}",
+            body,
+            if *post { "post-1962" } else { "pre-1962" },
+            n,
+            sum / f64::from(*n),
+            max
+        );
+    }
 
     // Accuracy is asserted where it is actually attributable to us: the era
     // where ΔT is measured rather than predicted. These bounds are what the
@@ -383,13 +449,29 @@ fn compare_against_reference() {
         "measured-ΔT era mean error {m_mean:.3}″ exceeds {MEASURED_MEAN_ARCSEC}″"
     );
 
-    // Future dates are bounded only against ΔT-prediction divergence. A blowout
-    // here means either our ΔT model or the ephemeris moved — worth a look, but
-    // it is not the accuracy claim.
+    // From 1962-01-20 the time scale is matched, so the bound is on the ephemeris
+    // and the pipeline alone, and it is tight.
+    let (post_n, post_sum, post_max) = split
+        .iter()
+        .filter(|((post, _), _)| *post)
+        .fold((0u32, 0.0f64, 0.0f64), |a, (_, v)| {
+            (a.0 + v.0, a.1 + v.1, a.2.max(v.2))
+        });
+    let post_mean = post_sum / f64::from(post_n);
+    assert!(
+        post_max < POST_1962_MAX_ARCSEC,
+        "post-1962 max error {post_max:.3}″ exceeds {POST_1962_MAX_ARCSEC}″"
+    );
+    assert!(
+        post_mean < POST_1962_MEAN_ARCSEC,
+        "post-1962 mean error {post_mean:.3}″ exceeds {POST_1962_MEAN_ARCSEC}″"
+    );
+
+    // Rows after 2025 are compared the same way, so the same kind of bound.
     assert!(
         p_max < PREDICTED_MAX_ARCSEC,
-        "predicted-ΔT era max error {p_max:.3}″ ({p_max_body} at {p_max_date}) exceeds \
-         {PREDICTED_MAX_ARCSEC}″ — check delta_t.rs against Horizons' ΔT"
+        "post-2025 max error {p_max:.3}″ ({p_max_body} at {p_max_date}) exceeds \
+         {PREDICTED_MAX_ARCSEC}″"
     );
 
     // Nothing anywhere in range should drift past an arcminute.
