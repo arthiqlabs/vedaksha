@@ -65,6 +65,12 @@
 //! caller's `moon_and_sun` callback (tropical or sidereal — the ayanamsha
 //! cancels in the elongation); the Sun's sidereal longitude is derived
 //! inside via `ayanamsha`.
+//!
+//! A calendar asks for many instants of one span, and each [`lunar_month_span`]
+//! reads the pair about a hundred times. Take the callback from one
+//! [`crate::walked::WalkedSky`] over the span and it makes 18 to 37 times fewer
+//! provider calls (measured over a year of every-fourth-day spans and four
+//! months of both schemes) and the same spans to 0.1 ms.
 
 use vedaksha_astro::sidereal::{Ayanamsha, true_ayanamsha_value};
 use vedaksha_ephem_core::julian;

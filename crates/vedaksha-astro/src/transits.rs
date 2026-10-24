@@ -71,6 +71,12 @@ pub struct TransitSearchConfig {
 /// # Returns
 /// Transit events found, sorted by Julian Day.
 ///
+/// For the Moon or the Sun, `vedaksha_vedic::walked::WalkedSky` serves
+/// `get_longitude` from an interpolated walk: a year of both against eight natal
+/// points and five aspects makes 7 times fewer provider calls (the Moon alone, 10
+/// times) and every event lands within the search's own 1e-8 day (0.86 ms)
+/// bisection width of the direct one. The planets are not served from a walk.
+///
 /// The outer loop over `config.transiting_bodies` is independent per body:
 /// each body's coarse scan and crossing detection reads nothing but its own
 /// index and the shared, read-only `config`/`get_longitude`. With the `std`

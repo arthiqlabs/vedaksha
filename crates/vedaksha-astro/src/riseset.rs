@@ -4542,4 +4542,39 @@ mod tests {
              measurement no longer supports"
         );
     }
+
+    /// `sun_equatorial_deg_walked` is `sun_equatorial_deg` with the Sun's place
+    /// read from a walk: the same to 1e-6 degree inside the span, and to the bit
+    /// outside it, where it reads the provider.
+    #[test]
+    fn the_walked_sun_is_the_provider_sun_inside_and_outside_the_span() {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::walk::{BodyWalk, WalkSpec};
+
+        let provider = AnalyticalProvider::new();
+        let (lo, hi) = (2_460_000.0, 2_460_040.0);
+        let spec = WalkSpec {
+            days: 8.0,
+            nodes: 12,
+        };
+        let walk = BodyWalk::with_spec(&provider, Body::Sun, lo, hi, spec);
+        let mut worst = 0.0_f64;
+        for k in 0..=80 {
+            let jd = lo + 0.5 * f64::from(k);
+            let (ra, dec) = sun_equatorial_deg_walked(&walk, &provider, jd).unwrap();
+            let (want_ra, want_dec) = sun_equatorial_deg(&provider, jd).unwrap();
+            worst = worst
+                .max(normalize_degrees_signed(ra - want_ra).abs())
+                .max((dec - want_dec).abs());
+        }
+        assert!(worst < 1.0e-6, "walked Sun off by {worst:e} degree");
+        assert!(worst > 0.0, "the walk was never used: {worst}");
+        for jd in [lo - 3.3, hi + 9.1] {
+            assert_eq!(
+                sun_equatorial_deg_walked(&walk, &provider, jd),
+                sun_equatorial_deg(&provider, jd)
+            );
+        }
+    }
 }

@@ -26,6 +26,16 @@
 //! here. [`crate::muhurta::refine_crossing`] is the shared longitude solver
 //! — this module brackets, it refines.
 //!
+//! A scan that reads the Moon or the Sun many times over a span (the Moon's
+//! ingresses at a few reads a day, an eclipse search at fourteen) can take its
+//! callbacks from [`crate::walked::WalkedSky`]: on the analytical provider it
+//! makes 4 to 23 times fewer provider calls and the ingresses and the eclipse
+//! contacts come out within 0.1 ms of the direct callbacks'. The eclipse's
+//! `madhya` does not: it is a ternary-search minimum and moves by 5 to 12 ms
+//! between two callbacks that agree to 1e-8 degree. The planets (the solar
+//! disc's step in the light deflection) and [`stations`] (the rate is the
+//! answer) are not served from a walk.
+//!
 //! # Frames and approximations (read before citing a result)
 //!
 //! - Altitudes use MEAN equinox LST (`gmst` + longitude): nutation (±1")

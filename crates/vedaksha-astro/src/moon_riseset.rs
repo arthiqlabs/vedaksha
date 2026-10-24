@@ -757,4 +757,36 @@ mod tests {
             tally.max_calls
         );
     }
+
+    /// `moon_equatorial_walked` is `moon_equatorial` with the Moon's place read
+    /// from a walk: the same to 1e-6 degree and 0.1 m inside the span, and to
+    /// the bit outside it, where it reads the provider.
+    #[test]
+    fn the_walked_moon_is_the_provider_moon_inside_and_outside_the_span() {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::walk::BodyWalk;
+
+        let provider = AnalyticalProvider::new();
+        let (lo, hi) = (2_460_000.0, 2_460_040.0);
+        let walk = BodyWalk::moon(&provider, lo, hi);
+        let (mut angle, mut metres) = (0.0_f64, 0.0_f64);
+        for k in 0..=160 {
+            let jd = lo + 0.25 * f64::from(k);
+            let (ra, dec, km) = moon_equatorial_walked(&walk, &provider, jd).unwrap();
+            let (want_ra, want_dec, want_km) = moon_equatorial(&provider, jd).unwrap();
+            angle = angle
+                .max(normalize_degrees_signed(ra - want_ra).abs())
+                .max((dec - want_dec).abs());
+            metres = metres.max((km - want_km).abs() * 1000.0);
+        }
+        assert!(angle < 1.0e-6, "walked Moon off by {angle:e} degree");
+        assert!(metres < 0.1, "walked Moon distance off by {metres} m");
+        assert!(angle > 0.0, "the walk was never used");
+        for jd in [lo - 3.3, hi + 9.1] {
+            assert_eq!(
+                moon_equatorial_walked(&walk, &provider, jd),
+                moon_equatorial(&provider, jd)
+            );
+        }
+    }
 }
