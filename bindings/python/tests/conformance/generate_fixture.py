@@ -79,6 +79,13 @@ MCP_CASES = [
         "params": {"name": "compute_shadbala", "arguments": {
             "julian_day": 2459016.0, "latitude": 78.22, "longitude": 15.65,
             "ayanamsha": "IndianOfficial"}}}),
+    # Shadbala is defined on sidereal positions: the tropical ayanamsha is
+    # refused, in the same words on both builds.
+    ("shadbala_tropical_refused", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_shadbala", "arguments": {
+            "julian_day": 2461338.0, "latitude": 13.08, "longitude": 80.27,
+            "ayanamsha": "Tropical"}}}),
     # The dasha systems and options added with the complete shadbala.
     ("dasha_yogini_rounds", {
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",

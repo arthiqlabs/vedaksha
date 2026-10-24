@@ -3399,6 +3399,36 @@ mod tests {
         assert!(polar.message.contains("polar"), "{}", polar.message);
     }
 
+    /// Shadbala is defined on sidereal positions, so the tropical zodiac is
+    /// refused rather than answered with a number that reads as Jyotish. Through
+    /// the request path, so the error a client sees is the one asserted.
+    #[test]
+    fn compute_shadbala_refuses_the_tropical_ayanamsha() {
+        for name in ["Tropical", "tropical", "None"] {
+            let mut args = shadbala_args();
+            args["ayanamsha"] = name.into();
+            let e = McpServer::call_compute_shadbala(&args).unwrap_err();
+            assert_eq!(e.error_code, "INVALID_PARAMETER", "{name}");
+            assert!(e.message.contains("ayanamsha"), "{}", e.message);
+            assert!(e.message.contains("sidereal"), "{}", e.message);
+        }
+        let server = McpServer::new();
+        let mut args = shadbala_args();
+        args["ayanamsha"] = "Tropical".into();
+        let request = serde_json::json!({
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": { "name": "compute_shadbala", "arguments": args }
+        });
+        let response: serde_json::Value =
+            serde_json::from_str(&server.handle_request(&request.to_string())).unwrap();
+        assert_eq!(
+            response["error"]["data"]["error_code"], "INVALID_PARAMETER",
+            "{response}"
+        );
+        // A sidereal system on the same moment is still served.
+        assert!(McpServer::call_compute_shadbala(&shadbala_args()).is_ok());
+    }
+
     #[test]
     fn compute_shadbala_house_system_changes_the_cusps_it_reads() {
         let placidus = McpServer::call_compute_shadbala(&shadbala_args()).expect("ok");
