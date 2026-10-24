@@ -5,13 +5,20 @@
 
 //! Vectorized `sin`/`cos` for four `f64` lanes at once.
 //!
-//! The ELP/MPP02 lunar series evaluates tens of thousands of `sin`/`cos` per
-//! position. This computes both for four phase angles simultaneously with
-//! [`wide`]'s `f64x4::sin_cos` algorithm (on AVX targets wide's own function,
-//! elsewhere a bit-identical port — see [`sincos_f64x4`]). The accompanying test pins its accuracy
-//! against scalar `libm::sincos` across the full domain the lunar phases
-//! occupy, so the vectorized path is a measured, bounded-error substitute
-//! rather than an assumed-equivalent one.
+//! The VSOP87A planetary series evaluate tens of thousands of `sin`/`cos` per
+//! planet position. This computes both for four phase angles simultaneously
+//! with [`wide`]'s `f64x4::sin_cos` algorithm (on AVX targets wide's own
+//! function, elsewhere a bit-identical port — see [`sincos_f64x4`]). The
+//! accompanying test pins its accuracy against scalar `libm::sincos` across
+//! the full domain the phases occupy, so the vectorized path is a measured,
+//! bounded-error substitute rather than an assumed-equivalent one.
+//!
+//! **ELP/MPP02 no longer calls this kernel.** Until the lunar series moved to
+//! angle addition (`phase_graph`), it was this kernel's main client, and the
+//! measurements below were taken on that workload. They are kept because the
+//! kernel's accuracy at those phases is still what VSOP87A relies on, and
+//! `elp_mpp02::tests::sincos_matches_libm_at_real_elp_phase_domain` still
+//! measures it there (a superset of VSOP87A's range).
 //!
 //! # Validated domain (corrected 2026-08-29)
 //!

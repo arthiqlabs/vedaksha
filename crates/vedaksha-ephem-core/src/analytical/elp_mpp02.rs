@@ -21,6 +21,25 @@
 //! No third-party implementation has been consulted; this file is a clean
 //! re-derivation from the cited primary sources only.
 //!
+//! ## Evaluation
+//!
+//! Every term is `amplitude · sin φ` or `cos φ` with `φ` an integer
+//! combination of 13 slowly-varying arguments. Rather than one `sincos` per
+//! term, each evaluation builds the sine and cosine of every needed combination
+//! by angle addition over a prefix tree of the multiplier vectors, and each term
+//! reads its pair. The method, its cost and its accuracy are in `phase_graph`.
+//! The terms are then summed with four independent accumulators.
+//!
+//! Output is not bit-identical to the one-`sincos`-per-term evaluation this
+//! replaced, and does not claim to be: the two differ by the old route's
+//! rounding of each phase at the magnitude of the phase (`1e-10` rad for the
+//! largest phases at the range edge), which the new route avoids. Measured over
+//! 85,005 instants spanning the supported range, the series moved by at most
+//! one unit in the last place of the unwrapped longitude `V` in 22 instants
+//! (0.03%), and by less than `1e-7` arcsec otherwise; see
+//! `tests::series_match_the_exact_phase_reference` for the comparison against
+//! an exact-phase reference.
+//!
 //! ## Convention notes (resolutions of the spec's open §8 questions)
 //!
 //! - **Time scale.** Argument polynomials use TDB Julian centuries from
@@ -56,13 +75,13 @@
 
 use core::f64::consts::PI;
 use core::sync::atomic::{AtomicU64, Ordering};
+use std::cell::RefCell;
 use std::sync::LazyLock;
-
-use wide::f64x4;
 
 use crate::analytical::coefficients::loader::{ElpMainTerm, ElpPertTerm};
 use crate::analytical::coefficients::{moon_distance, moon_latitude, moon_longitude};
-use crate::analytical::simd_trig::sincos_f64x4;
+use crate::analytical::fused::mul_add;
+use crate::analytical::phase_graph::{Multipliers, N_ARGS, Pair, PhaseGraph};
 
 /// Count of ELP/MPP02 evaluations performed by this process.
 ///
@@ -256,14 +275,22 @@ pub fn elp_geocentric_distance(jd: f64) -> f64 {
 
     let a_arg = reduce_all_args_position(args, &t_pow);
 
-    let r_main = eval_main_series_position(
-        moon_distance::MAIN.as_slice(),
-        R_MAIN_AMPS.get(fit),
-        &a_arg,
-        SeriesKind::Cosine,
-    );
-    let r_pert = eval_pert_series_position(&R_PERT_SPARSE, &a_arg, &t_pow);
-    (r_main + r_pert) * RA0
+    // The r-only graph: the longitude and latitude terms' nodes are not built.
+    let tables = &*TABLES_R;
+    with_workspace(tables.graph.pool_len(), |ws| {
+        tables.graph.fill_phases(&a_arg, &mut ws.pool);
+        let pool = &ws.pool[..];
+        let r_main = eval_main_series::<false>(
+            &tables.r.main,
+            R_MAIN_AMPS.get(fit),
+            pool,
+            &[],
+            SeriesKind::Cosine,
+        )
+        .value;
+        let r_pert = eval_pert_series::<false>(&tables.r, &t_pow, pool, &[]).value;
+        (r_main + r_pert) * RA0
+    })
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -593,46 +620,55 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
     // series evaluations below; see `reduce_all_args`.
     let (a_arg, adot_arg) = reduce_all_args(args, &t_pow);
 
-    // === Longitude (V), radians ===
-    let v_main = eval_main_series(
-        moon_longitude::MAIN.as_slice(),
-        V_MAIN_AMPS.get(fit),
-        &a_arg,
-        &adot_arg,
-        SeriesKind::Sine,
-    );
-    let v_pert = eval_pert_series(&V_PERT_SPARSE, &a_arg, &adot_arg, &t_pow);
-    let v_w1 = eval_poly(&args.w1, t);
-    let v = v_w1 + v_main.value + v_pert.value;
-    let vdot = eval_poly_dot(&args.w1, t) + v_main.dot + v_pert.dot;
+    let tables = &*TABLES_ALL;
+    with_workspace(tables.graph.pool_len(), |ws| {
+        // Every term's sin/cos and ω, once, for all three variables: see
+        // `phase_graph`.
+        tables.graph.fill_phases(&a_arg, &mut ws.pool);
+        tables.graph.fill_omega(&adot_arg, &mut ws.omega);
+        let (pool, omega) = (&ws.pool[..], &ws.omega[..]);
 
-    // === Latitude (U), radians ===
-    let u_main = eval_main_series(
-        moon_latitude::MAIN.as_slice(),
-        U_MAIN_AMPS.get(fit),
-        &a_arg,
-        &adot_arg,
-        SeriesKind::Sine,
-    );
-    let u_pert = eval_pert_series(&U_PERT_SPARSE, &a_arg, &adot_arg, &t_pow);
-    let u = u_main.value + u_pert.value;
-    let udot = u_main.dot + u_pert.dot;
+        // === Longitude (V), radians ===
+        let v_main = eval_main_series::<true>(
+            &tables.v.main,
+            V_MAIN_AMPS.get(fit),
+            pool,
+            omega,
+            SeriesKind::Sine,
+        );
+        let v_pert = eval_pert_series::<true>(&tables.v, &t_pow, pool, omega);
+        let v_w1 = eval_poly(&args.w1, t);
+        let v = v_w1 + v_main.value + v_pert.value;
+        let vdot = eval_poly_dot(&args.w1, t) + v_main.dot + v_pert.dot;
 
-    // === Distance (r), km ===
-    // S3 main is a *cosine* series (elpmpp02.pdf §2.2.1), and corrections
-    // include the additional `−(2/3)·A·δν/ν` term per §4.4.1.
-    let r_main = eval_main_series(
-        moon_distance::MAIN.as_slice(),
-        R_MAIN_AMPS.get(fit),
-        &a_arg,
-        &adot_arg,
-        SeriesKind::Cosine,
-    );
-    let r_pert = eval_pert_series(&R_PERT_SPARSE, &a_arg, &adot_arg, &t_pow);
-    let r = (r_main.value + r_pert.value) * RA0;
-    let rdot = (r_main.dot + r_pert.dot) * RA0;
+        // === Latitude (U), radians ===
+        let u_main = eval_main_series::<true>(
+            &tables.u.main,
+            U_MAIN_AMPS.get(fit),
+            pool,
+            omega,
+            SeriesKind::Sine,
+        );
+        let u_pert = eval_pert_series::<true>(&tables.u, &t_pow, pool, omega);
+        let u = u_main.value + u_pert.value;
+        let udot = u_main.dot + u_pert.dot;
 
-    (v, u, r, vdot, udot, rdot)
+        // === Distance (r), km ===
+        // S3 main is a *cosine* series (elpmpp02.pdf §2.2.1), and corrections
+        // include the additional `−(2/3)·A·δν/ν` term per §4.4.1.
+        let r_main = eval_main_series::<true>(
+            &tables.r.main,
+            R_MAIN_AMPS.get(fit),
+            pool,
+            omega,
+            SeriesKind::Cosine,
+        );
+        let r_pert = eval_pert_series::<true>(&tables.r, &t_pow, pool, omega);
+        let r = (r_main.value + r_pert.value) * RA0;
+        let rdot = (r_main.dot + r_pert.dot) * RA0;
+
+        (v, u, r, vdot, udot, rdot)
+    })
 }
 
 /// Position-only sibling of [`vur_series`]: same series, same terms, same
@@ -640,8 +676,10 @@ fn vur_series(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
 ///
 /// Returns `(V, U, r)` — V, U in radians, r in km — bit-for-bit identical to
 /// the first three elements of [`vur_series`]'s tuple at the same `(jd,
-/// fit)`. See `tests::elp_geocentric_position_matches_elp_geocentric_bit_for_bit`
-/// and `tests::elp_geocentric_position_of_date_matches_elp_geocentric_of_date_bit_for_bit`
+/// fit)`: the two instantiate the same generic accumulation, which forms
+/// `value` by the same operations whether or not it also forms `dot`. See
+/// `tests::elp_geocentric_position_matches_elp_geocentric_bit_for_bit` and
+/// `tests::elp_geocentric_position_of_date_matches_elp_geocentric_of_date_bit_for_bit`
 /// for the end-to-end proof (there is no direct per-function test of
 /// `vur_series_position` alone; those two tests exercise it through both
 /// public entry points).
@@ -653,38 +691,50 @@ fn vur_series_position(jd: f64, fit: Fit) -> (f64, f64, f64) {
 
     let a_arg = reduce_all_args_position(args, &t_pow);
 
-    // === Longitude (V), radians ===
-    let v_main = eval_main_series_position(
-        moon_longitude::MAIN.as_slice(),
-        V_MAIN_AMPS.get(fit),
-        &a_arg,
-        SeriesKind::Sine,
-    );
-    let v_pert = eval_pert_series_position(&V_PERT_SPARSE, &a_arg, &t_pow);
-    let v_w1 = eval_poly(&args.w1, t);
-    let v = v_w1 + v_main + v_pert;
+    let tables = &*TABLES_ALL;
+    with_workspace(tables.graph.pool_len(), |ws| {
+        tables.graph.fill_phases(&a_arg, &mut ws.pool);
+        let pool = &ws.pool[..];
 
-    // === Latitude (U), radians ===
-    let u_main = eval_main_series_position(
-        moon_latitude::MAIN.as_slice(),
-        U_MAIN_AMPS.get(fit),
-        &a_arg,
-        SeriesKind::Sine,
-    );
-    let u_pert = eval_pert_series_position(&U_PERT_SPARSE, &a_arg, &t_pow);
-    let u = u_main + u_pert;
+        // === Longitude (V), radians ===
+        let v_main = eval_main_series::<false>(
+            &tables.v.main,
+            V_MAIN_AMPS.get(fit),
+            pool,
+            &[],
+            SeriesKind::Sine,
+        )
+        .value;
+        let v_pert = eval_pert_series::<false>(&tables.v, &t_pow, pool, &[]).value;
+        let v_w1 = eval_poly(&args.w1, t);
+        let v = v_w1 + v_main + v_pert;
 
-    // === Distance (r), km ===
-    let r_main = eval_main_series_position(
-        moon_distance::MAIN.as_slice(),
-        R_MAIN_AMPS.get(fit),
-        &a_arg,
-        SeriesKind::Cosine,
-    );
-    let r_pert = eval_pert_series_position(&R_PERT_SPARSE, &a_arg, &t_pow);
-    let r = (r_main + r_pert) * RA0;
+        // === Latitude (U), radians ===
+        let u_main = eval_main_series::<false>(
+            &tables.u.main,
+            U_MAIN_AMPS.get(fit),
+            pool,
+            &[],
+            SeriesKind::Sine,
+        )
+        .value;
+        let u_pert = eval_pert_series::<false>(&tables.u, &t_pow, pool, &[]).value;
+        let u = u_main + u_pert;
 
-    (v, u, r)
+        // === Distance (r), km ===
+        let r_main = eval_main_series::<false>(
+            &tables.r.main,
+            R_MAIN_AMPS.get(fit),
+            pool,
+            &[],
+            SeriesKind::Cosine,
+        )
+        .value;
+        let r_pert = eval_pert_series::<false>(&tables.r, &t_pow, pool, &[]).value;
+        let r = (r_main + r_pert) * RA0;
+
+        (v, u, r)
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -720,11 +770,6 @@ fn reduce_arg(coeffs: &[f64; 5], t_pow: &[f64; 5]) -> (f64, f64) {
     (a, adot)
 }
 
-/// Number of distinct arguments a perturbation phase can reference: the four
-/// Delaunay arguments D, F, l, l′, then the eight planetary mean longitudes
-/// Me…N, then ζ.
-const N_ARGS: usize = 13;
-
 /// Reduce all 13 argument polynomials to `(value, derivative)` at one epoch.
 ///
 /// Hoisted out of the series evaluators on 2026-08-29
@@ -740,13 +785,11 @@ const N_ARGS: usize = 13;
 /// entries are exactly what `eval_main_series` used to build for itself, in
 /// the same index order.
 ///
-/// The arrays are [`N_SLOTS`] (16) wide rather than [`N_ARGS`] (13): entries
-/// 13..16 stay `0.0` and are what the sparse index's padding slots point at
-/// (see [`PAD_ARG`]). A power-of-two width is also what lets the inner loop's
-/// `& 15` mask eliminate its bounds check.
-fn reduce_all_args(args: &Args, t_pow: &[f64; 5]) -> ([f64; N_SLOTS], [f64; N_SLOTS]) {
-    let mut a_arg = [0.0_f64; N_SLOTS];
-    let mut adot_arg = [0.0_f64; N_SLOTS];
+/// The result is indexed by the argument numbering [`PhaseGraph`] uses:
+/// D, F, l, l′, then the eight planetary mean longitudes, then ζ.
+fn reduce_all_args(args: &Args, t_pow: &[f64; 5]) -> ([f64; N_ARGS], [f64; N_ARGS]) {
+    let mut a_arg = [0.0_f64; N_ARGS];
+    let mut adot_arg = [0.0_f64; N_ARGS];
     for (d, coeffs) in args.del.iter().enumerate() {
         let (a, adot) = reduce_arg(coeffs, t_pow);
         a_arg[d] = a;
@@ -780,8 +823,8 @@ fn reduce_arg_position(coeffs: &[f64; 5], t_pow: &[f64; 5]) -> f64 {
 }
 
 /// Position-only sibling of [`reduce_all_args`]: skips `adot_arg` entirely.
-fn reduce_all_args_position(args: &Args, t_pow: &[f64; 5]) -> [f64; N_SLOTS] {
-    let mut a_arg = [0.0_f64; N_SLOTS];
+fn reduce_all_args_position(args: &Args, t_pow: &[f64; 5]) -> [f64; N_ARGS] {
+    let mut a_arg = [0.0_f64; N_ARGS];
     for (d, coeffs) in args.del.iter().enumerate() {
         a_arg[d] = reduce_arg_position(coeffs, t_pow);
     }
@@ -860,303 +903,208 @@ static U_MAIN_AMPS: LazyLock<MainAmplitudes> =
 static R_MAIN_AMPS: LazyLock<MainAmplitudes> =
     LazyLock::new(|| MainAmplitudes::build(moon_distance::MAIN.as_slice(), true, false));
 
-/// Evaluate a main-problem series (S1, S2, or S3).
-///
-/// `amps` carries the per-term corrected amplitude already in the series'
-/// output unit (see [`MainAmplitudes`]) and must be parallel to `terms`.
-fn eval_main_series(
-    terms: &[ElpMainTerm],
-    amps: &[f64],
-    a_arg: &[f64; N_SLOTS],
-    adot_arg: &[f64; N_SLOTS],
-    kind: SeriesKind,
-) -> SeriesPart {
-    assert_eq!(
-        terms.len(),
-        amps.len(),
-        "main-series amplitude table is not parallel to its term table"
-    );
+// ─── Phase tables and series accumulation ───────────────────────────────────────
 
-    let mut value = 0.0;
-    let mut dot = 0.0;
-
-    // Entries 0..4 of the caller's hoisted argument arrays are the four
-    // Delaunay arguments' values Aⱼ and derivatives Ȧⱼ, in the same order this
-    // function used to build for itself; every term's phase
-    // φ = i1·D + i2·F + i3·l + i4·l' is a 4-term dot product with them.
-    //
-    // The main series is 77.2% dense (mean 3.09 nonzero multipliers of 4), so
-    // it keeps the straight-line 4-term form; only the 30.0%-dense
-    // perturbation series is worth indexing sparsely.
-    let term_po = |term: &ElpMainTerm| -> (f64, f64) {
-        let phase = (term.i1 as f64) * a_arg[0]
-            + (term.i2 as f64) * a_arg[1]
-            + (term.i3 as f64) * a_arg[2]
-            + (term.i4 as f64) * a_arg[3];
-        let omega = (term.i1 as f64) * adot_arg[0]
-            + (term.i2 as f64) * adot_arg[1]
-            + (term.i3 as f64) * adot_arg[2]
-            + (term.i4 as f64) * adot_arg[3];
-        (phase, omega)
-    };
-
-    // The 4-lane split must stay exactly where it was: `sincos_f64x4` and
-    // scalar `libm::sincos` agree only to 1-2 ULP, so which terms land in the
-    // vector body and which in the scalar tail is part of the output's bit
-    // pattern, not an implementation detail.
-    let n_chunks = terms.len() / 4;
-    for ci in 0..n_chunks {
-        let base = ci * 4;
-        let mut phases = [0.0_f64; 4];
-        let mut omegas = [0.0_f64; 4];
-        for lane in 0..4 {
-            let (p, o) = term_po(&terms[base + lane]);
-            phases[lane] = p;
-            omegas[lane] = o;
-        }
-        let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
-        let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
-        for lane in 0..4 {
-            let a = amps[base + lane];
-            let omega = omegas[lane];
-            let (sin_p, cos_p) = (sin4[lane], cos4[lane]);
-            match kind {
-                SeriesKind::Sine => {
-                    value += a * sin_p;
-                    dot += a * omega * cos_p;
-                }
-                SeriesKind::Cosine => {
-                    value += a * cos_p;
-                    dot += -a * omega * sin_p;
-                }
-            }
-        }
-    }
-    for i in (n_chunks * 4)..terms.len() {
-        let (phase, omega) = term_po(&terms[i]);
-        let a = amps[i];
-        let (sin_p, cos_p) = libm::sincos(phase);
-        match kind {
-            SeriesKind::Sine => {
-                value += a * sin_p;
-                dot += a * omega * cos_p;
-            }
-            SeriesKind::Cosine => {
-                value += a * cos_p;
-                dot += -a * omega * sin_p;
-            }
-        }
-    }
-
-    SeriesPart { value, dot }
+/// Which of the three lunar variables a series belongs to.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Var {
+    V,
+    U,
+    R,
 }
 
-/// Position-only sibling of [`eval_main_series`]: computes `value` only, no
-/// `omega`/`dot` at all — the phase is a straight-line dot product, no
-/// derivative dot product alongside it.
-///
-/// The `value` accumulation below is identical, term for term and in the
-/// same order, to [`eval_main_series`]'s own `value` accumulator, so the
-/// result is bit-for-bit identical to `eval_main_series(..).value`.
-fn eval_main_series_position(
-    terms: &[ElpMainTerm],
-    amps: &[f64],
-    a_arg: &[f64; N_SLOTS],
-    kind: SeriesKind,
-) -> f64 {
-    assert_eq!(
-        terms.len(),
-        amps.len(),
-        "main-series amplitude table is not parallel to its term table"
-    );
-
-    let mut value = 0.0;
-
-    let term_phase = |term: &ElpMainTerm| -> f64 {
-        (term.i1 as f64) * a_arg[0]
-            + (term.i2 as f64) * a_arg[1]
-            + (term.i3 as f64) * a_arg[2]
-            + (term.i4 as f64) * a_arg[3]
-    };
-
-    let n_chunks = terms.len() / 4;
-    for ci in 0..n_chunks {
-        let base = ci * 4;
-        let mut phases = [0.0_f64; 4];
-        for (lane, phase) in phases.iter_mut().enumerate() {
-            *phase = term_phase(&terms[base + lane]);
-        }
-        let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
-        let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
-        for lane in 0..4 {
-            let a = amps[base + lane];
-            let (sin_p, cos_p) = (sin4[lane], cos4[lane]);
-            match kind {
-                SeriesKind::Sine => value += a * sin_p,
-                SeriesKind::Cosine => value += a * cos_p,
-            }
-        }
-    }
-    for i in (n_chunks * 4)..terms.len() {
-        let phase = term_phase(&terms[i]);
-        let a = amps[i];
-        let (sin_p, cos_p) = libm::sincos(phase);
-        match kind {
-            SeriesKind::Sine => value += a * sin_p,
-            SeriesKind::Cosine => value += a * cos_p,
+impl Var {
+    fn main_terms(self) -> &'static [ElpMainTerm] {
+        match self {
+            Var::V => moon_longitude::MAIN.as_slice(),
+            Var::U => moon_latitude::MAIN.as_slice(),
+            Var::R => moon_distance::MAIN.as_slice(),
         }
     }
 
-    value
+    /// The four power-grouped perturbation tables `t^0 ..= t^3`.
+    fn pert_groups(self) -> [&'static [ElpPertTerm]; 4] {
+        match self {
+            Var::V => [
+                moon_longitude::PERT_0.as_slice(),
+                moon_longitude::PERT_1.as_slice(),
+                moon_longitude::PERT_2.as_slice(),
+                moon_longitude::PERT_3.as_slice(),
+            ],
+            Var::U => [
+                moon_latitude::PERT_0.as_slice(),
+                moon_latitude::PERT_1.as_slice(),
+                moon_latitude::PERT_2.as_slice(),
+                moon_latitude::PERT_3.as_slice(),
+            ],
+            Var::R => [
+                moon_distance::PERT_0.as_slice(),
+                moon_distance::PERT_1.as_slice(),
+                moon_distance::PERT_2.as_slice(),
+                moon_distance::PERT_3.as_slice(),
+            ],
+        }
+    }
+
+    /// Scale from the table's unit to the series' output unit: V and U are
+    /// tabulated in arcseconds and returned in radians, r in km both ways.
+    fn pert_scale(self) -> f64 {
+        match self {
+            Var::V | Var::U => 1.0 / ARCSEC_PER_RAD,
+            Var::R => 1.0,
+        }
+    }
 }
 
-// ─── Sparse perturbation multipliers ────────────────────────────────────────────
+/// One power-grouped perturbation table, ready to evaluate.
+struct PertGroup {
+    /// Pool id of each term's `(sin φ, cos φ)` in the [`PhaseGraph`].
+    node: Vec<u32>,
+    /// `(s, c)` with the series' unit scale already applied (`term.s * scale`
+    /// is jd-independent and used to be redone per term per call).
+    sc: Vec<Pair>,
+    /// Index of each entry in the source table, which the sort by node
+    /// scrambled. Only the tests need it, to find a term's multipliers.
+    #[cfg(test)]
+    source: Vec<usize>,
+}
 
-/// Multiplier slots every perturbation term's dot product visits
-/// unconditionally.
-///
-/// # Why a fixed count and not the term's own nonzero count
-///
-/// Because the fixed count is **much faster**, which is the opposite of what
-/// the arithmetic suggests. The first version of this change used a
-/// variable-length CSR list of exactly the nonzero multipliers — mean 3.90 per
-/// term, the minimum possible arithmetic — and it made `elp_mpp02_moon` **43%
-/// slower**: 261.80 µs → 375.57 µs, measured, not predicted.
-///
-/// The nonzero counts cluster tightly (histogram over the 33,122 terms, counts
-/// 0..7: 3, 136, 1896, 8607, 14071, 7435, 895, 79), so a loop whose length is
-/// the term's own count mispredicts its exit constantly — 33,122 unpredictable
-/// branches per evaluation, which cost far more than the multiply-adds they
-/// saved. A fixed slot count is straight-line, fully unrolled code with no
-/// data-dependent branch at all.
-///
-/// # Why 5
-///
-/// Measured, on this machine, with everything else held fixed
-/// (`cargo bench -p vedaksha-ephem-core -- elp_mpp02_moon`, aarch64, bench
-/// profile, against a 261.80 µs dense baseline):
-///
-/// | fixed slots | tail taken | `elp_mpp02_moon` |
-/// |---|---|---|
-/// | 4 | 25.4% | 254.02 µs |
-/// | **5** | **2.9%** | **219.31 µs** |
-/// | 6 | 0.24% | 231.01 µs |
-/// | 7 (no tail at all) | — | 241.02 µs |
-/// | 13 (every position, via this same gather) | — | 312.05 µs |
-///
-/// Each slot removed is worth ~11.8 µs, and each is a *gathered* load rather
-/// than the dense form's register-resident argument — which is why 13 slots
-/// through this path (312 µs) is slower than the dense 13 positions it
-/// replaced (262 µs). 4 is worse than 5 because a tail taken 25% of the time
-/// stops predicting. 5 is the measured optimum, not a guess.
-const PERT_SLOTS: usize = 5;
-
-/// Total slots stored per term, including the rarely-read tail.
-///
-/// A power of two so `Vec<[u8; 8]>` / `Vec<[i16; 8]>` have 8- and 16-byte
-/// strides and each term's slots are an aligned load rather than a
-/// cache-line-straddling read at stride 5 / 10. 8 also covers the measured
-/// maximum of 7 nonzero multipliers, so the tail needs no side table at all:
-/// the flag and the overflow slots both live in the term's own record. Routing
-/// the tail through a separate CSR side table instead measured 238.37 µs
-/// against this layout's 219.31 µs — the two extra offset loads and the slice
-/// construction cost more than the two slots they saved.
-const PERT_SLOTS_MAX: usize = 8;
-
-/// Argument-array index used by padding slots. Slots 13..16 are always `+0.0`,
-/// so a padding slot contributes exactly `0.0 * 0.0 = +0.0`.
-const PAD_ARG: u8 = 13;
-
-/// Width of the reduced-argument arrays: the 13 real arguments padded to 16.
-///
-/// A power of two so `index & 15` proves every sparse index in bounds and the
-/// bounds check leaves the inner loop.
-const N_SLOTS: usize = 16;
-
-/// One perturbation group's multipliers, sparsified to a fixed slot list.
-///
-/// # Why
-///
-/// Each of the 33,122 perturbation terms carries 13 integer multipliers
-/// `i1..i13`, and `eval_pert_series` formed a full 13-multiply / 12-add dot
-/// product with them twice per term — once for the phase φ, once for its
-/// derivative ω. That is 861,172 multiply-adds per [`elp_geocentric`] call,
-/// and the module's own ablation (`simd_trig.rs`, "Where the time actually
-/// goes") puts them at **36.5%** (35.0–38.1%) of `elp_mpp02_moon`.
-///
-/// Measured over the real tables, most of that work is multiplication by
-/// zero: mean **3.90** nonzero multipliers of 13 — 30.0% dense — maximum 7,
-/// 97.1% of terms with 5 or fewer. (Re-measured from the loaded tables by
-/// `tests::pert_multiplier_density_matches_the_investigation`, not taken on
-/// trust from `docs/audit/2026-08-29-perf-investigation.md` #2.) This index
-/// stores each term's nonzero multipliers, in their original `i1..i13`
-/// position order, in [`PERT_SLOTS_MAX`] slots of which [`PERT_SLOTS`] are
-/// always read.
-///
-/// # Why it is bit-identical, and how that is checked
-///
-/// In IEEE 754, `0.0 × A` is exactly `±0.0` for every finite `A`, and
-/// `fl(x + ±0.0) = x` for every finite `x` except `x = −0.0`. So dropping the
-/// zero-multiplier products — and appending zero-valued padding products after
-/// the real ones — cannot change any partial sum, *as long as the surviving
-/// products are added in their original left-to-right order*. That is why
-/// [`SparsePertGroup::idx`] keeps each term's slots in original position order
-/// and [`sparse_phase_omega`] seeds the accumulator with slot 0's product
-/// rather than with `0.0` (`0.0 + (−0.0)` is `+0.0`, so a `0.0` seed would not
-/// be a no-op if the leading product were a negative zero).
-///
-/// The one place that argument is not airtight is a term with **no** nonzero
-/// multiplier at all — there are exactly 3 — where the dense form's partial
-/// sum is `−0.0` if every one of the 13 reduced arguments is negative and
-/// `+0.0` otherwise, while this form always yields `+0.0`. That is a
-/// difference in the sign of a zero phase, whose `sin` is `∓0.0` and whose
-/// `cos` is `1.0` either way, so the resulting `±0.0` contribution changes no
-/// accumulated sum.
-///
-/// That is not hypothetical and is not asserted away:
-/// `tests::sparse_slots_are_bit_identical_to_the_dense_form` compares all
-/// 33,122 terms at 13 epochs — 430,586 pairs — and finds every one identical
-/// *to the bit* except **15** of the 39 all-zero-multiplier term-epoch pairs,
-/// which differ in the sign of a zero and nothing else. Whether that ever
-/// reaches a published number is a separate, measured question, and the answer
-/// is no: `tests/lunar_series_bit_digest.rs` pins 3,780,018 output bit
-/// patterns from 630,003 whole-series evaluations and they are unchanged.
-///
-/// # Layout
-///
-/// `i16` for the multiplier. Note that the maximum |multiplier| in the tables
-/// is 75, so `i8` would in fact hold it —
-/// `docs/audit/2026-08-29-perf-investigation.md` #2 says "`i8` overflows",
-/// which is wrong on its own figure. `i16` is kept anyway: it costs nothing
-/// here (the slot arrays are not the bottleneck, and the 8-slot record is
-/// 24 bytes either way once `idx` is padded to a power-of-two stride) and it
-/// leaves headroom if the tables are ever regenerated less aggressively.
-///
-/// Indices and multipliers are parallel arrays rather than interleaved pairs:
-/// `[(u8, i16); 8]` pads to 32 bytes against 24, and both are read as straight
-/// sequential streams. The reduced arguments are the reverse — they were tried
-/// interleaved as `[(a, ȧ); 16]`, one paired load per slot instead of two, and
-/// that measured **3.4% slower** (241.02 µs → 250.06 µs at 7 slots), so they
-/// stay as two arrays.
-///
-/// The `.bin` coefficient blobs are **not** touched: this is a derived,
-/// load-time transform of the already-parsed tables, which leaves the blobs
-/// under their existing provenance gates unchanged.
-struct SparsePertGroup {
-    /// Argument index per slot, in the term's original `i1..i13` position
-    /// order, then [`PAD_ARG`] for the unused slots.
-    idx: Vec<[u8; PERT_SLOTS_MAX]>,
-    /// Multiplier per slot, parallel to [`Self::idx`]; `0` in padding slots.
+impl PertGroup {
+    /// The group with its terms in pool-id order.
     ///
-    /// `mul[PERT_SLOTS]` doubles as the flag for the rarely-taken tail: it is
-    /// nonzero exactly when the term has more than [`PERT_SLOTS`] nonzero
-    /// multipliers, which is 2.9% of them.
-    mul: Vec<[i16; PERT_SLOTS_MAX]>,
-    /// `(s, c)` with the series' `arcsec -> radian` scale already applied --
-    /// `term.s * scale` was recomputed per term per call and is jd-independent
-    /// (`docs/audit/2026-08-29-perf-investigation.md` #4). Same multiply, same
-    /// operands, evaluated once.
-    sc: Vec<(f64, f64)>,
+    /// The order of terms within a group is free (the group is summed), and
+    /// ordering them by id makes the loop that reads the pool walk it forward
+    /// instead of jumping across 450 KB of pairs.
+    fn sorted_by_node(node: Vec<u32>, sc: Vec<Pair>) -> Self {
+        let mut order: Vec<usize> = (0..node.len()).collect();
+        order.sort_by_key(|&i| node[i]);
+        Self {
+            node: order.iter().map(|&i| node[i]).collect(),
+            sc: order.iter().map(|&i| sc[i]).collect(),
+            #[cfg(test)]
+            source: order,
+        }
+    }
+}
+
+/// Every term of one variable, as pool ids.
+struct VarTerms {
+    /// Pool id per main-problem term, parallel to the main table and to its
+    /// per-fit [`MainAmplitudes`].
+    main: Vec<u32>,
+    pert: [PertGroup; 4],
+}
+
+impl VarTerms {
+    fn empty() -> Self {
+        let group = || PertGroup {
+            node: Vec::new(),
+            sc: Vec::new(),
+            #[cfg(test)]
+            source: Vec::new(),
+        };
+        Self {
+            main: Vec::new(),
+            pert: [group(), group(), group(), group()],
+        }
+    }
+}
+
+/// The phase graph over a set of variables' terms, and each term's pool id.
+///
+/// See `phase_graph` for the method and its accuracy. Two instances exist:
+/// [`TABLES_ALL`] (V, U and r, which share most of their phases) and
+/// [`TABLES_R`] (r alone, for [`elp_geocentric_distance`], which must not pay
+/// for the nodes only the other two variables need). The second is the first
+/// with the unneeded nodes dropped, and a node keeps its parent chain, so the
+/// two agree to the bit on every r term.
+struct LunarTables {
+    graph: PhaseGraph,
+    v: VarTerms,
+    u: VarTerms,
+    r: VarTerms,
+}
+
+fn multiplier(m: i32) -> i16 {
+    i16::try_from(m).expect("an ELP multiplier does not fit in i16")
+}
+
+impl LunarTables {
+    /// The graph over all three variables.
+    fn build() -> Self {
+        // One multiplier vector per term, in a fixed order the ids are read
+        // back in below: per variable (V, U, R), main terms then the four
+        // perturbation groups.
+        let mut vectors: Vec<Multipliers> = Vec::new();
+        for var in [Var::V, Var::U, Var::R] {
+            for t in var.main_terms() {
+                let mut m = [0_i16; N_ARGS];
+                m[..4].copy_from_slice(&[
+                    multiplier(t.i1),
+                    multiplier(t.i2),
+                    multiplier(t.i3),
+                    multiplier(t.i4),
+                ]);
+                vectors.push(m);
+            }
+            for group in var.pert_groups() {
+                for t in group {
+                    vectors.push(dense_multipliers_of(t).map(multiplier));
+                }
+            }
+        }
+        let (graph, ids) = PhaseGraph::build(&vectors);
+
+        let mut cursor = 0;
+        let mut take = |n: usize| -> Vec<u32> {
+            let taken = ids[cursor..cursor + n].to_vec();
+            cursor += n;
+            taken
+        };
+        let mut terms_of = |var: Var| -> VarTerms {
+            let main = take(var.main_terms().len());
+            let scale = var.pert_scale();
+            let pert = var.pert_groups().map(|group| {
+                let node = take(group.len());
+                let sc: Vec<Pair> = group.iter().map(|t| [t.s * scale, t.c * scale]).collect();
+                PertGroup::sorted_by_node(node, sc)
+            });
+            VarTerms { main, pert }
+        };
+        let v = terms_of(Var::V);
+        let u = terms_of(Var::U);
+        let r = terms_of(Var::R);
+        debug_assert_eq!(cursor, ids.len());
+        Self { graph, v, u, r }
+    }
+
+    /// The same tables with only the nodes the distance series needs.
+    fn r_only(&self) -> Self {
+        let roots: Vec<u32> = self
+            .r
+            .main
+            .iter()
+            .chain(self.r.pert.iter().flat_map(|g| &g.node))
+            .copied()
+            .collect();
+        let (graph, ids) = self.graph.pruned(&roots);
+        let mut next = ids.into_iter();
+        let mut renumber =
+            |old: &[u32]| -> Vec<u32> { old.iter().map(|_| next.next().unwrap()).collect() };
+        let main = renumber(&self.r.main);
+        let pert = [0, 1, 2, 3].map(|n| PertGroup {
+            node: renumber(&self.r.pert[n].node),
+            sc: self.r.pert[n].sc.clone(),
+            #[cfg(test)]
+            source: self.r.pert[n].source.clone(),
+        });
+        Self {
+            graph,
+            v: VarTerms::empty(),
+            u: VarTerms::empty(),
+            r: VarTerms { main, pert },
+        }
+    }
 }
 
 /// The 13 multipliers of one perturbation term, in `i1..i13` order.
@@ -1168,296 +1116,178 @@ fn dense_multipliers_of(term: &ElpPertTerm) -> [i32; N_ARGS] {
     ]
 }
 
-impl SparsePertGroup {
-    fn build(terms: &[ElpPertTerm], scale: f64) -> Self {
-        let mut idx = Vec::with_capacity(terms.len());
-        let mut mul = Vec::with_capacity(terms.len());
-        let mut sc = Vec::with_capacity(terms.len());
+static TABLES_ALL: LazyLock<LunarTables> = LazyLock::new(LunarTables::build);
+static TABLES_R: LazyLock<LunarTables> = LazyLock::new(|| TABLES_ALL.r_only());
 
-        for term in terms {
-            let mut term_idx = [PAD_ARG; PERT_SLOTS_MAX];
-            let mut term_mul = [0i16; PERT_SLOTS_MAX];
-            let mut slot = 0usize;
-            // Original i1..i13 order. Anything else would reassociate the sum.
-            for (j, &m) in dense_multipliers_of(term).iter().enumerate() {
-                if m != 0 {
-                    let j8 = j as u8; // j < 13, cannot truncate
-                    let m16 = i16::try_from(m).unwrap_or_else(|_| {
-                        panic!("ELP perturbation multiplier {m} does not fit in i16")
-                    });
-                    assert!(
-                        slot < PERT_SLOTS_MAX,
-                        "an ELP perturbation term has more than {PERT_SLOTS_MAX} nonzero \
-                         multipliers; PERT_SLOTS_MAX is sized from the measured maximum \
-                         (see tests::pert_multiplier_density_matches_the_investigation)"
-                    );
-                    term_idx[slot] = j8;
-                    term_mul[slot] = m16;
-                    slot += 1;
-                }
+/// Scratch the phase graph is evaluated into: one `(sin, cos)` pair and one ω
+/// per pool id.
+///
+/// About 450 KB and 220 KB for [`TABLES_ALL`]. Kept per thread and reused,
+/// because allocating that on every evaluation costs more than it saves (the
+/// pages are faulted in fresh each time), and it is too large for the stack:
+/// `search_muhurta` runs evaluations on worker threads with the default stack.
+struct Workspace {
+    pool: Vec<Pair>,
+    omega: Vec<f64>,
+}
+
+thread_local! {
+    static WORKSPACE: RefCell<Workspace> = const {
+        RefCell::new(Workspace { pool: Vec::new(), omega: Vec::new() })
+    };
+}
+
+/// Run `f` with this thread's workspace, grown to at least `len` entries.
+fn with_workspace<T>(len: usize, f: impl FnOnce(&mut Workspace) -> T) -> T {
+    WORKSPACE.with_borrow_mut(|ws| {
+        if ws.pool.len() < len {
+            ws.pool.resize(len, [0.0, 0.0]);
+            ws.omega.resize(len, 0.0);
+        }
+        f(ws)
+    })
+}
+
+/// Evaluate a main-problem series (S1, S2, or S3) from its terms' pool ids.
+///
+/// `amps` carries the per-term corrected amplitude already in the series'
+/// output unit (see [`MainAmplitudes`]) and must be parallel to `ids`.
+///
+/// `VELOCITY` selects whether `dot` is formed; `value` is formed by the same
+/// operations either way, so the two instantiations return the same `value`
+/// to the bit. `omega` is read only when `VELOCITY` is true.
+///
+/// # Summation
+///
+/// Four independent accumulators, combined `(0 + 1) + (2 + 3)` and then the
+/// at most three leftover terms added in order. One accumulator would make
+/// every term wait on the add before it, which now that a term costs a few
+/// instructions and not a `sincos` is the slowest thing in the loop.
+fn eval_main_series<const VELOCITY: bool>(
+    ids: &[u32],
+    amps: &[f64],
+    pool: &[Pair],
+    omega: &[f64],
+    kind: SeriesKind,
+) -> SeriesPart {
+    assert_eq!(
+        ids.len(),
+        amps.len(),
+        "main-series amplitude table is not parallel to its term table"
+    );
+    // Sine series:   value = Σ a·sin φ,  dot = +Σ a·ω·cos φ.
+    // Cosine series: value = Σ a·cos φ,  dot = −Σ a·ω·sin φ.
+    let (value_col, dot_col, dot_sign) = match kind {
+        SeriesKind::Sine => (0, 1, 1.0),
+        SeriesKind::Cosine => (1, 0, -1.0),
+    };
+
+    let mut value = [0.0_f64; 4];
+    let mut dot = [0.0_f64; 4];
+    let id_chunks = ids.chunks_exact(4);
+    let amp_chunks = amps.chunks_exact(4);
+    let (id_rest, amp_rest) = (id_chunks.remainder(), amp_chunks.remainder());
+    for (ic, ac) in id_chunks.zip(amp_chunks) {
+        for (lane, (&id, &a)) in ic.iter().zip(ac).enumerate() {
+            let id = id as usize;
+            let p = pool[id];
+            value[lane] = mul_add(a, p[value_col], value[lane]);
+            if VELOCITY {
+                dot[lane] = mul_add(a * omega[id], p[dot_col], dot[lane]);
             }
-            idx.push(term_idx);
-            mul.push(term_mul);
-            sc.push((term.s * scale, term.c * scale));
         }
+    }
+    let mut v = (value[0] + value[1]) + (value[2] + value[3]);
+    let mut d = (dot[0] + dot[1]) + (dot[2] + dot[3]);
+    for (&id, &a) in id_rest.iter().zip(amp_rest) {
+        let id = id as usize;
+        let p = pool[id];
+        v = mul_add(a, p[value_col], v);
+        if VELOCITY {
+            d = mul_add(a * omega[id], p[dot_col], d);
+        }
+    }
 
-        Self { idx, mul, sc }
+    SeriesPart {
+        value: v,
+        dot: dot_sign * d,
     }
 }
 
-/// The four power-grouped perturbation tables (`t^0`..`t^3`) for one variable.
-struct SparsePertSeries {
-    groups: [SparsePertGroup; 4],
-}
-
-impl SparsePertSeries {
-    fn build(groups: [&[ElpPertTerm]; 4], arcsec_to_radian: bool) -> Self {
-        let scale = if arcsec_to_radian {
-            1.0 / ARCSEC_PER_RAD
-        } else {
-            1.0
-        };
-        Self {
-            groups: groups.map(|g| SparsePertGroup::build(g, scale)),
-        }
-    }
-}
-
-/// Phase φ and its derivative ω for one term, from its stored slots.
+/// `(Σ s·sin φ + c·cos φ,  Σ ω·(s·cos φ − c·sin φ))` over one perturbation
+/// group. The second is 0 unless `VELOCITY`.
 ///
-/// Equivalent, bit-for-bit, to the dense `i1·A₀ + i2·A₁ + … + i13·A₁₂` pair it
-/// replaces (see [`SparsePertGroup`] for the argument and for its one stated
-/// boundary). Three properties carry that:
-///
-/// 1. Slots are in original `i1..i13` position order, so the surviving
-///    products are summed left to right exactly as before.
-/// 2. Padding slots carry multiplier `0` and point at [`PAD_ARG`], whose
-///    argument value is `+0.0`, so each contributes exactly `+0.0` — and they
-///    are always *after* the real slots, never interleaved.
-/// 3. The accumulators are *seeded* with slot 0's product rather than starting
-///    from `0.0`, mirroring the dense expression's own leading term.
-///
-/// φ and ω are accumulated in one pass over the slots rather than two. That
-/// does not reassociate either sum: each keeps its own accumulator and its own
-/// left-to-right order.
-#[inline]
-fn sparse_phase_omega(
-    idx: [u8; PERT_SLOTS_MAX],
-    mul: &[i16; PERT_SLOTS_MAX],
-    a: &[f64; N_SLOTS],
-    adot: &[f64; N_SLOTS],
+/// Summed with four accumulators like [`eval_main_series`], and with the same
+/// guarantee: the first sum is formed identically with or without `VELOCITY`.
+fn eval_pert_group<const VELOCITY: bool>(
+    group: &PertGroup,
+    pool: &[Pair],
+    omega: &[f64],
 ) -> (f64, f64) {
-    // `& 15` is what lets the compiler drop the bounds check: the arrays are
-    // 16 wide, so a masked index is in range by construction.
-    let j0 = (idx[0] & 15) as usize;
-    let m0 = f64::from(mul[0]);
-    let mut phase = m0 * a[j0];
-    let mut omega = m0 * adot[j0];
-    for s in 1..PERT_SLOTS {
-        let j = (idx[s] & 15) as usize;
-        let m = f64::from(mul[s]);
-        phase += m * a[j];
-        omega += m * adot[j];
-    }
-    // The tail, for the 2.9% of terms with more than PERT_SLOTS nonzero
-    // multipliers. The condition reads a value the loop above already had in
-    // hand and is false for 97.1% of terms, so it predicts; a loop whose
-    // length is the term's own nonzero count does not, which is what made the
-    // first attempt at this change 43% SLOWER than the dense form. Any
-    // padding slots swept in here carry multiplier 0 and so contribute
-    // exactly +0.0, appended after the real products as always.
-    if mul[PERT_SLOTS] != 0 {
-        for s in PERT_SLOTS..PERT_SLOTS_MAX {
-            let j = (idx[s] & 15) as usize;
-            let m = f64::from(mul[s]);
-            phase += m * a[j];
-            omega += m * adot[j];
+    let mut inner_sum = [0.0_f64; 4];
+    let mut omega_sum = [0.0_f64; 4];
+    let id_chunks = group.node.chunks_exact(4);
+    let sc_chunks = group.sc.chunks_exact(4);
+    let (id_rest, sc_rest) = (id_chunks.remainder(), sc_chunks.remainder());
+    for (ic, scc) in id_chunks.zip(sc_chunks) {
+        for (lane, (&id, &[s, c])) in ic.iter().zip(scc).enumerate() {
+            let id = id as usize;
+            let p = pool[id];
+            inner_sum[lane] += mul_add(c, p[1], s * p[0]);
+            if VELOCITY {
+                let inner_dot = mul_add(s, p[1], -(c * p[0]));
+                omega_sum[lane] = mul_add(omega[id], inner_dot, omega_sum[lane]);
+            }
         }
     }
-    (phase, omega)
-}
-
-/// Position-only sibling of [`sparse_phase_omega`]: phase `phi` only, no
-/// `omega`. Same slot order, same seeded accumulator, so bit-for-bit
-/// identical to `sparse_phase_omega(..).0`.
-#[inline]
-fn sparse_phase_position(
-    idx: [u8; PERT_SLOTS_MAX],
-    mul: &[i16; PERT_SLOTS_MAX],
-    a: &[f64; N_SLOTS],
-) -> f64 {
-    let j0 = (idx[0] & 15) as usize;
-    let m0 = f64::from(mul[0]);
-    let mut phase = m0 * a[j0];
-    for s in 1..PERT_SLOTS {
-        let j = (idx[s] & 15) as usize;
-        let m = f64::from(mul[s]);
-        phase += m * a[j];
-    }
-    if mul[PERT_SLOTS] != 0 {
-        for s in PERT_SLOTS..PERT_SLOTS_MAX {
-            let j = (idx[s] & 15) as usize;
-            let m = f64::from(mul[s]);
-            phase += m * a[j];
+    let mut inner = (inner_sum[0] + inner_sum[1]) + (inner_sum[2] + inner_sum[3]);
+    let mut w = (omega_sum[0] + omega_sum[1]) + (omega_sum[2] + omega_sum[3]);
+    for (&id, &[s, c]) in id_rest.iter().zip(sc_rest) {
+        let id = id as usize;
+        let p = pool[id];
+        inner += mul_add(c, p[1], s * p[0]);
+        if VELOCITY {
+            let inner_dot = mul_add(s, p[1], -(c * p[0]));
+            w = mul_add(omega[id], inner_dot, w);
         }
     }
-    phase
+    (inner, w)
 }
-
-static V_PERT_SPARSE: LazyLock<SparsePertSeries> = LazyLock::new(|| {
-    SparsePertSeries::build(
-        [
-            moon_longitude::PERT_0.as_slice(),
-            moon_longitude::PERT_1.as_slice(),
-            moon_longitude::PERT_2.as_slice(),
-            moon_longitude::PERT_3.as_slice(),
-        ],
-        true, // arcsec -> radian
-    )
-});
-static U_PERT_SPARSE: LazyLock<SparsePertSeries> = LazyLock::new(|| {
-    SparsePertSeries::build(
-        [
-            moon_latitude::PERT_0.as_slice(),
-            moon_latitude::PERT_1.as_slice(),
-            moon_latitude::PERT_2.as_slice(),
-            moon_latitude::PERT_3.as_slice(),
-        ],
-        true, // arcsec -> radian
-    )
-});
-static R_PERT_SPARSE: LazyLock<SparsePertSeries> = LazyLock::new(|| {
-    SparsePertSeries::build(
-        [
-            moon_distance::PERT_0.as_slice(),
-            moon_distance::PERT_1.as_slice(),
-            moon_distance::PERT_2.as_slice(),
-            moon_distance::PERT_3.as_slice(),
-        ],
-        false, // km
-    )
-});
 
 /// Evaluate the four power-grouped perturbation series for one variable.
 /// Each table entry is `(S, C, i1..i13)` and is evaluated as
-/// `t^n · (S sin φ + C cos φ)` with φ accumulating Delaunay + planetary +
-/// ζ multipliers.
-fn eval_pert_series(
-    sparse: &SparsePertSeries,
-    a_arg: &[f64; N_SLOTS],
-    adot_arg: &[f64; N_SLOTS],
+/// `t^n · (S sin φ + C cos φ)`, with φ the term's integer combination of the
+/// arguments, whose sine and cosine are read from the pool.
+///
+/// `VELOCITY` selects whether `dot` is formed; `value` is formed by the same
+/// operations either way.
+///
+/// ```text
+/// f(t)  = t^n · (s sin φ + c cos φ)
+/// f'(t) = n·t^{n-1}·(s sin φ + c cos φ) + t^n · ω · (s cos φ − c sin φ)
+/// ```
+fn eval_pert_series<const VELOCITY: bool>(
+    var: &VarTerms,
     t_pow: &[f64; 5],
+    pool: &[Pair],
+    omega: &[f64],
 ) -> SeriesPart {
     let mut value = 0.0;
     let mut dot = 0.0;
-
-    // The caller supplies the 13 argument values Aⱼ and derivatives Ȧⱼ
-    // (4 Delaunay + 8 planetary + ζ, padded to 16), reduced once per
-    // `vur_series` call instead of once per variable. Each term's phase is a
-    // dot product of its multipliers with them, taken over its stored
-    // nonzero-multiplier slots rather than all 13 positions — see
-    // `SparsePertGroup`.
-
-    // f(t)  = t^n · (s sin φ + c cos φ)
-    // f'(t) = n·t^{n-1}·(s sin φ + c cos φ) + t^n · ω · (s cos φ − c sin φ)
-    for (n, group) in sparse.groups.iter().enumerate() {
+    for (n, group) in var.pert.iter().enumerate() {
         let tn = t_pow[n];
-        let dtn = if n >= 1 {
-            (n as f64) * t_pow[n - 1]
-        } else {
-            0.0
-        };
-
-        // The 4-lane split must stay exactly where the dense form put it:
-        // `sincos_f64x4` and scalar `libm::sincos` agree only to 1-2 ULP, so
-        // which terms land in the vector body and which in the scalar tail is
-        // part of the output's bit pattern.
-        let n_terms = group.sc.len();
-        let n_chunks = n_terms / 4;
-        for ci in 0..n_chunks {
-            let base = ci * 4;
-            let mut phases = [0.0_f64; 4];
-            let mut omegas = [0.0_f64; 4];
-            for lane in 0..4 {
-                let (p, o) = sparse_phase_omega(
-                    group.idx[base + lane],
-                    &group.mul[base + lane],
-                    a_arg,
-                    adot_arg,
-                );
-                phases[lane] = p;
-                omegas[lane] = o;
-            }
-            let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
-            let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
-            for lane in 0..4 {
-                let (s, c) = group.sc[base + lane];
-                let (sin_p, cos_p) = (sin4[lane], cos4[lane]);
-                let omega = omegas[lane];
-                let inner = s * sin_p + c * cos_p;
-                let inner_dot = s * cos_p - c * sin_p;
-                value += tn * inner;
-                dot += dtn * inner + tn * omega * inner_dot;
-            }
-        }
-        for i in (n_chunks * 4)..n_terms {
-            let (phase, omega) = sparse_phase_omega(group.idx[i], &group.mul[i], a_arg, adot_arg);
-            let (s, c) = group.sc[i];
-            let (sin_p, cos_p) = libm::sincos(phase);
-            let inner = s * sin_p + c * cos_p;
-            let inner_dot = s * cos_p - c * sin_p;
-            value += tn * inner;
-            dot += dtn * inner + tn * omega * inner_dot;
+        let (inner, w) = eval_pert_group::<VELOCITY>(group, pool, omega);
+        value += tn * inner;
+        if VELOCITY {
+            let dtn = if n >= 1 {
+                (n as f64) * t_pow[n - 1]
+            } else {
+                0.0
+            };
+            dot += dtn * inner + tn * w;
         }
     }
-
     SeriesPart { value, dot }
-}
-
-/// Position-only sibling of [`eval_pert_series`]: `value` only, no `dot`,
-/// `omega` or `dtn` at all.
-///
-/// The `value` accumulation is identical, group for group and term for term
-/// in the same order, to [`eval_pert_series`]'s own `value` accumulator —
-/// bit-for-bit identical to `eval_pert_series(..).value`.
-fn eval_pert_series_position(
-    sparse: &SparsePertSeries,
-    a_arg: &[f64; N_SLOTS],
-    t_pow: &[f64; 5],
-) -> f64 {
-    let mut value = 0.0;
-
-    for (n, group) in sparse.groups.iter().enumerate() {
-        let tn = t_pow[n];
-
-        let n_terms = group.sc.len();
-        let n_chunks = n_terms / 4;
-        for ci in 0..n_chunks {
-            let base = ci * 4;
-            let mut phases = [0.0_f64; 4];
-            for (lane, phase) in phases.iter_mut().enumerate() {
-                *phase =
-                    sparse_phase_position(group.idx[base + lane], &group.mul[base + lane], a_arg);
-            }
-            let (sin4, cos4) = sincos_f64x4(f64x4::from(phases));
-            let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
-            for lane in 0..4 {
-                let (s, c) = group.sc[base + lane];
-                let (sin_p, cos_p) = (sin4[lane], cos4[lane]);
-                let inner = s * sin_p + c * cos_p;
-                value += tn * inner;
-            }
-        }
-        for i in (n_chunks * 4)..n_terms {
-            let phase = sparse_phase_position(group.idx[i], &group.mul[i], a_arg);
-            let (s, c) = group.sc[i];
-            let (sin_p, cos_p) = libm::sincos(phase);
-            let inner = s * sin_p + c * cos_p;
-            value += tn * inner;
-        }
-    }
-
-    value
 }
 
 // ─── Spherical → rectangular ──────────────────────────────────────────────────
@@ -1614,7 +1444,7 @@ fn apply_pq_rotation_position(xyz_date: (f64, f64, f64), t: f64) -> (f64, f64, f
 mod tests {
     use super::*;
 
-    /// Epochs used by the sparse-index tests: both ends of the provider's
+    /// Epochs used by the phase-graph tests: both ends of the provider's
     /// supported JD range, J2000 itself, and a spread in between. `t` is in
     /// Julian centuries from J2000.
     fn sparse_test_epochs() -> Vec<f64> {
@@ -1626,225 +1456,353 @@ mod tests {
         ]
     }
 
-    /// Every perturbation group in the loaded tables, with a label.
-    fn all_pert_groups() -> Vec<(&'static str, &'static [ElpPertTerm])> {
-        vec![
-            ("V0", moon_longitude::PERT_0.as_slice()),
-            ("V1", moon_longitude::PERT_1.as_slice()),
-            ("V2", moon_longitude::PERT_2.as_slice()),
-            ("V3", moon_longitude::PERT_3.as_slice()),
-            ("U0", moon_latitude::PERT_0.as_slice()),
-            ("U1", moon_latitude::PERT_1.as_slice()),
-            ("U2", moon_latitude::PERT_2.as_slice()),
-            ("U3", moon_latitude::PERT_3.as_slice()),
-            ("R0", moon_distance::PERT_0.as_slice()),
-            ("R1", moon_distance::PERT_1.as_slice()),
-            ("R2", moon_distance::PERT_2.as_slice()),
-            ("R3", moon_distance::PERT_3.as_slice()),
-        ]
-    }
+    // ─── Phase-graph tests ──────────────────────────────────────────────────
 
-    fn dense_multipliers(term: &ElpPertTerm) -> [i32; N_ARGS] {
-        [
-            term.i1, term.i2, term.i3, term.i4, term.i5, term.i6, term.i7, term.i8, term.i9,
-            term.i10, term.i11, term.i12, term.i13,
-        ]
-    }
+    /// `2π` as an unevaluated sum of two doubles, for reducing a phase of
+    /// order 10⁶ rad without losing the digits the comparison is about.
+    const TAU_HI: f64 = core::f64::consts::TAU;
+    /// `2π − TAU_HI`, twice QD's `π_lo` (`1.224646799147353207e-16`), which
+    /// `tau_lo_is_the_remainder_of_tau` checks against libm.
+    const TAU_LO: f64 = 2.449_293_598_294_706_4e-16;
 
-    /// The density figures the sparse rewrite is justified by, re-measured
-    /// from the loaded coefficient tables.
-    ///
-    /// `docs/audit/2026-08-29-perf-investigation.md` #2 states mean 3.90
-    /// nonzero of 13 (30.0% dense), maximum 7, 97.0% of terms with ≤5, and
-    /// max |multiplier| 75. That document also claims 75 overflows `i8` —
-    /// it doesn't (`i8` holds -128..127); see this module's own `# Layout`
-    /// doc for the actual (unrelated) reason `i16` was kept. These figures
-    /// are load-bearing for the performance argument, so they are asserted
-    /// here rather than taken on trust from a document.
     #[test]
-    fn pert_multiplier_density_matches_the_investigation() {
-        let mut total_terms = 0u64;
-        let mut total_nonzero = 0u64;
-        let mut max_nonzero = 0usize;
-        let mut max_abs_multiplier = 0i32;
-        let mut le5 = 0u64;
-        let mut histogram = [0u64; N_ARGS + 1];
+    fn tau_lo_is_the_remainder_of_tau() {
+        // sin(x) for x within 1e-16 of π is π − x to every digit a double
+        // holds, so libm's value of sin(π_hi) *is* π − π_hi.
+        assert_eq!(
+            libm::sin(core::f64::consts::PI),
+            TAU_LO / 2.0,
+            "TAU_LO is not twice (π − π_hi)"
+        );
+    }
 
-        for (label, group) in all_pert_groups() {
-            let mut group_max = 0usize;
-            for term in group {
-                let nz = dense_multipliers(term).iter().filter(|&&m| m != 0).count();
-                total_terms += 1;
-                total_nonzero += nz as u64;
-                histogram[nz] += 1;
-                max_nonzero = max_nonzero.max(nz);
-                group_max = group_max.max(nz);
-                if nz <= 5 {
-                    le5 += 1;
-                }
-                for m in dense_multipliers(term) {
-                    max_abs_multiplier = max_abs_multiplier.max(m.abs());
+    fn two_sum(a: f64, b: f64) -> (f64, f64) {
+        let s = a + b;
+        let bb = s - a;
+        (s, (a - (s - bb)) + (b - bb))
+    }
+
+    /// `(sin φ, cos φ)` for `φ = Σ mⱼ·aⱼ`, with the sum carried in
+    /// double-double and reduced modulo 2π in extended precision.
+    ///
+    /// Good to the last place or two of a double at any `|φ|` this crate
+    /// reaches, which is what makes it a reference for both the phase-graph
+    /// pair and the old route's rounded phase. (`f64::mul_add` here is the
+    /// exact error of a product, wherever it runs; it is not a speed choice.)
+    fn exact_pair(m: &Multipliers, a: &[f64; N_ARGS]) -> (f64, f64) {
+        let (mut hi, mut lo) = (0.0_f64, 0.0_f64);
+        for (&mj, &aj) in m.iter().zip(a) {
+            if mj == 0 {
+                continue;
+            }
+            let x = f64::from(mj);
+            let p = x * aj;
+            let p_err = x.mul_add(aj, -p);
+            let (s, e) = two_sum(hi, p);
+            hi = s;
+            lo += e + p_err;
+        }
+        let (hi, lo) = two_sum(hi, lo);
+        let n = (hi / TAU_HI).round();
+        let p = n * TAU_HI;
+        let p_err = n.mul_add(TAU_HI, -p);
+        let d = hi - p; // exact: hi and p agree to within π
+        let small = lo - p_err - n * TAU_LO;
+        let (s, c) = libm::sincos(d);
+        (s + small * c, c - small * s)
+    }
+
+    /// The old route: the phase summed in plain `f64`, then one libm `sincos`.
+    fn dense_pair(m: &Multipliers, a: &[f64; N_ARGS]) -> (f64, f64) {
+        let phase: f64 = m.iter().zip(a).map(|(&m, &a)| f64::from(m) * a).sum();
+        libm::sincos(phase)
+    }
+
+    /// Every term's multiplier vector with its pool id, for one table set.
+    fn all_term_vectors(tables: &LunarTables, vars: &[Var]) -> Vec<(Multipliers, u32)> {
+        let mut out = Vec::new();
+        for &var in vars {
+            let terms = match var {
+                Var::V => &tables.v,
+                Var::U => &tables.u,
+                Var::R => &tables.r,
+            };
+            for (t, &id) in var.main_terms().iter().zip(&terms.main) {
+                let mut m = [0_i16; N_ARGS];
+                m[..4].copy_from_slice(&[
+                    multiplier(t.i1),
+                    multiplier(t.i2),
+                    multiplier(t.i3),
+                    multiplier(t.i4),
+                ]);
+                out.push((m, id));
+            }
+            for (group, ids) in var.pert_groups().iter().zip(&terms.pert) {
+                assert_eq!(group.len(), ids.node.len());
+                for (&source, &id) in ids.source.iter().zip(&ids.node) {
+                    out.push((dense_multipliers_of(&group[source]).map(multiplier), id));
                 }
             }
-            println!("{label}: {} terms, max nonzero {group_max}", group.len());
         }
-
-        let mean = total_nonzero as f64 / total_terms as f64;
-        println!(
-            "pert terms {total_terms}, mean nonzero {mean:.2} of {N_ARGS} \
-             ({:.1}% dense), max nonzero {max_nonzero}, \
-             <=5 nonzero {:.1}%, max |multiplier| {max_abs_multiplier}",
-            100.0 * mean / N_ARGS as f64,
-            100.0 * le5 as f64 / total_terms as f64,
-        );
-        println!("nonzero-count histogram: {histogram:?}");
-
-        assert_eq!(total_terms, 33_122, "perturbation term count moved");
-        assert!(
-            (3.85..3.95).contains(&mean),
-            "mean nonzero multipliers {mean:.3}, investigation says 3.90"
-        );
-        assert_eq!(max_nonzero, 7, "investigation says max 7 nonzero of 13");
-        assert!(
-            le5 as f64 / total_terms as f64 > 0.96,
-            "investigation says 97.0% of terms have <=5 nonzero multipliers"
-        );
-        // 75 fits in i8 (-128..127) fine — see the module's `# Layout` doc
-        // for why i16 was kept anyway; it isn't this.
-        assert_eq!(
-            max_abs_multiplier, 75,
-            "investigation says max |multiplier| is 75"
-        );
-        assert!(
-            i16::try_from(max_abs_multiplier).is_ok(),
-            "multiplier does not fit the i16 the sparse index stores"
-        );
+        out
     }
 
-    /// The sparse slot list reproduces the dense 13-term dot product
-    /// **bit for bit**, for every perturbation term, at every epoch tried.
-    ///
-    /// This is the direct check of the claim [`SparsePertGroup`] is built on.
-    /// It compares `to_bits()`, not values, so `+0.0` and `−0.0` are
-    /// distinguished — the whole argument turns on signed zeros, and `==`
-    /// would hide exactly the case that could go wrong.
-    ///
-    /// It covers all 33,122 terms × 13 epochs spanning the provider's full
-    /// supported JD range = 430,586 phase comparisons and as many for ω. That
-    /// is the *unit-level* evidence; `tests/lunar_series_bit_digest.rs` is the
-    /// end-to-end evidence over 630,003 whole-series evaluations.
-    ///
-    /// The 3 terms with no nonzero multiplier at all are held to a weaker
-    /// statement, deliberately and explicitly: both forms must produce a zero,
-    /// but the *sign* of that zero may differ, because the dense form's
-    /// thirteen `±0.0` products sum to `−0.0` only when every reduced argument
-    /// is negative while the sparse form always yields `+0.0`. `sin(±0.0)` is
-    /// `±0.0` and `cos(±0.0)` is `1.0`, so the term's contribution is the same
-    /// number either way; the assertion below records the boundary rather than
-    /// papering over it, and reports how often it is actually reached.
+    /// The facts the phase-graph design is justified by, re-measured from the
+    /// loaded tables rather than taken from a document.
     #[test]
-    fn sparse_slots_are_bit_identical_to_the_dense_form() {
-        let args = args_for(Fit::Llr);
-        let mut compared = 0u64;
-        let mut zero_multiplier_terms = 0u64;
-        let mut zero_sign_differences = 0u64;
+    fn elp_tables_have_the_sharing_the_design_relies_on() {
+        use std::collections::HashSet;
 
+        let tables = &*TABLES_ALL;
+        let terms = all_term_vectors(tables, &[Var::V, Var::U, Var::R]);
+        assert_eq!(terms.len(), 35_758, "lunar term count moved");
+
+        let unique: HashSet<Multipliers> = terms.iter().map(|(m, _)| *m).collect();
+        assert_eq!(unique.len(), 21_325, "distinct multiplier vectors moved");
+
+        let mut max_abs = 0_u16;
+        let mut max_nonzero = 0_usize;
+        for (m, _) in &terms {
+            max_nonzero = max_nonzero.max(m.iter().filter(|&&x| x != 0).count());
+            for &x in m {
+                max_abs = max_abs.max(x.unsigned_abs());
+            }
+        }
+        assert_eq!(max_abs, 75, "largest |multiplier| moved");
+        assert_eq!(max_nonzero, 7, "most non-zero multipliers in a term moved");
+
+        assert_eq!(
+            tables.graph.entry_count(),
+            394,
+            "(argument, multiplier) pairs moved"
+        );
+        // 27,721 prefix-tree nodes, of which 117 are single-pair prefixes and so
+        // are table entries rather than rotations.
+        assert_eq!(
+            tables.graph.derived_count(),
+            27_604,
+            "rotations per evaluation moved"
+        );
+        // The design replaces 35,758 sincos calls by these rotations; if the
+        // tree ever stops being smaller than the term list the method has
+        // stopped paying.
+        assert!(tables.graph.derived_count() < terms.len());
+    }
+
+    /// Every term's `(sin φ, cos φ)` from the pool against the exact value, at
+    /// 13 epochs spanning the supported range, with the old route's error
+    /// alongside.
+    ///
+    /// The bound is on the new route. The old route is measured, and asserted
+    /// to be worse only where its rounded phase is large enough that it must be.
+    #[test]
+    fn pool_pairs_match_the_exact_pair_for_every_term() {
+        let tables = &*TABLES_ALL;
+        let terms = all_term_vectors(tables, &[Var::V, Var::U, Var::R]);
+        let mut pool = vec![[0.0; 2]; tables.graph.pool_len()];
+
+        let mut worst_new = 0.0_f64;
         for t in sparse_test_epochs() {
             let t_pow = [1.0, t, t * t, t * t * t, t * t * t * t];
-            let (a_arg, adot_arg) = reduce_all_args(args, &t_pow);
+            let (a_arg, _) = reduce_all_args(args_for(Fit::Llr), &t_pow);
+            tables.graph.fill_phases(&a_arg, &mut pool);
 
-            for (label, group) in all_pert_groups() {
-                // Build the same side table production builds, from the same
-                // parsed terms. `scale` is irrelevant to phase/omega, so any
-                // value does; 1.0 keeps `sc` readable if this ever prints.
-                let sparse = SparsePertGroup::build(group, 1.0);
-
-                for (i, term) in group.iter().enumerate() {
-                    let m = dense_multipliers_of(term);
-
-                    // The dense expression `term_poc` used, verbatim in shape:
-                    // thirteen products summed left to right, seeded by the
-                    // first product rather than by zero.
-                    let dense_phase = (m[0] as f64) * a_arg[0]
-                        + (m[1] as f64) * a_arg[1]
-                        + (m[2] as f64) * a_arg[2]
-                        + (m[3] as f64) * a_arg[3]
-                        + (m[4] as f64) * a_arg[4]
-                        + (m[5] as f64) * a_arg[5]
-                        + (m[6] as f64) * a_arg[6]
-                        + (m[7] as f64) * a_arg[7]
-                        + (m[8] as f64) * a_arg[8]
-                        + (m[9] as f64) * a_arg[9]
-                        + (m[10] as f64) * a_arg[10]
-                        + (m[11] as f64) * a_arg[11]
-                        + (m[12] as f64) * a_arg[12];
-                    let dense_omega = (m[0] as f64) * adot_arg[0]
-                        + (m[1] as f64) * adot_arg[1]
-                        + (m[2] as f64) * adot_arg[2]
-                        + (m[3] as f64) * adot_arg[3]
-                        + (m[4] as f64) * adot_arg[4]
-                        + (m[5] as f64) * adot_arg[5]
-                        + (m[6] as f64) * adot_arg[6]
-                        + (m[7] as f64) * adot_arg[7]
-                        + (m[8] as f64) * adot_arg[8]
-                        + (m[9] as f64) * adot_arg[9]
-                        + (m[10] as f64) * adot_arg[10]
-                        + (m[11] as f64) * adot_arg[11]
-                        + (m[12] as f64) * adot_arg[12];
-
-                    let (sparse_phase, sparse_omega) =
-                        sparse_phase_omega(sparse.idx[i], &sparse.mul[i], &a_arg, &adot_arg);
-
-                    compared += 1;
-
-                    if m.iter().all(|&x| x == 0) {
-                        zero_multiplier_terms += 1;
-                        assert_eq!(
-                            dense_phase, 0.0,
-                            "{label}[{i}] t={t}: dense phase of an all-zero-multiplier \
-                             term is not a zero"
-                        );
-                        assert_eq!(
-                            sparse_phase, 0.0,
-                            "{label}[{i}] t={t}: sparse phase of an all-zero-multiplier \
-                             term is not a zero"
-                        );
-                        if dense_phase.to_bits() != sparse_phase.to_bits() {
-                            zero_sign_differences += 1;
-                        }
-                        continue;
-                    }
-
-                    assert_eq!(
-                        dense_phase.to_bits(),
-                        sparse_phase.to_bits(),
-                        "{label}[{i}] t={t}: phase differs — dense {dense_phase:e} \
-                         ({:016x}) vs sparse {sparse_phase:e} ({:016x})",
-                        dense_phase.to_bits(),
-                        sparse_phase.to_bits(),
-                    );
-                    assert_eq!(
-                        dense_omega.to_bits(),
-                        sparse_omega.to_bits(),
-                        "{label}[{i}] t={t}: omega differs — dense {dense_omega:e} \
-                         ({:016x}) vs sparse {sparse_omega:e} ({:016x})",
-                        dense_omega.to_bits(),
-                        sparse_omega.to_bits(),
-                    );
-                }
+            let (mut new_err, mut old_err) = (0.0_f64, 0.0_f64);
+            for (m, id) in &terms {
+                let (es, ec) = exact_pair(m, &a_arg);
+                let got = pool[*id as usize];
+                new_err = new_err.max((got[0] - es).abs()).max((got[1] - ec).abs());
+                let (ds, dc) = dense_pair(m, &a_arg);
+                old_err = old_err.max((ds - es).abs()).max((dc - ec).abs());
+            }
+            println!(
+                "t = {t:8.3} cy: pool-vs-exact {new_err:.2e}, dense-sincos-vs-exact {old_err:.2e}"
+            );
+            worst_new = worst_new.max(new_err);
+            if t.abs() >= 20.0 {
+                assert!(
+                    new_err < old_err,
+                    "t = {t}: the pool ({new_err:e}) should beat the rounded dense phase ({old_err:e})"
+                );
             }
         }
+        // A ladder rung `k` inherits `k` times the angle error of its
+        // `sincos(A)` (about 1.1e-16), so the largest multiplier, 75, is worth
+        // ~8e-15 by itself (measured 8.1e-15); the rotations on top add about
+        // an ulp each, six at the deepest node. Terms with large multipliers
+        // are the planetary resonances, whose amplitudes are tiny, and the
+        // series test below measures the effect on a position.
+        assert!(
+            worst_new < 1.5e-14,
+            "worst pool-vs-exact error {worst_new:e} exceeds 1.5e-14"
+        );
+    }
 
+    /// `elp_geocentric_distance` runs on the r-only graph; its pairs must equal
+    /// the full graph's, to the bit, for every r term.
+    #[test]
+    fn r_only_graph_agrees_with_the_full_graph_to_the_bit() {
+        let all = &*TABLES_ALL;
+        let only = &*TABLES_R;
+        let mut pool_all = vec![[0.0; 2]; all.graph.pool_len()];
+        let mut pool_r = vec![[0.0; 2]; only.graph.pool_len()];
+        assert!(
+            only.graph.pool_len() < all.graph.pool_len(),
+            "the r-only graph is not smaller, so it saves nothing"
+        );
+        assert!(only.v.main.is_empty() && only.u.main.is_empty());
+        for t in sparse_test_epochs() {
+            let t_pow = [1.0, t, t * t, t * t * t, t * t * t * t];
+            let (a_arg, _) = reduce_all_args(args_for(Fit::Llr), &t_pow);
+            all.graph.fill_phases(&a_arg, &mut pool_all);
+            only.graph.fill_phases(&a_arg, &mut pool_r);
+            let a_ids: Vec<u32> = all
+                .r
+                .main
+                .iter()
+                .chain(all.r.pert.iter().flat_map(|g| &g.node))
+                .copied()
+                .collect();
+            let r_ids: Vec<u32> = only
+                .r
+                .main
+                .iter()
+                .chain(only.r.pert.iter().flat_map(|g| &g.node))
+                .copied()
+                .collect();
+            assert_eq!(a_ids.len(), r_ids.len());
+            for (&ia, &ir) in a_ids.iter().zip(&r_ids) {
+                let (x, y) = (pool_all[ia as usize], pool_r[ir as usize]);
+                assert_eq!(x[0].to_bits(), y[0].to_bits(), "t = {t}: sin differs");
+                assert_eq!(x[1].to_bits(), y[1].to_bits(), "t = {t}: cos differs");
+            }
+        }
+    }
+
+    /// Reference series evaluation: every term's pair from [`exact_pair`], ω
+    /// by a dense dot product, summed in plain order. Returns
+    /// `(V, U, r, V̇, U̇, ṙ)` as [`vur_series`] does.
+    fn reference_vur(jd: f64, fit: Fit) -> (f64, f64, f64, f64, f64, f64) {
+        let args = args_for(fit);
+        let t = (jd - J2000) / DAYS_PER_CENTURY;
+        let t_pow = [1.0, t, t * t, t * t * t, t * t * t * t];
+        let (a_arg, adot_arg) = reduce_all_args(args, &t_pow);
+        let omega_of =
+            |m: &Multipliers| -> f64 { (0..N_ARGS).map(|j| f64::from(m[j]) * adot_arg[j]).sum() };
+
+        // Returns (main value, main dot, pert value, pert dot), so the caller
+        // can associate the final sum exactly as `vur_series` does.
+        let one = |var: Var, amps: &[f64], kind: SeriesKind| -> (f64, f64, f64, f64) {
+            let (mut value, mut dot) = (0.0, 0.0);
+            for (term, &a) in var.main_terms().iter().zip(amps) {
+                let mut m = [0_i16; N_ARGS];
+                m[..4].copy_from_slice(&[
+                    multiplier(term.i1),
+                    multiplier(term.i2),
+                    multiplier(term.i3),
+                    multiplier(term.i4),
+                ]);
+                let (s, c) = exact_pair(&m, &a_arg);
+                let w = omega_of(&m);
+                match kind {
+                    SeriesKind::Sine => {
+                        value += a * s;
+                        dot += a * w * c;
+                    }
+                    SeriesKind::Cosine => {
+                        value += a * c;
+                        dot += -a * w * s;
+                    }
+                }
+            }
+            let (mut pvalue, mut pdot) = (0.0, 0.0);
+            let scale = var.pert_scale();
+            for (n, group) in var.pert_groups().iter().enumerate() {
+                let tn = t_pow[n];
+                let dtn = if n >= 1 {
+                    (n as f64) * t_pow[n - 1]
+                } else {
+                    0.0
+                };
+                for term in *group {
+                    let m = dense_multipliers_of(term).map(multiplier);
+                    let (sn, cs) = exact_pair(&m, &a_arg);
+                    let w = omega_of(&m);
+                    let (s, c) = (term.s * scale, term.c * scale);
+                    let inner = s * sn + c * cs;
+                    let inner_dot = s * cs - c * sn;
+                    pvalue += tn * inner;
+                    pdot += dtn * inner + tn * w * inner_dot;
+                }
+            }
+            (value, dot, pvalue, pdot)
+        };
+
+        let (vm, vmd, vp, vpd) = one(Var::V, V_MAIN_AMPS.get(fit), SeriesKind::Sine);
+        let (um, umd, up, upd) = one(Var::U, U_MAIN_AMPS.get(fit), SeriesKind::Sine);
+        let (rm, rmd, rp, rpd) = one(Var::R, R_MAIN_AMPS.get(fit), SeriesKind::Cosine);
+        (
+            eval_poly(&args.w1, t) + vm + vp,
+            um + up,
+            (rm + rp) * RA0,
+            eval_poly_dot(&args.w1, t) + vmd + vpd,
+            umd + upd,
+            (rmd + rpd) * RA0,
+        )
+    }
+
+    /// The production series against the exact-phase reference, over the
+    /// supported range.
+    ///
+    /// Bound: the pool's pair error (≤ 1.5e-14, `pool_pairs_match_...`) times
+    /// the sum of the amplitudes (V, U ≲ 4e4 arcsec = 2e-1 rad; r ≲ 1e5 km) is
+    /// ≲ 3e-9 arcsec and ≲ 1.5e-9 km; the stated bounds below add summation
+    /// rounding. The bar this change was held to is 1e-6 arcsec.
+    ///
+    /// `V` is the unwrapped longitude `W₁ + …`, up to 3.4e5 rad at the range
+    /// edge, so one ulp of it is 5.8e-11 rad = 1.2e-5 arcsec there: a sum that
+    /// lands on the other side of a rounding boundary differs by that much and
+    /// no more, whichever way it is formed. The tolerance for V is two such ulps
+    /// plus the series bound; U and r have no such term.
+    #[test]
+    fn series_match_the_exact_phase_reference() {
+        let arcsec = |rad: f64| rad * ARCSEC_PER_RAD;
+        let ulp = |x: f64| f64::from_bits(x.abs().to_bits() + 1) - x.abs();
+        let mut worst = [0.0_f64; 3];
+        for t in sparse_test_epochs() {
+            for frac in [0.0, 0.37] {
+                let jd = J2000 + (t + frac * 0.01) * DAYS_PER_CENTURY;
+                let (v, u, r, vd, ud, rd) = vur_series(jd, Fit::Llr);
+                let (rv, ru, rr, rvd, rud, rrd) = reference_vur(jd, Fit::Llr);
+                let v_tol = arcsec(2.0 * ulp(v)) + 3e-9;
+                assert!(
+                    arcsec((v - rv).abs()) <= v_tol,
+                    "t={t}: V {v:e} vs {rv:e}, tolerance {v_tol:e} arcsec"
+                );
+                worst[0] = worst[0].max(arcsec((v - rv).abs()));
+                worst[1] = worst[1].max(arcsec((u - ru).abs()));
+                worst[2] = worst[2].max((r - rr).abs());
+                // Velocity: relative to the size of the derivative.
+                assert!(
+                    (vd - rvd).abs() < 1e-9 * rvd.abs(),
+                    "t={t}: dV/dt {vd} vs {rvd}"
+                );
+                assert!(
+                    (ud - rud).abs() < 1e-9 * rvd.abs(),
+                    "t={t}: dU/dt {ud} vs {rud}"
+                );
+                assert!(
+                    (rd - rrd).abs() < 1e-9 * rrd.abs().max(1.0),
+                    "t={t}: dr/dt {rd} vs {rrd}"
+                );
+            }
+        }
         println!(
-            "sparse vs dense: {compared} term-epoch pairs compared bit-for-bit, \
-             all identical except {zero_sign_differences} sign-of-zero differences \
-             among {zero_multiplier_terms} all-zero-multiplier term-epoch pairs"
+            "worst vs exact-phase reference: V {:.2e} arcsec, U {:.2e} arcsec, r {:.2e} km",
+            worst[0], worst[1], worst[2]
         );
-        assert_eq!(
-            compared,
-            33_122 * 13,
-            "expected every term at every epoch to be compared"
-        );
+        assert!(worst[1] < 3e-9, "U off by {:e} arcsec", worst[1]);
+        assert!(worst[2] < 3e-9, "r off by {:e} km", worst[2]);
     }
 
     #[test]
@@ -1975,7 +1933,9 @@ mod tests {
     /// even larger arguments).
     #[test]
     fn sincos_matches_libm_at_real_elp_phase_domain() {
+        use crate::analytical::simd_trig::sincos_f64x4;
         use crate::analytical::{JD_MAX, JD_MIN};
+        use wide::f64x4;
 
         let t_min = (JD_MIN - J2000) / DAYS_PER_CENTURY;
         let t_max = (JD_MAX - J2000) / DAYS_PER_CENTURY;

@@ -16,6 +16,8 @@
 
 pub mod coefficients;
 pub mod elp_mpp02;
+mod fused;
+mod phase_graph;
 mod simd_trig;
 pub mod vsop87a;
 
