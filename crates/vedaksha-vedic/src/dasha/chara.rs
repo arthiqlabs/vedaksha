@@ -62,9 +62,9 @@
 //! say the same at 1.1.6). The polarity, Rahu with Aquarius and not Scorpio,
 //! is frequently inverted in secondary sources, so it is stated explicitly
 //! here. Which co-lord's rashi the count runs to is decided by BPHS 46.158 to
-//! 166 and by the old verses at 1.1.7 to 1.1.13, which are the same verses
-//! (another recension of BPHS sets them in its chapter on length of life, at
-//! 31.77 to 86). The decision, in order:
+//! 166 and by the old verses at 1.1.7 to 1.1.13, which are largely the same
+//! verses in another arrangement (another recension of BPHS sets them in its
+//! chapter on length of life, at 31.77 to 86). The decision, in order:
 //!
 //! 1. Both co-lords stand in the sign itself -> 12 years (*dvav evadhipati
 //!    vipra yuktau svarkshe sthitau yadi; varsham dvadashakam tatra*).
@@ -315,7 +315,7 @@ pub struct CharaPeriod {
 /// the 9th sign from the lagna; see the module doc for the sutra and its
 /// confidence grading).
 ///
-/// The two-lord signs are resolved by [`DualLordRules::default`]; use
+/// The two-lord signs are resolved by `DualLordRules::default()`; use
 /// [`compute_chara_with`] to choose another reading.
 #[must_use]
 pub fn compute_chara(lagna_sign: u8, birth_jd: f64, positions: GrahaSigns) -> Vec<CharaPeriod> {
@@ -472,7 +472,7 @@ fn chara_direction(lagna: u8) -> Direction {
 }
 
 /// Resolve the sign occupied by `sign`'s lord (or lords), given natal graha
-/// positions, by [`DualLordRules::default`]. See the module doc for the full
+/// positions, by `DualLordRules::default()`. See the module doc for the full
 /// dual-lordship rule.
 pub(crate) fn lord_sign_for(sign: u8, pos: GrahaSigns) -> u8 {
     lord_sign_with(sign, pos, DualLordRules::default())
