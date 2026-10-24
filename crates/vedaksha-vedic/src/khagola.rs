@@ -60,8 +60,10 @@
 //!
 //! # Heliacal events: Surya Siddhanta ch. IX and X
 //!
-//! Read in the Sanskrit, in the Bibliotheca Indica text (F. Hall, 1854) as
-//! transcribed in GRETIL (M. Yano), whose verse numbers these are. Graded as the
+//! Read in the Sanskrit, in the text of the Bibliotheca Indica edition (F. Hall,
+//! 1854) and its later editions as transcribed for GRETIL by M. Yano, whose
+//! verse numbers these are (<https://gretil.sub.uni-goettingen.de/>, file
+//! `sa_sUryasiddhAnta`). Graded as the
 //! other doctrine modules grade: (a) the verse states it; (b) the verse states
 //! it and this module takes the exact spherical form of its arithmetic; (c) not
 //! in the verse, adopted here.
@@ -71,11 +73,13 @@
 //!   when it is less; the Moon, and Venus and Mercury while direct, set in the
 //!   east when less and rise in the west when greater. [`HeliacalSide`].
 //! - IX.4-5 (b): take the Sun and the planet at the moment of sunrise (east) or
-//!   sunset (west), with the planet's latitude in its longitude at the horizon;
-//!   the oblique ascensions of the two, in respirations, divided by sixty, are
-//!   the kalamsha (degrees of time). [`kalamsha_deg`] takes the difference of
-//!   the sidereal times at which the two rise (set) rather than the text's
-//!   sine-table arithmetic.
+//!   sunset (west) and apply the drikkarma, the correction of the longitude for
+//!   the latitude (VII.7-10, which VII.11 names as the rule for the setting and
+//!   rising of the grahas); the oblique ascensions of the two, in respirations,
+//!   divided by sixty, are the kalamsha (degrees of time). [`kalamsha_deg`]
+//!   takes the difference of the sidereal times at which the two rise (set), the
+//!   body itself at its own `(alpha, delta)`, which has the latitude exactly in
+//!   it, rather than the text's sine-table arithmetic.
 //! - IX.6 (a): Jupiter 11, Saturn 15, Mars 17. IX.7 (a): Venus 8 for "setting in
 //!   the west and rising in the east", 10 for the reverse. IX.8 (a): Mercury 12
 //!   when retrograde (`vakri`), 14 when fast-moving. X.1 (a): the Moon is seen
@@ -835,7 +839,7 @@ const HELIACAL_EVENT_WINDOW_D: f64 = 1000.0;
 ///
 /// Surya Siddhanta IX.4-5: take the longitudes of the Sun and of the planet at
 /// the moment of sunrise (east) or sunset (west), with the planet's
-/// latitude put into its longitude at the horizon (drikkarma); the oblique
+/// latitude put into its longitude (drikkarma, VII.7-11); the oblique
 /// ascensions, in respirations, of the two risings (west: of the two settings,
 /// each longitude increased by six signs), divided by sixty, are the
 /// kalamsha. The oblique ascension of the point of the ecliptic that rises
