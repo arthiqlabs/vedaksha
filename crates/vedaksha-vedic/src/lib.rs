@@ -38,4 +38,5 @@ pub mod panchanga;
 pub mod shadbala;
 pub mod upagraha;
 pub mod varga;
+pub mod vimshopaka;
 pub mod vishesha;
