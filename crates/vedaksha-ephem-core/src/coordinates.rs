@@ -1033,18 +1033,23 @@ mod tests {
         assert_eq!(checked, 2);
     }
 
-    /// `AnalyticalProvider` with the Sun moved off the origin it sits at in
-    /// VSOP87A's heliocentric frame. With the Sun at the origin a Sun target's
-    /// source-from-Sun vector is exactly zero and the deflection returns nothing
-    /// whether or not the Sun is excluded, which would make the exclusion test
-    /// below unable to fail.
+    /// `AnalyticalProvider` with the Sun moving, as it does about the barycentre
+    /// in the SPK kernel, instead of sitting still at the origin as in VSOP87A's
+    /// heliocentric frame.
+    ///
+    /// For a Sun target the source-from-Sun vector the deflection uses is the
+    /// Sun at the retarded time less the Sun now. On a fixed Sun that is exactly
+    /// zero and the deflection returns nothing whether or not the Sun is
+    /// excluded, so the exclusion test below could not fail. On a moving one it
+    /// is a few nanoau of arbitrary direction, and the unguarded formula turns
+    /// that into a shift of milliarcseconds.
     struct OffsetSun(crate::analytical::AnalyticalProvider);
 
     impl EphemerisProvider for OffsetSun {
         fn compute_state(&self, body: Body, jd: f64) -> Result<StateVector, ComputeError> {
             let mut s = self.0.compute_state(body, jd)?;
             if body == Body::Sun {
-                s.position.x += 0.004;
+                s.position.x += 0.004 + 1.0e-6 * (jd - 2_451_545.0);
                 s.position.y -= 0.002;
             }
             Ok(s)
@@ -1062,10 +1067,9 @@ mod tests {
 
     /// The Sun is not deflected by itself, and the Moon is left out on purpose
     /// (its ray is bent by about 5 microarcseconds): both come back
-    /// bit-identical with the step on or off. The provider has the Sun off the
-    /// origin, so a Sun that was deflected would be (it has a Sun-to-source
-    /// vector of 0.0045 AU), and a planet is checked to show the step really is
-    /// on in `light_time_geocentric`.
+    /// bit-identical with the step on or off. The provider's Sun moves (see
+    /// [`OffsetSun`]), so a Sun that was deflected would show it, and a planet
+    /// is checked to show the step really is on in `light_time_geocentric`.
     #[test]
     fn the_sun_and_the_moon_are_not_deflected() {
         let provider = OffsetSun(crate::analytical::AnalyticalProvider::new());
