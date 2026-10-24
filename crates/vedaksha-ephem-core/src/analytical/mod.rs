@@ -14,6 +14,7 @@
 //! The [`AnalyticalProvider`] struct implements [`EphemerisProvider`] to wire
 //! these evaluators into the unified trait interface.
 
+pub mod chebyshev_provider;
 pub mod coefficients;
 pub mod elp_mpp02;
 mod fused;
@@ -25,6 +26,7 @@ use crate::bodies::Body;
 use crate::error::ComputeError;
 use crate::jpl::{AU_KM, EMRAT, EphemerisProvider, Position, StateVector, Velocity};
 
+pub use self::chebyshev_provider::{ChebyshevConfig, ChebyshevProvider, SegmentSpec};
 use self::vsop87a::Planet;
 
 /// Precomputed cosine of the J2000 obliquity, **84381.448 arcsec**, the
