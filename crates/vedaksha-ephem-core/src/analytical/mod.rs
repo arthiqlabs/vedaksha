@@ -442,6 +442,21 @@ impl EphemerisProvider for AnalyticalProvider {
         Ok(moon_position_rel_emb(jd))
     }
 
+    /// The Moon's distance relative to the EMB from the ELP/MPP02 distance
+    /// series alone ([`elp_mpp02::elp_geocentric_distance`]), with the same
+    /// km→AU and EMRAT scaling [`moon_position_rel_emb`] applies to each
+    /// component. The longitude and latitude series are not evaluated.
+    ///
+    /// `None` outside the provider's range, where [`Self::moon_position`]
+    /// errors, as the trait's contract requires.
+    fn moon_distance(&self, jd: f64) -> Option<f64> {
+        if jd < JD_MIN || jd > JD_MAX {
+            return None;
+        }
+        let emb_factor = EMRAT / (1.0 + EMRAT);
+        Some(elp_mpp02::elp_geocentric_distance(jd) / AU_KM * emb_factor)
+    }
+
     fn time_range(&self) -> (f64, f64) {
         (JD_MIN, JD_MAX)
     }
@@ -866,6 +881,34 @@ mod tests {
                 other => panic!("earth_state({jd}) should be DateOutOfRange, got {other:?}"),
             }
         }
+    }
+
+    /// `moon_distance` against the length of `moon_position`'s vector, over
+    /// the provider's whole range, and `None` outside it.
+    ///
+    /// The light-time iteration's bit-exactness proof assumes the trait's
+    /// `MOON_DISTANCE_REL_TOL`, so this measures the real error and requires
+    /// it to sit far inside that bound.
+    #[test]
+    fn moon_distance_matches_the_position_length() {
+        let p = provider();
+        let step = (JD_MAX - JD_MIN) / 2_000.0;
+        let mut worst = 0.0_f64;
+        for i in 0..=2_000 {
+            let jd = JD_MIN + f64::from(i) * step;
+            let pos = p.moon_position(jd).expect("in-range jd");
+            let length = libm::sqrt(pos.x * pos.x + pos.y * pos.y + pos.z * pos.z);
+            let d = p.moon_distance(jd).expect("in-range jd");
+            worst = worst.max((d - length).abs() / length);
+        }
+        println!("moon_distance worst relative error vs |moon_position|: {worst:e}");
+        assert!(
+            worst < crate::jpl::MOON_DISTANCE_REL_TOL / 100.0,
+            "moon_distance is {worst:e} off |moon_position| relative; the contract allows {:e}",
+            crate::jpl::MOON_DISTANCE_REL_TOL
+        );
+        assert!(p.moon_distance(JD_MIN - 1.0).is_none());
+        assert!(p.moon_distance(JD_MAX + 1.0).is_none());
     }
 
     /// **The invariant `AnalyticalProvider::moon_position` exists to

@@ -94,12 +94,17 @@ fn chart_evaluates_moon_only_a_few_times() {
     //     `Body::TrueNode`'s osculating computation runs through
     //     `elp_geocentric_of_date`, which never passed through the counter
     //     site or `compute_state` at all.
-    //   - `vur_series`-site counter (current): **15**, the first count that
+    //   - `vur_series`-site counter: **15**, the first count that
     //     includes the node path. One Moon-body light-time evaluation per
     //     central-difference timestep (6, as before) plus TrueNode's
     //     osculating computation (3, one per central-difference timestep) and
     //     the intermediate values `true_node_osculating` needs beyond a bare
     //     position.
+    //   - after the Moon's light-time iteration took its first step from the
+    //     distance series (`EphemerisProvider::moon_distance`) (current):
+    //     **12**. The Moon body's 6 became 3 full evaluations plus 3
+    //     distance-only ones, which `ELP_DISTANCE_CALLS` counts and this
+    //     guard does not; `tests/moon_light_time.rs` pins the per-read counts.
     //
     // The threshold is set at 2x the corrected measured count rather than
     // pinning the exact number, so it still catches a real regression without

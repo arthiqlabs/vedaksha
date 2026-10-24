@@ -27,6 +27,17 @@ pub const AU_KM: f64 = 149_597_870.700;
 /// failing to compile.
 pub(crate) const EMRAT: f64 = 81.300_568_94;
 
+/// Largest relative error [`EphemerisProvider::moon_distance`] may carry
+/// against the length of [`EphemerisProvider::moon_position`]'s vector.
+///
+/// Set far above what a distance series and the length of the vector built
+/// from it actually differ by (a few ulp, about 1e-15; measured by
+/// `analytical::tests::moon_distance_matches_the_position_length`), because
+/// the light-time iteration's bit-exactness proof uses this bound rather than
+/// the measured error. A looser bound costs only a slightly more frequent
+/// fallback; a bound tighter than the truth would break the proof.
+pub const MOON_DISTANCE_REL_TOL: f64 = 1e-12;
+
 /// A 3D position vector in AU (astronomical units), ICRS frame.
 #[derive(Debug, Clone, Copy)]
 pub struct Position {
@@ -143,6 +154,32 @@ pub trait EphemerisProvider {
     /// Same conditions as [`Self::compute_state`] for [`Body::Moon`].
     fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
         Ok(self.compute_state(Body::Moon, jd)?.position)
+    }
+
+    /// The length of [`Self::moon_position`]'s vector at `jd` (AU, relative
+    /// to the EMB), computed more cheaply than the position itself, or `None`
+    /// where the provider has no cheaper way.
+    ///
+    /// The light-time iteration's first step needs only the Moon's distance.
+    /// A provider that can evaluate the distance alone (as
+    /// [`crate::analytical::AnalyticalProvider`] can, from the ELP/MPP02
+    /// distance series) lets that step skip a full position. The default is
+    /// `None`, so every other provider (SPK included) takes exactly the path
+    /// it took before this method existed.
+    ///
+    /// # Contract
+    ///
+    /// An implementation returning `Some(d)` must satisfy both:
+    ///
+    /// - `d` agrees with the length of `moon_position(jd)` to within a
+    ///   relative [`MOON_DISTANCE_REL_TOL`]. The light-time iteration relies on
+    ///   this bound to prove that starting from `d` reaches the bit-identical
+    ///   answer, and falls back to a full first evaluation when it cannot.
+    /// - it returns `None` wherever `moon_position(jd)` would return an error,
+    ///   so that error still surfaces from the same call it always did.
+    fn moon_distance(&self, jd: f64) -> Option<f64> {
+        let _ = jd;
+        None
     }
 
     /// Returns the time range covered by this provider.

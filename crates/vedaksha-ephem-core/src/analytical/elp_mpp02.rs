@@ -94,6 +94,15 @@ use crate::analytical::simd_trig::sincos_f64x4;
 #[doc(hidden)]
 pub static ELP_GEOCENTRIC_CALLS: AtomicU64 = AtomicU64::new(0);
 
+/// Count of distance-only ELP/MPP02 evaluations ([`elp_geocentric_distance`]).
+///
+/// Kept apart from [`ELP_GEOCENTRIC_CALLS`] because a distance-only
+/// evaluation runs the distance series alone, about 40% of a full one, and a
+/// guard that counts full evaluations must not have it folded in. Same
+/// instrumentation-only status as that counter.
+#[doc(hidden)]
+pub static ELP_DISTANCE_CALLS: AtomicU64 = AtomicU64::new(0);
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 /// Geocentric position and velocity of the Moon in J2000 ecliptic
@@ -220,6 +229,41 @@ pub fn elp_geocentric_position_of_date(jd: f64) -> (f64, f64, f64) {
 
     // Spherical → rectangular in the (date) ecliptic frame, no P/Q rotation.
     rectangular_from_spherical_position(v_d, u, r)
+}
+
+/// Geocentric Moon **distance only**, in km (LLR fit).
+///
+/// Evaluates the distance series alone — the `r` third of
+/// [`vur_series_position`], same terms, same accumulation order — so the
+/// value is bit-for-bit identical to the `r` that [`elp_geocentric_position`]
+/// converts to rectangular coordinates. The length of that rectangular vector
+/// agrees with it to rounding only (a few ulp): the P/Q rotation is
+/// orthogonal and the spherical-to-rectangular step preserves `r`.
+///
+/// It exists for the light-time iteration's first step, which needs only the
+/// distance (`τ = r / c`) and so does not need the longitude and latitude
+/// series, about 60% of the terms. See
+/// [`crate::jpl::EphemerisProvider::moon_distance`] for the contract this
+/// serves and `coordinates::moon_light_time` for how the result stays bit for
+/// bit what a full first evaluation would give.
+#[must_use]
+pub fn elp_geocentric_distance(jd: f64) -> f64 {
+    ELP_DISTANCE_CALLS.fetch_add(1, Ordering::Relaxed);
+    let fit = Fit::Llr;
+    let args = args_for(fit);
+    let t = (jd - J2000) / DAYS_PER_CENTURY;
+    let t_pow = [1.0, t, t * t, t * t * t, t * t * t * t];
+
+    let a_arg = reduce_all_args_position(args, &t_pow);
+
+    let r_main = eval_main_series_position(
+        moon_distance::MAIN.as_slice(),
+        R_MAIN_AMPS.get(fit),
+        &a_arg,
+        SeriesKind::Cosine,
+    );
+    let r_pert = eval_pert_series_position(&R_PERT_SPARSE, &a_arg, &t_pow);
+    (r_main + r_pert) * RA0
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -1852,6 +1896,18 @@ mod tests {
                 "t={t} jd={jd}: z differs — position-only {z:e} vs full {:e}",
                 full.z
             );
+        }
+    }
+
+    /// [`elp_geocentric_distance`] must be bit-for-bit the `r` that
+    /// [`vur_series_position`] computes, across the full supported JD range.
+    #[test]
+    fn elp_geocentric_distance_matches_the_position_series_r_bit_for_bit() {
+        for t in sparse_test_epochs() {
+            let jd = J2000 + t * DAYS_PER_CENTURY;
+            let (_, _, r) = vur_series_position(jd, Fit::Llr);
+            let d = elp_geocentric_distance(jd);
+            assert_eq!(d.to_bits(), r.to_bits(), "t={t} jd={jd}: {d:e} vs {r:e}");
         }
     }
 

@@ -17,7 +17,9 @@ use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::analytical::elp_mpp02::elp_geocentric;
 use vedaksha_ephem_core::analytical::vsop87a::{Planet, vsop87a_heliocentric};
 use vedaksha_ephem_core::bodies::Body;
-use vedaksha_ephem_core::coordinates::{apparent_position, apparent_positions, ecliptic_position};
+use vedaksha_ephem_core::coordinates::{
+    apparent_position, apparent_positions, ecliptic_position, moon_apparent_position,
+};
 
 /// A representative contemporary epoch (≈ 2025), well inside the supported range.
 const JD: f64 = 2_460_676.5;
@@ -104,6 +106,31 @@ fn bench_sun_position(c: &mut Criterion) {
     });
 }
 
+fn bench_moon_reads(c: &mut Criterion) {
+    // The three light-time-corrected Moon reads a lunar walk (rashi and
+    // nakshatra entries) makes at every bracket step: longitude only, the
+    // batch read with its central-difference speed, and the analytic-speed
+    // read.
+    let provider = AnalyticalProvider::new();
+    c.bench_function("ecliptic_position_moon", |b| {
+        b.iter(|| {
+            let p = ecliptic_position(&provider, black_box(Body::Moon), black_box(JD))
+                .expect("Moon position should be supported");
+            black_box(p);
+        });
+    });
+    c.bench_function("apparent_positions_moon", |b| {
+        b.iter(|| black_box(apparent_positions(&provider, &[Body::Moon], black_box(JD))));
+    });
+    c.bench_function("moon_apparent_position", |b| {
+        b.iter(|| {
+            let p = moon_apparent_position(&provider, black_box(JD))
+                .expect("Moon position should be supported");
+            black_box(p);
+        });
+    });
+}
+
 fn bench_transit_scan(c: &mut Criterion) {
     // 365 daily moon positions — models transit/dasha scanning where the same
     // series is evaluated across many dates (the batch-amortization target).
@@ -126,6 +153,7 @@ criterion_group!(
     bench_chart,
     bench_chart_batch,
     bench_sun_position,
+    bench_moon_reads,
     bench_transit_scan
 );
 criterion_main!(benches);

@@ -157,6 +157,16 @@ impl EphemerisProvider for CachingProvider<'_> {
         Ok(pos)
     }
 
+    /// Forward to the wrapped provider's own `moon_distance`, unmemoized.
+    ///
+    /// Forwarded for the same reason as `moon_position`: the trait default
+    /// returns `None`, which would silently drop the inner provider's cheaper
+    /// distance. Not memoized, because the light-time iteration asks for the
+    /// distance once per observation instant and a batch never repeats one.
+    fn moon_distance(&self, jd: f64) -> Option<f64> {
+        self.inner.moon_distance(jd)
+    }
+
     fn time_range(&self) -> (f64, f64) {
         self.inner.time_range()
     }

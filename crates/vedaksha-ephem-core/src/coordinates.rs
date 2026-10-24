@@ -16,7 +16,7 @@ use core::f64::consts::PI;
 use crate::bodies::Body;
 use crate::delta_t;
 use crate::error::ComputeError;
-use crate::jpl::{EMRAT, EphemerisProvider, StateVector};
+use crate::jpl::{EMRAT, EphemerisProvider, MOON_DISTANCE_REL_TOL, Position, StateVector};
 use crate::nutation;
 use crate::obliquity;
 use crate::precession;
@@ -223,16 +223,26 @@ fn compute_ecliptic_with_frame(
     // adding stellar aberration on top would double-count.
     let geo = light_time_geocentric(provider, body, jd_tt)?;
 
-    // Steps 2-3: apply the precomputed nutation·precession frame (the
-    // provider returns J2000 mean-equatorial vectors; SPK ICRF agrees to
-    // <25 mas — negligible here). `frame` must correspond to this `jd`.
+    Ok(spherical_of(&ecliptic_of_date(geo, frame)))
+}
+
+/// Steps 2-4 of [`compute_ecliptic_with_frame`]: rotate a J2000
+/// mean-equatorial vector into the ecliptic of date.
+///
+/// Apply the precomputed nutation·precession frame (the provider returns
+/// J2000 mean-equatorial vectors; SPK ICRF agrees to <25 mas — negligible
+/// here), then rotate true equatorial of date → ecliptic of date. `frame` must
+/// correspond to the observation time. The map is linear, so
+/// [`moon_apparent_position`] also passes a velocity through it.
+fn ecliptic_of_date(geo: [f64; 3], frame: &CelestialFrame) -> Vector3 {
     let geo_vec = Vector3::new(geo[0], geo[1], geo[2]);
     let true_eq = frame.combined.apply(&geo_vec);
+    Matrix3::rotation_x(frame.eps_true).apply(&true_eq)
+}
 
-    // Step 4: rotate true equatorial of date → ecliptic of date
-    let ecl_vec = Matrix3::rotation_x(frame.eps_true).apply(&true_eq);
-
-    // Step 5: extract spherical coordinates
+/// Step 5 of [`compute_ecliptic_with_frame`]: spherical coordinates of an
+/// ecliptic-of-date vector.
+fn spherical_of(ecl_vec: &Vector3) -> EclipticCoords {
     let distance =
         libm::sqrt(ecl_vec.x * ecl_vec.x + ecl_vec.y * ecl_vec.y + ecl_vec.z * ecl_vec.z);
     let mut longitude = libm::atan2(ecl_vec.y, ecl_vec.x);
@@ -241,11 +251,11 @@ fn compute_ecliptic_with_frame(
     }
     let latitude = libm::asin(ecl_vec.z / distance);
 
-    Ok(EclipticCoords {
+    EclipticCoords {
         longitude,
         latitude,
         distance,
-    })
+    }
 }
 
 /// Compute the geocentric vector to `body` at observation time `jd` (TT),
@@ -274,23 +284,23 @@ fn light_time_geocentric(
     // Earth ~once per timestep instead of ~75 times. The Moon itself does not
     // use `earth_state` (it scales the rel-EMB vector directly), so its own
     // position is unaffected.
-    let earth_anchor = if body == Body::Moon {
-        None
-    } else {
-        Some(provider.earth_state(jd)?)
-    };
+    //
+    // Only the Moon's position is ever used on this path — its velocity has
+    // no consumer — so its evaluation is `moon_position`, not
+    // `compute_state`, skipping a velocity computation that would only be
+    // discarded (`docs/audit/2026-08-29-perf-investigation.md` #5).
+    if body == Body::Moon {
+        let pos = moon_light_time(provider, jd, |t| provider.moon_position(t), moon_geocentric)?;
+        return Ok(moon_geocentric(&pos));
+    }
+    let earth_anchor = provider.earth_state(jd)?;
 
     let mut tau = 0.0_f64;
-    for _ in 0..10 {
+    for _ in 0..LIGHT_TIME_MAX_ITER {
         let target_pos = retarded_geocentric(provider, body, jd, tau, earth_anchor)?;
-        let r = libm::sqrt(
-            target_pos[0] * target_pos[0]
-                + target_pos[1] * target_pos[1]
-                + target_pos[2] * target_pos[2],
-        );
-        let tau_new = r / crate::aberration::C_AU_PER_DAY;
+        let tau_new = norm3(&target_pos) / crate::aberration::C_AU_PER_DAY;
 
-        if (tau_new - tau).abs() < 1e-12 {
+        if (tau_new - tau).abs() < LIGHT_TIME_TOL {
             return Ok(target_pos);
         }
         tau = tau_new;
@@ -300,34 +310,192 @@ fn light_time_geocentric(
     retarded_geocentric(provider, body, jd, tau, earth_anchor)
 }
 
-/// Geocentric vector `[x, y, z]` (AU, J2000 mean equatorial) to `body` at the
-/// retarded time `jd − tau`.
+/// Convergence threshold of the light-time iteration on `τ`, in days.
+const LIGHT_TIME_TOL: f64 = 1e-12;
+
+/// Iterations of the light-time loop before one final evaluation at the last
+/// `τ`, converged or not.
+const LIGHT_TIME_MAX_ITER: usize = 10;
+
+/// `|v|`, written once so every light-time distance rounds the same way.
+fn norm3(v: &[f64; 3]) -> f64 {
+    libm::sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2])
+}
+
+/// Geocentric Moon vector from the provider's rel-EMB position, scaled by
+/// `MOON_GEO_FACTOR`.
+fn moon_geocentric(pos: &Position) -> [f64; 3] {
+    [
+        pos.x * MOON_GEO_FACTOR,
+        pos.y * MOON_GEO_FACTOR,
+        pos.z * MOON_GEO_FACTOR,
+    ]
+}
+
+/// The Moon's light-time iteration: the provider evaluation (`eval`) at the
+/// retarded instant `jd − τ` that the iteration converges on, `jd` in TT.
 ///
-/// For the Moon, scales the rel-EMB vector by `MOON_GEO_FACTOR`. Only the
-/// Moon's position is ever used here — its velocity has no consumer on this
-/// path — so this calls [`EphemerisProvider::moon_position`] rather than
-/// [`EphemerisProvider::compute_state`], skipping a velocity computation that
-/// would only be discarded (`docs/audit/2026-08-29-perf-investigation.md`
-/// #5). For other bodies, subtracts Earth's position obtained by first-order
-/// extrapolation of `earth_anchor` (Earth's state at the observation time
-/// `jd`) to `jd − tau` — see [`light_time_geocentric`].
+/// `geo` maps an evaluation to the geocentric vector whose length sets `τ`.
+/// `eval` is `moon_position` for a position read and `compute_state` for
+/// [`moon_apparent_position`]; either way the result is bit for bit the
+/// evaluation the plain iteration (the non-Moon loop in
+/// [`light_time_geocentric`], which is how the Moon was iterated too through
+/// 9.4.1) returns, at less cost. Two savings, both exact:
+///
+/// 1. **No second evaluation at the same instant.** For the Moon `τ` is about
+///    1.3 s, and its change between iterations is often above
+///    [`LIGHT_TIME_TOL`] but far below the spacing of doubles near a modern
+///    `jd` (about 4.7e-10 day). So the next retarded instant is frequently
+///    the same double as the last one, and the plain loop evaluates it again
+///    to learn what it already knows. Since the Moon's vector depends only on
+///    the instant `jd − τ` (unlike other bodies', whose Earth extrapolation
+///    uses `τ` itself), a repeat evaluation returns the identical vector,
+///    hence the identical `τ`, and the plain loop then stops and returns it.
+///    Returning the previous evaluation directly is that same answer.
+/// 2. **A distance-only first step**, where the provider offers
+///    [`EphemerisProvider::moon_distance`]. The plain loop's first
+///    evaluation, at `jd` itself, is used only for its length. See
+///    [`moon_distance_first_step`] for when the distance can stand in for it
+///    and why the result is then unchanged; when it cannot, this falls back to
+///    the plain loop's own start.
+fn moon_light_time<S: Copy>(
+    provider: &dyn EphemerisProvider,
+    jd: f64,
+    eval: impl Fn(f64) -> Result<S, ComputeError>,
+    geo: impl Fn(&S) -> [f64; 3],
+) -> Result<S, ComputeError> {
+    let mut tau = 0.0_f64;
+    // The last evaluation and the bit pattern of the instant it was made at.
+    let mut prev: Option<(u64, S)> = None;
+    let mut first_iter = 0;
+    match moon_distance_first_step(provider, jd, &eval, &geo)? {
+        Some(FirstStep::Converged(s)) => return Ok(s),
+        Some(FirstStep::Continue {
+            tau: tau2,
+            instant_bits,
+            eval: s,
+        }) => {
+            tau = tau2;
+            prev = Some((instant_bits, s));
+            first_iter = 2;
+        }
+        None => {}
+    }
+
+    for _ in first_iter..LIGHT_TIME_MAX_ITER {
+        let t = jd - tau;
+        if let Some((bits, s)) = prev {
+            if bits == t.to_bits() {
+                return Ok(s);
+            }
+        }
+        let s = eval(t)?;
+        let tau_new = norm3(&geo(&s)) / crate::aberration::C_AU_PER_DAY;
+        if (tau_new - tau).abs() < LIGHT_TIME_TOL {
+            return Ok(s);
+        }
+        tau = tau_new;
+        prev = Some((t.to_bits(), s));
+    }
+
+    // Not converged in 10 iterations: evaluate once more at the last τ.
+    let t = jd - tau;
+    if let Some((bits, s)) = prev {
+        if bits == t.to_bits() {
+            return Ok(s);
+        }
+    }
+    eval(t)
+}
+
+/// Outcome of [`moon_distance_first_step`]: the plain iteration's first two
+/// steps, done with a distance-only first step.
+enum FirstStep<S> {
+    /// The plain loop would return this evaluation at its second step.
+    Converged(S),
+    /// The plain loop continues from `τ = tau` with this evaluation, made at
+    /// the instant whose bit pattern is `instant_bits`, as its last.
+    Continue {
+        tau: f64,
+        instant_bits: u64,
+        eval: S,
+    },
+}
+
+/// The plain iteration's first two steps, the first from
+/// [`EphemerisProvider::moon_distance`] instead of a full evaluation at `jd`,
+/// or `None` where that cannot be shown to give the plain loop's answer.
+///
+/// The plain loop's first step evaluates at `jd` and keeps only
+/// `τ₁ = |g(jd)| / c`. The distance gives `τ₁'`, which differs from `τ₁` by
+/// at most `E` (twice [`MOON_DISTANCE_REL_TOL`], relative). The unknown `τ₁`
+/// therefore lies in `[τ₁' − E, τ₁' + E]`, and the substitution is exact
+/// when every value in that interval leads the plain loop the same way:
+///
+/// - **Its first step must not stop.** The plain loop stops at step one when
+///   `|τ₁ − 0| < LIGHT_TIME_TOL`; requiring `τ₁' − E ≥ LIGHT_TIME_TOL` rules
+///   that out for every candidate.
+/// - **The second instant must be one double.** Floating-point subtraction is
+///   monotone, so if `jd − (τ₁' − E)` and `jd − (τ₁' + E)` round to the same
+///   double, `jd − τ₁` rounds to it too. The second evaluation, and the
+///   `τ₂` it gives, are then exactly the plain loop's.
+/// - **The second stop test must agree.** The set of `x` with
+///   `|τ₂ − x| < LIGHT_TIME_TOL` is an interval `2·LIGHT_TIME_TOL` wide. With
+///   `2E` narrower than that, `[τ₁' − E, τ₁' + E]` cannot contain it, so the
+///   test agreeing at both ends means it agrees everywhere between.
+///
+/// `E` is about 3e-17 day against a double spacing near 4.7e-10 day, so the
+/// fallback (`None`, after one wasted evaluation in the last case) is
+/// vanishingly rare.
+fn moon_distance_first_step<S: Copy>(
+    provider: &dyn EphemerisProvider,
+    jd: f64,
+    eval: &impl Fn(f64) -> Result<S, ComputeError>,
+    geo: &impl Fn(&S) -> [f64; 3],
+) -> Result<Option<FirstStep<S>>, ComputeError> {
+    let Some(distance) = provider.moon_distance(jd) else {
+        return Ok(None);
+    };
+    let tau1 = distance * MOON_GEO_FACTOR / crate::aberration::C_AU_PER_DAY;
+    let e = 2.0 * MOON_DISTANCE_REL_TOL * tau1;
+    if !tau1.is_finite() || tau1 - e < LIGHT_TIME_TOL || e >= LIGHT_TIME_TOL {
+        return Ok(None);
+    }
+    let t1 = jd - tau1;
+    if (jd - (tau1 - e)).to_bits() != t1.to_bits() || (jd - (tau1 + e)).to_bits() != t1.to_bits() {
+        return Ok(None);
+    }
+
+    let s = eval(t1)?;
+    let tau2 = norm3(&geo(&s)) / crate::aberration::C_AU_PER_DAY;
+    let stops_lo = (tau2 - (tau1 - e)).abs() < LIGHT_TIME_TOL;
+    let stops_hi = (tau2 - (tau1 + e)).abs() < LIGHT_TIME_TOL;
+    Ok(match (stops_lo, stops_hi) {
+        (true, true) => Some(FirstStep::Converged(s)),
+        (false, false) => Some(FirstStep::Continue {
+            tau: tau2,
+            instant_bits: t1.to_bits(),
+            eval: s,
+        }),
+        _ => None,
+    })
+}
+
+/// Geocentric vector `[x, y, z]` (AU, J2000 mean equatorial) to a non-Moon
+/// `body` at the retarded time `jd − tau`.
+///
+/// Subtracts Earth's position obtained by first-order extrapolation of
+/// `earth_anchor` (Earth's state at the observation time `jd`) to `jd − tau`
+/// — see [`light_time_geocentric`]. The Moon is iterated by
+/// [`moon_light_time`] instead.
 fn retarded_geocentric(
     provider: &dyn EphemerisProvider,
     body: Body,
     jd: f64,
     tau: f64,
-    earth_anchor: Option<StateVector>,
+    earth: StateVector,
 ) -> Result<[f64; 3], ComputeError> {
-    if body == Body::Moon {
-        let moon_pos = provider.moon_position(jd - tau)?;
-        return Ok([
-            moon_pos.x * MOON_GEO_FACTOR,
-            moon_pos.y * MOON_GEO_FACTOR,
-            moon_pos.z * MOON_GEO_FACTOR,
-        ]);
-    }
     let target_state = provider.compute_state(body, jd - tau)?;
-    let earth = earth_anchor.expect("non-Moon body has an Earth anchor");
     let (earth_pos, earth_vel) = (earth.position, earth.velocity);
     let dt = -tau;
     Ok([
@@ -379,6 +547,110 @@ pub fn apparent_position(
         jd_tt_after,
         &frame_after,
     )
+}
+
+/// Half-width, in days, of the central difference that measures how fast the
+/// precession-nutation frame turns, for [`moon_apparent_position`].
+///
+/// The frame is a smooth, slow rotation whose whole contribution to a
+/// longitude speed is about 4e-5 °/day, so a difference this narrow leaves no
+/// visible error in it; the end-to-end check in `tests/moon_light_time.rs`
+/// bounds the whole speed, frame term included, at 5e-7 °/day.
+const FRAME_RATE_HALF_STEP: f64 = 0.05;
+
+/// The Moon's apparent position with `longitude_speed` from the analytic
+/// derivative of the ephemeris, not a central difference.
+///
+/// `jd` is **UT1**, as for [`apparent_position`]. The position fields are bit
+/// for bit what [`ecliptic_position`]`(provider, Body::Moon, jd)` returns,
+/// provided the provider's `compute_state(Body::Moon, ·)` position equals its
+/// `moon_position` to the bit, as it does for
+/// [`crate::analytical::AnalyticalProvider`] and for any provider that keeps
+/// the trait's default `moon_position`.
+///
+/// # How the speed is formed
+///
+/// The geocentric vector is `g(t) = M(t − τ(t))`, the Moon at the retarded
+/// instant, with the provider's own velocity `v` there (for
+/// [`crate::analytical::AnalyticalProvider`], ELP/MPP02's analytic time
+/// derivative). Differentiating the light-time equation `τ = |g| / c` gives
+/// `τ̇ = (ĝ·v)(1 − τ̇) / c`, so `ġ = v · (1 − τ̇) = v / (1 + ĝ·v / c)`. That
+/// velocity goes through the frame of date like the position does. The frame
+/// itself turns (precession and nutation, a few times 1e-5 °/day in
+/// longitude), and that rate is measured by a central difference of the cheap
+/// frame alone over ±[`FRAME_RATE_HALF_STEP`], applied to the fixed vector `g`.
+/// The longitude rate is then `(x·ẏ − y·ẋ) / (x² + y²)` in the ecliptic of
+/// date.
+///
+/// The speed is per day of TT. [`apparent_position`]'s is per UT1 day; the
+/// two differ by the rate of change of Delta T, below 1e-7 relative.
+///
+/// # Agreement with [`apparent_position`]
+///
+/// [`apparent_position`]'s `longitude_speed` is a ±0.5-day central difference,
+/// whose truncation error for the Moon reaches about 1e-2 °/day. This read is
+/// the derivative itself, so the two differ by that error. Measured by
+/// `tests/moon_light_time.rs` over 1900 to 2100: worst 8.5e-3 °/day against
+/// the one-day difference, with no bias, and worst 1.3e-7 °/day against a
+/// Richardson-extrapolated difference of [`ecliptic_position_tt`] (the
+/// tolerance stated there is 5e-7). Expect the 1e-2 shift when moving a
+/// consumer from [`apparent_position`]'s speed to this one.
+///
+/// # Cost
+///
+/// One position-and-velocity evaluation at the retarded instant, plus, on a
+/// provider with [`EphemerisProvider::moon_distance`], one distance-only
+/// evaluation. [`apparent_position`] makes three light-time-corrected reads.
+///
+/// # Errors
+/// Returns [`ComputeError`] if the provider cannot compute the Moon's state.
+pub fn moon_apparent_position(
+    provider: &dyn EphemerisProvider,
+    jd: f64,
+) -> Result<ApparentPosition, ComputeError> {
+    let jd_tt = delta_t::ut1_to_tt(jd);
+    let frame = frame_for(jd_tt);
+    let state = moon_light_time(
+        provider,
+        jd_tt,
+        |t| provider.compute_state(Body::Moon, t),
+        |s: &StateVector| moon_geocentric(&s.position),
+    )?;
+    let g = moon_geocentric(&state.position);
+    let v = [
+        state.velocity.x * MOON_GEO_FACTOR,
+        state.velocity.y * MOON_GEO_FACTOR,
+        state.velocity.z * MOON_GEO_FACTOR,
+    ];
+
+    let ecl = ecliptic_of_date(g, &frame);
+    let ecliptic = spherical_of(&ecl);
+
+    // Light-time factor 1 − τ̇ = 1 / (1 + ĝ·v / c).
+    let radial_rate = (g[0] * v[0] + g[1] * v[1] + g[2] * v[2]) / norm3(&g);
+    let light_time_factor = 1.0 / (1.0 + radial_rate / crate::aberration::C_AU_PER_DAY);
+    let ecl_rate = ecliptic_of_date(
+        [
+            v[0] * light_time_factor,
+            v[1] * light_time_factor,
+            v[2] * light_time_factor,
+        ],
+        &frame,
+    );
+
+    // The frame's own turning, applied to the fixed vector g.
+    let ahead = ecliptic_of_date(g, &frame_for(jd_tt + FRAME_RATE_HALF_STEP));
+    let behind = ecliptic_of_date(g, &frame_for(jd_tt - FRAME_RATE_HALF_STEP));
+    let span = 2.0 * FRAME_RATE_HALF_STEP;
+    let x_rate = ecl_rate.x + (ahead.x - behind.x) / span;
+    let y_rate = ecl_rate.y + (ahead.y - behind.y) / span;
+
+    let longitude_rate = (ecl.x * y_rate - ecl.y * x_rate) / (ecl.x * ecl.x + ecl.y * ecl.y);
+
+    Ok(ApparentPosition {
+        ecliptic,
+        longitude_speed: longitude_rate * 180.0 / PI,
+    })
 }
 
 /// Apparent ecliptic coordinates **without** daily motion.
@@ -926,5 +1198,296 @@ mod tests {
              longitude_speed at this epoch) — this band is tight enough to catch a \
              sign-flipped conversion, or a halved/doubled Delta T, not just a no-op"
         );
+    }
+}
+
+/// The Moon's light-time iteration against the plain iteration it replaced.
+///
+/// [`moon_light_time`] claims to return, bit for bit, what the plain loop
+/// returns. These tests hold a verbatim copy of that loop and of the steps
+/// that followed it as they stood at 9.4.1, so the claim is checked against
+/// the old arithmetic itself and not against a refactor of it. The copy is
+/// architecture-independent, unlike a pinned table of output bits.
+#[cfg(all(test, feature = "std"))]
+mod moon_light_time_tests {
+    use super::*;
+    use crate::analytical::AnalyticalProvider;
+    use crate::jpl::Velocity;
+
+    /// 9.4.1's Moon read: the plain light-time loop, then steps 2-5, verbatim.
+    fn plain_ecliptic_moon(
+        provider: &dyn EphemerisProvider,
+        jd_tt: f64,
+        frame: &CelestialFrame,
+    ) -> Result<EclipticCoords, ComputeError> {
+        let retarded = |tau: f64| -> Result<[f64; 3], ComputeError> {
+            let moon_pos = provider.moon_position(jd_tt - tau)?;
+            Ok([
+                moon_pos.x * MOON_GEO_FACTOR,
+                moon_pos.y * MOON_GEO_FACTOR,
+                moon_pos.z * MOON_GEO_FACTOR,
+            ])
+        };
+        let geo = 'lt: {
+            let mut tau = 0.0_f64;
+            for _ in 0..10 {
+                let target_pos = retarded(tau)?;
+                let r = libm::sqrt(
+                    target_pos[0] * target_pos[0]
+                        + target_pos[1] * target_pos[1]
+                        + target_pos[2] * target_pos[2],
+                );
+                let tau_new = r / crate::aberration::C_AU_PER_DAY;
+
+                if (tau_new - tau).abs() < 1e-12 {
+                    break 'lt target_pos;
+                }
+                tau = tau_new;
+            }
+            retarded(tau)?
+        };
+
+        let geo_vec = Vector3::new(geo[0], geo[1], geo[2]);
+        let true_eq = frame.combined.apply(&geo_vec);
+        let ecl_vec = Matrix3::rotation_x(frame.eps_true).apply(&true_eq);
+        let distance =
+            libm::sqrt(ecl_vec.x * ecl_vec.x + ecl_vec.y * ecl_vec.y + ecl_vec.z * ecl_vec.z);
+        let mut longitude = libm::atan2(ecl_vec.y, ecl_vec.x);
+        if longitude < 0.0 {
+            longitude += 2.0 * PI;
+        }
+        let latitude = libm::asin(ecl_vec.z / distance);
+        Ok(EclipticCoords {
+            longitude,
+            latitude,
+            distance,
+        })
+    }
+
+    /// 9.4.1's `apparent_position(Moon)`: three plain reads and the ±0.5-day
+    /// central difference, verbatim.
+    fn plain_apparent_moon(provider: &dyn EphemerisProvider, jd: f64) -> ApparentPosition {
+        let jd_tt = delta_t::ut1_to_tt(jd);
+        let jd_tt_before = delta_t::ut1_to_tt(jd - 0.5);
+        let jd_tt_after = delta_t::ut1_to_tt(jd + 0.5);
+        let ecliptic = plain_ecliptic_moon(provider, jd_tt, &frame_for(jd_tt)).unwrap();
+        let pos_before =
+            plain_ecliptic_moon(provider, jd_tt_before, &frame_for(jd_tt_before)).unwrap();
+        let pos_after =
+            plain_ecliptic_moon(provider, jd_tt_after, &frame_for(jd_tt_after)).unwrap();
+        let mut speed_rad = pos_after.longitude - pos_before.longitude;
+        if speed_rad > PI {
+            speed_rad -= 2.0 * PI;
+        } else if speed_rad < -PI {
+            speed_rad += 2.0 * PI;
+        }
+        ApparentPosition {
+            ecliptic,
+            longitude_speed: speed_rad * 180.0 / PI,
+        }
+    }
+
+    /// `n` UT1 instants spread over 1900 to 2100, the fractional day stepped
+    /// by the golden ratio so no two share a time of day.
+    fn instants(n: u32) -> impl Iterator<Item = f64> {
+        let start = 2_415_020.5;
+        let span = 73_048.0;
+        (0..n).map(move |i| {
+            let frac = (f64::from(i) * 0.618_033_988_749_894_9).fract();
+            start + span * f64::from(i) / f64::from(n) + frac
+        })
+    }
+
+    fn assert_same_bits(got: &EclipticCoords, want: &EclipticCoords, what: &str) {
+        assert_eq!(
+            got.longitude.to_bits(),
+            want.longitude.to_bits(),
+            "{what}: longitude"
+        );
+        assert_eq!(
+            got.latitude.to_bits(),
+            want.latitude.to_bits(),
+            "{what}: latitude"
+        );
+        assert_eq!(
+            got.distance.to_bits(),
+            want.distance.to_bits(),
+            "{what}: distance"
+        );
+    }
+
+    /// Forwards every method except `moon_distance`, so it takes the trait
+    /// default and the provider offers no cheaper distance.
+    struct WithoutDistance<'a>(&'a dyn EphemerisProvider);
+
+    impl EphemerisProvider for WithoutDistance<'_> {
+        fn compute_state(&self, body: Body, jd: f64) -> Result<StateVector, ComputeError> {
+            self.0.compute_state(body, jd)
+        }
+        fn earth_state(&self, jd: f64) -> Result<StateVector, ComputeError> {
+            self.0.earth_state(jd)
+        }
+        fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
+            self.0.moon_position(jd)
+        }
+        fn time_range(&self) -> (f64, f64) {
+            self.0.time_range()
+        }
+    }
+
+    #[test]
+    fn ecliptic_position_moon_is_bit_identical_to_the_plain_iteration() {
+        let analytical = AnalyticalProvider::new();
+        let without = WithoutDistance(&analytical);
+        let mut n = 0;
+        for jd in instants(4_000) {
+            let jd_tt = delta_t::ut1_to_tt(jd);
+            let want = plain_ecliptic_moon(&analytical, jd_tt, &frame_for(jd_tt)).unwrap();
+            let got = ecliptic_position(&analytical, Body::Moon, jd).unwrap();
+            assert_same_bits(&got, &want, &format!("jd {jd}"));
+            let got = ecliptic_position(&without, Body::Moon, jd).unwrap();
+            assert_same_bits(&got, &want, &format!("jd {jd}, no distance hook"));
+            n += 1;
+        }
+        assert_eq!(n, 4_000);
+    }
+
+    #[test]
+    fn apparent_positions_moon_is_bit_identical_to_the_plain_iteration() {
+        let analytical = AnalyticalProvider::new();
+        for jd in instants(1_000) {
+            let want = plain_apparent_moon(&analytical, jd);
+            let got = apparent_positions(&analytical, &[Body::Moon], jd)
+                .remove(0)
+                .1
+                .unwrap();
+            assert_same_bits(&got.ecliptic, &want.ecliptic, &format!("jd {jd}"));
+            assert_eq!(
+                got.longitude_speed.to_bits(),
+                want.longitude_speed.to_bits(),
+                "jd {jd}: speed"
+            );
+        }
+    }
+
+    /// The new read's position is [`ecliptic_position`]'s, to the bit.
+    #[test]
+    fn moon_apparent_position_has_ecliptic_positions_bits() {
+        let analytical = AnalyticalProvider::new();
+        for jd in instants(1_000) {
+            let got = moon_apparent_position(&analytical, jd).unwrap();
+            let want = ecliptic_position(&analytical, Body::Moon, jd).unwrap();
+            assert_same_bits(&got.ecliptic, &want, &format!("jd {jd}"));
+        }
+    }
+
+    /// A Moon on a fixed direction whose distance grows linearly in time, so a
+    /// test can place `τ` and its change wherever a guard needs it. Its
+    /// distance hook is exact.
+    struct LinearMoon {
+        r0: f64,
+        rate: f64,
+        epoch: f64,
+    }
+
+    impl LinearMoon {
+        fn rel_emb(&self, jd: f64) -> f64 {
+            (self.r0 + self.rate * (jd - self.epoch)) / MOON_GEO_FACTOR
+        }
+    }
+
+    impl EphemerisProvider for LinearMoon {
+        fn compute_state(&self, _body: Body, jd: f64) -> Result<StateVector, ComputeError> {
+            Ok(StateVector {
+                position: Position {
+                    x: self.rel_emb(jd),
+                    y: 0.0,
+                    z: 0.0,
+                },
+                velocity: Velocity {
+                    x: self.rate / MOON_GEO_FACTOR,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            })
+        }
+        fn moon_distance(&self, jd: f64) -> Option<f64> {
+            Some(self.rel_emb(jd))
+        }
+        fn time_range(&self) -> (f64, f64) {
+            (f64::MIN, f64::MAX)
+        }
+    }
+
+    fn plain_geo(provider: &dyn EphemerisProvider, jd_tt: f64) -> [f64; 3] {
+        let frame = frame_for(jd_tt);
+        let e = plain_ecliptic_moon(provider, jd_tt, &frame).unwrap();
+        [e.longitude, e.latitude, e.distance]
+    }
+
+    fn new_geo(provider: &dyn EphemerisProvider, jd_tt: f64) -> [f64; 3] {
+        let e = ecliptic_position_tt(provider, Body::Moon, jd_tt).unwrap();
+        [e.longitude, e.latitude, e.distance]
+    }
+
+    fn first_step_taken(provider: &dyn EphemerisProvider, jd: f64) -> bool {
+        let eval = |t: f64| provider.moon_position(t);
+        moon_distance_first_step(provider, jd, &eval, &moon_geocentric)
+            .unwrap()
+            .is_some()
+    }
+
+    /// Each of the three guards in [`moon_distance_first_step`] declines when
+    /// its condition fails, and the read then still matches the plain loop.
+    #[test]
+    fn distance_first_step_falls_back_where_it_cannot_prove_the_answer() {
+        let c = crate::aberration::C_AU_PER_DAY;
+        let jd = 2_460_000.5;
+
+        // Baseline: an ordinary Moon-like case takes the distance step.
+        let ordinary = LinearMoon {
+            r0: 0.002_57,
+            rate: 1e-6,
+            epoch: jd,
+        };
+        assert!(first_step_taken(&ordinary, jd));
+        assert_eq!(new_geo(&ordinary, jd), plain_geo(&ordinary, jd));
+
+        // Guard 1: τ₁ below the stop threshold, so the plain loop stops at
+        // its first step.
+        let near = LinearMoon {
+            r0: 1e-12 * c / 2.0,
+            rate: 0.0,
+            epoch: jd,
+        };
+        assert!(!first_step_taken(&near, jd));
+        assert_eq!(new_geo(&near, jd), plain_geo(&near, jd));
+
+        // Guard 2: near jd = 0.001 doubles are 2e-19 day apart, far finer than
+        // the distance's error bound, so the second instant is not one double.
+        let fine_jd = 0.001;
+        let fine = LinearMoon {
+            r0: 0.002_57,
+            rate: 1e-6,
+            epoch: fine_jd,
+        };
+        assert!(!first_step_taken(&fine, fine_jd));
+        assert_eq!(new_geo(&fine, fine_jd), plain_geo(&fine, fine_jd));
+
+        // Guard 3: choose the distance rate so |τ₂ − τ₁| lands on the stop
+        // threshold, inside the distance's error bound.
+        let r0 = 0.002_57;
+        let tau1 = r0 / c;
+        let delta = jd - (jd - tau1);
+        let boundary = LinearMoon {
+            r0,
+            rate: 1e-12 * c / delta,
+            epoch: jd,
+        };
+        assert!(
+            !first_step_taken(&boundary, jd),
+            "the stop test should be ambiguous across the distance's error bound"
+        );
+        assert_eq!(new_geo(&boundary, jd), plain_geo(&boundary, jd));
     }
 }
