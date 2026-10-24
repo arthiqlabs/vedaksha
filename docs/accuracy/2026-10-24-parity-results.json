@@ -1,0 +1,289 @@
+{
+  "$comment": "Measured, not transcribed. Produced on 2026-10-24 by the vedaksha-parity harness against the published vedaksha==10.0.0 PyPI package, with reference kernels this repository does not ship (JPL DE440 and IMCCE INPOP21a, each hash-verified against the harness's own kernel manifest). These figures are not asserted by scripts/check_metrics_accuracy.py and are not covered by any test gate in this repository. Supersedes 2026-09-01-parity-results.json (engine 9.1.0); it can itself be superseded only by a dated replacement document, never edited in place.",
+  "publishedAt": "2026-10-24",
+  "measuredAt": "2026-10-24",
+  "measuredAtComment": "The date both measurements below were run against engine 10.0.0. publishedAt is when this document was written; the two coincide for this document but are distinct facts.",
+  "engineVersion": "10.0.0",
+  "harness": "A separate parity harness maintained by the same authors",
+  "harnessNote": "A separate parity-testing project that consumes this engine only through its published interfaces and holds its own local copies of the reference kernels. It is maintained by the same authors as this engine: what is independent is the methodology and the reference ephemerides, not the party performing the measurement.",
+  "crossValidation": {
+    "$comment": "Analytical-path (wasm-hosted Python package, no SPK file loaded) tropical apparent longitudes, addressed in UT1, at the 2,000 instants of the harness's bundled birth-data sample (count 2000, seed 42), for seven bodies (Sun, Moon, Mercury, Venus, Mars, Jupiter, Saturn), compared against two independently produced national-agency ephemerides read through Skyfield 1.55. The lunar nodes are also in each case list but neither kernel models them, so they are refused rather than compared. Comparison counts differ between references because each adapter refuses instants outside its own validity window (DE440: a Delta-T window of roughly 1800-2100; INPOP21a: its kernel coverage). Mars, Jupiter and Saturn are answered from their system barycentres. Reproduce from arthiqlabs/vedaksha-parity: vedaksha-parity run-config configs/crossval-2000.yaml --out <dir>; the run artifacts are committed under results/canonical/ (t1-tropical-*-2026-10-24T2028*).",
+    "references": [
+      {
+        "reference": "JPL",
+        "kernel": "DE440 (local kernel)",
+        "meanArcsec": 0.03,
+        "maxArcsec": 0.695,
+        "maxBody": "Mars",
+        "comparisons": 13832
+      },
+      {
+        "reference": "IMCCE",
+        "kernel": "INPOP21a (local kernel)",
+        "meanArcsec": 0.025,
+        "maxArcsec": 0.696,
+        "maxBody": "Mars",
+        "comparisons": 11788
+      }
+    ]
+  },
+  "byDistanceFromJ2000": {
+    "$comment": "Analytical-path apparent ecliptic-of-date longitude residuals against DE440, by distance from J2000.0, through the TT-addressed entry point (analytical_position). Both sides addressed in TT, so no Delta-T model enters on either side; the reference side is Skyfield's apparent place against the same kernel. 43 instants at a fixed step of 9131.25 days (25 Julian years) starting at JD(TT) 2292184.5, inside DE440's 1550-2650 coverage. Each cell is mean/max of the absolute residual in arcseconds. Sample counts fall in the outer bands as the kernel's coverage margin is approached; the one instant beyond 600 years falls in no band. Outer planets are answered from their system barycentres. Reproduce from arthiqlabs/vedaksha-parity: python -I scripts/fullrange_tt_sweep.py vendor/kernels/de440.bsp 2292184.5 9131.25 43 <out.json>; the output is committed as results/canonical/fullrange-tt-10.0.0-2026-10-24.json.",
+    "maxIsLowerBound": true,
+    "maxIsLowerBoundComment": "The maxima in this table are lower bounds on the true worst case, not measured worst cases: n is at most 8 per cell, and a 25-year grid samples any short-period residual term at an effectively arbitrary phase. No dense scan was run against 10.0.0, so every maximum here carries this caveat.",
+    "bands": [
+      {
+        "band": "0-100",
+        "n": 8,
+        "bodies": {
+          "Sun": {
+            "mean": 0.01,
+            "max": 0.025
+          },
+          "Moon": {
+            "mean": 0.01,
+            "max": 0.019
+          },
+          "Mercury": {
+            "mean": 0.012,
+            "max": 0.053
+          },
+          "Venus": {
+            "mean": 0.009,
+            "max": 0.025
+          },
+          "Mars": {
+            "mean": 0.027,
+            "max": 0.077
+          },
+          "Jupiter": {
+            "mean": 0.141,
+            "max": 0.292
+          },
+          "Saturn": {
+            "mean": 0.146,
+            "max": 0.217
+          },
+          "Uranus": {
+            "mean": 0.544,
+            "max": 1.312
+          },
+          "Neptune": {
+            "mean": 0.982,
+            "max": 2.202
+          }
+        }
+      },
+      {
+        "band": "100-200",
+        "n": 8,
+        "bodies": {
+          "Sun": {
+            "mean": 0.033,
+            "max": 0.056
+          },
+          "Moon": {
+            "mean": 0.016,
+            "max": 0.028
+          },
+          "Mercury": {
+            "mean": 0.031,
+            "max": 0.069
+          },
+          "Venus": {
+            "mean": 0.034,
+            "max": 0.05
+          },
+          "Mars": {
+            "mean": 0.143,
+            "max": 0.393
+          },
+          "Jupiter": {
+            "mean": 0.304,
+            "max": 0.661
+          },
+          "Saturn": {
+            "mean": 0.2,
+            "max": 0.347
+          },
+          "Uranus": {
+            "mean": 0.611,
+            "max": 2.183
+          },
+          "Neptune": {
+            "mean": 1.91,
+            "max": 3.538
+          }
+        }
+      },
+      {
+        "band": "200-300",
+        "n": 8,
+        "bodies": {
+          "Sun": {
+            "mean": 0.053,
+            "max": 0.099
+          },
+          "Moon": {
+            "mean": 0.045,
+            "max": 0.087
+          },
+          "Mercury": {
+            "mean": 0.056,
+            "max": 0.16
+          },
+          "Venus": {
+            "mean": 0.054,
+            "max": 0.094
+          },
+          "Mars": {
+            "mean": 0.268,
+            "max": 0.735
+          },
+          "Jupiter": {
+            "mean": 0.442,
+            "max": 0.516
+          },
+          "Saturn": {
+            "mean": 0.361,
+            "max": 0.495
+          },
+          "Uranus": {
+            "mean": 1.365,
+            "max": 3.043
+          },
+          "Neptune": {
+            "mean": 3.377,
+            "max": 4.388
+          }
+        }
+      },
+      {
+        "band": "300-400",
+        "n": 8,
+        "bodies": {
+          "Sun": {
+            "mean": 0.073,
+            "max": 0.16
+          },
+          "Moon": {
+            "mean": 0.078,
+            "max": 0.167
+          },
+          "Mercury": {
+            "mean": 0.072,
+            "max": 0.14
+          },
+          "Venus": {
+            "mean": 0.071,
+            "max": 0.136
+          },
+          "Mars": {
+            "mean": 0.443,
+            "max": 0.849
+          },
+          "Jupiter": {
+            "mean": 0.412,
+            "max": 0.741
+          },
+          "Saturn": {
+            "mean": 0.501,
+            "max": 0.609
+          },
+          "Uranus": {
+            "mean": 1.849,
+            "max": 4.499
+          },
+          "Neptune": {
+            "mean": 4.805,
+            "max": 6.368
+          }
+        }
+      },
+      {
+        "band": "400-500",
+        "n": 6,
+        "bodies": {
+          "Sun": {
+            "mean": 0.069,
+            "max": 0.181
+          },
+          "Moon": {
+            "mean": 0.241,
+            "max": 0.354
+          },
+          "Mercury": {
+            "mean": 0.108,
+            "max": 0.266
+          },
+          "Venus": {
+            "mean": 0.12,
+            "max": 0.273
+          },
+          "Mars": {
+            "mean": 1.347,
+            "max": 3.881
+          },
+          "Jupiter": {
+            "mean": 0.45,
+            "max": 0.782
+          },
+          "Saturn": {
+            "mean": 0.752,
+            "max": 0.935
+          },
+          "Uranus": {
+            "mean": 3.117,
+            "max": 6.493
+          },
+          "Neptune": {
+            "mean": 5.768,
+            "max": 6.28
+          }
+        }
+      },
+      {
+        "band": "500-600",
+        "n": 4,
+        "bodies": {
+          "Sun": {
+            "mean": 0.055,
+            "max": 0.075
+          },
+          "Moon": {
+            "mean": 0.508,
+            "max": 0.602
+          },
+          "Mercury": {
+            "mean": 0.068,
+            "max": 0.105
+          },
+          "Venus": {
+            "mean": 0.019,
+            "max": 0.04
+          },
+          "Mars": {
+            "mean": 2.394,
+            "max": 6.371
+          },
+          "Jupiter": {
+            "mean": 0.443,
+            "max": 0.505
+          },
+          "Saturn": {
+            "mean": 1.075,
+            "max": 1.231
+          },
+          "Uranus": {
+            "mean": 5.395,
+            "max": 10.056
+          },
+          "Neptune": {
+            "mean": 7.725,
+            "max": 8.196
+          }
+        }
+      }
+    ]
+  }
+}
