@@ -693,7 +693,7 @@ impl McpServer {
                     })),
                 }
             }
-            _ => {
+            DashaSystem::Maheshwara => {
                 let options = MaheshwaraOptions::default();
                 match compute_maheshwara(
                     &placements,
@@ -720,6 +720,13 @@ impl McpServer {
                         }))
                     }
                 }
+            }
+            DashaSystem::Vimshottari
+            | DashaSystem::Ashtottari
+            | DashaSystem::Yogini
+            | DashaSystem::Chara
+            | DashaSystem::Narayana => {
+                unreachable!("call_compute_dasha sends only the Jaimini rashi dashas here")
             }
         }
     }
