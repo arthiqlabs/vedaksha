@@ -5,40 +5,96 @@
 
 //! Delta T (TT − UT1) computation.
 //!
-//! Uses IERS measured values (1620–2025, outside 1830–1900) and predictions
-//! (2025–2150) with linear interpolation, the Espenak & Meeus (2006)
-//! polynomial fit to the Morrison & Stephenson series for 1830–1900, and
-//! Espenak & Meeus polynomial expressions outside the table range.
+//! Delta T is the difference between Terrestrial Time, which runs uniformly, and
+//! UT1, which follows the Earth's rotation. It is measured, not computed, and a
+//! prediction of it loses accuracy quickly.
 //!
-//! # Node spacing per era
+//! # Where the values come from, era by era
 //!
-//! - 1620–1825: 5-year knots (IERS). The curve is smooth there; linear
-//!   interpolation is sub-second.
-//! - 1830–1900: evaluated DIRECTLY from the Espenak & Meeus (2006)
-//!   1860–1900 polynomial, not interpolated — 5-year knots alias the real
-//!   minimum near 1895 (−6.2 s), reading −3.6 s there instead (2.5 s error).
-//!   Verified against the USNO historic half-year rows within 0.35 s over
-//!   1830–1955 (see `delta_t_1890s_minimum_matches_usno`).
-//! - 1900–2025: 5-year knots (IERS), sub-second.
-//! - 2025–2150: predictions from the 2005–2050 polynomial, ±2 s by 2050.
+//! | Era | Source | Between knots |
+//! |---|---|---|
+//! | before 1620 | Espenak & Meeus (2006) polynomials | evaluated directly |
+//! | 1620–1825 | 5-year knots, IERS | linear |
+//! | 1830–1900 | Espenak & Meeus (2006) fit to Morrison & Stephenson | evaluated directly |
+//! | 1900.0–1973.0 | USNO half-year rows, McCarthy & Babcock (1986) | linear |
+//! | 1973-02-01–2026-10-01 | USNO monthly rows, from IERS Earth orientation data | linear |
+//! | 2026-10-01–2150 | 5-year knots from Espenak & Meeus (2006) expressions | linear |
+//! | after 2150 | Espenak & Meeus parabola | evaluated directly |
+//!
+//! The 1900–2026 rows are the generated `delta_t_table.rs`, written by
+//! `scripts/generate_delta_t_table.py` from two files retrieved from the U.S.
+//! Naval Observatory on 2026-10-24: `historic_deltat.data` and `deltat.data`
+//! (URLs, row counts and sha256 sums in the generated file's header and in
+//! `DATA_PROVENANCE.md`). Both are public-domain US Government products
+//! (Distribution Statement A). Over their overlap, 1973.5 to 1984, they agree to
+//! 6 milliseconds.
+//!
+//! Time is continuous: a Julian Day is turned into a decimal year, so Delta T
+//! changes smoothly through a month. This module used to read only the calendar
+//! month, so within a month Delta T was a constant and at each month's end it
+//! jumped by that month's change, 0.09 s in the 1970s.
+//!
+//! # Why 1900 onward is not five-year knots
+//!
+//! The 1900–2025 table was 5-year knots with linear interpolation. Delta T
+//! wanders by up to half a second from a chord across five years, and the
+//! Moon moves 0.55″ per second of time: against JPL Horizons the Moon's mean
+//! longitude error fell from 0.166″ to 0.140″ on switching to the rows above,
+//! with nothing else changed. The 1830–1900 era never had knots: five-year knots
+//! alias the real minimum near 1895 (−6.2 s), reading −3.6 s there instead (2.5 s
+//! error), so it is evaluated directly from the Espenak & Meeus (2006)
+//! 1860–1900 polynomial, checked against the USNO historic rows to within 0.35 s
+//! (see `delta_t_1890s_minimum_matches_usno`).
+//!
+//! # What this cannot be
+//!
+//! Delta T here is TT − **UT1**, and the public contract of this engine is that
+//! every Julian Day handed to it is UT1. Civil time is UTC, which differs from
+//! UT1 by up to 0.9 s; JPL Horizons treats its UT input as UTC from 1962, and as
+//! UT1 before. Feeding UTC to this engine therefore puts the Moon up to 0.5″ off,
+//! and no Delta T table can fix that: only the day's UT1 − UTC, which this crate
+//! does not carry (see `MAINTENANCE.md` §1).
+//!
+//! # Known limits of the prediction
+//!
+//! The 2030–2150 knots are the Espenak & Meeus 2005–2050 polynomial, which assumed
+//! a faster slowing of the Earth than occurred: Delta T peaked at 69.44 s in 2020
+//! and has stood between 69.1 and 69.2 s since 2023. USNO's own prediction file (`deltat.preds`, retrieved
+//! 2026-10-24) puts 2033.75 at 71.25 s; these knots give 75.1 s there, about
+//! 4 s high, which is 2″ for the Moon. Refreshing them from `deltat.preds` is
+//! the maintenance step in `MAINTENANCE.md` §3.
+//!
+//! # Accuracy
+//!
+//! Sub-0.01 s from 1973 to 2026-10 (the rows are the measurements, interpolated
+//! between months). Over 1900–1973 the half-year file states its own error: 0.18 s
+//! at worst (1920) and 0.01 s or better from the mid-1940s. That is the
+//! uncertainty of one reconstruction; the later one JPL Horizons uses before 1962,
+//! Stephenson, Morrison & Hohenkerk (2016, *Proc. R. Soc. A* 472, 20160404), sits
+//! 0.8 to 1.0 s above these rows in 1900–1910 and about 0.4 s below them in the
+//! 1950s (measured 2026-10-24 from Horizons' `TDB-UT` output on the oracle's
+//! 30-day grid). Both are published; which is closer to the truth is not settled
+//! here. After 2026-10, ±2 s by 2030 and growing.
 
 use crate::julian;
 
-/// Delta T values at 5-year intervals, except 1830–1900 (see below).
+#[path = "delta_t_table.rs"]
+mod table;
+
+/// Delta T knots before 1900: 5-year intervals from 1620 to 1825.
 ///
-/// 1620–2025: IERS measured values (astronomical facts), at 5-year knots —
-/// EXCEPT 1830–1900, which carries no knots at all: [`delta_t`] evaluates
-/// that era directly from the Espenak & Meeus (2006) polynomial because
-/// 5-year knots alias the minimum near 1895 (see the module doc).
-/// 2025–2050: Extrapolated predictions based on the Espenak & Meeus (2006)
-///            2005-2050 polynomial: `62.92 + 0.32217*t + 0.005589*t^2`
-///            where t = year - 2000. These predictions should be updated
-///            annually from IERS Bulletin A as new observations become available.
+/// 1620–1825: IERS measured values (astronomical facts), at 5-year knots. The
+/// next knot is the first row of [`table::MODERN`]; the 1830–1900 era carries no
+/// knots at all, [`delta_t`] evaluates it directly from the Espenak & Meeus (2006)
+/// polynomial because 5-year knots alias the minimum near 1895.
+///
+/// Known and not touched here: between the last knot here (1825, 13.1 s) and the
+/// polynomial's start at 1830 the lookup runs a straight line to the 1900.0 knot
+/// (12.0 s at 1830), where the polynomial reads 7.7 s, a 4.4 s step.
 ///
 /// Source: IERS Earth Orientation Centre; Espenak & Meeus (2006).
-static DELTA_T_TABLE: &[(f64, f64)] = &[
+static EARLY_KNOTS: &[(f64, f64)] = &[
     // (decimal year, Delta T in seconds)
-    // ── Measured (1620–2025) ──
     (1620.0, 124.0),
     (1625.0, 119.0),
     (1630.0, 115.0),
@@ -81,37 +137,17 @@ static DELTA_T_TABLE: &[(f64, f64)] = &[
     (1815.0, 12.2),
     (1820.0, 12.5),
     (1825.0, 13.1),
-    // 1830–1900: no knots — evaluated from the polynomial (see module doc).
-    (1900.0, -2.7),
-    (1905.0, 3.6),
-    (1910.0, 10.4),
-    (1915.0, 17.2),
-    (1920.0, 21.2),
-    (1925.0, 23.9),
-    (1930.0, 24.0),
-    (1935.0, 24.0),
-    (1940.0, 24.3),
-    (1945.0, 26.8),
-    (1950.0, 29.1),
-    (1955.0, 31.1),
-    (1960.0, 33.2),
-    (1965.0, 35.7),
-    (1970.0, 40.2),
-    (1975.0, 45.5),
-    (1980.0, 50.5),
-    (1985.0, 54.3),
-    (1990.0, 56.9),
-    (1995.0, 60.8),
-    (2000.0, 63.8),
-    (2005.0, 64.7),
-    (2010.0, 66.1),
-    (2015.0, 68.0),
-    (2020.0, 69.4),
-    (2025.0, 69.2),
-    // ── Predicted (2026–2150) ──
-    // From Espenak & Meeus polynomial: 62.92 + 0.32217*t + 0.005589*t^2 (t = year-2000)
-    // Accuracy degrades with distance from present (~±2s at 2050, ~±30s at 2100).
-    // These should be refreshed annually from IERS Bulletin A.
+];
+
+/// Predicted Delta T after the last measured row of [`table::MODERN`], 5-year
+/// knots from the Espenak & Meeus (2006) 2005–2050 polynomial
+/// `62.92 + 0.32217·t + 0.005589·t²` (t = year − 2000), then their 2050–2150
+/// expression.
+///
+/// Accuracy degrades with distance from the present, and this polynomial has run
+/// high since about 2015: see the module notes. Refresh from USNO
+/// `deltat.preds` or IERS Bulletin A.
+static PREDICTED_KNOTS: &[(f64, f64)] = &[
     (2030.0, 73.2),
     (2035.0, 75.8),
     (2040.0, 78.8),
@@ -134,20 +170,49 @@ static DELTA_T_TABLE: &[(f64, f64)] = &[
     (2150.0, 233.8),
 ];
 
+/// Number of knots in the whole table: early, modern, predicted.
+fn knot_count() -> usize {
+    EARLY_KNOTS.len() + table::MODERN.len() + PREDICTED_KNOTS.len()
+}
+
+/// The `i`th knot of the whole table, counting [`EARLY_KNOTS`], then
+/// [`table::MODERN`], then [`PREDICTED_KNOTS`].
+fn knot(i: usize) -> (f64, f64) {
+    let early = EARLY_KNOTS.len();
+    let modern = table::MODERN.len();
+    if i < early {
+        EARLY_KNOTS[i]
+    } else if i < early + modern {
+        table::MODERN[i - early]
+    } else {
+        PREDICTED_KNOTS[i - early - modern]
+    }
+}
+
+/// Decimal year of a Julian Day: `year + (JD − JD(Jan 1)) / length of year`,
+/// continuous through the year (the calendar's month and day enter only through
+/// the Julian Day of 1 January).
+fn decimal_year(jd: f64) -> f64 {
+    let (year, _, _) = julian::jd_to_calendar(jd);
+    let start = julian::calendar_to_jd(year, 1, 1.0);
+    let end = julian::calendar_to_jd(year + 1, 1, 1.0);
+    f64::from(year) + (jd - start) / (end - start)
+}
+
 /// Compute Delta T (TT − UT1) in seconds for a given Julian Day.
 ///
-/// Uses IERS measured values with linear interpolation for 1620–2025
-/// (except 1830–1900, evaluated from the polynomial — see the module doc),
-/// predicted values for 2025–2150, and Espenak & Meeus polynomial
-/// expressions outside that range.
+/// Reads the measured rows by linear interpolation from 1900 to 2026-10, the
+/// 5-year knots for 1620–1825 and the predicted knots after, and evaluates the
+/// Espenak & Meeus polynomials for 1830–1900 and outside 1620–2150. See the module
+/// notes for the sources, the accuracy of each era and the limits of a UT1
+/// argument.
 ///
-/// Accuracy: sub-second for 1620–2025 (measured or polynomial-verified),
-/// ±2s for 2025–2050, ±30s for 2050–2150 (prediction uncertainty grows
+/// Accuracy: below 0.01 s from 1973 to 2026-10, sub-second for 1620–1973, ±2 s
+/// for 2026–2050, ±30 s for 2050–2150 (prediction uncertainty grows
 /// quadratically).
 #[must_use]
 pub fn delta_t(jd: f64) -> f64 {
-    let (year, month, _) = julian::jd_to_calendar(jd);
-    let y = f64::from(year) + (f64::from(month) - 0.5) / 12.0;
+    let y = decimal_year(jd);
 
     // 1830–1900 first: no table knots there (see the module doc). Five-year
     // knots alias the 1890s minimum, so this era resolves through the
@@ -165,18 +230,26 @@ pub fn delta_t(jd: f64) -> f64 {
     polynomial_delta_t(y)
 }
 
-/// Linearly interpolate Delta T from the measured-value table.
+/// Linearly interpolate Delta T from the knots, by binary search for the
+/// bracketing pair. `y` must lie in `[1620, 2150]`, the table's span.
 fn interpolate_table(y: f64) -> f64 {
-    let mut prev = DELTA_T_TABLE[0];
-    for &(ty, tv) in &DELTA_T_TABLE[1..] {
-        if y <= ty {
-            let frac = (y - prev.0) / (ty - prev.0);
-            return prev.1 + frac * (tv - prev.1);
+    // Smallest index whose knot is at or after `y`.
+    let mut lo = 0;
+    let mut hi = knot_count() - 1;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if knot(mid).0 < y {
+            lo = mid + 1;
+        } else {
+            hi = mid;
         }
-        prev = (ty, tv);
     }
-    // Past end of table — return last value
-    DELTA_T_TABLE.last().unwrap().1
+    if lo == 0 {
+        return knot(0).1;
+    }
+    let (y0, v0) = knot(lo - 1);
+    let (y1, v1) = knot(lo);
+    v0 + (y - y0) / (y1 - y0) * (v1 - v0)
 }
 
 /// Espenak & Meeus (2006) polynomial expressions for Delta T.
@@ -404,6 +477,185 @@ mod tests {
                 "ΔT at 9 Nov {year}: expected {expected:.3}s (USNO), got {dt:.3}s"
             );
         }
+    }
+
+    // --- The 1900-2026 table: rows from the USNO files, read continuously ---
+
+    /// Rows of USNO's `deltat.data` and `historic_deltat.data`, copied from the
+    /// retrieved files (not from `delta_t_table.rs`), at dates the interpolation
+    /// must hit exactly: the knot's own instant.
+    ///
+    /// `(year, month, ΔT s)` for the first-of-month rows of `deltat.data`:
+    /// ```text
+    ///  1973  2  1  43.4724     2000  1  1  63.8285     2025 12  1  69.1042
+    ///  1973  3  1  43.5648     2000  2  1  63.8557     2026 10  1  69.2065
+    ///  1985  7  1  54.6355     2012  7  1  66.7708
+    /// ```
+    /// and `(year, ΔT s)` for `historic_deltat.data` rows at 0h on 1 January:
+    /// ```text
+    ///  1900.000  -2.70    1950.000  29.15    1955.000  31.07    1962.000  33.992
+    /// ```
+    #[test]
+    fn rows_of_the_usno_files_are_hit_exactly_at_their_own_instants() {
+        const MONTHLY: [(i32, u32, f64); 8] = [
+            (1973, 2, 43.4724),
+            (1973, 3, 43.5648),
+            (1985, 7, 54.6355),
+            (2000, 1, 63.8285),
+            (2000, 2, 63.8557),
+            (2012, 7, 66.7708),
+            (2025, 12, 69.1042),
+            (2026, 10, 69.2065),
+        ];
+        for (year, month, expected) in MONTHLY {
+            let dt = delta_t(julian::calendar_to_jd(year, month, 1.0));
+            assert!(
+                (dt - expected).abs() < 1e-6,
+                "ΔT at {year}-{month:02}-01: expected {expected}, got {dt}"
+            );
+        }
+        const HALF_YEAR: [(i32, f64); 5] = [
+            (1900, -2.70),
+            (1950, 29.15),
+            (1955, 31.07),
+            (1962, 33.992),
+            (1973, 43.373),
+        ];
+        for (year, expected) in HALF_YEAR {
+            let dt = delta_t(julian::calendar_to_jd(year, 1, 1.0));
+            assert!(
+                (dt - expected).abs() < 1e-6,
+                "ΔT at {year}-01-01: expected {expected}, got {dt}"
+            );
+        }
+    }
+
+    /// Between two monthly rows Delta T is the straight line between them:
+    /// 1973-02-15 is 14 of the 28 days of February, the midpoint of the 43.4724
+    /// and 43.5648 rows, and 2000-01-16 is 15 of 31 days toward 63.8557.
+    #[test]
+    fn delta_t_is_linear_between_monthly_rows() {
+        let mid_feb = delta_t(julian::calendar_to_jd(1973, 2, 15.0));
+        assert!((mid_feb - 43.5186).abs() < 1e-6, "got {mid_feb}");
+        let jan_2000 = delta_t(julian::calendar_to_jd(2000, 1, 16.0));
+        let expected = 63.8285 + (15.0 / 31.0) * (63.8557 - 63.8285);
+        assert!((jan_2000 - expected).abs() < 1e-6, "got {jan_2000}");
+    }
+
+    /// Delta T does not step at a month boundary. It used to read the calendar
+    /// month alone, so it held one value all month and jumped by that month's
+    /// change (0.09 s in the 1970s) at the turn. Straddle every boundary from
+    /// 1960 to 2025 by one second and require the difference to be the true
+    /// rate (about 3e-8 s) rather than a step.
+    #[test]
+    fn delta_t_does_not_step_at_month_boundaries() {
+        let mut worst = 0.0_f64;
+        let mut n = 0;
+        for year in 1960..=2025 {
+            for month in 1..=12 {
+                let boundary = julian::calendar_to_jd(year, month, 1.0);
+                let before = delta_t(boundary - 0.5 / 86_400.0);
+                let after = delta_t(boundary + 0.5 / 86_400.0);
+                worst = worst.max((after - before).abs());
+                n += 1;
+            }
+        }
+        assert_eq!(n, 66 * 12);
+        assert!(
+            worst < 1e-6,
+            "ΔT steps by {worst} s across a month boundary"
+        );
+    }
+
+    /// The knots are strictly increasing in time and Delta T moves by a
+    /// believable amount between neighbours: at most 0.15 s a month (largest in
+    /// the data 0.109) and between -0.2 and 1.0 s a half year (data -0.12 to
+    /// 0.83). A transposed digit or a row out of order breaks one of these.
+    #[test]
+    fn the_modern_table_is_ordered_and_smooth() {
+        let rows = table::MODERN;
+        // 147 half-year rows (1900.0 to 1973.0) plus the monthly rows, 645 when
+        // the table was made (1973-02 to 2026-10); a refresh adds more.
+        assert!(rows.len() >= 147 + 645, "only {} knots", rows.len());
+        assert_eq!(rows[0].0, 1900.0);
+        for pair in rows.windows(2) {
+            let ((y0, v0), (y1, v1)) = (pair[0], pair[1]);
+            assert!(y1 > y0, "knots out of order at {y0} -> {y1}");
+            let step = y1 - y0;
+            let dv = v1 - v0;
+            if step > 0.4 {
+                assert!((-0.2..=1.0).contains(&dv), "half-year step {y0}: {dv} s");
+            } else {
+                assert!(dv.abs() < 0.15, "monthly step at {y0}: {dv} s");
+            }
+        }
+    }
+
+    /// An independent check on all 635 monthly rows through 2025: since 1972 UTC
+    /// is kept within 0.9 s of UT1 by leap seconds, so Delta T cannot differ from
+    /// `32.184 + (TAI - UTC)` by more than that. `TAI - UTC` is the leap-second
+    /// count from USNO's `tai-utc.dat` (retrieved 2026-10-24), a different file
+    /// from the one the table is made of. A row wrong by a second or more, or a
+    /// column or a month misplaced, breaks the bound; this is the same physical
+    /// quantity the oracle meets as the UT1-UTC floor, see the module notes.
+    #[test]
+    fn monthly_rows_stay_within_the_leap_second_bound_of_utc() {
+        // (year, month, TAI - UTC in seconds from that date), from 1972.
+        const LEAP: [(i32, u32, f64); 28] = [
+            (1972, 1, 10.0),
+            (1972, 7, 11.0),
+            (1973, 1, 12.0),
+            (1974, 1, 13.0),
+            (1975, 1, 14.0),
+            (1976, 1, 15.0),
+            (1977, 1, 16.0),
+            (1978, 1, 17.0),
+            (1979, 1, 18.0),
+            (1980, 1, 19.0),
+            (1981, 7, 20.0),
+            (1982, 7, 21.0),
+            (1983, 7, 22.0),
+            (1985, 7, 23.0),
+            (1988, 1, 24.0),
+            (1990, 1, 25.0),
+            (1991, 1, 26.0),
+            (1992, 7, 27.0),
+            (1993, 7, 28.0),
+            (1994, 7, 29.0),
+            (1996, 1, 30.0),
+            (1997, 7, 31.0),
+            (1999, 1, 32.0),
+            (2006, 1, 33.0),
+            (2009, 1, 34.0),
+            (2012, 7, 35.0),
+            (2015, 7, 36.0),
+            (2017, 1, 37.0),
+        ];
+        let tai_minus_utc = |jd: f64| {
+            LEAP.iter()
+                .rev()
+                .find(|&&(y, m, _)| julian::calendar_to_jd(y, m, 1.0) <= jd)
+                .map(|&(_, _, v)| v)
+                .unwrap()
+        };
+        let mut worst = 0.0_f64;
+        let mut n = 0;
+        let (first, last) = (1973 * 12 + 1, 2025 * 12 + 11); // Feb 1973 .. Dec 2025
+        for k in first..=last {
+            let (year, month) = (k / 12, (k % 12) as u32 + 1);
+            let jd = julian::calendar_to_jd(year, month, 1.0);
+            let ut1_minus_utc = 32.184 + tai_minus_utc(jd) - delta_t(jd);
+            worst = worst.max(ut1_minus_utc.abs());
+            assert!(
+                ut1_minus_utc.abs() < 0.9,
+                "{year}-{month:02}: UT1-UTC would be {ut1_minus_utc:.3} s, beyond the 0.9 s bound"
+            );
+            n += 1;
+        }
+        assert_eq!(n, 635);
+        // And the bound is not vacuous: the sawtooth really does swing most of
+        // the way to its limit.
+        assert!(worst > 0.7, "largest |UT1-UTC| over 1973-2025 only {worst}");
     }
 
     #[test]

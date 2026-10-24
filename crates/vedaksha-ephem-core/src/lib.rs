@@ -37,6 +37,7 @@ pub mod bodies;
 #[cfg(feature = "std")]
 pub mod cache;
 pub mod coordinates;
+pub mod deflection;
 pub mod delta_t;
 pub mod error;
 pub mod jpl;

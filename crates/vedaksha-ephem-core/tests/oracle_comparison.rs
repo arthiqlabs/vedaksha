@@ -78,8 +78,9 @@ struct OracleDataPoint {
 }
 
 /// JD of 2026-01-01 — the boundary between ΔT that is *measured* and ΔT that
-/// is *predicted* (`delta_t.rs` carries IERS values through 2025, then
-/// extrapolates).
+/// is *predicted*. `delta_t.rs` now carries USNO measured values to 2026-10 and
+/// extrapolates after; the cut stays at 2026-01-01 so the published
+/// 1900–2025 figure keeps its definition.
 ///
 /// This split matters. At or before this epoch the residual against Horizons
 /// reflects our ephemeris and apparent-place pipeline, and is sub-arcsecond.
@@ -94,12 +95,17 @@ struct OracleDataPoint {
 /// error, and the two get separate budgets rather than one meaningless bound.
 const MEASURED_DT_JD: f64 = 2_461_041.5;
 
-/// Per-point ceiling over the measured-ΔT era. Observed max is 1.184″ (a
-/// single Uranus point in 1900); 2.0″ leaves headroom without going slack.
-const MEASURED_MAX_ARCSEC: f64 = 2.0;
+/// Per-point ceiling over the measured-ΔT era. Observed max is 0.501″: the Moon
+/// in 1906, where Horizons' pre-1962 ΔT (Stephenson, Morrison & Hohenkerk 2016)
+/// sits about 1 s above the USNO series `delta_t.rs` uses, and the Moon moves
+/// 0.55″ per second of time. Without the Moon the worst point is 0.266″
+/// (Mercury). It was 1.187″ (Uranus, 0.36° from the Sun) until the Sun's light
+/// deflection was added to the pipeline, and the old 2.0″ ceiling would not have
+/// noticed that coming back; 0.6″ would.
+const MEASURED_MAX_ARCSEC: f64 = 0.6;
 
-/// Mean ceiling over the measured-ΔT era. Observed mean is 0.103″.
-const MEASURED_MEAN_ARCSEC: f64 = 0.20;
+/// Mean ceiling over the measured-ΔT era. Observed mean is 0.099″.
+const MEASURED_MEAN_ARCSEC: f64 = 0.15;
 
 /// Per-point ceiling over the predicted-ΔT era, sized by the ΔT divergence
 /// rather than by our ephemeris. Observed max is 44.9″ (Moon, 2099).

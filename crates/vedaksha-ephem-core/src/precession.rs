@@ -152,6 +152,39 @@ mod tests {
         assert_mat_near_identity(&p, IDENTITY_EPS);
     }
 
+    /// At J2000.0 the precession matrix is not the identity: the
+    /// Fukushima-Williams angles are referred to the GCRS, so the matrix there
+    /// is the ICRS-to-mean-J2000 frame bias, about 23 mas. The test above
+    /// admits 1e-6 rad (0.2″), which cannot tell a matrix carrying the bias
+    /// from one without it. This one compares element by element with the
+    /// bias matrix of IERS Conventions (2010), eq. 5.4, built independently in
+    /// `nutation::frame_bias_matrix`, to 1e-10 rad (0.02 mas), and checks that
+    /// the bias is really present: its off-diagonal elements are 1e-7 rad, a
+    /// thousand times the tolerance.
+    #[test]
+    fn precession_matrix_at_j2000_is_the_frame_bias() {
+        let p = precession_matrix(J2000);
+        let b = crate::nutation::frame_bias_matrix();
+        let mut worst = 0.0_f64;
+        let mut biggest = 0.0_f64;
+        for r in 0..3 {
+            for c in 0..3 {
+                worst = worst.max((p.data[r][c] - b.data[r][c]).abs());
+                if r != c {
+                    biggest = biggest.max(b.data[r][c].abs());
+                }
+            }
+        }
+        assert!(
+            biggest > 5e-8,
+            "the reference bias matrix should have 1e-7 rad elements, largest {biggest}"
+        );
+        assert!(
+            worst < 1e-10,
+            "P(J2000) differs from the IERS frame bias matrix by {worst} rad"
+        );
+    }
+
     #[test]
     fn precession_matrix_is_orthogonal() {
         // For any epoch, P * P^T should be the identity matrix
