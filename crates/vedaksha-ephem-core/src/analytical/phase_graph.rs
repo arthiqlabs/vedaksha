@@ -415,7 +415,7 @@ mod tests {
     /// A small deterministic set of vectors, with duplicates, an empty one,
     /// shared prefixes, negative multipliers and a large one.
     fn sample_vectors() -> Vec<Multipliers> {
-        let mut v = vec![[0_i16; N_ARGS]; 8];
+        let mut v = vec![[0_i16; N_ARGS]; 9];
         v[1][0] = 1;
         v[2][0] = 1;
         v[2][2] = -1;
@@ -431,6 +431,10 @@ mod tests {
         v[7][5] = 69;
         v[7][9] = 16;
         v[7][12] = 2;
+        // Shares an argument with v[7] but a smaller largest multiplier, so a
+        // graph holding only this one builds a shorter ladder for it.
+        v[8][5] = 10;
+        v[8][12] = 2;
         // v[0] stays the all-zero vector.
         v
     }
@@ -498,13 +502,13 @@ mod tests {
     fn sharing_collapses_the_tree() {
         let vectors = sample_vectors();
         let (graph, _) = PhaseGraph::build(&vectors);
-        // Distinct (arg, m) pairs: (0,1) (0,2) (2,-1) (3,1) (5,69) (6,75)
-        // (9,16) (12,2) (12,-2) = 9.
-        assert_eq!(graph.entry_count(), 9);
+        // Distinct (arg, m) pairs: (0,1) (0,2) (2,-1) (3,1) (5,10) (5,69)
+        // (6,75) (9,16) (12,2) (12,-2) = 10.
+        assert_eq!(graph.entry_count(), 10);
         // Derived nodes: {0:1,2:-1}, {0:2,2:-1}, {0:2,2:-1,3:1}, {6:75,12:-2},
-        // {0:1,2:-1,5:69}, {..,9:16}, {..,12:2}, and the one-pair ones are
-        // entries, so exactly these seven.
-        assert_eq!(graph.derived_count(), 7);
+        // {0:1,2:-1,5:69}, {..,9:16}, {..,12:2}, {5:10,12:2}, and the one-pair
+        // ones are entries, so exactly these eight.
+        assert_eq!(graph.derived_count(), 8);
     }
 
     #[test]
@@ -556,14 +560,16 @@ mod tests {
     fn a_node_does_not_depend_on_the_other_vectors_in_the_set() {
         let all = sample_vectors();
         let (g_all, ids_all) = PhaseGraph::build(&all);
-        let subset = vec![all[7], all[2]];
+        // v[8] uses argument 5 up to 10; in `all` that argument's ladder runs to
+        // 69. The pair for v[8] must not care.
+        let subset = vec![all[8], all[2]];
         let (g_sub, ids_sub) = PhaseGraph::build(&subset);
         let a = test_args(1234.567_891);
         let mut p_all = vec![[0.0; 2]; g_all.pool_len()];
         let mut p_sub = vec![[0.0; 2]; g_sub.pool_len()];
         g_all.fill_phases(&a, &mut p_all);
         g_sub.fill_phases(&a, &mut p_sub);
-        for (sub_i, all_i) in [(0, 7), (1, 2)] {
+        for (sub_i, all_i) in [(0, 8), (1, 2)] {
             let x = p_all[ids_all[all_i] as usize];
             let y = p_sub[ids_sub[sub_i] as usize];
             assert_eq!(x[0].to_bits(), y[0].to_bits(), "sin of vector {all_i}");
