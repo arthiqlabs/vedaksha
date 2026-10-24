@@ -5,9 +5,10 @@
 
 //! `compute_dasha` — Vedic dasha period computation tool.
 //!
-//! Supports five classical systems: three Moon-longitude based
-//! (Vimshottari, Ashtottari, Yogini) and two Lagna-sign based
-//! (Chara, Narayana).
+//! Supports eight classical systems: three Moon-longitude based
+//! (Vimshottari, Ashtottari, Yogini), two Lagna-sign based (Chara, Narayana)
+//! and three Jaimini rashi dashas read from the lagna and the grahas'
+//! longitudes (Sthira, Niryana Shoola, Maheshwara).
 
 use serde::Deserialize;
 
@@ -24,26 +25,49 @@ pub enum DashaSystem {
     Yogini,
     Chara,
     Narayana,
+    Sthira,
+    NiryanaShoola,
+    Maheshwara,
 }
 
 impl DashaSystem {
-    /// Parse a case-insensitive system name.
+    /// Parse a system name, ignoring case and any `_`, `-` or space, so
+    /// `NiryanaShoola`, `niryana_shoola` and `niryana-shoola` all name the
+    /// same system.
     ///
     /// # Errors
     /// Returns [`McpError::invalid_parameter`] if `s` does not match one of
-    /// `Vimshottari`, `Ashtottari`, `Yogini`, `Chara`, or `Narayana`.
+    /// `Vimshottari`, `Ashtottari`, `Yogini`, `Chara`, `Narayana`, `Sthira`,
+    /// `NiryanaShoola` or `Maheshwara`.
     pub fn parse(s: &str) -> Result<Self, McpError> {
-        match s.to_ascii_lowercase().as_str() {
+        let normalized: String = s
+            .chars()
+            .filter(|c| !matches!(c, '_' | '-' | ' '))
+            .map(|c| c.to_ascii_lowercase())
+            .collect();
+        match normalized.as_str() {
             "vimshottari" => Ok(Self::Vimshottari),
             "ashtottari" => Ok(Self::Ashtottari),
             "yogini" => Ok(Self::Yogini),
             "chara" => Ok(Self::Chara),
             "narayana" => Ok(Self::Narayana),
+            "sthira" => Ok(Self::Sthira),
+            "niryanashoola" => Ok(Self::NiryanaShoola),
+            "maheshwara" => Ok(Self::Maheshwara),
             _ => Err(McpError::invalid_parameter(
                 "system",
-                "must be one of: Vimshottari, Ashtottari, Yogini, Chara, Narayana",
+                "must be one of: Vimshottari, Ashtottari, Yogini, Chara, Narayana, Sthira, \
+                 NiryanaShoola, Maheshwara",
             )),
         }
+    }
+
+    /// Whether this system is one of the three Jaimini rashi dashas that read
+    /// the lagna and the grahas' longitudes (the atmakaraka and the tie-breaks
+    /// of the strength tests need degrees, not just signs).
+    #[must_use]
+    pub fn is_longitude_based(self) -> bool {
+        matches!(self, Self::Sthira | Self::NiryanaShoola | Self::Maheshwara)
     }
 
     /// Whether this system uses the natal Moon's sidereal longitude
@@ -127,8 +151,71 @@ impl GrahaSignsInput {
     }
 }
 
+/// Sidereal longitudes (degrees, [0, 360)) of the seven classical grahas plus
+/// Rahu, for the systems that need degrees: Sthira, Niryana Shoola and
+/// Maheshwara. Ketu is derived 180 degrees from Rahu, as `graha_signs` derives
+/// it, and is deliberately not a field.
+///
+/// Every field is optional so [`validate`] can name the one that is missing;
+/// `deny_unknown_fields` so a supplied `ketu` is refused rather than ignored.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct GrahaLongitudesInput {
+    /// Sun's sidereal longitude.
+    pub sun: Option<f64>,
+    /// Moon's sidereal longitude.
+    pub moon: Option<f64>,
+    /// Mars's sidereal longitude.
+    pub mars: Option<f64>,
+    /// Mercury's sidereal longitude.
+    pub mercury: Option<f64>,
+    /// Jupiter's sidereal longitude.
+    pub jupiter: Option<f64>,
+    /// Venus's sidereal longitude.
+    pub venus: Option<f64>,
+    /// Saturn's sidereal longitude.
+    pub saturn: Option<f64>,
+    /// Rahu's (north lunar node's) sidereal longitude.
+    pub rahu: Option<f64>,
+}
+
+impl GrahaLongitudesInput {
+    /// The eight longitudes in the order `NatalPlacements::from_longitudes`
+    /// takes: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn, Rahu.
+    ///
+    /// # Panics
+    /// Panics if a field is `None`. Only call after [`validate`].
+    #[must_use]
+    pub fn into_array(self) -> [f64; 8] {
+        let get = |v: Option<f64>| v.expect("validated above");
+        [
+            get(self.sun),
+            get(self.moon),
+            get(self.mars),
+            get(self.mercury),
+            get(self.jupiter),
+            get(self.venus),
+            get(self.saturn),
+            get(self.rahu),
+        ]
+    }
+
+    fn named(self) -> [(&'static str, Option<f64>); 8] {
+        [
+            ("graha_longitudes.sun", self.sun),
+            ("graha_longitudes.moon", self.moon),
+            ("graha_longitudes.mars", self.mars),
+            ("graha_longitudes.mercury", self.mercury),
+            ("graha_longitudes.jupiter", self.jupiter),
+            ("graha_longitudes.venus", self.venus),
+            ("graha_longitudes.saturn", self.saturn),
+            ("graha_longitudes.rahu", self.rahu),
+        ]
+    }
+}
+
 /// Input parameters for the `compute_dasha` tool.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct ComputeDashaInput {
     /// Dasha system. Defaults to `"Vimshottari"`.
     pub system: Option<String>,
@@ -150,8 +237,27 @@ pub struct ComputeDashaInput {
     /// Required for Chara, Narayana; irrelevant otherwise.
     pub graha_signs: Option<GrahaSignsInput>,
     /// Number of nested dasha levels (1–5). Defaults to 3.
-    /// Ignored by Chara and Narayana, which return a single level.
+    /// Ignored by the sign-based systems, which return a single level (with
+    /// their antardashas where they have them).
     pub levels: Option<u8>,
+    /// Sidereal longitudes of the seven classical grahas plus Rahu. Required,
+    /// with `lagna_sign`, for Sthira, Niryana Shoola and Maheshwara.
+    pub graha_longitudes: Option<GrahaLongitudesInput>,
+    /// Which chara karakas name the atmakaraka for Sthira and Maheshwara:
+    /// `"7"` (Sun to Saturn, the default) or `"8"` (adds Rahu), as
+    /// `compute_karakas` takes it.
+    pub karaka_scheme: Option<String>,
+    /// Yogini only: how many 36-year rounds of the cycle to produce, 1 to
+    /// [`MAX_YOGINI_ROUNDS`](vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS).
+    /// Defaults to 1. Exclusive with `until`.
+    pub rounds: Option<u8>,
+    /// Yogini only: a horizon, Julian Day (UT1). Whole rounds are produced
+    /// until the tree reaches it (at most the maximum number of rounds).
+    /// Exclusive with `rounds`.
+    pub until: Option<f64>,
+    /// Chara only: whether each period carries its twelve antardashas.
+    /// Defaults to false, which leaves the response exactly as it was.
+    pub antardashas: Option<bool>,
 }
 
 /// Tool metadata for MCP tool-listing.
@@ -159,21 +265,34 @@ pub struct ComputeDashaInput {
 pub fn definition() -> super::ToolDefinition {
     super::ToolDefinition {
         name: "compute_dasha",
-        description: "Compute Vedic dasha (planetary period) sequences. Supports five \
+        description: "Compute Vedic dasha (planetary period) sequences. Supports eight \
             classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, \
             require `moon_longitude`); Chara, Narayana (sign based, require BOTH \
             `lagna_sign` AND `graha_signs`, since each sign's period length is counted \
-            to the sign its lord occupies in this chart). `graha_signs` takes the eight \
-            `sign_index` values compute_natal_chart already returns; Ketu is derived \
-            from Rahu and must not be supplied. Returns a JSON dasha tree with \
-            start/end Julian Days.",
+            to the sign its lord occupies in this chart); Sthira, NiryanaShoola \
+            (`niryana_shoola` is accepted too) and Maheshwara (Jaimini rashi dashas, \
+            require `lagna_sign` AND `graha_longitudes`, since the atmakaraka and the \
+            tie-breaks of the strength tests read degrees). `graha_signs` takes the \
+            eight `sign_index` values compute_natal_chart already returns, \
+            `graha_longitudes` the eight sidereal longitudes; Ketu is derived from Rahu \
+            and must not be supplied. Yogini takes `rounds` (1 to 10 whole 36-year \
+            rounds) or `until` (a horizon Julian Day); Chara takes `antardashas` \
+            (twelve per period, BPHS 51.5-51.9). Sthira, NiryanaShoola and Maheshwara \
+            use the defaults of the vedic crate's dasha functions (see their module \
+            docs) and always carry their antardashas. Sthira and Maheshwara start from \
+            the Brahma graha; a chart whose marks leave none returns `no_brahma: true` \
+            with a message, not an error. Returns a JSON dasha tree with start/end \
+            Julian Days.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {
                 "system": {
                     "type": "string",
                     "description": "Dasha system selector",
-                    "enum": ["Vimshottari", "Ashtottari", "Yogini", "Chara", "Narayana"],
+                    "enum": [
+                        "Vimshottari", "Ashtottari", "Yogini", "Chara", "Narayana",
+                        "Sthira", "NiryanaShoola", "Maheshwara"
+                    ],
                     "default": "Vimshottari"
                 },
                 "birth_jd": {
@@ -193,7 +312,7 @@ pub fn definition() -> super::ToolDefinition {
                 "lagna_sign": {
                     "type": "integer",
                     "description": "Lagna (ascendant) sign 0–11 (0 = Aries). Required for \
-                        Chara, Narayana. This is the same 0-indexed convention \
+                        Chara, Narayana, Sthira, NiryanaShoola, Maheshwara. This is the same 0-indexed convention \
                         compute_natal_chart, compute_bhavas and compute_vargas all serve as \
                         `sign_index`, so an ascendant read from any of them passes straight \
                         through. Through v8.1.0 this one parameter was 1-indexed while every \
@@ -225,9 +344,67 @@ pub fn definition() -> super::ToolDefinition {
                     },
                     "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "rahu"]
                 },
+                "graha_longitudes": {
+                    "type": "object",
+                    "description": "Sidereal longitudes in degrees [0, 360) of the seven \
+                        classical grahas plus Rahu, as compute_natal_chart serves them \
+                        (Rahu from its MeanNode). Required, with lagna_sign, for Sthira, \
+                        NiryanaShoola and Maheshwara, whose Brahma graha, atmakaraka and \
+                        strength tie-breaks read degrees within the sign. Ketu is not a \
+                        field: it is derived 180 degrees from Rahu. Do not also pass \
+                        graha_signs for these systems.",
+                    "properties": {
+                        "sun":     { "type": "number", "description": "Sun's sidereal longitude.", "minimum": 0, "maximum": 360 },
+                        "moon":    { "type": "number", "description": "Moon's sidereal longitude.", "minimum": 0, "maximum": 360 },
+                        "mars":    { "type": "number", "description": "Mars's sidereal longitude.", "minimum": 0, "maximum": 360 },
+                        "mercury": { "type": "number", "description": "Mercury's sidereal longitude.", "minimum": 0, "maximum": 360 },
+                        "jupiter": { "type": "number", "description": "Jupiter's sidereal longitude.", "minimum": 0, "maximum": 360 },
+                        "venus":   { "type": "number", "description": "Venus's sidereal longitude.", "minimum": 0, "maximum": 360 },
+                        "saturn":  { "type": "number", "description": "Saturn's sidereal longitude.", "minimum": 0, "maximum": 360 },
+                        "rahu":    { "type": "number", "description": "Rahu's (north lunar node's) sidereal longitude.", "minimum": 0, "maximum": 360 }
+                    },
+                    "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "rahu"]
+                },
+                "karaka_scheme": {
+                    "type": "string",
+                    "description": "Which chara karakas name the atmakaraka for Sthira and \
+                        Maheshwara: \"7\" (Sun to Saturn) or \"8\" (adds Rahu), as \
+                        compute_karakas takes it. Applies to those two systems only.",
+                    "enum": ["7", "8"],
+                    "default": "7"
+                },
+                "rounds": {
+                    "type": "integer",
+                    "description": "Yogini only: how many whole 36-year rounds of the cycle \
+                        to produce. Round 1 is the round from birth, whose first maha is the \
+                        birth yogini's unelapsed share; each later round runs all eight \
+                        yoginis whole. Every maha and sub-period carries its `round`. \
+                        Defaults to 1. Exclusive with `until`.",
+                    "minimum": 1,
+                    "maximum": vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS,
+                    "default": 1
+                },
+                "until": {
+                    "type": "number",
+                    "description": "Yogini only: a horizon as a Julian Day (UT1). Whole rounds \
+                        are produced until the tree reaches it, at least one and at most the \
+                        maximum of `rounds`; compare the last maha's end_jd with it to see \
+                        whether it was cut. Exclusive with `rounds`."
+                },
+                "antardashas": {
+                    "type": "boolean",
+                    "description": "Chara only: when true each of the twelve periods carries \
+                        its twelve antardashas in `antar` (BPHS 51.5-51.9: the stronger of \
+                        the dasha rashi and its seventh starts, by modality, a twelfth of the \
+                        period each). Defaults to false. Sthira, NiryanaShoola and Maheshwara \
+                        always carry theirs.",
+                    "default": false
+                },
                 "levels": {
                     "type": "integer",
-                    "description": "Number of nested dasha levels (1–5). Ignored by Chara and Narayana.",
+                    "description": "Number of nested dasha levels (1–5). Ignored by the \
+                        sign-based systems (Chara, Narayana, Sthira, NiryanaShoola, \
+                        Maheshwara).",
                     "minimum": 1,
                     "maximum": 5,
                     "default": 3
@@ -290,7 +467,8 @@ pub fn definition() -> super::ToolDefinition {
                     "type": "object",
                     "description": "Sign-based systems. Twelve single-level periods, one \
                         per rashi, in dasha order. No nakshatra or balance: these systems \
-                        are anchored on the lagna and the grahas' natal signs, not the Moon.",
+                        are anchored on the lagna and the grahas' natal signs, not the Moon. \
+                        With `antardashas` true, Chara's periods also carry `antar`.",
                     "properties": {
                         "lagna_sign": {
                             "type": "integer",
@@ -310,6 +488,12 @@ pub fn definition() -> super::ToolDefinition {
                                         "description": "Counted from this sign to the sign \
                                             its lord occupies in THIS chart, so it varies \
                                             between charts."
+                                    },
+                                    "antar": {
+                                        "type": "array",
+                                        "description": "Chara with `antardashas` true only: \
+                                            the twelve antardashas, tiling the period.",
+                                        "items": { "type": "object" }
                                     }
                                 },
                                 "required": [
@@ -320,6 +504,59 @@ pub fn definition() -> super::ToolDefinition {
                         }
                     },
                     "required": ["lagna_sign", "periods"]
+                },
+                {
+                    "title": "Sthira",
+                    "type": "object",
+                    "description": "Twelve periods of 7, 8 or 9 years by modality from the \
+                        Brahma graha's rashi, each with twelve antardashas. When the chart \
+                        has no Brahma graha, `no_brahma` is true, `message` says so, and \
+                        `anchor_sign`, `brahma` and `direction` are null and `periods` is \
+                        empty: the text names no other start.",
+                    "properties": {
+                        "no_brahma": { "type": "boolean" },
+                        "message": { "type": "string" },
+                        "anchor_sign": { "type": ["integer", "null"] },
+                        "brahma": { "type": ["string", "null"] },
+                        "direction": { "type": ["string", "null"] },
+                        "periods": { "type": "array", "items": { "type": "object" } }
+                    },
+                    "required": ["no_brahma", "anchor_sign", "brahma", "direction", "periods"]
+                },
+                {
+                    "title": "Niryana Shoola",
+                    "type": "object",
+                    "description": "Twelve periods of 7, 8 or 9 years in trikona groups from \
+                        the stronger of the lagna and the seventh, each with twelve \
+                        antardashas.",
+                    "properties": {
+                        "anchor_sign": { "type": "integer" },
+                        "direction": { "type": "string" },
+                        "periods": { "type": "array", "items": { "type": "object" } }
+                    },
+                    "required": ["anchor_sign", "direction", "periods"]
+                },
+                {
+                    "title": "Maheshwara",
+                    "type": "object",
+                    "description": "The Maheshwara graha, the span of life to the end of its \
+                        rashi's sthira period, and the antardashas of that period that can \
+                        carry death. When the sthira dasha has no Brahma anchor, \
+                        `no_brahma` is true with a `message`, `maheshwara` and `rashi` are \
+                        still given, and the rest is absent.",
+                    "properties": {
+                        "no_brahma": { "type": "boolean" },
+                        "message": { "type": "string" },
+                        "maheshwara": { "type": "string" },
+                        "rashi": { "type": "integer" },
+                        "eighth_lord": { "type": "string" },
+                        "eighth_lord_rashi": { "type": "integer" },
+                        "death_trikona": { "type": "array", "items": { "type": "integer" } },
+                        "life_span_years": { "type": "number" },
+                        "period": { "type": "object" },
+                        "death_antars": { "type": "array", "items": { "type": "integer" } }
+                    },
+                    "required": ["no_brahma", "maheshwara", "rashi"]
                 }
             ]
         })),
@@ -339,8 +576,50 @@ pub fn validate(input: &ComputeDashaInput) -> Result<DashaSystem, McpError> {
     };
 
     validation::validate_jd(input.birth_jd)?;
+    validate_extensions(input, system)?;
 
-    if system.is_moon_based() {
+    if system.is_longitude_based() {
+        let sign = input.lagna_sign.ok_or_else(|| {
+            McpError::invalid_parameter(
+                "lagna_sign",
+                "required for Sthira, NiryanaShoola and Maheshwara",
+            )
+        })?;
+        if !(0..=11).contains(&sign) {
+            return Err(McpError::invalid_parameter(
+                "lagna_sign",
+                "must be an integer in [0, 11]",
+            ));
+        }
+        let longitudes = input.graha_longitudes.ok_or_else(|| {
+            McpError::invalid_parameter(
+                "graha_longitudes",
+                "required for Sthira, NiryanaShoola and Maheshwara",
+            )
+        })?;
+        for (name, value) in longitudes.named() {
+            let value = value.ok_or_else(|| {
+                McpError::invalid_parameter(
+                    name,
+                    "required when system is Sthira, NiryanaShoola or Maheshwara",
+                )
+            })?;
+            if !value.is_finite() || !(0.0..360.0).contains(&value) {
+                return Err(McpError::invalid_parameter(
+                    name,
+                    "must be a finite number in [0, 360)",
+                ));
+            }
+        }
+        // The two ways of giving the grahas must not both be given: signs and
+        // longitudes could disagree, and one of them would be ignored.
+        if input.graha_signs.is_some() {
+            return Err(McpError::invalid_parameter(
+                "graha_signs",
+                "not used by Sthira, NiryanaShoola or Maheshwara; pass graha_longitudes",
+            ));
+        }
+    } else if system.is_moon_based() {
         let moon = input.moon_longitude.ok_or_else(|| {
             McpError::invalid_parameter(
                 "moon_longitude",
@@ -405,6 +684,69 @@ pub fn validate(input: &ComputeDashaInput) -> Result<DashaSystem, McpError> {
     Ok(system)
 }
 
+/// The options that change which answer a system gives, checked against the
+/// system they belong to. An option that moved the answer and was silently
+/// ignored would read as the answer the caller asked for, so each is refused
+/// where it does not apply (data the caller merely supplies, such as
+/// `graha_signs` to a Moon-based system, is ignored, as it always was).
+fn validate_extensions(input: &ComputeDashaInput, system: DashaSystem) -> Result<(), McpError> {
+    let only = |param: &str, systems: &str| {
+        McpError::invalid_parameter(param, &format!("applies to {systems} only"))
+    };
+    if (input.rounds.is_some() || input.until.is_some()) && system != DashaSystem::Yogini {
+        let param = if input.rounds.is_some() {
+            "rounds"
+        } else {
+            "until"
+        };
+        return Err(only(param, "Yogini"));
+    }
+    if input.antardashas == Some(true) && system != DashaSystem::Chara {
+        return Err(McpError::invalid_parameter(
+            "antardashas",
+            "applies to Chara only; Sthira, NiryanaShoola and Maheshwara always carry \
+             theirs, and the other systems have levels",
+        ));
+    }
+    if input.karaka_scheme.is_some()
+        && !matches!(system, DashaSystem::Sthira | DashaSystem::Maheshwara)
+    {
+        return Err(only("karaka_scheme", "Sthira and Maheshwara"));
+    }
+    if let Some(scheme) = &input.karaka_scheme
+        && !matches!(scheme.as_str(), "7" | "8")
+    {
+        return Err(McpError::invalid_parameter(
+            "karaka_scheme",
+            "must be \"7\" or \"8\"",
+        ));
+    }
+    if input.rounds.is_some() && input.until.is_some() {
+        return Err(McpError::invalid_parameter(
+            "rounds",
+            "exclusive with until: give a number of rounds or a horizon, not both",
+        ));
+    }
+    if let Some(rounds) = input.rounds {
+        let max = vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS;
+        if rounds == 0 || rounds > max {
+            return Err(McpError::invalid_parameter(
+                "rounds",
+                &format!("must be between 1 and {max}"),
+            ));
+        }
+    }
+    if let Some(until) = input.until
+        && !until.is_finite()
+    {
+        return Err(McpError::invalid_parameter(
+            "until",
+            "must be a finite Julian Day",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -414,9 +756,7 @@ mod tests {
             system: None,
             birth_jd: 2_451_545.0, // J2000
             moon_longitude: Some(123.45),
-            lagna_sign: None,
-            graha_signs: None,
-            levels: None,
+            ..ComputeDashaInput::default()
         }
     }
 
@@ -440,7 +780,7 @@ mod tests {
             moon_longitude: None,
             lagna_sign: Some(0),
             graha_signs: Some(valid_graha_signs()),
-            levels: None,
+            ..ComputeDashaInput::default()
         }
     }
 
@@ -664,6 +1004,118 @@ mod tests {
         let systems = def.input_schema["properties"]["system"]["enum"]
             .as_array()
             .unwrap();
-        assert_eq!(systems.len(), 5);
+        assert_eq!(systems.len(), 8);
+        // Every system the schema lists is one the parser takes.
+        for name in systems {
+            assert!(DashaSystem::parse(name.as_str().unwrap()).is_ok(), "{name}");
+        }
+    }
+
+    fn valid_graha_longitudes() -> GrahaLongitudesInput {
+        GrahaLongitudesInput {
+            sun: Some(29.0),
+            moon: Some(95.0),
+            mars: Some(100.0),
+            mercury: Some(38.0),
+            jupiter: Some(252.0),
+            venus: Some(63.0),
+            saturn: Some(124.0),
+            rahu: Some(350.0),
+        }
+    }
+
+    fn jaimini_input(system: &str) -> ComputeDashaInput {
+        ComputeDashaInput {
+            system: Some(system.to_string()),
+            birth_jd: 2_451_545.0,
+            lagna_sign: Some(0),
+            graha_longitudes: Some(valid_graha_longitudes()),
+            ..ComputeDashaInput::default()
+        }
+    }
+
+    #[test]
+    fn the_new_systems_parse_under_either_spelling() {
+        for (spelling, system) in [
+            ("Sthira", DashaSystem::Sthira),
+            ("sthira", DashaSystem::Sthira),
+            ("NiryanaShoola", DashaSystem::NiryanaShoola),
+            ("niryana_shoola", DashaSystem::NiryanaShoola),
+            ("Niryana-Shoola", DashaSystem::NiryanaShoola),
+            ("MAHESHWARA", DashaSystem::Maheshwara),
+        ] {
+            assert_eq!(DashaSystem::parse(spelling).unwrap(), system, "{spelling}");
+        }
+        assert!(DashaSystem::parse("Shoola").is_err());
+        assert!(!DashaSystem::Chara.is_longitude_based());
+        assert!(DashaSystem::Sthira.is_longitude_based());
+    }
+
+    #[test]
+    fn validate_asks_the_jaimini_dashas_for_the_lagna_and_the_longitudes() {
+        for system in ["Sthira", "NiryanaShoola", "Maheshwara"] {
+            assert!(validate(&jaimini_input(system)).is_ok(), "{system}");
+
+            let mut no_lagna = jaimini_input(system);
+            no_lagna.lagna_sign = None;
+            assert!(
+                validate(&no_lagna)
+                    .unwrap_err()
+                    .message
+                    .contains("lagna_sign")
+            );
+
+            let mut none = jaimini_input(system);
+            none.graha_longitudes = None;
+            assert!(
+                validate(&none)
+                    .unwrap_err()
+                    .message
+                    .contains("graha_longitudes")
+            );
+
+            let mut nan = jaimini_input(system);
+            nan.graha_longitudes.as_mut().unwrap().venus = Some(f64::NAN);
+            assert!(validate(&nan).unwrap_err().message.contains("venus"));
+
+            // The two ways of naming the grahas may not both be given.
+            let mut both = jaimini_input(system);
+            both.graha_signs = Some(valid_graha_signs());
+            assert!(
+                validate(&both)
+                    .unwrap_err()
+                    .message
+                    .contains("graha_longitudes")
+            );
+        }
+    }
+
+    #[test]
+    fn validate_refuses_an_option_on_a_system_it_would_not_move() {
+        let mut rounds = moon_input();
+        rounds.rounds = Some(2);
+        assert!(validate(&rounds).unwrap_err().message.contains("Yogini"));
+        let mut until = moon_input();
+        until.until = Some(2_460_000.0);
+        assert!(validate(&until).unwrap_err().message.contains("Yogini"));
+        let mut yogini = moon_input();
+        yogini.system = Some("Yogini".to_string());
+        yogini.rounds = Some(2);
+        assert!(validate(&yogini).is_ok());
+        yogini.until = Some(2_460_000.0);
+        assert!(validate(&yogini).unwrap_err().message.contains("until"));
+        let mut antardashas = lagna_input();
+        antardashas.antardashas = Some(true);
+        assert!(validate(&antardashas).is_ok());
+        antardashas.system = Some("Narayana".to_string());
+        assert!(
+            validate(&antardashas)
+                .unwrap_err()
+                .message
+                .contains("Chara")
+        );
+        // `false` is the default and says nothing.
+        antardashas.antardashas = Some(false);
+        assert!(validate(&antardashas).is_ok());
     }
 }

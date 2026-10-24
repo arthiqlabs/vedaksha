@@ -12,10 +12,13 @@
 //! binary uses — and validates what actually comes back.
 //!
 //! The validator below covers the JSON Schema subset these schemas use:
-//! `type`, `properties`, `required` and `items`. It is deliberately small, and
-//! [`validator_rejects_what_it_should`] plants four defects to prove it can
-//! fail — a validator that returns "valid" for everything would make every
-//! assertion here meaningless.
+//! `type` (one name, or a list such as `["integer", "null"]`), `properties`,
+//! `required`, `items` and `oneOf` (read as "at least one variant conforms",
+//! which is all the envelope of `compute_dasha` needs). It is deliberately
+//! small, and [`validator_rejects_what_it_should`] plants six defects to prove
+//! it can fail — a validator that returns "valid" for everything would make
+//! every assertion here meaningless. Before `oneOf` and type lists were read,
+//! the five-variant envelope of `compute_dasha` was checked against nothing.
 
 use serde_json::{Value, json};
 use vedaksha_mcp::server::McpServer;
@@ -24,22 +27,47 @@ use vedaksha_mcp::tools::tool_definitions;
 /// Validate `value` against the JSON Schema subset used by our output schemas.
 /// Returns the path of the first violation, or `None` when it conforms.
 fn violation(value: &Value, schema: &Value, path: &str) -> Option<String> {
-    if let Some(ty) = schema.get("type").and_then(Value::as_str) {
-        let ok = match ty {
+    let type_ok = |ty: &str| -> Result<bool, String> {
+        Ok(match ty {
             "object" => value.is_object(),
             "array" => value.is_array(),
             "string" => value.is_string(),
             "boolean" => value.is_boolean(),
+            "null" => value.is_null(),
             // Serde emits whole-valued f64 as `1.0`, which is still a number;
             // `is_i64`/`is_u64` alone would reject a legitimate integer field.
             "integer" => {
                 value.is_i64() || value.is_u64() || value.as_f64().is_some_and(|f| f.fract() == 0.0)
             }
             "number" => value.is_number(),
-            other => return Some(format!("{path}: schema names unknown type '{other}'")),
-        };
-        if !ok {
-            return Some(format!("{path}: expected {ty}, found {value}"));
+            other => return Err(format!("{path}: schema names unknown type '{other}'")),
+        })
+    };
+    match schema.get("type") {
+        Some(Value::String(ty)) => match type_ok(ty) {
+            Ok(true) => {}
+            Ok(false) => return Some(format!("{path}: expected {ty}, found {value}")),
+            Err(e) => return Some(e),
+        },
+        Some(Value::Array(types)) => {
+            let mut any = false;
+            for ty in types.iter().filter_map(Value::as_str) {
+                match type_ok(ty) {
+                    Ok(true) => any = true,
+                    Ok(false) => {}
+                    Err(e) => return Some(e),
+                }
+            }
+            if !any {
+                return Some(format!("{path}: expected one of {types:?}, found {value}"));
+            }
+        }
+        _ => {}
+    }
+
+    if let Some(variants) = schema.get("oneOf").and_then(Value::as_array) {
+        if !variants.iter().any(|v| violation(value, v, path).is_none()) {
+            return Some(format!("{path}: conforms to none of the oneOf variants"));
         }
     }
 
@@ -94,6 +122,32 @@ const JD: f64 = 2_451_545.0;
 const LAT: f64 = 28.6139;
 const LON: f64 = 77.2090;
 
+/// The chart the MCP unit tests derive a Brahma graha for by hand (Jupiter, in
+/// Sagittarius), as `compute_dasha` takes it.
+fn jaimini_chart() -> Value {
+    json!({
+        "lagna_sign": 0, "birth_jd": JD,
+        "graha_longitudes": {
+            "sun": 29.0, "moon": 95.0, "mars": 100.0, "mercury": 38.0,
+            "jupiter": 252.0, "venus": 63.0, "saturn": 124.0, "rahu": 350.0
+        }
+    })
+}
+
+/// The same chart with Mercury beside the Sun and Jupiter in Cancer, which
+/// leaves no Brahma graha.
+fn jaimini_no_brahma_chart() -> Value {
+    let mut c = jaimini_chart();
+    c["graha_longitudes"]["mercury"] = json!(8.0);
+    c["graha_longitudes"]["jupiter"] = json!(112.0);
+    c
+}
+
+fn with_system(mut args: Value, system: &str) -> Value {
+    args["system"] = json!(system);
+    args
+}
+
 /// A valid call for every tool that declares an output schema.
 fn sample_arguments() -> Vec<(&'static str, Value)> {
     let lons = json!({
@@ -104,21 +158,6 @@ fn sample_arguments() -> Vec<(&'static str, Value)> {
         "sun": 0, "moon": 3, "mars": 6, "mercury": 0,
         "jupiter": 10, "venus": 1, "saturn": 8
     });
-    let planets: Vec<Value> = [
-        "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn",
-    ]
-    .iter()
-    .zip([10.0, 100.0, 200.0, 25.0, 300.0, 40.0, 250.0])
-    .map(|(name, longitude): (&&str, f64)| {
-        json!({
-            "planet": name, "sign": (longitude / 30.0) as u8, "longitude": longitude,
-            "bhava": ((longitude / 30.0) as u8 % 12) + 1,
-            "speed": 0.9, "average_speed": 1.0,
-            "benefic_aspect_count": 1, "malefic_aspect_count": 0
-        })
-    })
-    .collect();
-
     let mut with_lagna = signs.clone();
     with_lagna["lagna"] = json!(2);
     let mut with_reference = signs.clone();
@@ -147,11 +186,46 @@ fn sample_arguments() -> Vec<(&'static str, Value)> {
             "compute_dasha",
             json!({ "birth_jd": JD, "moon_longitude": 100.0 }),
         ),
+        // One call per envelope the schema's `oneOf` describes, so each
+        // variant is checked against a real response.
+        (
+            "compute_dasha",
+            json!({ "system": "Ashtottari", "birth_jd": JD, "moon_longitude": 100.0 }),
+        ),
+        (
+            "compute_dasha",
+            json!({ "system": "Yogini", "birth_jd": JD, "moon_longitude": 100.0, "rounds": 2 }),
+        ),
+        (
+            "compute_dasha",
+            json!({
+                "system": "Chara", "birth_jd": JD, "lagna_sign": 10, "antardashas": true,
+                "graha_signs": { "sun": 9, "moon": 2, "mars": 1, "mercury": 10,
+                                 "jupiter": 10, "venus": 10, "saturn": 4, "rahu": 2 }
+            }),
+        ),
+        ("compute_dasha", with_system(jaimini_chart(), "Sthira")),
+        (
+            "compute_dasha",
+            with_system(jaimini_no_brahma_chart(), "Sthira"),
+        ),
+        (
+            "compute_dasha",
+            with_system(jaimini_chart(), "NiryanaShoola"),
+        ),
+        ("compute_dasha", with_system(jaimini_chart(), "Maheshwara")),
+        (
+            "compute_dasha",
+            with_system(jaimini_no_brahma_chart(), "Maheshwara"),
+        ),
         ("compute_karakas", lons.clone()),
         ("compute_combustion", lons),
         (
             "compute_shadbala",
-            json!({ "planets": planets, "is_daytime": true, "moon_phase_waxing": true }),
+            json!({
+                "julian_day": JD, "latitude": LAT, "longitude": LON,
+                "ayanamsha": "IndianOfficial", "tz_offset_minutes": 330
+            }),
         ),
         (
             "compute_transit",
@@ -297,6 +371,13 @@ fn validator_rejects_what_it_should() {
         },
         "required": ["count", "items"]
     });
+    let nullable = json!({ "type": ["integer", "null"] });
+    let variants = json!({
+        "oneOf": [
+            { "type": "object", "required": ["a"] },
+            { "type": "object", "required": ["b"] }
+        ]
+    });
 
     assert_eq!(
         violation(
@@ -307,20 +388,35 @@ fn validator_rejects_what_it_should() {
         None,
         "a conforming value must pass"
     );
+    assert_eq!(violation(&json!(null), &nullable, "$"), None);
+    assert_eq!(violation(&json!(3), &nullable, "$"), None);
+    assert_eq!(violation(&json!({ "b": 1 }), &variants, "$"), None);
 
-    for (bad, expected) in [
+    for (bad, against, expected) in [
         (
             json!({ "items": [] }),
+            &schema,
             "required property 'count' is missing",
         ),
-        (json!({ "count": "one", "items": [] }), "expected integer"),
-        (json!({ "count": 1, "items": {} }), "expected array"),
+        (
+            json!({ "count": "one", "items": [] }),
+            &schema,
+            "expected integer",
+        ),
+        (
+            json!({ "count": 1, "items": {} }),
+            &schema,
+            "expected array",
+        ),
         (
             json!({ "count": 1, "items": [{ "label": "a" }] }),
+            &schema,
             "required property 'name' is missing",
         ),
+        (json!("three"), &nullable, "expected one of"),
+        (json!({ "c": 1 }), &variants, "none of the oneOf variants"),
     ] {
-        let found = violation(&bad, &schema, "$").expect("planted defect must be caught");
+        let found = violation(&bad, against, "$").expect("planted defect must be caught");
         assert!(
             found.contains(expected),
             "expected a violation mentioning '{expected}', got '{found}'"

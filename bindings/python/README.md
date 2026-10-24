@@ -50,6 +50,11 @@ panchanga = vk.call_tool("compute_panchanga", jd=2451545.0, sun=280.0, moon=120.
                          latitude=28.6139, longitude=77.2090,
                          elevation_m=216.0, tz_offset_minutes=330)
 dasha = vk.call_tool("compute_dasha", birth_jd=2451545.0, moon_longitude=120.4)
+# compute_shadbala takes a moment and a place and returns every part of each
+# graha's strength; the ayanamsha is required, and the Sun must rise and set.
+shadbala = vk.call_tool("compute_shadbala", julian_day=2461338.0,
+                        latitude=13.08, longitude=80.27,
+                        ayanamsha="IndianOfficial", tz_offset_minutes=330)
 ```
 
 ### Sub-arcsecond positions (SPK tier)

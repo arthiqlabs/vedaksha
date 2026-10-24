@@ -347,46 +347,25 @@ fn body_from_name(name: &str) -> Option<vedaksha_ephem_core::bodies::Body> {
     }
 }
 
-fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
+/// Cast a sidereal chart for `body_names` at `jd` (UT1) and a place, and the
+/// true ayanamsha it took off, in degrees. The one routine behind
+/// `compute_natal_chart` and `compute_shadbala`, so the two cannot disagree on
+/// a position, a cusp or a house.
+fn cast_chart(
+    jd: f64,
+    latitude: f64,
+    longitude: f64,
+    ayanamsha_system: vedaksha_astro::sidereal::Ayanamsha,
+    house_system: vedaksha_astro::houses::HouseSystem,
+    body_names: &[String],
+) -> Result<(vedaksha_astro::chart::ComputedChart, f64), String> {
     use vedaksha_ephem_core::analytical::AnalyticalProvider;
     use vedaksha_ephem_core::coordinates;
-    use vedaksha_ephem_core::jpl::EphemerisProvider;
-    use vedaksha_ephem_core::julian;
     use vedaksha_ephem_core::nutation;
     use vedaksha_ephem_core::obliquity;
     use vedaksha_ephem_core::sidereal_time;
 
-    // Parse config
-    let ayanamsha_system = {
-        use core::str::FromStr as _;
-        vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
-            .map_err(|e| e.to_string())?
-    };
-    let house_system = house_system_from_str(&input.house_system)
-        .map_err(|_| format!("Unknown house system: {}", input.house_system))?;
-
-    // Calendar to JD (UTC)
-    let day_fraction = input.day as f64
-        + input.hour as f64 / 24.0
-        + input.minute as f64 / 1440.0
-        + input.second as f64 / 86400.0;
-    let jd = julian::calendar_to_jd(input.year, input.month, day_fraction);
-
-    // Range check
     let provider = AnalyticalProvider;
-    let (jd_min, jd_max) = provider.time_range();
-    if jd < jd_min || jd > jd_max {
-        return Err(format!(
-            "Date out of range: JD {jd:.1} outside [{jd_min:.0}, {jd_max:.0}]"
-        ));
-    }
-
-    // Resolve bodies
-    let body_names = if input.bodies.is_empty() {
-        default_bodies()
-    } else {
-        input.bodies
-    };
 
     // Compute positions via the batch API: one shared memoizing provider so
     // the ELP/MPP02 lunar series pulled into every planet's light-time
@@ -423,7 +402,7 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
     let jd_tt = vedaksha_ephem_core::delta_t::ut1_to_tt(jd);
     let (dpsi, deps) = nutation::nutation(jd_tt);
     let eps_true = obliquity::true_obliquity(jd_tt, deps);
-    let geo_lon_rad = input.longitude * core::f64::consts::PI / 180.0;
+    let geo_lon_rad = longitude * core::f64::consts::PI / 180.0;
     let last = sidereal_time::local_sidereal_time(jd, geo_lon_rad, dpsi, eps_true);
     let ramc_deg = last * 180.0 / core::f64::consts::PI;
 
@@ -443,7 +422,7 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
     let chart = vedaksha_astro::chart::compute_chart(
         &planet_data,
         ramc_deg,
-        input.latitude,
+        latitude,
         obliquity_deg,
         jd,
         &config,
@@ -454,6 +433,55 @@ fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
     // Must stay identical to the MCP path (`vedaksha-mcp/src/server.rs`);
     // `mcp_surface_parity` enforces it.
     let ayanamsha_value = vedaksha_astro::sidereal::true_ayanamsha_value(ayanamsha_system, jd);
+
+    Ok((chart, ayanamsha_value))
+}
+
+fn compute_natal_chart_inner(input: NatalChartInput) -> Result<String, String> {
+    use vedaksha_ephem_core::analytical::AnalyticalProvider;
+    use vedaksha_ephem_core::jpl::EphemerisProvider;
+    use vedaksha_ephem_core::julian;
+
+    // Parse config
+    let ayanamsha_system = {
+        use core::str::FromStr as _;
+        vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
+            .map_err(|e| e.to_string())?
+    };
+    let house_system = house_system_from_str(&input.house_system)
+        .map_err(|_| format!("Unknown house system: {}", input.house_system))?;
+
+    // Calendar to JD (UTC)
+    let day_fraction = input.day as f64
+        + input.hour as f64 / 24.0
+        + input.minute as f64 / 1440.0
+        + input.second as f64 / 86400.0;
+    let jd = julian::calendar_to_jd(input.year, input.month, day_fraction);
+
+    // Range check
+    let provider = AnalyticalProvider;
+    let (jd_min, jd_max) = provider.time_range();
+    if jd < jd_min || jd > jd_max {
+        return Err(format!(
+            "Date out of range: JD {jd:.1} outside [{jd_min:.0}, {jd_max:.0}]"
+        ));
+    }
+
+    // Resolve bodies
+    let body_names = if input.bodies.is_empty() {
+        default_bodies()
+    } else {
+        input.bodies
+    };
+
+    let (chart, ayanamsha_value) = cast_chart(
+        jd,
+        input.latitude,
+        input.longitude,
+        ayanamsha_system,
+        house_system,
+        &body_names,
+    )?;
 
     // Serialize
     let output = serde_json::json!({
@@ -729,102 +757,147 @@ pub fn compute_combustion(positions_json: &str, retro_json: &str) -> Result<Stri
     compute_combustion_inner(positions_json, retro_json).map_err(|e| JsError::new(&e))
 }
 
-fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
-    use vedaksha_vedic::graha::{Graha, GrahaPosition};
-    use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
-
-    let v: serde_json::Value =
-        serde_json::from_str(input_json).map_err(|e| format!("invalid JSON: {e}"))?;
-
-    let is_daytime = v
-        .get("is_daytime")
-        .and_then(|x| x.as_bool())
-        .unwrap_or(false);
-    let moon_phase_waxing = v
-        .get("moon_phase_waxing")
-        .and_then(|x| x.as_bool())
-        .unwrap_or(false);
-
-    let planets_arr = v
-        .get("planets")
-        .and_then(|x| x.as_array())
-        .ok_or_else(|| "missing 'planets' array".to_string())?;
-
-    let parse_planet_name = |name: &str| -> Result<Graha, String> {
-        match name.to_lowercase().as_str() {
-            "sun" => Ok(Graha::Sun),
-            "moon" => Ok(Graha::Moon),
-            "mars" => Ok(Graha::Mars),
-            "mercury" => Ok(Graha::Mercury),
-            "jupiter" => Ok(Graha::Jupiter),
-            "venus" => Ok(Graha::Venus),
-            "saturn" => Ok(Graha::Saturn),
-            other => Err(format!("unknown planet '{other}'")),
-        }
-    };
-
-    let mut planet_data: Vec<ShadbalaPlanetData> = Vec::with_capacity(planets_arr.len());
-    for entry in planets_arr {
-        let planet_name = entry
-            .get("planet")
-            .and_then(|x| x.as_str())
-            .ok_or_else(|| "missing 'planet' field".to_string())?;
-        let planet = parse_planet_name(planet_name)?;
-        let sign = entry.get("sign").and_then(|x| x.as_u64()).unwrap_or(0) as u8;
-        let longitude = entry
-            .get("longitude")
-            .and_then(|x| x.as_f64())
-            .unwrap_or(0.0);
-        let bhava = entry.get("bhava").and_then(|x| x.as_u64()).unwrap_or(1) as u8;
-        let speed = entry.get("speed").and_then(|x| x.as_f64()).unwrap_or(0.0);
-        let average_speed = entry
-            .get("average_speed")
-            .and_then(|x| x.as_f64())
-            .unwrap_or(1.0);
-        let benefic = entry
-            .get("benefic_aspect_count")
-            .and_then(|x| x.as_u64())
-            .unwrap_or(0) as u32;
-        let malefic = entry
-            .get("malefic_aspect_count")
-            .and_then(|x| x.as_u64())
-            .unwrap_or(0) as u32;
-        planet_data.push(ShadbalaPlanetData {
-            position: GrahaPosition {
-                planet,
-                sign,
-                longitude,
-                bhava,
-            },
-            speed,
-            average_speed,
-            benefic_aspect_count: benefic,
-            malefic_aspect_count: malefic,
-        });
-    }
-
-    let results = compute_shadbala_full(&planet_data, is_daytime, moon_phase_waxing);
-    serde_json::to_string(&results).map_err(|e| e.to_string())
+/// The input of [`compute_shadbala`]: the arguments of the MCP
+/// `compute_shadbala` tool, key for key.
+#[derive(serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ShadbalaInput {
+    julian_day: f64,
+    latitude: f64,
+    longitude: f64,
+    ayanamsha: String,
+    #[serde(default)]
+    house_system: Option<String>,
+    #[serde(default)]
+    elevation_m: f64,
+    #[serde(default)]
+    tz_offset_minutes: i32,
 }
 
-/// Compute six-fold Shadbala for all supplied planets.
+fn compute_shadbala_inner(input_json: &str) -> Result<String, String> {
+    use vedaksha_ephem_core::analytical::AnalyticalProvider;
+    use vedaksha_ephem_core::jpl::EphemerisProvider as _;
+    use vedaksha_vedic::shadbala::ShadbalaOptions;
+    use vedaksha_vedic::shadbala_chart::{
+        ChartShadbalaRequest, RAHU_BODY_NAME, shadbala_for_chart,
+    };
+
+    let input: ShadbalaInput =
+        serde_json::from_str(input_json).map_err(|e| format!("invalid input: {e}"))?;
+
+    // The same bounds the MCP tool's `validate` applies, so one input is
+    // accepted or refused alike on both surfaces.
+    let (jd_min, jd_max) = AnalyticalProvider.time_range();
+    if !input.julian_day.is_finite() || input.julian_day < jd_min || input.julian_day > jd_max {
+        return Err(format!(
+            "julian_day must be a finite Julian Day in [{jd_min:.1}, {jd_max:.1}]"
+        ));
+    }
+    if !input.latitude.is_finite() || !(-90.0..=90.0).contains(&input.latitude) {
+        return Err("latitude must be a finite number in [-90, 90]".to_string());
+    }
+    if !input.longitude.is_finite() || !(-180.0..=180.0).contains(&input.longitude) {
+        return Err("longitude must be a finite number in [-180, 180]".to_string());
+    }
+    if !input.elevation_m.is_finite() || !(-500.0..=9000.0).contains(&input.elevation_m) {
+        return Err(
+            "elevation_m must be a finite number of metres above sea level in [-500, 9000]"
+                .to_string(),
+        );
+    }
+    if !(-720..=840).contains(&input.tz_offset_minutes) {
+        return Err(
+            "tz_offset_minutes must be between -720 and 840 (UTC-12:00 to UTC+14:00)".to_string(),
+        );
+    }
+    let ayanamsha = {
+        use core::str::FromStr as _;
+        vedaksha_astro::sidereal::Ayanamsha::from_str(&input.ayanamsha)
+            .map_err(|e| e.to_string())?
+    };
+    let house_name = input.house_system.as_deref().unwrap_or("Placidus");
+    let house_system = house_system_from_str(house_name)
+        .map_err(|_| format!("Unknown house system: {house_name}"))?;
+
+    // The seven grahas and the mean node (Rahu), cast as `compute_natal_chart`
+    // casts them: the chart is the same routine.
+    let bodies: Vec<String> = [
+        "Sun",
+        "Moon",
+        "Mercury",
+        "Venus",
+        "Mars",
+        "Jupiter",
+        "Saturn",
+        RAHU_BODY_NAME,
+    ]
+    .iter()
+    .map(|name| (*name).to_string())
+    .collect();
+    let (chart, ayanamsha_value) = cast_chart(
+        input.julian_day,
+        input.latitude,
+        input.longitude,
+        ayanamsha,
+        house_system,
+        &bodies,
+    )?;
+
+    // Defaults throughout: the verses' own readings (see
+    // `vedaksha_vedic::shadbala`). Must stay identical to the MCP path
+    // (`vedaksha-mcp/src/server.rs`); `mcp_surface_parity` enforces it.
+    let result = shadbala_for_chart(
+        &ChartShadbalaRequest {
+            chart: &chart,
+            jd_ut: input.julian_day,
+            latitude_deg: input.latitude,
+            longitude_deg: input.longitude,
+            elevation_m: input.elevation_m,
+            tz_offset_minutes: input.tz_offset_minutes,
+            ayanamsha_deg: ayanamsha_value,
+        },
+        &ShadbalaOptions::default(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    let output = serde_json::json!({
+        "julian_day": input.julian_day,
+        "true_ayanamsha_value": ayanamsha_value,
+        "house_system": format!("{:?}", chart.houses.system),
+        "moment": result.moment,
+        "cusps": result.cusps,
+        "planets": result.planets,
+    });
+    serde_json::to_string(&output).map_err(|e| e.to_string())
+}
+
+/// Compute the complete six-fold Shadbala of the seven grahas for a birth
+/// moment and place (BPHS chapter 27, with Ishta and Kashta Phala from
+/// chapter 28), in virupas.
 ///
 /// # Arguments
-/// * `input_json` — JSON object with `"planets"` array plus optional `"is_daytime"` and
-///   `"moon_phase_waxing"` booleans. Each planet: `planet` (string), `sign` (0–11),
-///   `longitude` (0–360), `bhava` (1–12), `speed`, `average_speed`,
-///   optional `benefic_aspect_count`, `malefic_aspect_count`.
+/// * `input_json` — JSON object with the arguments of the MCP
+///   `compute_shadbala` tool, key for key: `julian_day` (UT1), `latitude`,
+///   `longitude` (east positive) and `ayanamsha` (all required), and optional
+///   `house_system` (default `"Placidus"`), `elevation_m` (default 0) and
+///   `tz_offset_minutes` (default 0).
 ///
 /// # Returns
-/// JSON array of Shadbala objects: the six components, the four implemented
-/// Sthana sub-components (`uccha_bala`, `ojhayugma_bala`, `kendradi_bala`,
-/// `drekkana_bala`), `total`, `ishta_phala` and `kashta_phala`. Sthana Bala
-/// omits Saptavargaja Bala — see `vedaksha_vedic::shadbala`.
+/// JSON object: `julian_day`, `true_ayanamsha_value`, `house_system`, `moment`
+/// (the sunrise that begins the Hindu day, the sunset, the next sunrise, the
+/// day label and the local apparent time), `cusps` (the four angular cusps
+/// Dig Bala is measured from) and `planets`, seven objects Sun to Saturn with
+/// every part — `sthana`, `dig_bala`, `kala`, `cheshta_bala`,
+/// `naisargika_bala`, `drik_bala`, `total`, `ishta_phala`, `kashta_phala` —
+/// and the graha's `motion` state. See `vedaksha_vedic::shadbala` for each
+/// rule.
 ///
 /// # Errors
-/// Errors if `input_json` is malformed, if a planet name is unrecognised, if a
-/// sign, longitude or bhava is out of range, or if the result cannot be
-/// serialised.
+/// Errors if `input_json` is malformed or carries a field the tool does not
+/// have (including the earlier `planets` array), if a coordinate, elevation or
+/// clock offset is out of range, if the ayanamsha or house system is not
+/// known, or if the Sun does not both rise and set at the place (the polar day
+/// or night, which has no Hindu day to divide).
 #[wasm_bindgen]
 pub fn compute_shadbala(input_json: &str) -> Result<String, JsError> {
     compute_shadbala_inner(input_json).map_err(|e| JsError::new(&e))
@@ -1394,34 +1467,84 @@ mod tests {
     mod shadbala_tests {
         use super::*;
 
+        const INPUT: &str = r#"{
+            "julian_day": 2461338.0, "latitude": 13.08, "longitude": 80.27,
+            "ayanamsha": "IndianOfficial", "tz_offset_minutes": 330
+        }"#;
+
         #[test]
-        fn compute_shadbala_jupiter_retrograde() {
-            let input = r#"{
-                "planets": [{
-                    "planet": "Jupiter", "sign": 3, "longitude": 105.0,
-                    "bhava": 4, "speed": -0.05, "average_speed": 0.08,
-                    "benefic_aspect_count": 2, "malefic_aspect_count": 1
-                }],
-                "is_daytime": true,
-                "moon_phase_waxing": true
-            }"#;
-            let result = compute_shadbala_inner(input).unwrap();
-            let arr: serde_json::Value = serde_json::from_str(&result).unwrap();
-            let sb = &arr[0];
-            assert_eq!(sb["planet"], "Jupiter");
-            assert!(sb["total"].as_f64().unwrap() > 0.0);
-            assert!(sb["uccha_bala"].as_f64().is_some());
-            assert!(sb["ishta_phala"].as_f64().is_some());
-            assert!(sb["kashta_phala"].as_f64().is_some());
-            let ishta = sb["ishta_phala"].as_f64().unwrap();
-            let kashta = sb["kashta_phala"].as_f64().unwrap();
-            assert!((ishta + kashta - 60.0).abs() < 0.001);
+        fn compute_shadbala_serves_seven_grahas_with_every_part() {
+            let out: serde_json::Value =
+                serde_json::from_str(&compute_shadbala_inner(INPUT).unwrap()).unwrap();
+            let planets = out["planets"].as_array().unwrap();
+            assert_eq!(planets.len(), 7);
+            assert_eq!(planets[0]["planet"], "Sun");
+            assert_eq!(planets[6]["planet"], "Saturn");
+            for p in planets {
+                let f = |v: &serde_json::Value| v.as_f64().unwrap();
+                let sthana: f64 = ["uccha", "saptavargaja", "ojhayugma", "kendradi", "drekkana"]
+                    .iter()
+                    .map(|k| f(&p["sthana"][*k]))
+                    .sum();
+                let kala: f64 = [
+                    "nathonnata",
+                    "paksha",
+                    "tribhaga",
+                    "abda",
+                    "masa",
+                    "vara",
+                    "hora",
+                    "ayana",
+                    "yuddha",
+                ]
+                .iter()
+                .map(|k| f(&p["kala"][*k]))
+                .sum();
+                assert!((f(&p["sthana"]["total"]) - sthana).abs() < 1e-9);
+                assert!((f(&p["kala"]["total"]) - kala).abs() < 1e-9);
+                let total = sthana
+                    + f(&p["dig_bala"])
+                    + kala
+                    + f(&p["cheshta_bala"])
+                    + f(&p["naisargika_bala"])
+                    + f(&p["drik_bala"]);
+                assert!((f(&p["total"]) - total).abs() < 1e-9, "{}", p["planet"]);
+                assert!(p["motion"]["state"].is_string());
+                let (ishta, kashta) = (f(&p["ishta_phala"]), f(&p["kashta_phala"]));
+                assert!((ishta + kashta - 60.0).abs() < 1e-9);
+            }
+            assert!(out["moment"]["jd_sunrise"].as_f64().unwrap() < 2_461_338.0);
         }
 
         #[test]
-        fn compute_shadbala_missing_planets_errors() {
-            let input = r#"{"is_daytime": true}"#;
-            assert!(compute_shadbala_inner(input).is_err());
+        fn compute_shadbala_refuses_the_earlier_shape_and_bad_input() {
+            // The earlier planets-and-flags input.
+            let old = r#"{"planets": [], "is_daytime": true}"#;
+            let e = compute_shadbala_inner(old).unwrap_err();
+            assert!(e.contains("unknown field"), "{e}");
+            let with = |k: &str, v: serde_json::Value| {
+                let mut a: serde_json::Value = serde_json::from_str(INPUT).unwrap();
+                a[k] = v;
+                compute_shadbala_inner(&a.to_string()).unwrap_err()
+            };
+            assert!(with("latitude", 95.0.into()).contains("latitude"));
+            assert!(with("longitude", 181.0.into()).contains("longitude"));
+            assert!(with("elevation_m", 1e9.into()).contains("elevation_m"));
+            assert!(with("tz_offset_minutes", 900.into()).contains("tz_offset_minutes"));
+            assert!(with("julian_day", 1.0.into()).contains("julian_day"));
+            assert!(with("house_system", "Nonsense".into()).contains("Nonsense"));
+            assert!(with("ayanamsha", "NoSuchSystem".into()).contains("NoSuchSystem"));
+            // The ayanamsha is required.
+            let missing = r#"{"julian_day": 2461338.0, "latitude": 13.08, "longitude": 80.27}"#;
+            assert!(
+                compute_shadbala_inner(missing)
+                    .unwrap_err()
+                    .contains("ayanamsha")
+            );
+            // The polar day: no sunset, no Hindu day.
+            let polar = r#"{"julian_day": 2459016.0, "latitude": 78.22, "longitude": 15.65,
+                            "ayanamsha": "IndianOfficial"}"#;
+            assert!(compute_shadbala_inner(polar).unwrap_err().contains("polar"));
         }
     }
 }

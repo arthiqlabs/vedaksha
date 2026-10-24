@@ -417,34 +417,40 @@ impl McpServer {
         Ok((chart, ayanamsha_value))
     }
 
+    /// The house system a tool's `house_system` argument names; Placidus when
+    /// it is absent. Shared by every tool that casts a chart from one.
+    fn parse_house_system(
+        name: Option<&str>,
+    ) -> Result<vedaksha_astro::houses::HouseSystem, McpError> {
+        use vedaksha_astro::houses::HouseSystem;
+        match name {
+            Some(s) => match s.to_lowercase().as_str() {
+                "placidus" => Ok(HouseSystem::Placidus),
+                "koch" => Ok(HouseSystem::Koch),
+                "equal" => Ok(HouseSystem::Equal),
+                "wholesign" | "whole_sign" => Ok(HouseSystem::WholeSign),
+                "campanus" => Ok(HouseSystem::Campanus),
+                "regiomontanus" => Ok(HouseSystem::Regiomontanus),
+                "porphyry" => Ok(HouseSystem::Porphyry),
+                "morinus" => Ok(HouseSystem::Morinus),
+                "alcabitius" => Ok(HouseSystem::Alcabitius),
+                "sripathi" => Ok(HouseSystem::Sripathi),
+                _ => Err(McpError::invalid_parameter(
+                    "house_system",
+                    &format!("Unknown: {s}"),
+                )),
+            },
+            None => Ok(HouseSystem::Placidus),
+        }
+    }
+
     fn call_compute_natal(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
         let input: crate::tools::compute_natal::ComputeNatalInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::compute_natal::validate(&input)?;
 
-        // Parse house system and ayanamsha
-        let house_system = match input.house_system.as_deref() {
-            Some(s) => match s.to_lowercase().as_str() {
-                "placidus" => vedaksha_astro::houses::HouseSystem::Placidus,
-                "koch" => vedaksha_astro::houses::HouseSystem::Koch,
-                "equal" => vedaksha_astro::houses::HouseSystem::Equal,
-                "wholesign" | "whole_sign" => vedaksha_astro::houses::HouseSystem::WholeSign,
-                "campanus" => vedaksha_astro::houses::HouseSystem::Campanus,
-                "regiomontanus" => vedaksha_astro::houses::HouseSystem::Regiomontanus,
-                "porphyry" => vedaksha_astro::houses::HouseSystem::Porphyry,
-                "morinus" => vedaksha_astro::houses::HouseSystem::Morinus,
-                "alcabitius" => vedaksha_astro::houses::HouseSystem::Alcabitius,
-                "sripathi" => vedaksha_astro::houses::HouseSystem::Sripathi,
-                _ => {
-                    return Err(McpError::invalid_parameter(
-                        "house_system",
-                        &format!("Unknown: {s}"),
-                    ));
-                }
-            },
-            None => vedaksha_astro::houses::HouseSystem::Placidus,
-        };
+        let house_system = Self::parse_house_system(input.house_system.as_deref())?;
 
         let jd = input.julian_day;
         let (chart, ayanamsha_value) = Self::compute_sidereal_chart(
@@ -508,11 +514,21 @@ impl McpServer {
                 input.birth_jd,
                 levels,
             )),
-            DashaSystem::Yogini => serde_json::to_value(dasha::yogini::compute_yogini(
-                input.moon_longitude.expect("validated above"),
-                input.birth_jd,
-                levels,
-            )),
+            DashaSystem::Yogini => {
+                let moon = input.moon_longitude.expect("validated above");
+                // `rounds` and `until` are exclusive (validated above); with
+                // neither, the first round only, as it always was.
+                let tree = match (input.rounds, input.until) {
+                    (Some(rounds), _) => {
+                        dasha::yogini::compute_yogini_rounds(moon, input.birth_jd, levels, rounds)
+                    }
+                    (None, Some(until)) => {
+                        dasha::yogini::compute_yogini_until(moon, input.birth_jd, levels, until)
+                    }
+                    (None, None) => dasha::yogini::compute_yogini(moon, input.birth_jd, levels),
+                };
+                serde_json::to_value(tree)
+            }
             // `dasha::chara::compute_chara` and `dasha::narayana::compute_narayana`
             // take a 0-indexed lagna_sign, but this tool's schema documents
             // `lagna_sign` as 1-indexed (1 = Aries), matching `compute_natal_chart`'s
@@ -531,7 +547,24 @@ impl McpServer {
                     .graha_signs
                     .expect("validated above")
                     .into_graha_signs();
-                let periods = dasha::chara::compute_chara(lagna, input.birth_jd, positions);
+                // With `antardashas` each period carries its twelve (BPHS
+                // 51.5 to 51.9, the library's defaults); without, exactly the
+                // periods this tool has always served. The twelve mahadashas
+                // are bit for bit the same either way.
+                let periods: serde_json::Value = if input.antardashas == Some(true) {
+                    serde_json::to_value(dasha::chara::compute_chara_with_antars(
+                        lagna,
+                        input.birth_jd,
+                        positions,
+                    ))
+                } else {
+                    serde_json::to_value(dasha::chara::compute_chara(
+                        lagna,
+                        input.birth_jd,
+                        positions,
+                    ))
+                }
+                .map_err(|e| McpError::computation_failed(&e.to_string()))?;
                 // Wrapped in the same `{lagna_sign, periods}` envelope
                 // Narayana returns. Through v8.1.0 Chara served a bare array
                 // while Narayana served this object, for two systems that now
@@ -568,9 +601,134 @@ impl McpServer {
                     positions,
                 ))
             }
+            DashaSystem::Sthira | DashaSystem::NiryanaShoola | DashaSystem::Maheshwara => {
+                Self::jaimini_rashi_dasha(&input, system)
+            }
         };
 
         result.map_err(|e| McpError::computation_failed(&e.to_string()))
+    }
+
+    /// Sthira, Niryana Shoola and Maheshwara, with the defaults of the vedic
+    /// crate's dasha functions (their module docs grade every rule and name
+    /// the options that exist). The three read the lagna and the grahas'
+    /// longitudes: the atmakaraka, the Brahma graha and the strength tests'
+    /// tie-breaks all need degrees within the sign.
+    fn jaimini_rashi_dasha(
+        input: &crate::tools::compute_dasha::ComputeDashaInput,
+        system: crate::tools::compute_dasha::DashaSystem,
+    ) -> Result<serde_json::Value, serde_json::Error> {
+        use crate::tools::compute_dasha::DashaSystem;
+        use vedaksha_vedic::dasha::maheshwara::{
+            MaheshwaraOptions, compute_maheshwara, maheshwara_graha,
+        };
+        use vedaksha_vedic::dasha::rashi_strength::{JaiminiStrength, NatalPlacements};
+        use vedaksha_vedic::dasha::shoola::{ShoolaOptions, compute_niryana_shoola};
+        use vedaksha_vedic::dasha::sthira::{SthiraOptions, compute_sthira};
+        use vedaksha_vedic::karaka::{KarakaInput, KarakaScheme, compute_karakas};
+
+        /// Why there is no dasha, in words an agent can act on.
+        const NO_BRAHMA: &str = "No Brahma graha in this chart. Jaimini 2.1.52 to 2.1.57 \
+            (BPHS 46.170 to 173) name Brahma as the strong lord of the sixth, eighth or twelfth \
+            rashi, in an odd rashi, behind the stronger of the lagna and its seventh, and the \
+            sthira dasha starts from his rashi (2.3.4); in this chart the marks leave no graha. \
+            The text names no other start. This is a property of the chart, not an error: it \
+            is common, and a chart without a Brahma has no sthira dasha by the text.";
+
+        let longitudes = input
+            .graha_longitudes
+            .expect("validated above")
+            .into_array();
+        // Only the lagna's sign is read; the middle of the sign stands in for
+        // a longitude the tool is not given.
+        let lagna_sign = input.lagna_sign.expect("validated above");
+        let placements =
+            NatalPlacements::from_longitudes(f64::from(lagna_sign) * 30.0 + 15.0, longitudes);
+        let strength = JaiminiStrength::new(&placements);
+
+        let scheme = match input.karaka_scheme.as_deref() {
+            Some("8") => KarakaScheme::Eight,
+            _ => KarakaScheme::Seven,
+        };
+        let atmakaraka = compute_karakas(&KarakaInput {
+            sun: longitudes[0],
+            moon: longitudes[1],
+            mars: longitudes[2],
+            mercury: longitudes[3],
+            jupiter: longitudes[4],
+            venus: longitudes[5],
+            saturn: longitudes[6],
+            rahu: Some(longitudes[7]),
+            scheme,
+        })[0]
+            .planet;
+
+        match system {
+            DashaSystem::NiryanaShoola => serde_json::to_value(compute_niryana_shoola(
+                &placements,
+                input.birth_jd,
+                &ShoolaOptions::default(),
+                &strength,
+            )),
+            DashaSystem::Sthira => {
+                match compute_sthira(
+                    &placements,
+                    atmakaraka,
+                    input.birth_jd,
+                    &SthiraOptions::default(),
+                    &strength,
+                ) {
+                    Some(dasha) => {
+                        let mut v = serde_json::to_value(dasha)?;
+                        v["no_brahma"] = serde_json::Value::Bool(false);
+                        Ok(v)
+                    }
+                    None => Ok(serde_json::json!({
+                        "no_brahma": true,
+                        "message": NO_BRAHMA,
+                        "anchor_sign": null,
+                        "brahma": null,
+                        "direction": null,
+                        "periods": [],
+                    })),
+                }
+            }
+            DashaSystem::Maheshwara => {
+                let options = MaheshwaraOptions::default();
+                match compute_maheshwara(
+                    &placements,
+                    atmakaraka,
+                    input.birth_jd,
+                    &options,
+                    &strength,
+                ) {
+                    Some(dasha) => {
+                        let mut v = serde_json::to_value(dasha)?;
+                        v["no_brahma"] = serde_json::Value::Bool(false);
+                        Ok(v)
+                    }
+                    // The Maheshwara graha does not depend on Brahma; only the
+                    // sthira dasha its life span is read from does.
+                    None => {
+                        let graha =
+                            maheshwara_graha(&placements, atmakaraka, &strength, options.rules);
+                        Ok(serde_json::json!({
+                            "no_brahma": true,
+                            "message": NO_BRAHMA,
+                            "maheshwara": graha,
+                            "rashi": placements.sign_of(graha),
+                        }))
+                    }
+                }
+            }
+            DashaSystem::Vimshottari
+            | DashaSystem::Ashtottari
+            | DashaSystem::Yogini
+            | DashaSystem::Chara
+            | DashaSystem::Narayana => {
+                unreachable!("call_compute_dasha sends only the Jaimini rashi dashas here")
+            }
+        }
     }
 
     fn call_compute_karakas(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -953,38 +1111,50 @@ impl McpServer {
     }
 
     fn call_compute_shadbala(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use vedaksha_vedic::graha::GrahaPosition;
-        use vedaksha_vedic::shadbala::{ShadbalaPlanetData, compute_shadbala_full};
+        use vedaksha_vedic::shadbala::ShadbalaOptions;
+        use vedaksha_vedic::shadbala_chart::{ChartShadbalaRequest, shadbala_for_chart};
 
         let input: crate::tools::compute_shadbala::ComputeShadbalaInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::compute_shadbala::validate(&input)?;
+        let house_system = Self::parse_house_system(input.house_system.as_deref())?;
 
-        let planet_data: Vec<ShadbalaPlanetData> = input
-            .planets
-            .iter()
-            .map(|entry| {
-                let planet = crate::tools::compute_shadbala::parse_planet(&entry.planet)
-                    .expect("already validated");
-                ShadbalaPlanetData {
-                    position: GrahaPosition {
-                        planet,
-                        sign: entry.sign,
-                        longitude: entry.longitude,
-                        bhava: entry.bhava,
-                    },
-                    speed: entry.speed,
-                    average_speed: entry.average_speed,
-                    benefic_aspect_count: entry.benefic_aspect_count,
-                    malefic_aspect_count: entry.malefic_aspect_count,
-                }
-            })
-            .collect();
+        // The chart is the one compute_natal_chart casts for the same
+        // arguments, so a strength can never disagree with the positions,
+        // houses and cusps the caller sees there.
+        let (chart, ayanamsha_value) = Self::compute_sidereal_chart(
+            input.julian_day,
+            input.latitude,
+            input.longitude,
+            Some(input.ayanamsha.as_str()),
+            house_system,
+        )?;
 
-        let results =
-            compute_shadbala_full(&planet_data, input.is_daytime, input.moon_phase_waxing);
-        serde_json::to_value(&results).map_err(|e| McpError::computation_failed(&e.to_string()))
+        // Defaults throughout: the verses' own readings. See
+        // `vedaksha_vedic::shadbala` for each rule and the options that exist.
+        let result = shadbala_for_chart(
+            &ChartShadbalaRequest {
+                chart: &chart,
+                jd_ut: input.julian_day,
+                latitude_deg: input.latitude,
+                longitude_deg: input.longitude,
+                elevation_m: input.elevation_m,
+                tz_offset_minutes: input.tz_offset_minutes,
+                ayanamsha_deg: ayanamsha_value,
+            },
+            &ShadbalaOptions::default(),
+        )
+        .map_err(|e| McpError::computation_failed(&e.to_string()))?;
+
+        Ok(serde_json::json!({
+            "julian_day": input.julian_day,
+            "true_ayanamsha_value": ayanamsha_value,
+            "house_system": format!("{:?}", chart.houses.system),
+            "moment": result.moment,
+            "cusps": result.cusps,
+            "planets": result.planets,
+        }))
     }
 
     fn call_compute_ashtakavarga(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
@@ -3005,5 +3175,620 @@ mod tests {
             "latitude": 91.0, "longitude": 0.0
         });
         assert!(McpServer::call_compute_panchanga(&bad).is_err());
+    }
+
+    // ── compute_shadbala: the complete form, for a chart ─────────────────────
+
+    const SHADBALA_JD: f64 = 2_461_338.0;
+
+    fn shadbala_args() -> serde_json::Value {
+        serde_json::json!({
+            "julian_day": SHADBALA_JD, "latitude": 13.08, "longitude": 80.27,
+            "ayanamsha": "IndianOfficial", "tz_offset_minutes": 330
+        })
+    }
+
+    fn f(v: &serde_json::Value) -> f64 {
+        v.as_f64()
+            .unwrap_or_else(|| panic!("expected a number, got {v}"))
+    }
+
+    /// The verse's weak cusp for each graha, read from the NATAL tool's cusps:
+    /// an oracle that shares no code with the shadbala handler. The Sun and
+    /// Mars the fourth, Jupiter and Mercury the seventh, Saturn the first,
+    /// Venus and the Moon the tenth (BPHS 27.7).
+    fn weak_cusp(planet: &str, cusps: &[serde_json::Value]) -> f64 {
+        let at = |i: usize| f(&cusps[i]);
+        match planet {
+            "Sun" | "Mars" => at(3),
+            "Jupiter" | "Mercury" => at(6),
+            "Saturn" => at(0),
+            "Venus" | "Moon" => at(9),
+            other => panic!("not a graha of shadbala: {other}"),
+        }
+    }
+
+    #[test]
+    fn compute_shadbala_serves_every_part_of_the_chart_natal_serves() {
+        let out = McpServer::call_compute_shadbala(&shadbala_args()).expect("a mid-latitude day");
+        let natal = McpServer::call_compute_natal(&serde_json::json!({
+            "julian_day": SHADBALA_JD, "latitude": 13.08, "longitude": 80.27,
+            "ayanamsha": "IndianOfficial"
+        }))
+        .expect("natal");
+
+        // The same chart: the ayanamsha, the house system and the cusps.
+        assert_eq!(out["true_ayanamsha_value"], natal["true_ayanamsha_value"]);
+        assert_eq!(out["house_system"], natal["houses"]["system"]);
+        assert_eq!(out["julian_day"], SHADBALA_JD);
+        let cusps = natal["houses"]["cusps"].as_array().expect("cusps");
+        for (key, i) in [("first", 0), ("fourth", 3), ("seventh", 6), ("tenth", 9)] {
+            assert_eq!(out["cusps"][key], cusps[i], "{key}");
+        }
+
+        let planets = out["planets"].as_array().expect("planets");
+        let names: Vec<&str> = planets
+            .iter()
+            .map(|p| p["planet"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn"
+            ]
+        );
+
+        for p in planets {
+            let name = p["planet"].as_str().unwrap();
+            let n = natal["planets"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|c| c["name"] == name)
+                .expect("in the natal chart");
+
+            // Dig Bala: the arc from the weak cusp, the short way, over 3.
+            let diff = (f(&n["longitude"]) - weak_cusp(name, cusps)).rem_euclid(360.0);
+            let arc = if diff > 180.0 { 360.0 - diff } else { diff };
+            assert!((f(&p["dig_bala"]) - arc / 3.0).abs() < 1e-9, "{name} dig");
+            // Kendradi Bala from the natal house; the motion from its speed.
+            let house = u8::try_from(n["house"].as_u64().unwrap()).unwrap();
+            let kendradi = vedaksha_vedic::shadbala::kendradi_bala(house);
+            assert!(
+                (f(&p["sthana"]["kendradi"]) - kendradi).abs() < 1e-9,
+                "{name}"
+            );
+            assert!((f(&p["motion"]["speed_deg_per_day"]) - f(&n["speed"])).abs() < 1e-12);
+            assert!(p["motion"]["state"].is_string());
+            // Ayana Bala reads the sayana longitude: the sidereal one put back
+            // by the ayanamsha the chart took off (the true value, reported).
+            let graha = match name {
+                "Sun" => vedaksha_vedic::graha::Graha::Sun,
+                "Moon" => vedaksha_vedic::graha::Graha::Moon,
+                "Mars" => vedaksha_vedic::graha::Graha::Mars,
+                "Mercury" => vedaksha_vedic::graha::Graha::Mercury,
+                "Jupiter" => vedaksha_vedic::graha::Graha::Jupiter,
+                "Venus" => vedaksha_vedic::graha::Graha::Venus,
+                _ => vedaksha_vedic::graha::Graha::Saturn,
+            };
+            let sayana = f(&n["longitude"]) + f(&natal["true_ayanamsha_value"]);
+            let ayana = vedaksha_vedic::shadbala::ayana_bala_khanda(graha, sayana);
+            assert!(
+                (f(&p["kala"]["ayana"]) - ayana).abs() < 1e-9,
+                "{name} ayana"
+            );
+
+            // Each total is the sum of its parts, every part present.
+            let sum = |obj: &serde_json::Value, keys: &[&str]| -> f64 {
+                keys.iter().map(|k| f(&obj[*k])).sum()
+            };
+            let sthana = sum(
+                &p["sthana"],
+                &["uccha", "saptavargaja", "ojhayugma", "kendradi", "drekkana"],
+            );
+            assert!((f(&p["sthana"]["total"]) - sthana).abs() < 1e-9, "{name}");
+            let kala = sum(
+                &p["kala"],
+                &[
+                    "nathonnata",
+                    "paksha",
+                    "tribhaga",
+                    "abda",
+                    "masa",
+                    "vara",
+                    "hora",
+                    "ayana",
+                    "yuddha",
+                ],
+            );
+            assert!((f(&p["kala"]["total"]) - kala).abs() < 1e-9, "{name}");
+            let total = sthana
+                + f(&p["dig_bala"])
+                + kala
+                + f(&p["cheshta_bala"])
+                + f(&p["naisargika_bala"])
+                + f(&p["drik_bala"]);
+            assert!((f(&p["total"]) - total).abs() < 1e-9, "{name} total");
+            assert!(p["ishta_phala"].is_number() && p["kashta_phala"].is_number());
+        }
+
+        // The Hindu day: the engine's own sunrise before the birth, sunset
+        // after it, the next sunrise after that; noon UT is 17:30 on the
+        // clock, the civil day whose Julian Day Number is the integer JD.
+        let m = &out["moment"];
+        let (jd, rise, set, next) = (
+            f(&m["jd"]),
+            f(&m["jd_sunrise"]),
+            f(&m["jd_sunset"]),
+            f(&m["jd_next_sunrise"]),
+        );
+        assert_eq!(jd, SHADBALA_JD);
+        assert!(rise <= jd && rise < set && set < next && jd < next);
+        assert_eq!(m["hindu_day_jdn"], 2_461_338);
+    }
+
+    #[test]
+    fn compute_shadbala_clock_offset_and_elevation_move_the_hindu_day() {
+        let base = McpServer::call_compute_shadbala(&shadbala_args()).expect("ok");
+        // Sunrise at Chennai is about 00:30 UT. Seen from UTC-12 that is 12:30
+        // on the evening before, so the Hindu day carries the previous date.
+        let mut west = shadbala_args();
+        west["tz_offset_minutes"] = (-720).into();
+        let west = McpServer::call_compute_shadbala(&west).expect("ok");
+        assert_eq!(base["moment"]["hindu_day_jdn"], 2_461_338);
+        assert_eq!(west["moment"]["hindu_day_jdn"], 2_461_337);
+        // The offset moves the day label and nothing else of the moment.
+        assert_eq!(base["moment"]["jd_sunrise"], west["moment"]["jd_sunrise"]);
+
+        // At 3650 m the horizon is lowered and the Sun rises sooner and sets
+        // later, by minutes.
+        let mut high = shadbala_args();
+        high["elevation_m"] = 3650.0.into();
+        let high = McpServer::call_compute_shadbala(&high).expect("ok");
+        let earlier = f(&base["moment"]["jd_sunrise"]) - f(&high["moment"]["jd_sunrise"]);
+        let later = f(&high["moment"]["jd_sunset"]) - f(&base["moment"]["jd_sunset"]);
+        assert!(
+            earlier > 5.0 / 1440.0 && earlier < 15.0 / 1440.0,
+            "{earlier}"
+        );
+        assert!(later > 5.0 / 1440.0 && later < 15.0 / 1440.0, "{later}");
+    }
+
+    #[test]
+    fn compute_shadbala_refuses_what_it_cannot_serve() {
+        let err = |args: serde_json::Value| McpServer::call_compute_shadbala(&args).unwrap_err();
+
+        // The earlier planets-and-flags shape is refused, naming the field.
+        let old = err(serde_json::json!({
+            "planets": [{ "planet": "Sun", "sign": 2, "longitude": 60.6, "bhava": 10,
+                          "speed": 0.9, "average_speed": 1.0 }],
+            "is_daytime": true, "moon_phase_waxing": true
+        }));
+        assert_eq!(old.error_code, "INVALID_PARAMETER");
+        assert!(old.message.contains("unknown field"), "{}", old.message);
+        assert!(
+            old.message.contains("is_daytime") || old.message.contains("planets"),
+            "{}",
+            old.message
+        );
+
+        // The ayanamsha is required, and must be one the engine has.
+        let mut missing = shadbala_args();
+        missing.as_object_mut().unwrap().remove("ayanamsha");
+        let e = err(missing);
+        assert_eq!(e.error_code, "INVALID_PARAMETER");
+        assert!(e.message.contains("ayanamsha"), "{}", e.message);
+        let mut unknown = shadbala_args();
+        unknown["ayanamsha"] = "NoSuchSystem".into();
+        assert_eq!(err(unknown).error_code, "INVALID_PARAMETER");
+
+        let mut house = shadbala_args();
+        house["house_system"] = "Nonsense".into();
+        assert_eq!(err(house).error_code, "INVALID_PARAMETER");
+        let mut lat = shadbala_args();
+        lat["latitude"] = 95.0.into();
+        assert_eq!(err(lat).error_code, "INVALID_LATITUDE");
+
+        // The midnight sun: no sunset, so no Hindu day to divide. Named, not
+        // a number built on nothing.
+        let polar = err(serde_json::json!({
+            "julian_day": 2_459_016.0, "latitude": 78.22, "longitude": 15.65,
+            "ayanamsha": "IndianOfficial"
+        }));
+        assert_eq!(polar.error_code, "COMPUTATION_FAILED");
+        assert!(polar.message.contains("polar"), "{}", polar.message);
+    }
+
+    #[test]
+    fn compute_shadbala_house_system_changes_the_cusps_it_reads() {
+        let placidus = McpServer::call_compute_shadbala(&shadbala_args()).expect("ok");
+        let mut whole = shadbala_args();
+        whole["house_system"] = "WholeSign".into();
+        let whole = McpServer::call_compute_shadbala(&whole).expect("ok");
+        assert_eq!(whole["house_system"], "WholeSign");
+        assert_ne!(placidus["cusps"]["tenth"], whole["cusps"]["tenth"]);
+        // Whole-sign cusps are the start of a sign.
+        assert!((f(&whole["cusps"]["first"]) % 30.0).abs() < 1e-9);
+    }
+
+    // ── compute_dasha: Yogini rounds, Chara antardashas, the Jaimini dashas ──
+
+    fn dasha(args: &serde_json::Value) -> serde_json::Value {
+        McpServer::call_compute_dasha(args).expect("a valid dasha request")
+    }
+
+    fn dasha_err(args: &serde_json::Value) -> McpError {
+        McpServer::call_compute_dasha(args).unwrap_err()
+    }
+
+    #[test]
+    fn yogini_rounds_and_until_extend_the_tree_by_whole_rounds() {
+        let base = serde_json::json!({
+            "system": "Yogini", "moon_longitude": 45.0, "birth_jd": 2_451_545.0, "levels": 1
+        });
+        let with = |k: &str, v: serde_json::Value| {
+            let mut a = base.clone();
+            a[k] = v;
+            a
+        };
+        let one = dasha(&base);
+        assert_eq!(one["maha_periods"].as_array().unwrap().len(), 8);
+
+        // Three rounds: 24 mahas, each carrying its round; every later round
+        // is 1 + 2 + ... + 8 = 36 whole years of 365.25 days.
+        let three = dasha(&with("rounds", 3.into()));
+        let m = three["maha_periods"].as_array().unwrap();
+        assert_eq!(m.len(), 24);
+        assert_eq!(m[0]["round"], 1);
+        assert_eq!(m[8]["round"], 2);
+        assert_eq!(m[23]["round"], 3);
+        let year = 36.0 * 365.25;
+        assert!((f(&m[15]["end_jd"]) - f(&m[7]["end_jd"]) - year).abs() < 1e-6);
+        assert!((f(&m[23]["end_jd"]) - f(&m[15]["end_jd"]) - year).abs() < 1e-6);
+        // The first round is exactly the default tree's.
+        assert_eq!(&m[..8], &one["maha_periods"].as_array().unwrap()[..]);
+
+        // A horizon inside the first round gives that round; one 40 years out
+        // takes round 2 whole (round 1 ends before the 36th year).
+        let inside = dasha(&with("until", 2_451_545.0.into()));
+        assert_eq!(inside, one);
+        let two = dasha(&with("until", (2_451_545.0 + 40.0 * 365.25).into()));
+        assert_eq!(two["maha_periods"].as_array().unwrap().len(), 16);
+        // The cap holds however far the horizon is.
+        let far = dasha(&with("until", 2_597_000.0.into()));
+        assert_eq!(
+            far["maha_periods"].as_array().unwrap().len(),
+            8 * usize::from(vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS)
+        );
+    }
+
+    #[test]
+    fn yogini_options_are_refused_where_they_do_not_apply_or_disagree() {
+        let yogini = |extra: serde_json::Value| {
+            let mut a = serde_json::json!({
+                "system": "Yogini", "moon_longitude": 45.0, "birth_jd": 2_451_545.0
+            });
+            for (k, v) in extra.as_object().unwrap() {
+                a[k] = v.clone();
+            }
+            dasha_err(&a)
+        };
+        let max = vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS;
+        for bad in [0, i32::from(max) + 1] {
+            let e = yogini(serde_json::json!({ "rounds": bad }));
+            assert_eq!(e.error_code, "INVALID_PARAMETER", "rounds {bad}");
+            assert!(e.message.contains("rounds"));
+        }
+        let both = yogini(serde_json::json!({ "rounds": 2, "until": 2_460_000.0 }));
+        assert!(both.message.contains("until"), "{}", both.message);
+
+        // On a system that has no rounds the option would move nothing: refused.
+        let e = dasha_err(&serde_json::json!({
+            "system": "Vimshottari", "moon_longitude": 45.0,
+            "birth_jd": 2_451_545.0, "rounds": 2
+        }));
+        assert_eq!(e.error_code, "INVALID_PARAMETER");
+        assert!(e.message.contains("Yogini"), "{}", e.message);
+    }
+
+    #[test]
+    fn chara_antardashas_are_opt_in_and_leave_the_mahadashas_untouched() {
+        let args = |extra: &str| -> serde_json::Value {
+            serde_json::from_str(&format!(
+                r#"{{"system":"Chara","lagna_sign":10,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}{extra}}}"#
+            ))
+            .unwrap()
+        };
+        let plain = dasha(&args(""));
+        let with = dasha(&args(r#","antardashas":true"#));
+        let (p, w) = (
+            plain["periods"].as_array().unwrap(),
+            with["periods"].as_array().unwrap(),
+        );
+        assert_eq!(p.len(), 12);
+        assert_eq!(w.len(), 12);
+        for (a, b) in p.iter().zip(w) {
+            assert!(a.get("antar").is_none(), "off by default: {a}");
+            for k in [
+                "sign_index",
+                "sign_name",
+                "start_jd",
+                "end_jd",
+                "duration_years",
+            ] {
+                assert_eq!(a[k], b[k], "{k}");
+            }
+            // Twelve antardashas, a twelfth of the period each, tiling it.
+            let antar = b["antar"].as_array().expect("twelve antardashas");
+            assert_eq!(antar.len(), 12);
+            assert!((f(&antar[0]["start_jd"]) - f(&b["start_jd"])).abs() < 1e-9);
+            assert!((f(&antar[11]["end_jd"]) - f(&b["end_jd"])).abs() < 1e-6);
+            for pair in antar.windows(2) {
+                assert!((f(&pair[0]["end_jd"]) - f(&pair[1]["start_jd"])).abs() < 1e-9);
+            }
+            for x in antar {
+                assert!((f(&x["duration_years"]) - f(&b["duration_years"]) / 12.0).abs() < 1e-9);
+            }
+            let mut signs: Vec<u64> = antar
+                .iter()
+                .map(|x| x["sign_index"].as_u64().unwrap())
+                .collect();
+            signs.sort_unstable();
+            signs.dedup();
+            assert_eq!(signs.len(), 12, "each rashi once");
+        }
+        // Not for a system that already has levels.
+        let e = dasha_err(&serde_json::json!({
+            "system": "Vimshottari", "moon_longitude": 45.0,
+            "birth_jd": 2_451_545.0, "antardashas": true
+        }));
+        assert!(e.message.contains("Chara"), "{}", e.message);
+    }
+
+    /// Lagna Aries. Sun 29 Aries, Moon 5 Cancer, Mars 10 Cancer, Mercury 8
+    /// Taurus, Jupiter 12 Sagittarius, Venus 3 Gemini, Saturn 4 Leo, Rahu 20
+    /// Pisces (so Ketu 20 Virgo). The Sun has the most degrees, so he is the
+    /// atmakaraka. The lords of the sixth, eighth and twelfth are Mercury, Mars
+    /// (with Ketu) and Jupiter; of those only Jupiter stands in an odd rashi
+    /// inside the six rashis behind the base (Aries, holding the Sun, is the
+    /// stronger of Aries and Libra). Brahma is Jupiter, in Sagittarius.
+    fn brahma_chart() -> serde_json::Value {
+        serde_json::json!({
+            "lagna_sign": 0, "birth_jd": 2_451_545.0,
+            "graha_longitudes": {
+                "sun": 29.0, "moon": 95.0, "mars": 100.0, "mercury": 38.0,
+                "jupiter": 252.0, "venus": 63.0, "saturn": 124.0, "rahu": 350.0
+            }
+        })
+    }
+
+    /// The same chart with Mercury in Aries beside the Sun and Jupiter in
+    /// Cancer: the exclusive window leaves no candidate, so no Brahma.
+    fn no_brahma_chart() -> serde_json::Value {
+        let mut c = brahma_chart();
+        c["graha_longitudes"]["mercury"] = 8.0.into();
+        c["graha_longitudes"]["jupiter"] = 112.0.into();
+        c
+    }
+
+    fn with_system(mut args: serde_json::Value, system: &str) -> serde_json::Value {
+        args["system"] = system.into();
+        args
+    }
+
+    #[test]
+    fn sthira_runs_from_the_brahma_rashi_by_modality() {
+        let d = dasha(&with_system(brahma_chart(), "Sthira"));
+        assert_eq!(d["no_brahma"], false);
+        assert_eq!(d["brahma"], "Jupiter");
+        assert_eq!(d["anchor_sign"], 8);
+        // Sagittarius is an odd rashi: forward. Years by modality (dual 9,
+        // movable 7, fixed 8) from Sagittarius: 9, 7, 8, 9, 7, 8, ... = 96.
+        assert_eq!(d["direction"], "Zodiacal");
+        let periods = d["periods"].as_array().unwrap();
+        let signs: Vec<u64> = periods
+            .iter()
+            .map(|p| p["sign_index"].as_u64().unwrap())
+            .collect();
+        assert_eq!(signs, [8, 9, 10, 11, 0, 1, 2, 3, 4, 5, 6, 7]);
+        let years: Vec<f64> = periods.iter().map(|p| f(&p["duration_years"])).collect();
+        assert_eq!(
+            years,
+            [9.0, 7.0, 8.0, 9.0, 7.0, 8.0, 9.0, 7.0, 8.0, 9.0, 7.0, 8.0]
+        );
+        assert!((f(&periods[0]["start_jd"]) - 2_451_545.0).abs() < 1e-9);
+        assert!((f(&periods[0]["end_jd"]) - 2_451_545.0 - 9.0 * 365.25).abs() < 1e-9);
+        assert_eq!(periods[0]["antar"].as_array().unwrap().len(), 12);
+        // niryana_shoola spells the same as NiryanaShoola.
+        assert!(McpServer::call_compute_dasha(&with_system(brahma_chart(), "sthira")).is_ok());
+    }
+
+    #[test]
+    fn sthira_with_no_brahma_says_so_and_is_not_an_error() {
+        let d = McpServer::call_compute_dasha(&with_system(no_brahma_chart(), "Sthira"))
+            .expect("a chart without a Brahma is a result");
+        assert_eq!(d["no_brahma"], true);
+        assert!(d["brahma"].is_null() && d["anchor_sign"].is_null() && d["direction"].is_null());
+        assert_eq!(d["periods"].as_array().unwrap().len(), 0);
+        let message = d["message"].as_str().expect("a message");
+        assert!(message.contains("No Brahma graha"), "{message}");
+        // The same is said for Maheshwara, which reads the sthira dasha, with
+        // the graha that does not depend on Brahma still given.
+        let m = McpServer::call_compute_dasha(&with_system(no_brahma_chart(), "Maheshwara"))
+            .expect("a result");
+        assert_eq!(m["no_brahma"], true);
+        assert!(m["message"].as_str().unwrap().contains("No Brahma graha"));
+        assert!(m["maheshwara"].is_string() && m["rashi"].is_number());
+        assert!(m.get("period").is_none());
+    }
+
+    #[test]
+    fn niryana_shoola_runs_the_trikona_groups_from_the_stronger_of_lagna_and_seventh() {
+        // Aries holds the Sun and Libra nothing: Aries is stronger, an odd
+        // rashi, so forward. The groups (Jaimini 2.4.15) are the anchor, its
+        // fifth and ninth, then the next rashi's trikona, and so on: 0, 4, 8,
+        // 1, 5, 9, 2, 6, 10, 3, 7, 11, in sthira years (7, 8, 9 by modality),
+        // 96 in all.
+        for spelling in ["NiryanaShoola", "niryana_shoola"] {
+            let d = dasha(&with_system(brahma_chart(), spelling));
+            assert_eq!(d["anchor_sign"], 0);
+            assert_eq!(d["direction"], "Zodiacal");
+            let periods = d["periods"].as_array().unwrap();
+            let signs: Vec<u64> = periods
+                .iter()
+                .map(|p| p["sign_index"].as_u64().unwrap())
+                .collect();
+            assert_eq!(signs, [0, 4, 8, 1, 5, 9, 2, 6, 10, 3, 7, 11]);
+            let total: f64 = periods.iter().map(|p| f(&p["duration_years"])).sum();
+            assert!((total - 96.0).abs() < 1e-12);
+            assert_eq!(periods[3]["antar"].as_array().unwrap().len(), 12);
+        }
+    }
+
+    #[test]
+    fn maheshwara_reads_the_life_span_from_the_sthira_dasha() {
+        let d = dasha(&with_system(brahma_chart(), "Maheshwara"));
+        assert_eq!(d["no_brahma"], false);
+        let sthira = dasha(&with_system(brahma_chart(), "Sthira"));
+        let periods = sthira["periods"].as_array().unwrap();
+        let rashi = d["rashi"].as_u64().unwrap();
+        // The span is the years of the sthira periods up to and including the
+        // one of Maheshwara's rashi (Jaimini 2.1.58), and that period, with
+        // its antardashas, is the one served.
+        let index = periods
+            .iter()
+            .position(|p| p["sign_index"] == rashi)
+            .unwrap();
+        let span: f64 = periods[..=index]
+            .iter()
+            .map(|p| f(&p["duration_years"]))
+            .sum();
+        assert!((f(&d["life_span_years"]) - span).abs() < 1e-12);
+        assert_eq!(d["period"], periods[index]);
+        // The death antardashas are exactly those in the trikona of the
+        // eighth lord's rashi (2.1.59).
+        let trikona: Vec<u64> = d["death_trikona"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| x.as_u64().unwrap())
+            .collect();
+        let antar = d["period"]["antar"].as_array().unwrap();
+        let expected: Vec<usize> = (0..antar.len())
+            .filter(|&i| trikona.contains(&antar[i]["sign_index"].as_u64().unwrap()))
+            .collect();
+        let got: Vec<usize> = d["death_antars"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| usize::try_from(x.as_u64().unwrap()).unwrap())
+            .collect();
+        assert_eq!(got, expected);
+        assert!(
+            !got.is_empty(),
+            "a trikona of three rashis is met in twelve antardashas"
+        );
+    }
+
+    #[test]
+    fn the_atmakaraka_scheme_reaches_sthira_and_the_longitudes_are_checked() {
+        // Rahu at 29.9 Pisces reflects to 0.1 degrees under the 8-karaka
+        // scheme, so it does not change the atmakaraka here; an inapplicable
+        // scheme is refused, as is a bad value.
+        let bad_scheme = dasha_err(&with_system(
+            {
+                let mut c = brahma_chart();
+                c["karaka_scheme"] = "9".into();
+                c
+            },
+            "Sthira",
+        ));
+        assert!(bad_scheme.message.contains("karaka_scheme"));
+
+        // Rahu at 0.5 degrees of Pisces reflects to 29.5 degrees under the
+        // 8-karaka scheme, past the Sun's 29: Rahu is then the atmakaraka, in
+        // Pisces, and Maheshwara is drawn from the eighth and twelfth from
+        // Pisces (the lords of Libra and Aquarius: Venus, Saturn or Rahu). In
+        // the 7-karaka scheme the Sun is, in Aries, and the eighth lord of
+        // Aries's Scorpio is Mars or Ketu. The two cannot agree.
+        let maheshwara = |scheme: Option<&str>| {
+            let mut c = brahma_chart();
+            c["graha_longitudes"]["rahu"] = 330.5.into();
+            if let Some(scheme) = scheme {
+                c["karaka_scheme"] = scheme.into();
+            }
+            dasha(&with_system(c, "Maheshwara"))["maheshwara"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let seven = maheshwara(None);
+        assert_eq!(seven, maheshwara(Some("7")), "7 is the default");
+        assert!(["Mars", "Ketu"].contains(&seven.as_str()), "{seven}");
+        let eight = maheshwara(Some("8"));
+        assert!(
+            ["Venus", "Saturn", "Rahu"].contains(&eight.as_str()),
+            "{eight}"
+        );
+        let wrong_system = dasha_err(&serde_json::json!({
+            "system": "Vimshottari", "moon_longitude": 45.0,
+            "birth_jd": 2_451_545.0, "karaka_scheme": "8"
+        }));
+        assert!(
+            wrong_system.message.contains("Sthira"),
+            "{}",
+            wrong_system.message
+        );
+        assert!(
+            McpServer::call_compute_dasha(&with_system(
+                {
+                    let mut c = brahma_chart();
+                    c["karaka_scheme"] = "8".into();
+                    c
+                },
+                "Sthira"
+            ))
+            .is_ok()
+        );
+
+        // graha_longitudes is required and checked field by field.
+        let mut no_longitudes = with_system(brahma_chart(), "Sthira");
+        no_longitudes
+            .as_object_mut()
+            .unwrap()
+            .remove("graha_longitudes");
+        assert!(
+            dasha_err(&no_longitudes)
+                .message
+                .contains("graha_longitudes")
+        );
+        let mut out_of_range = with_system(brahma_chart(), "Sthira");
+        out_of_range["graha_longitudes"]["mars"] = 360.0.into();
+        assert!(
+            dasha_err(&out_of_range)
+                .message
+                .contains("graha_longitudes.mars")
+        );
+        let mut missing_rahu = with_system(brahma_chart(), "Maheshwara");
+        missing_rahu["graha_longitudes"]
+            .as_object_mut()
+            .unwrap()
+            .remove("rahu");
+        assert!(
+            dasha_err(&missing_rahu)
+                .message
+                .contains("graha_longitudes.rahu")
+        );
+        // Signs are not the input here, and both are not accepted.
+        let mut both = with_system(brahma_chart(), "NiryanaShoola");
+        both["graha_signs"] =
+            serde_json::from_str::<serde_json::Value>(&format!("{{{BPHS_46_GRAHA_SIGNS_JSON}}}"))
+                .unwrap()["graha_signs"]
+                .clone();
+        assert!(dasha_err(&both).message.contains("graha_longitudes"));
+        // Ketu is derived, not accepted.
+        let mut ketu = with_system(brahma_chart(), "Sthira");
+        ketu["graha_longitudes"]["ketu"] = 170.0.into();
+        assert_eq!(dasha_err(&ketu).error_code, "INVALID_PARAMETER");
     }
 }
