@@ -281,11 +281,11 @@ pub fn build_antars(
     for (k, &sign) in signs.iter().enumerate() {
         let w = weight(sign);
         cumulative += w;
-        let this_end = if k == 11 {
-            end_jd
-        } else {
-            start_jd + span * (cumulative / total)
-        };
+        // At the last antar `cumulative` is the same running sum as `total`,
+        // so the ratio is exactly 1.0 and the bound is exactly `end_jd`
+        // (`start + (end - start)` is `end` for any two doubles this close);
+        // `tiling_is_exact_for_awkward_instants` holds the property.
+        let this_end = start_jd + span * (cumulative / total);
         out.push(RashiAntar {
             sign_index: sign,
             sign_name: SIGN_NAMES[usize::from(sign)].to_string(),

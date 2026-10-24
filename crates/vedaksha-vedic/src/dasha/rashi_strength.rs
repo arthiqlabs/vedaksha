@@ -585,6 +585,47 @@ mod tests {
         assert_eq!(s.stronger_rashi(3, 0), 0);
     }
 
+    // 5b. 2.3.8 outranks the lords. Capricorn(9) holds Mars alone, exalted
+    // there; Cancer(3) holds Mercury alone, not exalted there. Both are
+    // movable. Without 2.3.8 the lords would decide the other way: Saturn,
+    // Capricorn's lord, stands alone in Aries, while the Moon, Cancer's lord,
+    // stands in Gemini with Jupiter and Venus. Mars's exaltation decides.
+    #[test]
+    fn exaltation_outranks_the_lords() {
+        // sun 8, moon 2, mars 9, mercury 3, jupiter 2, venus 2, saturn 0,
+        // rahu 5 (Ketu 11).
+        let p = NatalPlacements::from_signs(0, signs(8, 2, 9, 3, 2, 2, 0, 5));
+        let s = JaiminiStrength::new(&p);
+        assert_eq!(p.occupants_of(9), vec![Graha::Mars]);
+        assert_eq!(p.occupants_of(3), vec![Graha::Mercury]);
+        assert_eq!(s.stronger_rashi(9, 3), 9);
+        assert_eq!(s.stronger_rashi(3, 9), 9);
+        // The lords alone would favour Cancer.
+        assert_eq!(s.stronger_graha(Graha::Saturn, Graha::Moon), Graha::Moon);
+    }
+
+    // 5c. 2.3.15: with everything else tied, the rashi whose lord stands in
+    // it, and this outranks 2.3.17 (odd over even).
+    //
+    // Taurus(1, even) holds Venus alone, its own lord at home; Leo(4, odd)
+    // holds Mars alone, its lord the Sun standing alone in Aquarius(10).
+    // Counts are 1 and 1; neither holds an exalted graha (Venus is not
+    // exalted in Taurus, Mars not in Leo); both are fixed; the lords Venus
+    // and the Sun each stand alone, unexalted, in a fixed rashi, so the graha
+    // tests tie; and then Taurus, whose lord is at home, beats odd Leo.
+    #[test]
+    fn a_lord_at_home_decides_when_the_rest_ties() {
+        // sun 10, moon 8, mars 4, mercury 2, jupiter 5, venus 1, saturn 11,
+        // rahu 9 (Ketu 3).
+        let p = NatalPlacements::from_signs(0, signs(10, 8, 4, 2, 5, 1, 11, 9));
+        let s = JaiminiStrength::new(&p);
+        assert_eq!(p.occupants_of(1), vec![Graha::Venus]);
+        assert_eq!(p.occupants_of(4), vec![Graha::Mars]);
+        assert_eq!(p.companions_of(Graha::Sun), 0);
+        assert_eq!(s.stronger_rashi(4, 1), 1);
+        assert_eq!(s.stronger_rashi(1, 4), 1);
+    }
+
     // 6. 2.3.9: with nothing to separate them in numbers or exaltation,
     // natural strength: dual over fixed. In Chart A Taurus(1, fixed) and
     // Virgo(5, dual) are both empty.
