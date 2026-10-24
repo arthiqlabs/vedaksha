@@ -183,6 +183,11 @@ pub fn ayanamsha_sidereal_schema_enum() -> serde_json::Value {
 /// [`ayanamsha_schema_description`] for a parameter that must be sidereal: the
 /// same systems and primaries, with the offer of `Tropical` replaced by the
 /// statement that it is refused.
+///
+/// # Panics
+///
+/// If [`ayanamsha_schema_description`] no longer carries the sentence this
+/// replaces, so the two cannot drift apart silently.
 #[must_use]
 pub fn ayanamsha_sidereal_schema_description() -> String {
     let full = ayanamsha_schema_description();

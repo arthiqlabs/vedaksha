@@ -695,30 +695,22 @@ impl McpServer {
             }
             DashaSystem::Maheshwara => {
                 let options = MaheshwaraOptions::default();
-                match compute_maheshwara(
-                    &placements,
-                    atmakaraka,
-                    input.birth_jd,
-                    &options,
-                    &strength,
-                ) {
-                    Some(dasha) => {
-                        let mut v = serde_json::to_value(dasha)?;
-                        v["no_brahma"] = serde_json::Value::Bool(false);
-                        Ok(v)
-                    }
+                if let Some(dasha) =
+                    compute_maheshwara(&placements, atmakaraka, input.birth_jd, &options, &strength)
+                {
+                    let mut v = serde_json::to_value(dasha)?;
+                    v["no_brahma"] = serde_json::Value::Bool(false);
+                    Ok(v)
+                } else {
                     // The Maheshwara graha does not depend on Brahma; only the
                     // sthira dasha its life span is read from does.
-                    None => {
-                        let graha =
-                            maheshwara_graha(&placements, atmakaraka, &strength, options.rules);
-                        Ok(serde_json::json!({
-                            "no_brahma": true,
-                            "message": NO_BRAHMA,
-                            "maheshwara": graha,
-                            "rashi": placements.sign_of(graha),
-                        }))
-                    }
+                    let graha = maheshwara_graha(&placements, atmakaraka, &strength, options.rules);
+                    Ok(serde_json::json!({
+                        "no_brahma": true,
+                        "message": NO_BRAHMA,
+                        "maheshwara": graha,
+                        "rashi": placements.sign_of(graha),
+                    }))
                 }
             }
             DashaSystem::Vimshottari
@@ -1571,11 +1563,25 @@ impl McpServer {
         // the same call, as `call_search_muhurta` below; the returned
         // `.longitude` is the identical value `apparent_position` would have
         // put in `.ecliptic.longitude`.
+        //
+        // The Moon and the Sun come from interpolated walks over the span, a
+        // day either side for the coarse step's first and last brackets. The
+        // bisection below stops at 1e-8 day, and the walk moves a Moon
+        // crossing by under 0.1 ms, so an event moves by under a millisecond.
+        // The planets are not walked; see `vedaksha_vedic::walked`.
+        let sky = vedaksha_vedic::walked::WalkedSky::new(
+            &provider,
+            input.start_jd - 1.0,
+            input.end_jd + 1.0,
+        );
         let get_longitude = |body_idx: usize, jd: f64| -> Option<f64> {
-            let (_, body) = all_bodies.get(body_idx)?;
-            coordinates::ecliptic_position(&provider, *body, jd)
-                .ok()
-                .map(|pos| pos.longitude.to_degrees())
+            match all_bodies.get(body_idx)? {
+                (_, Body::Moon) => sky.moon_longitude(jd),
+                (_, Body::Sun) => sky.sun_longitude(jd),
+                (_, body) => coordinates::ecliptic_position(&provider, *body, jd)
+                    .ok()
+                    .map(|pos| pos.longitude.to_degrees()),
+            }
         };
 
         let events = vedaksha_astro::transits::search_transits(&config, &get_longitude);
@@ -1604,57 +1610,37 @@ impl McpServer {
     }
 
     fn call_search_muhurta(args: &serde_json::Value) -> Result<serde_json::Value, McpError> {
-        use std::sync::Mutex;
-        use vedaksha_astro::riseset::sun_equatorial_deg;
+        use vedaksha_astro::sidereal::Ayanamsha;
         use vedaksha_ephem_core::analytical::AnalyticalProvider;
-        use vedaksha_ephem_core::bodies::Body;
-        use vedaksha_ephem_core::coordinates;
-
-        /// One memo slot for the enrichment loop below: an instant, keyed on
-        /// the JD's exact bit pattern, and whatever was computed there.
-        type Slot<T> = Mutex<Option<(u64, T)>>;
-
-        /// Read a slot, hitting only on a bit-for-bit identical JD.
-        fn read_slot<T: Copy>(slot: &Slot<T>, jd: f64) -> Option<T> {
-            slot.lock()
-                .expect("memo slot")
-                .and_then(|(bits, payload)| (bits == jd.to_bits()).then_some(payload))
-        }
+        use vedaksha_vedic::walked::WalkedSky;
 
         let input: crate::tools::search_muhurta::SearchMuhurtaInput =
             serde_json::from_value(args.clone())
                 .map_err(|e| McpError::invalid_parameter("arguments", &e.to_string()))?;
         crate::tools::search_muhurta::validate(&input)?;
 
-        let provider = AnalyticalProvider;
         let min_quality = input.min_quality.unwrap_or(0.5);
+
+        // The Moon and the Sun over the window, from interpolated walks: the
+        // scan, the sunrises that bound each vara, and the tithi and
+        // nakshatra ends of the reported windows all read the same few days.
+        // The span runs a day before the window, for the sunrise that begins
+        // the first vara, and two after it, for an end that falls past the
+        // window; a read outside it falls back to the direct pipeline.
+        let sky = WalkedSky::new(
+            &AnalyticalProvider,
+            input.start_jd - 1.0,
+            input.end_jd + 2.0,
+        );
 
         // Muhurta needs sidereal Sun and Moon longitudes (Lahiri ayanamsha),
         // using the TRUE ayanamsha (mean + nutation-in-longitude) so the
         // quality scoring and nakshatra-boundary refinement below are rotated
         // consistently with the nutation already present in the tropical
-        // positions `apparent_position`/`apparent_positions` return.
-        // Position only — daily motion is not used, so skip the central-
-        // difference work via `ecliptic_position` (≈3× cheaper per step).
-        let get_moon_sidereal = |jd: f64| -> Option<f64> {
-            let pos = coordinates::ecliptic_position(&provider, Body::Moon, jd).ok()?;
-            let tropical_lon = pos.longitude.to_degrees();
-            Some(vedaksha_astro::sidereal::true_tropical_to_sidereal(
-                tropical_lon,
-                vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
-                jd,
-            ))
-        };
-
-        let get_sun_sidereal = |jd: f64| -> Option<f64> {
-            let pos = coordinates::ecliptic_position(&provider, Body::Sun, jd).ok()?;
-            let tropical_lon = pos.longitude.to_degrees();
-            Some(vedaksha_astro::sidereal::true_tropical_to_sidereal(
-                tropical_lon,
-                vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
-                jd,
-            ))
-        };
+        // positions.
+        let ayanamsha = Ayanamsha::IndianOfficial;
+        let get_moon_sidereal = |jd: f64| sky.moon_sidereal_longitude(ayanamsha, jd);
+        let get_sun_sidereal = |jd: f64| sky.sun_sidereal_longitude(ayanamsha, jd);
 
         // `tz_offset_minutes` (default 0/UT) names the vara's weekday only —
         // the sunrise instant that bounds the vara depends only on
@@ -1668,7 +1654,7 @@ impl McpServer {
         // tools, given the same observer, cannot report different weekdays for
         // the same instant.
         let elevation_m = input.elevation_m.unwrap_or(0.0);
-        let sun_eq = |jd: f64| sun_equatorial_deg(&provider, jd);
+        let sun_eq = |jd: f64| sky.sun_equatorial(jd);
         let mut assessments = vedaksha_vedic::muhurta::search_muhurta(
             input.start_jd,
             input.end_jd,
@@ -1682,123 +1668,14 @@ impl McpServer {
             min_quality,
         );
 
-        // Enrich the reported windows with exact tithi/nakshatra ending times.
-        // These need the Moon/Sun daily motion, so they use apparent_position
-        // (position + speed) — but only for the few windows that passed the
-        // quality filter, not the position-only scan above.
-        //
-        // One ephemeris evaluation per instant, shared by every consumer of
-        // that instant. Three things asked the provider for the same evaluation
-        // twice over:
-        //
-        //   * The Moon is wanted tropical by the tithi refinement (the
-        //     ayanamsha cancels in the elongation) and sidereal by the
-        //     nakshatra refinement. Those are one `true_tropical_to_sidereal`
-        //     apart, so a single evaluation yields both.
-        //   * Each refinement asks for its body at the candidate instant twice
-        //     — once to identify the boundary it is aiming at, once on the
-        //     first Newton step, which starts from that same instant.
-        //   * The tithi refinement wants the Moon AND the Sun at each `t` it
-        //     visits. Asked separately, that entered the provider twice per
-        //     instant and rebuilt the same three central-difference frames both
-        //     times.
-        //
-        // `apparent_position` is a ±0.5-day central difference, i.e. three
-        // ephemeris evaluations a call, so these repeats are the dominant cost
-        // of the enrichment loop. Three things collapse them, and all three are
-        // reuse of an identical call rather than a different computation, so
-        // values are unchanged rather than approximated:
-        //
-        //   1. `apparent_positions` (plural) serves the tithi refinement's
-        //      Moon-and-Sun pair from ONE entry: it builds the three frames once
-        //      and shares a memoizing provider across the pair, so the ELP/MPP02
-        //      lunar series each light-time correction pulls in is evaluated per
-        //      timestamp rather than per body. It is bit-identical to
-        //      `apparent_position` per body — asserted by
-        //      `batch_matches_per_body_bit_for_bit`.
-        //   2. Memo slots keyed on the *bit pattern* of the JD. An identical
-        //      `jd` hands back the identical `f64`s the provider already
-        //      produced; any other `jd` — including one differing in the last
-        //      ulp — misses and recomputes. `AnalyticalProvider` is a unit
-        //      struct, so its output depends on nothing but `(body, jd)`.
-        //   3. A slot PINNED to the candidate instant for the whole of one
-        //      iteration. Both refinements start their Newton walk at `a.jd`,
-        //      but the tithi walk steps away from it first, so with a single
-        //      rolling slot the nakshatra refinement's opening ask for `a.jd`
-        //      always missed. The pinned slot is primed once per candidate,
-        //      by the one evaluation the tithi refinement was going to make
-        //      anyway.
-        //
-        // The slots are `Mutex`, not `Cell`, because the callback types these
-        // are passed as carry `+ Sync` — a `&Cell` is not shareable across
-        // threads and so cannot appear inside one. The lock is never contended
-        // (this loop is serial) and is taken a few thousand times per served
-        // request against a request measured in seconds, so it does not show up
-        // in the timings below.
-        //
-        // Slot layout: `(jd.to_bits(), payload)`, the payload being
-        // `(tropical_longitude_deg, longitude_speed)` per body.
-        // Moon and Sun together, from one batch evaluation.
-        let pair_at = |jd: f64| -> Option<vedaksha_vedic::muhurta::MoonAndSun> {
-            let computed = coordinates::apparent_positions(&provider, &[Body::Moon, Body::Sun], jd);
-            let mut it = computed.into_iter();
-            let moon = it.next()?.1.ok()?;
-            let sun = it.next()?.1.ok()?;
-            Some((
-                (moon.ecliptic.longitude.to_degrees(), moon.longitude_speed),
-                (sun.ecliptic.longitude.to_degrees(), sun.longitude_speed),
-            ))
-        };
-
-        // Pinned to the candidate instant; primed once per iteration below.
-        let pinned: Slot<vedaksha_vedic::muhurta::MoonAndSun> = Mutex::new(None);
-        // Rolling slot for the instants the Newton walks step to.
-        let pair_rolling: Slot<vedaksha_vedic::muhurta::MoonAndSun> = Mutex::new(None);
-        // Rolling slot for the nakshatra walk, which wants the Moon alone —
-        // evaluating the Sun alongside it would be work nothing reads.
-        let moon_rolling: Slot<(f64, f64)> = Mutex::new(None);
-
-        let moon_and_sun = |jd: f64| -> Option<vedaksha_vedic::muhurta::MoonAndSun> {
-            if let Some(hit) = read_slot(&pinned, jd).or_else(|| read_slot(&pair_rolling, jd)) {
-                return Some(hit);
-            }
-            let pair = pair_at(jd)?;
-            *pair_rolling.lock().expect("memo slot") = Some((jd.to_bits(), pair));
-            Some(pair)
-        };
-
-        let moon_pos_speed = |jd: f64| -> Option<(f64, f64)> {
-            // The pinned and rolling PAIR slots are consulted first: whenever
-            // the Moon is already known at this instant, the pair holding it is
-            // the cheapest place to find it.
-            if let Some(((lon, speed), _)) =
-                read_slot(&pinned, jd).or_else(|| read_slot(&pair_rolling, jd))
-            {
-                return Some((lon, speed));
-            }
-            if let Some(hit) = read_slot(&moon_rolling, jd) {
-                return Some(hit);
-            }
-            let p = coordinates::apparent_position(&provider, Body::Moon, jd).ok()?;
-            let moon = (p.ecliptic.longitude.to_degrees(), p.longitude_speed);
-            *moon_rolling.lock().expect("memo slot") = Some((jd.to_bits(), moon));
-            Some(moon)
-        };
-
-        let moon_sid_speed = |jd: f64| -> Option<(f64, f64)> {
-            let (tropical_lon, speed) = moon_pos_speed(jd)?;
-            let sid = vedaksha_astro::sidereal::true_tropical_to_sidereal(
-                tropical_lon,
-                vedaksha_astro::sidereal::Ayanamsha::IndianOfficial,
-                jd,
-            );
-            Some((sid, speed))
-        };
+        // Enrich the reported windows with exact tithi and nakshatra ending
+        // times, which need the rates as well. The walk's rate is the
+        // derivative of its interpolant; the refinement uses it only to steer
+        // and runs to Julian Day resolution, so the ends agree with the direct
+        // pipeline's to 0.1 ms (see `vedaksha_vedic::walked`).
+        let moon_and_sun = |jd: f64| sky.moon_and_sun(jd);
+        let moon_sid_speed = |jd: f64| sky.moon_sidereal_longitude_rate(ayanamsha, jd);
         for a in &mut assessments {
-            // Prime the pinned slot. This is the evaluation `compute_tithi_end`
-            // makes on its first line, hoisted so it also survives the tithi
-            // Newton walk and serves `compute_nakshatra_end`'s opening ask.
-            *pinned.lock().expect("memo slot") = pair_at(a.jd).map(|p| (a.jd.to_bits(), p));
             a.tithi_end_jd = vedaksha_vedic::muhurta::compute_tithi_end(a.jd, &moon_and_sun);
             a.nakshatra_end_jd =
                 vedaksha_vedic::muhurta::compute_nakshatra_end(a.jd, &moon_sid_speed);
@@ -3818,10 +3695,11 @@ mod tests {
         );
         // Signs are not the input here, and both are not accepted.
         let mut both = with_system(brahma_chart(), "NiryanaShoola");
-        both["graha_signs"] =
-            serde_json::from_str::<serde_json::Value>(&format!("{{{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"))
-                .unwrap()["graha_signs"]
-                .clone();
+        both["graha_signs"] = serde_json::from_str::<serde_json::Value>(&format!(
+            "{{{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"
+        ))
+        .unwrap()["graha_signs"]
+            .clone();
         assert!(dasha_err(&both).message.contains("graha_longitudes"));
         // Ketu is derived, not accepted.
         let mut ketu = with_system(brahma_chart(), "Sthira");
