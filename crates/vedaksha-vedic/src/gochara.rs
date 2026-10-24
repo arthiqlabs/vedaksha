@@ -362,7 +362,7 @@ mod tests {
         let sun = g.iter().find(|e| e.graha == Graha::Sun).unwrap();
         assert_eq!(sun.house_from_natal, 1);
         assert_eq!(sun.classical_effect, GocharaEffect::Unfavourable);
-        assert!(sun.vedha_candidates.is_empty());
+        assert_eq!(sun.vedha_candidates, Vec::<Graha>::new());
     }
 
     #[test]

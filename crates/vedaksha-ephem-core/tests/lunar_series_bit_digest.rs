@@ -469,12 +469,10 @@ mod sha256 {
                 self.buf_len = 0;
             }
 
-            let mut chunks = data.chunks_exact(64);
-            for chunk in chunks.by_ref() {
-                let block: &[u8; 64] = chunk.try_into().expect("chunks_exact(64) yields 64 bytes");
+            let (blocks, rest) = data.as_chunks::<64>();
+            for block in blocks {
                 compress(&mut self.h, block);
             }
-            let rest = chunks.remainder();
             self.buf[..rest.len()].copy_from_slice(rest);
             self.buf_len = rest.len();
         }
@@ -506,8 +504,8 @@ mod sha256 {
 
     fn compress(h: &mut [u32; 8], chunk: &[u8; 64]) {
         let mut w = [0_u32; 64];
-        for (word, bytes) in w.iter_mut().zip(chunk.chunks_exact(4)) {
-            *word = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        for (word, bytes) in w.iter_mut().zip(chunk.as_chunks::<4>().0) {
+            *word = u32::from_be_bytes(*bytes);
         }
         for i in 16..64 {
             let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);

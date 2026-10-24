@@ -2136,9 +2136,9 @@ mod tests {
     #[test]
     fn metadata_is_present_for_every_system() {
         for &system in Ayanamsha::ALL {
-            assert!(!system.name().is_empty());
-            assert!(!system.key().is_empty());
-            assert!(!system.primary_source().is_empty());
+            assert_ne!(system.name(), "");
+            assert_ne!(system.key(), "");
+            assert_ne!(system.primary_source(), "");
         }
         assert_eq!(Ayanamsha::SIDEREAL.len(), 11);
         assert_eq!(Ayanamsha::ALL.len(), 12);

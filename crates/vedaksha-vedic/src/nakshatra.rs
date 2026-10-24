@@ -638,7 +638,7 @@ mod tests {
     fn all_27_have_deities() {
         for i in 0..27 {
             let n = Nakshatra::from_index(i);
-            assert!(!n.deity().is_empty());
+            assert_ne!(n.deity(), "");
         }
     }
 

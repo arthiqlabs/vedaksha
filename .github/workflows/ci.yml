@@ -283,7 +283,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Pinned deliberately to the declared MSRV, NOT to `stable`. Every other
-      # job here resolves stable and then defers to rust-toolchain.toml (1.97.1),
+      # job here resolves stable and then defers to rust-toolchain.toml (1.99.1),
       # so before this job the only mechanical check that the declared MSRV
       # still held was the release Docker image building on rust:1.89-slim —
       # i.e. the claim was verified at tag time, or not at all.
@@ -291,7 +291,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Check at the declared MSRV
         # RUSTUP_TOOLCHAIN overrides rust-toolchain.toml, which would otherwise
-        # pull 1.97.1 back in and make this job a no-op that always passed.
+        # pull 1.99.1 back in and make this job a no-op that always passed.
         env:
           RUSTUP_TOOLCHAIN: "1.89"
         run: |

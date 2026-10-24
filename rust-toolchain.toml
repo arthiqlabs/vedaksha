@@ -11,12 +11,12 @@
 # only the version CI and local development build *with*.
 #
 # `targets` is load-bearing, not decoration. rustup treats `stable` and
-# `1.97.1` as distinct toolchain installs, so the `targets:` input on
+# `1.99.1` as distinct toolchain installs, so the `targets:` input on
 # dtolnay/rust-toolchain@stable adds wasm32 to `stable` while cargo — honouring
-# this file — runs under `1.97.1` without it. Declaring it here is what keeps
+# this file — runs under `1.99.1` without it. Declaring it here is what keeps
 # the WASM, Python-binding and PyPI jobs building.
 [toolchain]
-channel = "1.97.1"
+channel = "1.99.1"
 components = ["clippy", "rustfmt"]
 targets = ["wasm32-unknown-unknown"]
 profile = "minimal"

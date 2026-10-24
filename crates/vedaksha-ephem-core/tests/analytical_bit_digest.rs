@@ -573,10 +573,12 @@ mod sha256 {
         let bit_len = (data.len() as u64) * 8;
         msg.extend_from_slice(&bit_len.to_be_bytes());
 
-        for chunk in msg.chunks_exact(64) {
+        // The padding above makes `msg` a whole number of 64-byte blocks, so the
+        // remainder `as_chunks` returns is empty.
+        for chunk in msg.as_chunks::<64>().0 {
             let mut w = [0_u32; 64];
-            for (word, bytes) in w.iter_mut().zip(chunk.chunks_exact(4)) {
-                *word = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+            for (word, bytes) in w.iter_mut().zip(chunk.as_chunks::<4>().0) {
+                *word = u32::from_be_bytes(*bytes);
             }
             for i in 16..64 {
                 let s0 = w[i - 15].rotate_right(7) ^ w[i - 15].rotate_right(18) ^ (w[i - 15] >> 3);

@@ -313,7 +313,7 @@ mod tests {
 
         assert_eq!(chart.planets.len(), 2);
         assert_eq!(chart.houses.cusps.len(), 12);
-        assert!(!chart.config_summary.is_empty());
+        assert_ne!(chart.config_summary, "");
     }
 
     #[test]

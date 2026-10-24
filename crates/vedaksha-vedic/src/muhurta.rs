@@ -2215,7 +2215,7 @@ mod tests {
     #[test]
     fn tithi_lord_exists() {
         let t = compute_tithi(15.0, 0.0);
-        assert!(!t.lord().is_empty());
+        assert_ne!(t.lord(), "");
     }
 
     #[test]
@@ -2258,7 +2258,7 @@ mod tests {
             Weekday::Saturday,
         ];
         for d in &days {
-            assert!(!d.lord().is_empty());
+            assert_ne!(d.lord(), "");
         }
     }
 
