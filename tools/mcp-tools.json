@@ -228,49 +228,49 @@
             "properties": {
               "jupiter": {
                 "description": "Jupiter's sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               },
               "mars": {
                 "description": "Mars's sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               },
               "mercury": {
                 "description": "Mercury's sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               },
               "moon": {
                 "description": "Moon's sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               },
               "rahu": {
                 "description": "Rahu's (north lunar node's) sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               },
               "saturn": {
                 "description": "Saturn's sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               },
               "sun": {
                 "description": "Sun's sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               },
               "venus": {
                 "description": "Venus's sidereal longitude.",
-                "maximum": 360,
+                "exclusiveMaximum": 360,
                 "minimum": 0,
                 "type": "number"
               }
@@ -375,7 +375,7 @@
           },
           "moon_longitude": {
             "description": "Natal Moon sidereal longitude in degrees [0, 360). Required for Vimshottari, Ashtottari, Yogini.",
-            "maximum": 360,
+            "exclusiveMaximum": 360,
             "minimum": 0,
             "type": "number"
           },

@@ -312,7 +312,7 @@ pub fn definition() -> super::ToolDefinition {
                     "type": "number",
                     "description": "Natal Moon sidereal longitude in degrees [0, 360). Required for Vimshottari, Ashtottari, Yogini.",
                     "minimum": 0,
-                    "maximum": 360
+                    "exclusiveMaximum": 360
                 },
                 "lagna_sign": {
                     "type": "integer",
@@ -359,14 +359,14 @@ pub fn definition() -> super::ToolDefinition {
                         field: it is derived 180 degrees from Rahu. Do not also pass \
                         graha_signs for these systems.",
                     "properties": {
-                        "sun":     { "type": "number", "description": "Sun's sidereal longitude.", "minimum": 0, "maximum": 360 },
-                        "moon":    { "type": "number", "description": "Moon's sidereal longitude.", "minimum": 0, "maximum": 360 },
-                        "mars":    { "type": "number", "description": "Mars's sidereal longitude.", "minimum": 0, "maximum": 360 },
-                        "mercury": { "type": "number", "description": "Mercury's sidereal longitude.", "minimum": 0, "maximum": 360 },
-                        "jupiter": { "type": "number", "description": "Jupiter's sidereal longitude.", "minimum": 0, "maximum": 360 },
-                        "venus":   { "type": "number", "description": "Venus's sidereal longitude.", "minimum": 0, "maximum": 360 },
-                        "saturn":  { "type": "number", "description": "Saturn's sidereal longitude.", "minimum": 0, "maximum": 360 },
-                        "rahu":    { "type": "number", "description": "Rahu's (north lunar node's) sidereal longitude.", "minimum": 0, "maximum": 360 }
+                        "sun":     { "type": "number", "description": "Sun's sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 },
+                        "moon":    { "type": "number", "description": "Moon's sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 },
+                        "mars":    { "type": "number", "description": "Mars's sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 },
+                        "mercury": { "type": "number", "description": "Mercury's sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 },
+                        "jupiter": { "type": "number", "description": "Jupiter's sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 },
+                        "venus":   { "type": "number", "description": "Venus's sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 },
+                        "saturn":  { "type": "number", "description": "Saturn's sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 },
+                        "rahu":    { "type": "number", "description": "Rahu's (north lunar node's) sidereal longitude.", "minimum": 0, "exclusiveMaximum": 360 }
                     },
                     "required": ["sun", "moon", "mars", "mercury", "jupiter", "venus", "saturn", "rahu"]
                 },
