@@ -86,7 +86,7 @@ const MEASURED_DT_JD: f64 = 2_461_041.5;
 /// This was 30″, on the strength of figures that no longer reproduce (24.2″,
 /// Venus 1958, here; 13.09″ in `analytical_accuracy.rs`). At 30″ the gate sat
 /// twenty times above the truth: dropping the leap seconds from the time
-/// conversion, which puts the Moon 20″ out, passed it. At 2.0″ that fails it.
+/// conversion, which puts the Moon 23.4″ out, passed it. At 2.0″ that fails it.
 const MEASURED_MAX_ARCSEC: f64 = 2.0;
 
 fn body_from_name(name: &str) -> Option<Body> {
