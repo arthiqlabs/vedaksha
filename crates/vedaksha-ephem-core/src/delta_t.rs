@@ -6,8 +6,8 @@
 //! Delta T (TT − UT1) computation.
 //!
 //! Delta T is the difference between Terrestrial Time, which runs uniformly, and
-//! UT1, which follows the Earth's rotation. It is measured, not computed: nothing
-//! predicts it better than a year or two ahead.
+//! UT1, which follows the Earth's rotation. It is measured, not computed, and a
+//! prediction of it loses accuracy quickly.
 //!
 //! # Where the values come from, era by era
 //!
@@ -18,7 +18,7 @@
 //! | 1830–1900 | Espenak & Meeus (2006) fit to Morrison & Stephenson | evaluated directly |
 //! | 1900.0–1973.0 | USNO half-year rows, McCarthy & Babcock (1986) | linear |
 //! | 1973-02-01–2026-10-01 | USNO monthly rows, from IERS Earth orientation data | linear |
-//! | 2026-10-01–2150 | 5-year knots from the Espenak & Meeus 2005–2050 polynomial | linear |
+//! | 2026-10-01–2150 | 5-year knots from Espenak & Meeus (2006) expressions | linear |
 //! | after 2150 | Espenak & Meeus parabola | evaluated directly |
 //!
 //! The 1900–2026 rows are the generated `delta_t_table.rs`, written by
@@ -43,8 +43,8 @@
 //! with nothing else changed. The 1830–1900 era never had knots: five-year knots
 //! alias the real minimum near 1895 (−6.2 s), reading −3.6 s there instead (2.5 s
 //! error), so it is evaluated directly from the Espenak & Meeus (2006)
-//! 1860–1900 polynomial, which agrees with the USNO historic rows within 0.35 s
-//! over 1830–1955 (see `delta_t_1890s_minimum_matches_usno`).
+//! 1860–1900 polynomial, checked against the USNO historic rows to within 0.35 s
+//! (see `delta_t_1890s_minimum_matches_usno`).
 //!
 //! # What this cannot be
 //!
@@ -58,8 +58,8 @@
 //! # Known limits of the prediction
 //!
 //! The 2030–2150 knots are the Espenak & Meeus 2005–2050 polynomial, which assumed
-//! a faster slowing of the Earth than occurred: Delta T has been flat near 69 s
-//! since about 2015. USNO's own prediction file (`deltat.preds`, retrieved
+//! a faster slowing of the Earth than occurred: Delta T peaked at 69.44 s in 2020
+//! and has stood between 69.1 and 69.2 s since 2023. USNO's own prediction file (`deltat.preds`, retrieved
 //! 2026-10-24) puts 2033.75 at 71.25 s; these knots give 75.1 s there, about
 //! 4 s high, which is 2″ for the Moon. Refreshing them from `deltat.preds` is
 //! the maintenance step in `MAINTENANCE.md` §3.
