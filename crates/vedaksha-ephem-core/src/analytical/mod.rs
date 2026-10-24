@@ -8,7 +8,8 @@
 //! series expansions, requiring no external data files at runtime:
 //!
 //! - **VSOP87A** (Bretagnon & Francou 1988) — heliocentric rectangular
-//!   ecliptic coordinates (J2000.0) for Mercury through Neptune
+//!   ecliptic coordinates (J2000.0) for Mercury through Neptune, rotated to
+//!   the equatorial frame by the rotation the theory's authors publish
 //! - **ELP/MPP02** (Chapront 2002) — geocentric lunar coordinates
 //!
 //! The [`AnalyticalProvider`] struct implements [`EphemerisProvider`] to wire
@@ -28,15 +29,90 @@ use crate::jpl::{AU_KM, EMRAT, EphemerisProvider, Position, StateVector, Velocit
 pub use self::chebyshev_provider::{ChebyshevConfig, ChebyshevProvider, SegmentSpec};
 use self::vsop87a::Planet;
 
+/// The rotation from VSOP87A's frame to the equatorial frame, **as the theory's
+/// authors publish it**, applied to every VSOP87A vector (position and
+/// velocity) in [`vsop_state`].
+///
+/// VSOP87A's rectangular coordinates are, in the authors' words, "given in the
+/// inertial frame defined by the dynamical equinox and ecliptic J2000". Their
+/// documentation (`vsop87.doc`, section "REFERENCE SYSTEM", Bretagnon and
+/// Francou, distributed with the series at
+/// `https://ftp.imcce.fr/pub/ephem/planets/vsop87/`) goes on: "The rectangular
+/// coordinates of VSOP87A and VSOP87E defined in dynamical ecliptic frame J2000
+/// can be connected to the equatorial frame FK5 J2000 with the following
+/// rotation", and prints this matrix to twelve decimals:
+///
+/// ```text
+///   X        +1.000000000000  +0.000000440360  -0.000000190919   X
+///   Y     =  -0.000000479966  +0.917482137087  -0.397776982902   Y
+///   Z FK5     0.000000000000  +0.397776982902  +0.917482137087   Z VSOP87A
+/// ```
+///
+/// Read off the matrix, it is `Rz(phi) · Rx(eps)`: the ordinary ecliptic to
+/// equator rotation about x by `eps = 84381.4091` arcsec, followed by a
+/// rotation about the equatorial z axis by `phi = -0.0990` arcsec, an equinox
+/// offset. The authors state the matrix, not those two angles;
+/// `tests::vsop87a_matrix_is_rz_phi_rx_eps` pins that the matrix reproduces
+/// from them to its own rounding. The VSOP2013 distribution documents its
+/// ICRF rotation in the same `Rz(phi) · Rx(eps)` form, with different
+/// constants (`eps = 84381.41136`, `phi = -0.05188` arcsec), because that
+/// theory was fitted to a different numerical integration; those constants are
+/// not VSOP87A's and are not used here.
+///
+/// # What this replaced, and what that was worth
+///
+/// Before this change VSOP87A was rotated with `Rx(84381.448 arcsec)` alone,
+/// the same [`ecliptic_to_equatorial`] the Moon still uses, on the belief that
+/// 84381.448 is the obliquity VSOP87A's frame is built on. The authors'
+/// matrix differs from that by 38.9 mas about x (84381.448 against 84381.4091)
+/// and 99.0 mas about z (the equinox offset, which was absent altogether).
+/// Against DE440s over 1900 to 2100 (30-day grid, geometric heliocentric
+/// vectors, no light time or aberration), the mean angular residual went:
+///
+/// | body | before | after |
+/// |---|---|---|
+/// | Mercury | 0.102″ | 0.021″ |
+/// | Venus | 0.090″ | 0.014″ |
+/// | Earth | 0.088″ | 0.019″ |
+/// | Mars | 0.075″ | 0.032″ |
+/// | Jupiter | 0.236″ | 0.170″ |
+/// | Saturn | 0.217″ | 0.141″ |
+///
+/// What remains is not a frame error. Uranus and Neptune barely moved (0.605″
+/// to 0.611″ and 1.095″ to 1.029″), and a constant rotation fitted per body
+/// leaves them at 0.61″ and 0.90″. Evaluating the complete untruncated VSOP87A
+/// series gives the same residuals as the committed tables to four decimals
+/// for the outer planets and to within 0.005″ in the mean for the inner ones,
+/// so the committed tables' truncation is not the cause either. The theory was
+/// fitted to the JPL integration DE200 (`vsop87.doc`, "PRECISION"), not to
+/// DE440, and that is what the residual measures.
+///
+/// The target of this matrix is FK5, not the ICRS the rest of the engine
+/// assumes. The two are different realisations of the equator and equinox, and
+/// no published rotation between them is applied here: nothing read for this
+/// change gives one for a theory fitted to DE200. Measured, after this
+/// rotation the Venus and Earth vectors still sit about 16 mas of rotation
+/// from DE440s (a fit, so evidence and not a correction).
+const VSOP87A_TO_EQUATORIAL: [[f64; 3]; 3] = [
+    [1.000_000_000_000, 0.000_000_440_360, -0.000_000_190_919],
+    [-0.000_000_479_966, 0.917_482_137_087, -0.397_776_982_902],
+    [0.0, 0.397_776_982_902, 0.917_482_137_087],
+];
+
 /// Precomputed cosine of the J2000 obliquity, **84381.448 arcsec**, the
-/// IAU 1976 value.
+/// IAU 1976 value. It serves the Moon only, through
+/// [`ecliptic_to_equatorial`]; VSOP87A has its own rotation,
+/// `VSOP87A_TO_EQUATORIAL`.
 ///
 /// That is deliberately *not* the IAU 2006 value of 84381.406 arcsec that
-/// [`crate::obliquity::mean_obliquity`] evaluates. VSOP87A and ELP/MPP02 are
-/// referred to the dynamical equinox and ecliptic of J2000 as their authors
-/// defined it, and 84381.448 is the obliquity that frame is built on; rotating
-/// their output with the IAU 2006 value would introduce a 0.042 arcsec frame
-/// error against the very theory being evaluated.
+/// [`crate::obliquity::mean_obliquity`] evaluates, and whether it is the
+/// right rotation for ELP/MPP02 is not settled here. Measured against DE440s
+/// over 1900 to 2100 (30-day grid), the geocentric lunar vector this rotation
+/// produces sits 0.030″ mean from the SPK path in angle, and the rotation that
+/// best fits the difference is (37.6, 16.4, 14.0) mas about (x, y, z), whose
+/// x part is the 38.9 mas between 84381.448 and 84381.4091. That fit is
+/// evidence, not a correction; ELP/MPP02's own published frame relation has
+/// not been checked against it.
 ///
 /// Through v7.1.1 a module-level `OBLIQUITY_J2000` constant carried 84381.406,
 /// was dead code behind an `#[allow]`, and the comment beside this literal and
@@ -62,10 +138,25 @@ const JD_MIN: f64 = 990_575.0;
 /// Maximum supported Julian Day (~+3000 CE).
 const JD_MAX: f64 = 2_816_788.0;
 
-/// Rotate a vector from ecliptic (J2000) to equatorial (ICRS approximation).
+/// Rotate a vector from ecliptic (J2000) to equatorial (ICRS approximation)
+/// about x by the IAU 1976 obliquity. Used for the Moon only; VSOP87A goes
+/// through [`vsop87a_to_equatorial`].
 #[inline]
 fn ecliptic_to_equatorial(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
     (x, y * COS_EPS - z * SIN_EPS, y * SIN_EPS + z * COS_EPS)
+}
+
+/// Rotate a VSOP87A vector from the theory's dynamical ecliptic and equinox of
+/// J2000 to the equatorial frame, by the authors' published matrix
+/// (`VSOP87A_TO_EQUATORIAL`).
+#[inline]
+fn vsop87a_to_equatorial(x: f64, y: f64, z: f64) -> (f64, f64, f64) {
+    let m = &VSOP87A_TO_EQUATORIAL;
+    (
+        m[0][0] * x + m[0][1] * y + m[0][2] * z,
+        m[1][0] * x + m[1][1] * y + m[1][2] * z,
+        m[2][0] * x + m[2][1] * y + m[2][2] * z,
+    )
 }
 
 /// Convert VSOP87A planet enum from Body enum.
@@ -88,20 +179,22 @@ fn body_to_vsop_planet(body: Body) -> Option<Planet> {
     }
 }
 
-/// Compute a VSOP87A planet state in barycentric equatorial (ICRS) frame.
+/// Compute a VSOP87A planet state in barycentric equatorial frame.
 ///
-/// Heliocentric ecliptic → equatorial rotation. Heliocentric ≈ barycentric
-/// (Sun ≈ SSB; error < 0.5 arcsec for inner planets, acceptable budget).
+/// Heliocentric ecliptic → equatorial rotation, by the matrix the VSOP87
+/// authors publish (`VSOP87A_TO_EQUATORIAL`), whose target is FK5 J2000 and
+/// which is treated as ICRS. Heliocentric ≈ barycentric (Sun ≈ SSB; error
+/// < 0.5 arcsec for inner planets, acceptable budget).
 fn vsop_state(planet: Planet, jd: f64) -> StateVector {
     let (pos_ecl, vel_ecl) = vsop87a::vsop87a_heliocentric(planet, jd);
 
-    let (px, py, pz) = ecliptic_to_equatorial(pos_ecl[0], pos_ecl[1], pos_ecl[2]);
+    let (px, py, pz) = vsop87a_to_equatorial(pos_ecl[0], pos_ecl[1], pos_ecl[2]);
 
     // Velocity: AU/millennium → AU/day
     let vx_day = vel_ecl[0] / DAYS_PER_MILLENNIUM;
     let vy_day = vel_ecl[1] / DAYS_PER_MILLENNIUM;
     let vz_day = vel_ecl[2] / DAYS_PER_MILLENNIUM;
-    let (vx, vy, vz) = ecliptic_to_equatorial(vx_day, vy_day, vz_day);
+    let (vx, vy, vz) = vsop87a_to_equatorial(vx_day, vy_day, vz_day);
 
     StateVector {
         position: Position {
@@ -375,7 +468,7 @@ impl EphemerisProvider for AnalyticalProvider {
     /// That fixes the addition's rounding error at `|δ| ≤ ulp(1 AU)/2 ≈
     /// 1.66e-5 m` (0.03 **mm**) — an *absolute* bound that holds everywhere in
     /// the supported range, ten orders of magnitude inside VSOP87A's own
-    /// 0.239″ mean residual against Horizons. This path removes the two
+    /// 0.164″ mean residual against Horizons. This path removes the two
     /// roundings rather than introducing one, so where it differs at all it
     /// is the *more* accurate of the two.
     ///
@@ -642,6 +735,164 @@ mod tests {
             "SIN_EPS {SIN_EPS} vs sin(OBLIQUITY_J2000) {}",
             libm::sin(OBLIQUITY_J2000)
         );
+    }
+
+    /// The matrix the VSOP87 authors print in `vsop87.doc`, typed a second time
+    /// here in the document's own row order and signs, so that an edit to
+    /// `VSOP87A_TO_EQUATORIAL` alone is caught.
+    const PUBLISHED_ROWS: [[f64; 3]; 3] = [
+        [1.000000000000, 0.000000440360, -0.000000190919],
+        [-0.000000479966, 0.917482137087, -0.397776982902],
+        [0.000000000000, 0.397776982902, 0.917482137087],
+    ];
+
+    /// The constant is the published matrix, entry for entry, and its first
+    /// column is where the VSOP87A x axis lands: `(1, -4.79966e-7, 0)`, a right
+    /// ascension of -0.0990 arcsec in the equatorial frame.
+    #[test]
+    fn vsop87a_matrix_is_the_published_matrix() {
+        for (i, (got_row, want_row)) in VSOP87A_TO_EQUATORIAL
+            .iter()
+            .zip(&PUBLISHED_ROWS)
+            .enumerate()
+        {
+            for (j, (got, want)) in got_row.iter().zip(want_row).enumerate() {
+                assert_eq!(
+                    got.to_bits(),
+                    want.to_bits(),
+                    "VSOP87A_TO_EQUATORIAL[{i}][{j}] = {got} is not the published {want}"
+                );
+            }
+        }
+        let (x, y, z) = vsop87a_to_equatorial(1.0, 0.0, 0.0);
+        assert_eq!((x, y, z), (1.0, -0.000000479966, 0.0));
+    }
+
+    /// The published matrix is a rotation, to the precision it is printed at.
+    ///
+    /// Each entry is rounded to twelve decimals, so each is wrong by at most
+    /// 5e-13, and a row product or a determinant mixes three entries of size
+    /// up to 1: the defect cannot honestly be expected below about 1.5e-12.
+    /// Measured 2026-10-24: largest `|M·Mᵀ − I|` entry 5.8e-13. The bound is
+    /// 2e-12, three times the measurement; a transcription slip in the ninth
+    /// decimal (a 1e-9 error) is four hundred times over it.
+    #[test]
+    fn vsop87a_matrix_is_a_rotation_to_its_printed_precision() {
+        let m = &VSOP87A_TO_EQUATORIAL;
+        let mut worst = 0.0_f64;
+        for (i, row_i) in m.iter().enumerate() {
+            for (j, row_j) in m.iter().enumerate() {
+                let dot: f64 = row_i.iter().zip(row_j).map(|(a, b)| a * b).sum();
+                let want = if i == j { 1.0 } else { 0.0 };
+                worst = worst.max((dot - want).abs());
+            }
+        }
+        let det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+            - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+            + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+        println!(
+            "VSOP87A matrix: worst |M Mt - I| = {worst:e}, det - 1 = {:e}",
+            det - 1.0
+        );
+        assert!(worst < 2e-12, "M Mt differs from I by {worst:e}");
+        assert!((det - 1.0).abs() < 2e-12, "det is {det}, not +1");
+    }
+
+    /// The matrix is `Rz(phi) · Rx(eps)` with `eps = 84381.4091` arcsec and
+    /// `phi = -0.0990` arcsec, to its own rounding.
+    ///
+    /// Working. `Rz(phi) · Rx(eps)` is
+    ///
+    /// ```text
+    /// [ cos phi   -sin phi cos eps    sin phi sin eps ]
+    /// [ sin phi    cos phi cos eps   -cos phi sin eps ]
+    /// [ 0          sin eps            cos eps         ]
+    /// ```
+    ///
+    /// Its bottom row is `(0, sin eps, cos eps)`, so the printed `0.397776982902`
+    /// and `0.917482137087` fix `eps = atan2(0.397776982902, 0.917482137087)`,
+    /// which is 84381.4091 arcsec (23 deg 26 min 21.4091 sec). Its (2,1)
+    /// entry is `sin phi`, so the printed `-0.000000479966` fixes
+    /// `phi = -0.0990` arcsec. The (1,2) and (1,3) entries then follow as
+    /// `-sin phi cos eps = +4.4036e-7` and `sin phi sin eps = -1.9092e-7`,
+    /// matching the printed `0.000000440360` and `-0.000000190919`. The
+    /// tolerance is 1e-12, twice the 5e-13 a twelve-decimal print can hide;
+    /// measured largest difference 4.6e-13.
+    #[test]
+    fn vsop87a_matrix_is_rz_phi_rx_eps() {
+        const ARCSEC: f64 = core::f64::consts::PI / (180.0 * 3600.0);
+        let eps = 84_381.4091 * ARCSEC;
+        let phi = -0.0990 * ARCSEC;
+        let (se, ce) = (libm::sin(eps), libm::cos(eps));
+        let (sp, cp) = (libm::sin(phi), libm::cos(phi));
+        let want = [
+            [cp, -sp * ce, sp * se],
+            [sp, cp * ce, -cp * se],
+            [0.0, se, ce],
+        ];
+        let worst = VSOP87A_TO_EQUATORIAL
+            .iter()
+            .flatten()
+            .zip(want.iter().flatten())
+            .map(|(got, want)| (got - want).abs())
+            .fold(0.0_f64, f64::max);
+        println!("VSOP87A matrix vs Rz(phi) Rx(eps): worst entry difference {worst:e}");
+        assert!(worst < 1e-12, "largest entry difference {worst:e}");
+    }
+
+    /// `vsop_state` rotates VSOP87A with the published matrix and not with the
+    /// Moon's obliquity-only rotation.
+    ///
+    /// The two differ by 38.9 mas about x and 99.0 mas about z, a rotation of
+    /// 106 mas whose axis lies at ecliptic latitude -59 degrees. The planets
+    /// stay within 8 degrees of the ecliptic plane, so they are at least 50
+    /// degrees from the axis, and at 0.3 AU or more the two rotations move a
+    /// vector apart by at least 1e-7 AU: eight orders over the 1e-15 AU
+    /// agreement required with the matrix, so a revert to
+    /// `ecliptic_to_equatorial` cannot pass.
+    #[test]
+    fn vsop_state_uses_the_published_rotation() {
+        let planets = [Planet::Mercury, Planet::Venus, Planet::Earth, Planet::Mars];
+        for planet in planets {
+            for jd in [2_415_020.5, J2000, 2_460_676.5] {
+                let (raw, raw_v) = vsop87a::vsop87a_heliocentric(planet, jd);
+                let got = vsop_state(planet, jd);
+                let m = &PUBLISHED_ROWS;
+                let rot = |v: [f64; 3]| -> [f64; 3] {
+                    core::array::from_fn(|i| m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2])
+                };
+                let want = rot(raw);
+                let want_v = rot([
+                    raw_v[0] / DAYS_PER_MILLENNIUM,
+                    raw_v[1] / DAYS_PER_MILLENNIUM,
+                    raw_v[2] / DAYS_PER_MILLENNIUM,
+                ]);
+                let got_p = [got.position.x, got.position.y, got.position.z];
+                let got_v = [got.velocity.x, got.velocity.y, got.velocity.z];
+                for (k, (((gp, wp), gv), wv)) in
+                    got_p.iter().zip(&want).zip(&got_v).zip(&want_v).enumerate()
+                {
+                    assert!(
+                        (gp - wp).abs() < 1e-15,
+                        "{planet:?} jd {jd} position[{k}]: {gp} vs published-matrix {wp}"
+                    );
+                    assert!(
+                        (gv - wv).abs() < 1e-17,
+                        "{planet:?} jd {jd} velocity[{k}]: {gv} vs published-matrix {wv}"
+                    );
+                }
+                // And it is a different answer from the obliquity-only rotation.
+                let (ox, oy, oz) = ecliptic_to_equatorial(raw[0], raw[1], raw[2]);
+                let apart = libm::sqrt(
+                    (got_p[0] - ox).powi(2) + (got_p[1] - oy).powi(2) + (got_p[2] - oz).powi(2),
+                );
+                assert!(
+                    apart > 5e-8,
+                    "{planet:?} jd {jd}: rotations agree to {apart:e} AU, they should differ \
+                     by the 0.1 arcsec equinox offset"
+                );
+            }
+        }
     }
 
     /// `ecliptic_to_equatorial` must preserve length — it is a rotation about
