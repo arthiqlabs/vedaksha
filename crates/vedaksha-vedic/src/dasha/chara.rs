@@ -510,7 +510,7 @@ fn stronger_co_lord(
         (true, false) => return second,
         // Both at home (12 years: the count is to the sign itself), or only
         // the second -> the first.
-        (true, true) | (false, true) => return first,
+        (_, true) => return first,
         (false, false) => {}
     }
     if co_lord_key(sign, first, placements, rules) >= co_lord_key(sign, second, placements, rules) {
