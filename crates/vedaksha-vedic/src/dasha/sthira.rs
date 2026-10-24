@@ -90,6 +90,11 @@
 //! The marks can leave no graha: this function then returns `None`, and
 //! [`compute_sthira`] with the Brahma anchor returns `None` with it. The text
 //! does not say what a chart without a Brahma uses; choose another anchor.
+//! How often that happens was measured once, on 100,000 charts whose lagna
+//! and grahas were each drawn uniformly over the twelve signs (not real
+//! charts, whose placements are not independent): about 38% with the default
+//! window and about 30% with [`BrahmaWindow::BehindInclusive`]. Treat the
+//! `None` as the common case for the Brahma anchor, not an edge.
 
 use serde::{Deserialize, Serialize};
 
