@@ -300,6 +300,18 @@ pub trait Strength {
     fn stronger_graha(&self, a: Graha, b: Graha) -> Graha;
 }
 
+/// A rashi's lord for a comparison: its only lord, or the stronger of its
+/// two (Scorpio: Mars and Ketu; Aquarius: Saturn and Rahu) by `strength`,
+/// the first-named lord on a tie.
+#[must_use]
+pub fn effective_lord(sign: u8, strength: &dyn Strength) -> Graha {
+    match *rashi_lords(sign) {
+        [first, second] => strength.stronger_graha(first, second),
+        [only] => only,
+        _ => Graha::Sun,
+    }
+}
+
 /// Rank of a rashi's natural strength: dual over fixed over movable (2.3.9).
 const fn natural_rank(sign: u8) -> u8 {
     match modality(sign) {
@@ -328,15 +340,6 @@ impl<'a> JaiminiStrength<'a> {
             .occupants_of(sign)
             .iter()
             .any(|&g| self.placements.sign_of(g) == exaltation_sign(g))
-    }
-
-    /// A rashi's lord for comparison: the only lord, or the stronger of two.
-    fn effective_lord(&self, sign: u8) -> Graha {
-        match *rashi_lords(sign) {
-            [only] => only,
-            [first, second] => self.stronger_graha(first, second),
-            _ => Graha::Sun,
-        }
     }
 
     fn lord_stands_in_own_rashi(&self, sign: u8) -> bool {
@@ -386,7 +389,7 @@ impl Strength for JaiminiStrength<'_> {
             return pick(ra > rb);
         }
         // 2.3.10: the lords, by the graha tests.
-        let (la, lb) = (self.effective_lord(a), self.effective_lord(b));
+        let (la, lb) = (effective_lord(a, self), effective_lord(b, self));
         if let Some(winner) = self.graha_edge(la, lb) {
             return pick(winner == la);
         }

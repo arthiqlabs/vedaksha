@@ -7,9 +7,11 @@
 
 pub mod ashtottari;
 pub mod chara;
+pub mod maheshwara;
 pub mod narayana;
 pub mod rashi_antar;
 pub mod rashi_strength;
+pub mod shoola;
 pub mod sthira;
 pub mod vimshottari;
 pub mod yogini;

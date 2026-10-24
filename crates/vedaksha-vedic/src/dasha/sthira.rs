@@ -16,7 +16,7 @@
 //!   *shashi-nanda-pavakah kramad abdah sthira-dashayam* (Jaimini 2.3.3),
 //!   which the commentary reads Aries 7, Taurus 8, Gemini 9; BPHS ch. 46
 //!   (the dasha chapter, in the recension this crate follows throughout)
-//!   sloka 168, *chare sapta sthire cashtau dvandve tatra sama smritah*.
+//!   sloka 168, *chare sapta sthire chashtau* ... *samah smritah*.
 //!   Grade (a). There is no lord-distance count in this dasha, and twelve
 //!   periods make 96 years.
 //! - **Anchor.** *brahma-adir esha* (2.3.4): the dasha begins from the rashi
@@ -39,10 +39,10 @@
 //!   the lagna (2.3.32, which names the *chara* dasha), the modality of the
 //!   anchor (forward from a movable or dual rashi, reverse from a fixed
 //!   one), and an explicit direction.
-//! - **Antardashas.** BPHS 51.5 to 51.9 name the sthira dasha among the
-//!   dashas whose antars are twelfths (51.11 on the paka and bhoga rashis
-//!   lists "the chara paryaya, the sthira paryaya and the trikona dasha");
-//!   so the defaults of [`super::rashi_antar`] apply. Grade (a) for the rule,
+//! - **Antardashas.** BPHS 51.5 to 51.9 give the antar rule, and slokas 11 and
+//!   12 of the same chapter, on the paka and bhoga rashis, name "the chara
+//!   paryaya, the sthira paryaya and the trikona dasha" as the dashas it
+//!   covers; so the defaults of [`super::rashi_antar`] apply. Grade (a) for the rule,
 //!   (c) for the proportional-length alternative.
 //!
 //! # The Brahma graha (Jaimini 2.1.52 to 2.1.57; BPHS 46.170 to 173)
