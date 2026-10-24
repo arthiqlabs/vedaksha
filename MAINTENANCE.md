@@ -34,12 +34,15 @@ If your application converts civil UTC to UT1 before calling, that conversion is
 **Impact if neglected:** The prediction error grows roughly quadratically. After 5 years without update, the error is typically < 2 seconds. After 20 years, it could be 10–30 seconds. For the Moon (fastest-moving body), 1 second ≈ 0.5 arcsecond.
 
 **How to update:**
-1. Get the latest Delta T observations from: https://datacenter.iers.org/data/latestVersion/finals2000A.all (column for TT-UT1) or Espenak & Meeus tables
-2. Update the polynomial coefficients in `crates/vedaksha-ephem-core/src/delta_t.rs`
-3. Extend the historical measured table with new data points
-4. Run accuracy tests to verify the new polynomial matches observed values
+1. Download the two USNO files, each into a directory of its own (they are untrusted input; never run anything from inside that directory):
+   - `https://maia.usno.navy.mil/ser7/deltat.data`, monthly Delta T since 1973 (gains a row each month)
+   - `https://maia.usno.navy.mil/ser7/historic_deltat.data`, half-year Delta T from 1657 (static; the rows from 1900.0 to 1973.0 are used)
+2. Regenerate the table: `python3 -I scripts/generate_delta_t_table.py --historic <path> --monthly <path> --retrieved <YYYY-MM-DD>`. It writes `crates/vedaksha-ephem-core/src/delta_t_table.rs` with the sha256 of both inputs in its header. Update the retrieval date, row counts and last-row date in `delta_t.rs`'s module notes and in `DATA_PROVENANCE.md`.
+3. Refresh the predicted knots (`PREDICTED_KNOTS` in `delta_t.rs`, 2030 onward) from `https://maia.usno.navy.mil/ser7/deltat.preds`. They are currently the Espenak & Meeus 2005-2050 polynomial, which has run about 4 s high by 2033 against that file.
+4. Run `cargo test -p vedaksha-ephem-core --lib delta_t::`. `rows_of_the_usno_files_are_hit_exactly_at_their_own_instants` pins the last row, so update it to the new last row. If a leap second has been inserted since 2017, add it to the list in `monthly_rows_stay_within_the_leap_second_bound_of_utc` and extend that test's range.
+5. Re-run the two oracles (`oracle_comparison.rs`, `analytical_oracle.rs`) and re-pin `metrics.json`. Against Horizons the Moon is the instrument: 1 s of Delta T is 0.55 arcsec of Moon longitude. After 1962 Horizons' "UT" is UTC, not UT1, so a floor of about 0.14 arcsec on the Moon over 1973-2025 (the mean |UT1 - UTC|, up to 0.9 s) remains whatever the table says.
 
-**Frequency:** Every 5 years is sufficient for astrological use. Every 1–2 years for research-grade.
+**Frequency:** Once a year keeps charts cast for the current year on measured values (the table ends at the month it was made, and the prediction after it is a few seconds out). Every 5 years is sufficient for astrological use elsewhere; every 1–2 years for research-grade.
 
 ---
 
