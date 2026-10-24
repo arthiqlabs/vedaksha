@@ -1568,7 +1568,12 @@ mod tests {
             // The analytical provider spans far wider than the tool's range,
             // so a day just outside it is where the two surfaces could part.
             let server = vedaksha_mcp::server::McpServer::new();
-            for jd in [dasha::JD_MIN - 1.0, dasha::JD_MIN, dasha::JD_MAX, dasha::JD_MAX + 1.0] {
+            for jd in [
+                dasha::JD_MIN - 1.0,
+                dasha::JD_MIN,
+                dasha::JD_MAX,
+                dasha::JD_MAX + 1.0,
+            ] {
                 let mut a: serde_json::Value = serde_json::from_str(INPUT).unwrap();
                 a["julian_day"] = jd.into();
                 let wasm = compute_shadbala_inner(&a.to_string());
