@@ -175,18 +175,28 @@ fn validate_extensions(input: &DashaInput, system: System) -> Result<(), String>
         let levels = u32::from(input.levels.unwrap_or(3).clamp(1, MAX_LEVELS));
         let per_round: u64 = (1..=levels).map(|l| 8_u64.pow(l)).sum();
         let max = u64::from(vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS);
-        // `until` stops at the first round ending at or past it; a round is
-        // 36 years, and the first round is the shortest, so this counts high.
+        // `until` stops at the first round ending at or past it. The rounds
+        // are counted by the engine itself at one level (at most
+        // `MAX_YOGINI_ROUNDS` rounds of eight periods), so the count is exact
+        // and an `until` however far ahead cannot overflow it.
         let rounds = match (input.rounds, input.until) {
             (Some(r), _) => u64::from(r),
-            (None, Some(until)) => {
-                let years = (until - input.birth_jd) / (36.0 * 365.25);
-                if years > 0.0 {
-                    (years.ceil() as u64 + 1).min(max)
-                } else {
-                    1
-                }
-            }
+            (None, Some(until)) => input
+                .moon_longitude
+                .filter(|m| (0.0..360.0).contains(m))
+                .and_then(|moon| {
+                    vedaksha_vedic::dasha::yogini::compute_yogini_until(
+                        moon,
+                        input.birth_jd,
+                        1,
+                        until,
+                    )
+                    .maha_periods
+                    .last()
+                    .map(|p| u64::from(p.round))
+                })
+                .unwrap_or(1)
+                .min(max),
             (None, None) => 1,
         };
         if per_round * rounds > MAX_YOGINI_PERIODS {

@@ -1569,11 +1569,14 @@ impl McpServer {
         // bisection below stops at 1e-8 day, and the walk moves a Moon
         // crossing by under 0.1 ms, so an event moves by under a millisecond.
         // The planets are not walked; see `vedaksha_vedic::walked`.
-        let sky = vedaksha_vedic::walked::WalkedSky::new(
-            &provider,
-            input.start_jd - 1.0,
-            input.end_jd + 1.0,
+        // Validation bounds the span's length, not its order; a reversed span
+        // must reach the scan, which finds nothing in it, and not the walk's
+        // assert.
+        let (lo, hi) = (
+            input.start_jd.min(input.end_jd),
+            input.start_jd.max(input.end_jd),
         );
+        let sky = vedaksha_vedic::walked::WalkedSky::new(&provider, lo - 1.0, hi + 1.0);
         let get_longitude = |body_idx: usize, jd: f64| -> Option<f64> {
             match all_bodies.get(body_idx)? {
                 (_, Body::Moon) => sky.moon_longitude(jd),
@@ -1627,11 +1630,14 @@ impl McpServer {
         // The span runs a day before the window, for the sunrise that begins
         // the first vara, and two after it, for an end that falls past the
         // window; a read outside it falls back to the direct pipeline.
-        let sky = WalkedSky::new(
-            &AnalyticalProvider,
-            input.start_jd - 1.0,
-            input.end_jd + 2.0,
+        // Validation bounds the span's length, not its order; a reversed span
+        // must reach the scan, which finds nothing in it, and not the walk's
+        // assert.
+        let (lo, hi) = (
+            input.start_jd.min(input.end_jd),
+            input.start_jd.max(input.end_jd),
         );
+        let sky = WalkedSky::new(&AnalyticalProvider, lo - 1.0, hi + 2.0);
 
         // Muhurta needs sidereal Sun and Moon longitudes (Lahiri ayanamsha),
         // using the TRUE ayanamsha (mean + nutation-in-longitude) so the
@@ -2625,6 +2631,27 @@ mod tests {
             val["error"]["data"]["error_code"].as_str().unwrap(),
             "SEARCH_RANGE_TOO_LARGE"
         );
+    }
+
+    /// Validation bounds a search span's length and not its order, so a
+    /// reversed span reaches the handler. It must answer, not abort the
+    /// process (the release profile aborts on panic, and the walk asserts an
+    /// ordered span).
+    #[test]
+    fn a_reversed_search_span_is_answered_not_aborted() {
+        let s = server();
+        for args in [
+            r#"{"name":"search_transits","arguments":{"start_jd":2451560.0,"end_jd":2451545.0,
+                "natal_positions":[{"name":"Mars","longitude":45.0}],"bodies":["Moon"]}}"#,
+            r#"{"name":"search_muhurta","arguments":{"start_jd":2451560.0,"end_jd":2451545.0,
+                "latitude":13.08,"longitude":80.27}}"#,
+        ] {
+            let resp = s.handle_request(&format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{args}}}"#
+            ));
+            let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+            assert!(val["result"].is_object(), "{args}: {val}");
+        }
     }
 
     // 365-day transit search in debug mode runs unbounded — search iterates
