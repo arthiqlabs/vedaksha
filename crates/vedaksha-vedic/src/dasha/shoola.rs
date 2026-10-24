@@ -474,6 +474,16 @@ mod tests {
         assert_eq!(anchor(ShoolaAnchor::Explicit(15)), 3, "reduced mod 12");
     }
 
+    // 4b. The seventh can be the stronger of the pair. Lagna Aries; the Sun,
+    // Moon and Mars in Libra(6), nothing in Aries: Libra holds more.
+    #[test]
+    fn the_seventh_can_be_the_anchor() {
+        let p = chart(0, [6, 6, 6, 3, 3, 3, 9, 11]);
+        let d = run(&p, &ShoolaOptions::default());
+        assert_eq!(d.anchor_sign, 6);
+        assert_eq!(d.periods[0].sign_index, 6);
+    }
+
     // 5. The house each relative reads from (2.3.19 to 2.3.23).
     #[test]
     fn relatives_use_their_houses() {

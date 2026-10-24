@@ -498,6 +498,26 @@ mod tests {
         );
     }
 
+    // 6b. The base is the stronger of the lagna and its seventh, not always
+    // the lagna. Lagna Aries(0); the Sun, Moon and Mars in Libra(6), so
+    // Libra, holding three grahas to Aries's none, is the base. The window
+    // behind Libra excluding it is Virgo(5) Leo(4) Cancer(3) Gemini(2)
+    // Taurus(1) Aries(0); the odd ones are Leo, Gemini and Aries. Mercury,
+    // lord of the sixth, stands in Gemini(2): the only candidate (Mars, lord
+    // of the eighth, stands in Libra, outside this window though inside the
+    // one behind Aries; Jupiter and Venus are in Cancer, an even rashi; Rahu
+    // in Pisces puts Ketu in Virgo, also even). The lord of the eighth from
+    // the Sun in Libra is Taurus's Venus, in Cancer, not at home. So Brahma
+    // is Mercury; with the lagna as base it would be Mars.
+    #[test]
+    fn the_seventh_can_be_the_base() {
+        let p = chart(0, [6, 6, 6, 2, 3, 3, 9, 11]);
+        assert_eq!(
+            brahma(&p, Graha::Sun, BrahmaRules::default()),
+            Some(Graha::Mercury)
+        );
+    }
+
     // 7. Years by modality and the 96-year total, in every direction, from
     // every anchor: Aries 7, Taurus 8, Gemini 9 and so on.
     #[test]
