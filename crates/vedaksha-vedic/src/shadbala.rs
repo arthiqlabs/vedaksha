@@ -28,7 +28,8 @@
 //! # Two forms
 //!
 //! * **The complete form**, [`compute_shadbala_complete`], takes the birth
-//!   moment, the ayanamsha and the seven grahas and returns a
+//!   moment, the ayanamsha, the four angular cusps and the seven grahas and
+//!   returns a
 //!   [`CompleteShadbala`] per graha with every part below. It is the form that
 //!   follows the verse.
 //! * **The coarse form**, [`compute_shadbala_full`] with [`ShadbalaPlanetData`]
@@ -58,6 +59,8 @@
 //! | Yuddha | 27.20: the difference of the two shadbalas goes to the victor from the vanquished | (a); the winner rule is the caller's [`YuddhaRule`] |
 //! | Cheshta | 27.24 and 27.25: the cheshta kendra, folded, over 3 for Mars to Saturn; 27.18 for the Sun and Moon | (a) |
 //! | Naisargika | 27.14 | (a), unchanged |
+//! | Dig | 27.7 and the first half of 27.8: the arc from the cusp opposite the graha's strong bhava, folded to six signs, over 3 | (a); needs the four angular cusps ([`AngularCusps`]) |
+//! | Drik | 27.19: a quarter of the benefic sphuta drishti added and a quarter of the malefic taken away, the aspect of Mercury and of Jupiter added in full; the aspects are those of BPHS 26.6 to 26.12 ([`crate::drishti`]) | (a) for the rule; (c) for the Mercury and Jupiter clause ([`FullAspectReading`]); the benefic and malefic grahas are those of 3.11 ([`shubha_by_nature`]), with the waning Moon and Mercury's company read as (d) ([`MercuryCompany`]) |
 //!
 //! **The pairing the totals use (27.18).** The Sun's cheshta bala is his ayana
 //! bala and the Moon's is her paksha bala. Both are therefore counted twice in
@@ -66,24 +69,70 @@
 //! the Moon's paksha inside kala bala and gives them no cheshta reaches the
 //! same total with different parts; this module does not.
 //!
+//! # Dig Bala and Drik Bala in the complete form
+//!
+//! * **Dig Bala, 27.7 and the first half of 27.8 (grade (a)).** The verse names,
+//!   for each graha, the bhava whose cusp is *subtracted* from it: from the Sun
+//!   and Mars the fourth (`sukha`), from Jupiter and Mercury the seventh
+//!   (`astam`), from Saturn the lagna, from Venus and the Moon the tenth
+//!   (`dashama`, in another edition `madhya-lagna`). Each is the bhava opposite
+//!   the one where the graha is strong (the Sun and Mars in the tenth, Jupiter
+//!   and Mercury in the lagna, Saturn in the seventh, Venus and the Moon in the
+//!   fourth). The difference, if over six signs (`shad-bha-adhike`), is
+//!   subtracted from the circle (`chakrad vishodhya`), and the degrees are
+//!   divided by three (`tribhir bhaktah`): [`dig_bala_at`]. The result runs from
+//!   0 at the weak cusp to 60 at the point opposite it, continuously. It uses
+//!   the actual cusps, so it reaches 60 only if the cusps are exactly opposite:
+//!   a graha standing on its own strong cusp has 60 only when that cusp is 180
+//!   degrees from the weak one. [`dig_bala`], the bhava-step grade (10 virupas
+//!   a house), stays for the coarse form and is not the verse. The verse names
+//!   seven grahas; the nodes have no dig bala.
+//! * **Drik Bala, 27.19 (grade (a) for the rule, (c) for one clause).** The
+//!   verse: the sum of the other strengths is *diminished by a quarter of the
+//!   aspect of the malefics* (`papa-drik-pada-hinam`), *joined with a quarter
+//!   of the aspect of the benefics* (`shubha-drik-pada-yuk`), *and joined with
+//!   the aspect of Mercury and Jupiter* (`jnejya-drik-yuktam`). The aspect is
+//!   the *sphuta* (degree) drishti of BPHS 26.6 to 26.12, in virupas, from
+//!   [`crate::drishti::sputa_drishti_graha`]; a quarter of a full aspect is 15
+//!   virupas, which is what the coarse [`drik_bala`] counted for each aspect.
+//!   The last clause adds Mercury's and Jupiter's aspects at their whole value,
+//!   unquartered. The verse does not say whether their quarters stay in the
+//!   benefic and malefic sums as well; the sibling rule for bhava bala
+//!   ([`crate::bhava_bala`], 27.28 and 27.29) reads them as in both, a benefic
+//!   Jupiter then contributing 1.25 times his aspect, and that is the default
+//!   here; the other reading, the whole aspect *in place of* the quarter, is
+//!   [`FullAspectReading::InPlaceOfQuarter`]. Nothing clamps the sum: the verse
+//!   gives no bound, so the result can be negative or pass 60 (the coarse form's
+//!   clamp to -30 and 60 is not in the verse). Only the seven grahas cast an
+//!   aspect; the verses give none for Rahu or Ketu. Who is benefic and who is
+//!   malefic is not in 27.19; the complete form reads it from BPHS 3.11
+//!   ([`shubha_by_nature`]): the Sun, Saturn, Mars, the waning Moon (`kshina-
+//!   indu`), Rahu and Ketu are malefic, the rest benefic, and Mercury is
+//!   malefic when joined with a malefic (`krura-yuto budhah`). The verse leaves
+//!   "waning" and "joined" without a measure; the Moon is waning when her
+//!   elongation from the Sun is over six signs (the split paksha bala itself
+//!   makes at 27.10), grade (d), and "joined" is the same rashi by default,
+//!   grade (d), with [`MercuryCompany::WithinDegrees`] as the alternative.
+//!   [`drishti::SputaSpecialRule`](crate::drishti::SputaSpecialRule) chooses
+//!   between the two recensions' special aspects of Saturn, Jupiter and Mars.
+//!
 //! # What neither form covers
 //!
-//! * **Dig Bala** is the bhava-step grade ([`dig_bala`]), 10 virupas per house
-//!   from the weak house. BPHS 27.7 makes it continuous in the degrees from
-//!   the weak angle's cusp, which needs the four cusps; not implemented.
-//! * **Drik Bala** is [`drik_bala`], fifteen virupas per aspect received. BPHS
-//!   27.19 takes a quarter of the drishti pinda; not implemented.
-//! * **Bhava bala** (27.26 to 27.31) is a separate computation.
+//! * **Bhava bala** (27.26 to 27.31) is a separate computation
+//!   ([`crate::bhava_bala`]).
 //!
 //! # Coverage of the coarse form
 //!
 //! Sthana Bala is Uchcha, Ojhayugma, Kendradi and Drekkana; Saptavargaja is
 //! absent. Kala Bala is Nathonnata and Paksha as 0-or-30 steps; Tribhaga, the
 //! abda-masa-vara-hora set, Ayana and Yuddha are absent. Cheshta Bala is the
-//! speed grade of [`cheshta_bala`], which is not a verse rule. Dig, Naisargika
-//! and Drik Bala are as above.
+//! speed grade of [`cheshta_bala`], which is not a verse rule. Dig Bala is the
+//! bhava-step grade of [`dig_bala`] and Drik Bala is [`drik_bala`], fifteen
+//! virupas per aspect received, neither being the verse. Naisargika Bala is as
+//! in the verse.
 
 use crate::cheshta::{YuddhaRule, graha_yuddha};
+use crate::drishti::{SputaSpecialRule, VedicPlanet, sputa_drishti_graha};
 use crate::graha::{Graha, GrahaPosition};
 use crate::kala_khanda::hora;
 use crate::mean_motion::mean_longitude;
@@ -1525,6 +1574,220 @@ pub fn cheshta_bala_at(planet: Graha, jd_tt: f64, true_tropical_longitude_deg: f
         .map(cheshta_bala_from_kendra)
 }
 
+// ── Dig Bala from the cusps (BPHS 27.7 and the first half of 27.8) ──
+
+/// The four angular bhava cusps (the bhava madhya of the first, fourth,
+/// seventh and tenth bhavas) that Dig Bala is measured from, in the sidereal
+/// zodiac, degrees.
+///
+/// BPHS 27.7 names them for the grahas: `lagna`, `sukha`, `astam` and
+/// `dashama`. The cusps are the caller's house division's own; they need not be
+/// exactly opposite one another (the fourth is 180 degrees from the tenth and
+/// the seventh from the first in the quadrant systems, but not in every
+/// system), and Dig Bala reads each one it is given.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct AngularCusps {
+    /// The first bhava (lagna).
+    pub first: f64,
+    /// The fourth bhava (sukha).
+    pub fourth: f64,
+    /// The seventh bhava (astam).
+    pub seventh: f64,
+    /// The tenth bhava (dashama, `madhya-lagna`).
+    pub tenth: f64,
+}
+
+impl AngularCusps {
+    /// The four angular cusps from twelve bhava madhya in zodiacal order from
+    /// the first bhava (indices 0, 3, 6 and 9).
+    #[must_use]
+    pub fn from_twelve(madhya: &[f64; 12]) -> Self {
+        Self {
+            first: madhya[0],
+            fourth: madhya[3],
+            seventh: madhya[6],
+            tenth: madhya[9],
+        }
+    }
+
+    fn all_finite(&self) -> bool {
+        [self.first, self.fourth, self.seventh, self.tenth]
+            .iter()
+            .all(|x| x.is_finite())
+    }
+}
+
+/// The cusp BPHS 27.7 subtracts from each graha: the Sun's and Mars's the
+/// fourth, Jupiter's and Mercury's the seventh, Saturn's the first, Venus's and
+/// the Moon's the tenth. `None` for Rahu and Ketu, which the verse does not
+/// name.
+fn dig_weak_cusp(planet: Graha, cusps: &AngularCusps) -> Option<f64> {
+    match planet {
+        Graha::Sun | Graha::Mars => Some(cusps.fourth),
+        Graha::Jupiter | Graha::Mercury => Some(cusps.seventh),
+        Graha::Saturn => Some(cusps.first),
+        Graha::Venus | Graha::Moon => Some(cusps.tenth),
+        Graha::Rahu | Graha::Ketu => None,
+    }
+}
+
+/// Dig Bala in virupas, 0 to 60, continuous in the longitude (BPHS 27.7 and the
+/// first half of 27.8, grade (a)): the arc from the graha's weak cusp (see
+/// [`AngularCusps`] and the module documentation), taken the short way (a
+/// difference over six signs is taken from the circle), over 3.
+///
+/// ```text
+/// dig_bala = min(|longitude - weak_cusp|, 360 - |longitude - weak_cusp|) / 3
+/// ```
+///
+/// 0 at the weak cusp, 60 at the point opposite it. `longitude_deg` and the
+/// cusps are in one frame. `None` for Rahu and Ketu.
+#[must_use]
+pub fn dig_bala_at(planet: Graha, longitude_deg: f64, cusps: &AngularCusps) -> Option<f64> {
+    dig_weak_cusp(planet, cusps).map(|weak| fold180(longitude_deg - weak) / 3.0)
+}
+
+// ── Drik Bala from the sphuta drishti (BPHS 27.19) ──────────────────
+
+/// How the aspect of Mercury and of Jupiter enters Drik Bala (BPHS 27.19, the
+/// words `jneyjya-drik-yuktam`, "joined with the aspect of Mercury and
+/// Jupiter"). The verse adds their aspect and does not say whether the quarter
+/// they also contribute as benefics (or, for Mercury, malefics) is dropped.
+/// Grade (c).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FullAspectReading {
+    /// The whole aspect is added to the benefic and malefic sums, in which
+    /// Mercury and Jupiter also stand with their quarters. A benefic Jupiter
+    /// then gives 1.25 times his aspect, a malefic Mercury 0.75 times. This is
+    /// how [`crate::bhava_bala`] reads the same clause in 27.28 and 27.29. The
+    /// default.
+    #[default]
+    AddedToQuarter,
+    /// The whole aspect stands where their quarter would: Mercury and Jupiter
+    /// give exactly their aspect, added, and no quarter.
+    InPlaceOfQuarter,
+}
+
+/// What "joined" (`yuta`) means in BPHS 3.11, "Mercury is malefic when joined
+/// with a malefic" (`krura-yuto budhah`). The verse gives no measure. Grade
+/// (d).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum MercuryCompany {
+    /// In the same rashi. The default.
+    #[default]
+    SameRashi,
+    /// Within this many degrees of longitude, across a sign boundary too.
+    WithinDegrees(f64),
+}
+
+/// Whether the Moon is waning: her elongation from the Sun over six signs, the
+/// same split paksha bala makes (27.10). At exactly a full moon she is not yet
+/// waning.
+fn moon_is_waning(moon_longitude_deg: f64, sun_longitude_deg: f64) -> bool {
+    (moon_longitude_deg - sun_longitude_deg).rem_euclid(360.0) > 180.0
+}
+
+/// Whether a graha is benefic (`saumya`, `true`) or malefic (`krura`, `false`)
+/// as BPHS 3.11 names them (grade (a) for the groups, (d) for the two measures
+/// below). The malefics are the Sun, Saturn, Mars, the waning Moon, Rahu and
+/// Ketu; the other grahas (Jupiter, Venus, the waxing Moon and Mercury) are
+/// benefic, except that Mercury is malefic when joined with a malefic, which
+/// is [`MercuryCompany`]'s measure. The waning Moon is the Moon at over six
+/// signs' elongation from the Sun.
+///
+/// `positions` holds the grahas present, in one frame; it must hold the Sun and
+/// the Moon (`None` otherwise, the Moon's phase being needed to know who is
+/// malefic). Rahu and Ketu are company for Mercury only if they are in it.
+#[must_use]
+pub fn shubha_by_nature(
+    planet: Graha,
+    positions: &[GrahaPosition],
+    company: MercuryCompany,
+) -> Option<bool> {
+    let at = |g: Graha| {
+        positions
+            .iter()
+            .find(|p| p.planet == g)
+            .map(|p| p.longitude)
+    };
+    let (sun, moon) = (at(Graha::Sun)?, at(Graha::Moon)?);
+    let waning = moon_is_waning(moon, sun);
+    Some(match planet {
+        Graha::Sun | Graha::Mars | Graha::Saturn | Graha::Rahu | Graha::Ketu => false,
+        Graha::Moon => !waning,
+        Graha::Jupiter | Graha::Venus => true,
+        Graha::Mercury => {
+            let mercury = at(Graha::Mercury)?;
+            let joined = |other: f64| match company {
+                MercuryCompany::SameRashi => sign_of(other) == sign_of(mercury),
+                MercuryCompany::WithinDegrees(orb) => fold180(other - mercury) <= orb,
+            };
+            let malefic_company = positions.iter().any(|p| match p.planet {
+                Graha::Sun | Graha::Mars | Graha::Saturn | Graha::Rahu | Graha::Ketu => {
+                    joined(p.longitude)
+                }
+                Graha::Moon => waning && joined(p.longitude),
+                Graha::Mercury | Graha::Jupiter | Graha::Venus => false,
+            });
+            !malefic_company
+        }
+    })
+}
+
+/// A graha casting an aspect on another, for [`drik_bala_sputa`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DrikAspector {
+    /// The aspecting graha. Only the seven classical grahas cast an aspect;
+    /// Rahu and Ketu are skipped.
+    pub graha: Graha,
+    /// Its longitude, in the frame of the aspected longitude.
+    pub longitude_deg: f64,
+    /// Whether it is benefic (adds) or malefic (takes away), by
+    /// [`shubha_by_nature`] or the caller's own reading.
+    pub benefic: bool,
+}
+
+/// Drik Bala of the graha at `target_longitude_deg`, in virupas, from the
+/// grahas in `aspectors` (BPHS 27.19; see the module documentation).
+///
+/// Each aspector's value is `sputa_drishti_graha(graha, its longitude, the
+/// target's, special)`, 0 to 60. A quarter of each benefic's is added and a
+/// quarter of each malefic's taken away, and the aspect of Mercury and of
+/// Jupiter is added whole, either on top of those quarters or in place of
+/// them, as `full` reads. The caller leaves the target itself out of
+/// `aspectors`; an aspector that is Rahu or Ketu casts none and is skipped.
+#[must_use]
+pub fn drik_bala_sputa(
+    target_longitude_deg: f64,
+    aspectors: &[DrikAspector],
+    special: SputaSpecialRule,
+    full: FullAspectReading,
+) -> f64 {
+    let mut total = 0.0;
+    for a in aspectors {
+        if !is_classical(a.graha) {
+            continue;
+        }
+        let value = sputa_drishti_graha(
+            VedicPlanet::from(a.graha),
+            a.longitude_deg,
+            target_longitude_deg,
+            special,
+        );
+        let whole = matches!(a.graha, Graha::Mercury | Graha::Jupiter);
+        if whole && full == FullAspectReading::InPlaceOfQuarter {
+            total += value;
+            continue;
+        }
+        let quarter = value / 4.0;
+        total += if a.benefic { quarter } else { -quarter };
+        if whole {
+            total += value;
+        }
+    }
+    total
+}
+
 // ── The complete form ───────────────────────────────────────────────
 
 /// The birth moment as Kala Bala needs it.
@@ -1556,6 +1819,8 @@ pub struct ShadbalaContext {
     pub ayanamsha_deg: f64,
     /// The birth moment.
     pub moment: KalaMoment,
+    /// The four angular cusps, sidereal, that Dig Bala is measured from.
+    pub cusps: AngularCusps,
 }
 
 /// One graha's chart data for the complete form.
@@ -1569,10 +1834,6 @@ pub struct CompletePlanetData {
     /// Equatorial declination in degrees, north positive: needed only under
     /// [`AyanaReading::Declination`].
     pub declination_deg: Option<f64>,
-    /// Number of benefic aspects received (Drik Bala).
-    pub benefic_aspect_count: u32,
-    /// Number of malefic aspects received (Drik Bala).
-    pub malefic_aspect_count: u32,
 }
 
 /// The doctrine and convention choices of the complete form, each documented
@@ -1594,6 +1855,14 @@ pub struct ShadbalaOptions<'a> {
     pub drekkana: DrekkanaOrder,
     /// How the winner of a planetary war is decided.
     pub yuddha_rule: YuddhaRule,
+    /// Which recension's special aspects of Saturn, Jupiter and Mars Drik Bala
+    /// reads.
+    pub sputa_special: SputaSpecialRule,
+    /// How Mercury's and Jupiter's whole aspect enters Drik Bala.
+    pub full_aspects: FullAspectReading,
+    /// What it is for Mercury to be joined with a malefic (BPHS 3.11), which
+    /// decides whether his quarter in Drik Bala is added or taken away.
+    pub mercury_company: MercuryCompany,
 }
 
 impl Default for ShadbalaOptions<'static> {
@@ -1606,6 +1875,9 @@ impl Default for ShadbalaOptions<'static> {
             ayana: AyanaReading::default(),
             drekkana: DrekkanaOrder::default(),
             yuddha_rule: YuddhaRule::NorthernLatitude,
+            sputa_special: SputaSpecialRule::default(),
+            full_aspects: FullAspectReading::default(),
+            mercury_company: MercuryCompany::default(),
         }
     }
 }
@@ -1621,6 +1893,8 @@ pub enum ShadbalaError {
     /// The sunrise, sunset and next sunrise are not in order, or the birth is
     /// not between the two sunrises, or a time is not finite.
     BadMoment,
+    /// One of the four angular cusps is not finite.
+    BadCusps,
 }
 
 impl core::fmt::Display for ShadbalaError {
@@ -1635,6 +1909,7 @@ impl core::fmt::Display for ShadbalaError {
                 f,
                 "the birth must lie between two sunrises with the sunset between them"
             ),
+            Self::BadCusps => write!(f, "the four angular cusps must be finite longitudes"),
         }
     }
 }
@@ -1692,7 +1967,7 @@ pub struct CompleteShadbala {
     pub planet: Graha,
     /// Positional strength by part.
     pub sthana: SthanaParts,
-    /// Directional strength ([`dig_bala`]).
+    /// Directional strength ([`dig_bala_at`]).
     pub dig_bala: f64,
     /// Temporal strength by part.
     pub kala: KalaParts,
@@ -1701,7 +1976,7 @@ pub struct CompleteShadbala {
     pub cheshta_bala: f64,
     /// Natural strength.
     pub naisargika_bala: f64,
-    /// Aspectual strength ([`drik_bala`]).
+    /// Aspectual strength ([`drik_bala_sputa`]), signed.
     pub drik_bala: f64,
     /// Sum of the six: `sthana.total + dig_bala + kala.total + cheshta_bala +
     /// naisargika_bala + drik_bala`.
@@ -1739,11 +2014,11 @@ fn validate_moment(m: &KalaMoment) -> Result<(), ShadbalaError> {
 }
 
 /// Compute Shadbala by every part of BPHS chapter 27 (see the module
-/// documentation for what each part is, its verse and its grade, and for the
-/// two components still outside it, Dig and Drik).
+/// documentation for what each part is, its verse and its grade).
 ///
-/// `planets` must hold all seven classical grahas; Rahu and Ketu, if present,
-/// are ignored. The result has one entry per classical graha supplied, in
+/// `planets` must hold all seven classical grahas. Rahu and Ketu, if present,
+/// get no result; they count only as malefic company for Mercury in Drik Bala
+/// (BPHS 3.11). The result has one entry per classical graha supplied, in
 /// input order.
 ///
 /// The kala total pairs the parts as BPHS 27.18 does: the Sun's ayana bala and
@@ -1754,7 +2029,7 @@ fn validate_moment(m: &KalaMoment) -> Result<(), ShadbalaError> {
 /// [`ShadbalaError::MissingGraha`] if a classical graha is absent,
 /// [`ShadbalaError::MissingDeclination`] under [`AyanaReading::Declination`]
 /// for a graha without one, [`ShadbalaError::BadMoment`] for a malformed
-/// birth moment.
+/// birth moment, [`ShadbalaError::BadCusps`] for a cusp that is not finite.
 pub fn compute_shadbala_complete(
     planets: &[CompletePlanetData],
     context: &ShadbalaContext,
@@ -1762,6 +2037,9 @@ pub fn compute_shadbala_complete(
 ) -> Result<Vec<CompleteShadbala>, ShadbalaError> {
     let moment = &context.moment;
     validate_moment(moment)?;
+    if !context.cusps.all_finite() {
+        return Err(ShadbalaError::BadCusps);
+    }
 
     let find = |g: Graha| {
         planets
@@ -1775,6 +2053,25 @@ pub fn compute_shadbala_complete(
     }
     let sun_lon = find(Graha::Sun)?.position.longitude;
     let moon_lon = find(Graha::Moon)?.position.longitude;
+
+    // Who is benefic, for Drik Bala: the seven, with Rahu and Ketu as
+    // possible company for Mercury if the caller gave them.
+    let mut with_nodes = positions.clone();
+    for node in [Graha::Rahu, Graha::Ketu] {
+        if let Some(p) = planets.iter().find(|p| p.position.planet == node) {
+            with_nodes.push(p.position);
+        }
+    }
+    let mut aspectors = Vec::with_capacity(7);
+    for position in &positions {
+        let benefic = shubha_by_nature(position.planet, &with_nodes, options.mercury_company)
+            .ok_or(ShadbalaError::MissingGraha(Graha::Sun))?;
+        aspectors.push(DrikAspector {
+            graha: position.planet,
+            longitude_deg: position.longitude,
+            benefic,
+        });
+    }
 
     let ahargana = ahargana_from_jdn(moment.hindu_day_jdn);
     let vara = vara_lord(ahargana);
@@ -1863,9 +2160,14 @@ pub fn compute_shadbala_complete(
             Graha::Moon => paksha,
             _ => cheshta_bala_at(planet, context.jd_tt, lon + context.ayanamsha_deg).unwrap_or(0.0),
         };
-        let dig = dig_bala(planet, data.position.bhava);
+        let dig = dig_bala_at(planet, lon, &context.cusps).unwrap_or(0.0);
         let naisargika = naisargika_bala(planet);
-        let drik = drik_bala(data.benefic_aspect_count, data.malefic_aspect_count);
+        let others: Vec<DrikAspector> = aspectors
+            .iter()
+            .copied()
+            .filter(|a| a.graha != planet)
+            .collect();
+        let drik = drik_bala_sputa(lon, &others, options.sputa_special, options.full_aspects);
         let total = sthana.total + dig + kala.total + cheshta + naisargika + drik;
 
         candidates.push(WarCandidate {
@@ -3740,6 +4042,12 @@ mod tests {
             jd_tt: 2_461_338.0,
             ayanamsha_deg: 24.2,
             moment: moment(),
+            cusps: AngularCusps {
+                first: 15.0,
+                fourth: 108.0,
+                seventh: 195.0,
+                tenth: 287.0,
+            },
         }
     }
 
@@ -3754,8 +4062,6 @@ mod tests {
             position,
             latitude_deg,
             declination_deg: Some(declination),
-            benefic_aspect_count: 1,
-            malefic_aspect_count: 0,
         }
     }
 
@@ -3838,9 +4144,28 @@ mod tests {
                 + r.kala.yuddha;
             assert!((r.kala.total - kala_sum).abs() < 1e-9);
 
-            assert!((r.dig_bala - dig_bala(r.planet, p.bhava)).abs() < 1e-12);
+            let cusps = context().cusps;
+            assert!(
+                (r.dig_bala - dig_bala_at(r.planet, lon, &cusps).expect("classical")).abs() < 1e-12
+            );
             assert!((r.naisargika_bala - naisargika_bala(r.planet)).abs() < 1e-12);
-            assert!((r.drik_bala - drik_bala(1, 0)).abs() < 1e-12);
+            let aspectors: Vec<DrikAspector> = chart
+                .iter()
+                .filter(|c| c.planet != r.planet)
+                .map(|c| DrikAspector {
+                    graha: c.planet,
+                    longitude_deg: c.longitude,
+                    benefic: shubha_by_nature(c.planet, &chart, MercuryCompany::SameRashi)
+                        .expect("sun and moon"),
+                })
+                .collect();
+            let drik = drik_bala_sputa(
+                lon,
+                &aspectors,
+                SputaSpecialRule::PerSignRemainder,
+                FullAspectReading::AddedToQuarter,
+            );
+            assert!((r.drik_bala - drik).abs() < 1e-12, "{:?}", r.planet);
             let total = r.sthana.total
                 + r.dig_bala
                 + r.kala.total
@@ -3929,9 +4254,10 @@ mod tests {
         assert!((saturn.kala.yuddha - (pre_mars - pre_saturn).abs()).abs() < 1e-9);
         // Mars's every part but the yuddha is what it was in the control
         // (Saturn stays in Mesha, so nothing of Mars's friendships moves), and
-        // so is every graha that was not in the war.
+        // so is every graha that was not in the war. Drik bala is set aside:
+        // it reads the other grahas' longitudes, and Saturn moved.
         let mars0 = pick(&control, Graha::Mars);
-        assert!((pre_mars - mars0.total).abs() < 1e-9);
+        assert!(((pre_mars - mars.drik_bala) - (mars0.total - mars0.drik_bala)).abs() < 1e-9);
         assert!((mars.kala.total - mars.kala.yuddha - mars0.kala.total).abs() < 1e-9);
         assert!((mars.sthana.total - mars0.sthana.total).abs() < 1e-9);
         assert!((mars.cheshta_bala - mars0.cheshta_bala).abs() < 1e-9);
@@ -3943,7 +4269,10 @@ mod tests {
             Graha::Venus,
         ] {
             let (a, b) = (pick(&warred, g), pick(&control, g));
-            assert!((a.total - b.total).abs() < 1e-9, "{g:?}");
+            assert!(
+                ((a.total - a.drik_bala) - (b.total - b.drik_bala)).abs() < 1e-9,
+                "{g:?}"
+            );
             assert!(a.kala.yuddha.abs() < 1e-12, "{g:?}");
         }
     }
@@ -4082,6 +4411,16 @@ mod tests {
             );
         }
 
+        // A cusp that is not a longitude.
+        for broken in [f64::NAN, f64::INFINITY] {
+            let mut bad = ctx;
+            bad.cusps.tenth = broken;
+            assert_eq!(
+                compute_shadbala_complete(&planets, &bad, &opts).unwrap_err(),
+                ShadbalaError::BadCusps
+            );
+        }
+
         // The declination reading without a declination.
         let mut no_decl = planets.clone();
         no_decl[3].declination_deg = None; // Mercury
@@ -4108,6 +4447,372 @@ mod tests {
         );
         // The message names the graha.
         assert!(format!("{}", ShadbalaError::MissingGraha(Graha::Venus)).contains("Venus"));
+    }
+
+    // ── Dig Bala from the cusps (BPHS 27.7) ─────────────────────────
+
+    /// Four cusps no two of which are 180 degrees apart, so each graha's weak
+    /// cusp is told from the others by value.
+    fn skew_cusps() -> AngularCusps {
+        AngularCusps {
+            first: 100.0,
+            fourth: 185.0,
+            seventh: 280.0,
+            tenth: 8.0,
+        }
+    }
+
+    #[test]
+    fn dig_bala_is_the_arc_from_the_weak_cusp_over_three() {
+        let c = skew_cusps();
+        // The verse subtracts, from the Sun and Mars the fourth, from Jupiter
+        // and Mercury the seventh, from Saturn the first, from Venus and the
+        // Moon the tenth. Working for a graha `offset` degrees past its cusp
+        // (the arc the short way, over 3):
+        //   0   -> 0
+        //   60  -> 60 / 3 = 20
+        //   -60 -> 60 / 3 = 20
+        //   180 -> 180 / 3 = 60
+        //   250 -> over six signs: 360 - 250 = 110 -> 110 / 3
+        for (planet, weak) in [
+            (Graha::Sun, c.fourth),
+            (Graha::Mars, c.fourth),
+            (Graha::Jupiter, c.seventh),
+            (Graha::Mercury, c.seventh),
+            (Graha::Saturn, c.first),
+            (Graha::Venus, c.tenth),
+            (Graha::Moon, c.tenth),
+        ] {
+            let at = |offset: f64| dig_bala_at(planet, weak + offset, &c).expect("classical");
+            assert!(at(0.0).abs() < 1e-12, "{planet:?} on its weak cusp");
+            assert!((at(60.0) - 20.0).abs() < 1e-12, "{planet:?}");
+            assert!((at(-60.0) - 20.0).abs() < 1e-12, "{planet:?} behind");
+            assert!((at(180.0) - 60.0).abs() < 1e-12, "{planet:?} opposite");
+            assert!((at(250.0) - 110.0 / 3.0).abs() < 1e-12, "{planet:?}");
+        }
+    }
+
+    #[test]
+    fn dig_bala_follows_the_actual_cusps_not_the_bhava_step() {
+        // Cusps exactly a quadrant apart: each graha on its strong cusp is at
+        // the opposite of its weak one, 60, as the bhava-step grade says.
+        let square = AngularCusps {
+            first: 40.0,
+            fourth: 130.0,
+            seventh: 220.0,
+            tenth: 310.0,
+        };
+        for (planet, strong_cusp, strong_house) in [
+            (Graha::Sun, square.tenth, 10),
+            (Graha::Mars, square.tenth, 10),
+            (Graha::Moon, square.fourth, 4),
+            (Graha::Venus, square.fourth, 4),
+            (Graha::Mercury, square.first, 1),
+            (Graha::Jupiter, square.first, 1),
+            (Graha::Saturn, square.seventh, 7),
+        ] {
+            let v = dig_bala_at(planet, strong_cusp, &square).expect("classical");
+            assert!((v - 60.0).abs() < 1e-12, "{planet:?} on its strong cusp");
+            assert!((v - dig_bala(planet, strong_house)).abs() < 1e-12);
+        }
+        // With a skewed pair of cusps the strong cusp is not 60: the Sun on
+        // the tenth cusp (8) is 177 degrees from the fourth (185), 177 / 3 = 59,
+        // where the bhava-step grade says 60.
+        let c = skew_cusps();
+        let sun = dig_bala_at(Graha::Sun, c.tenth, &c).expect("Sun");
+        assert!((sun - 59.0).abs() < 1e-12);
+        assert!((dig_bala(Graha::Sun, 10) - 60.0).abs() < 1e-12);
+        // The same bhava, two longitudes: the grade moves within a house.
+        let a = dig_bala_at(Graha::Saturn, 100.0 + 90.0, &c).expect("Saturn");
+        let b = dig_bala_at(Graha::Saturn, 100.0 + 120.0, &c).expect("Saturn");
+        assert!((a - 30.0).abs() < 1e-12 && (b - 40.0).abs() < 1e-12);
+        // The nodes are not named by the verse.
+        assert!(dig_bala_at(Graha::Rahu, 10.0, &c).is_none());
+        assert!(dig_bala_at(Graha::Ketu, 10.0, &c).is_none());
+    }
+
+    // ── Drik Bala from the sphuta drishti (BPHS 27.19) ──────────────
+
+    fn asp(graha: Graha, longitude_deg: f64, benefic: bool) -> DrikAspector {
+        DrikAspector {
+            graha,
+            longitude_deg,
+            benefic,
+        }
+    }
+
+    fn drik(target: f64, aspectors: &[DrikAspector]) -> f64 {
+        drik_bala_sputa(
+            target,
+            aspectors,
+            SputaSpecialRule::PerSignRemainder,
+            FullAspectReading::AddedToQuarter,
+        )
+    }
+
+    #[test]
+    fn drik_bala_is_a_quarter_of_each_benefic_less_a_quarter_of_each_malefic() {
+        // Aspected point at 180 degrees. Each aspect, by BPHS 26.6 to 26.12:
+        //   Venus at 0: x = 180 -> the seventh, 60 -> a quarter, +15.
+        //   Sun at 0 (malefic): the same 60 -> -15.
+        //   Saturn at 140 (malefic): x = 40, c = 1, d = 10. Saturn's special
+        //     aspect for c = 1 is 2d = 20 (the generic d / 2 = 5 is not his)
+        //     -> -5.
+        //   Moon at 90 (benefic): x = 90, c = 3, d = 0 -> generic
+        //     (30 - 0) / 2 + 30 = 45 -> +11.25.
+        assert!((drik(180.0, &[asp(Graha::Venus, 0.0, true)]) - 15.0).abs() < 1e-12);
+        assert!((drik(180.0, &[asp(Graha::Sun, 0.0, false)]) + 15.0).abs() < 1e-12);
+        assert!((drik(180.0, &[asp(Graha::Saturn, 140.0, false)]) + 5.0).abs() < 1e-12);
+        assert!((drik(180.0, &[asp(Graha::Moon, 90.0, true)]) - 11.25).abs() < 1e-12);
+        let all = [
+            asp(Graha::Venus, 0.0, true),
+            asp(Graha::Sun, 0.0, false),
+            asp(Graha::Saturn, 140.0, false),
+            asp(Graha::Moon, 90.0, true),
+        ];
+        assert!((drik(180.0, &all) - 6.25).abs() < 1e-12);
+        // No aspector, no aspect; a graha within a sign of the point, or past
+        // ten signs behind it, casts nothing.
+        assert!(drik(180.0, &[]).abs() < 1e-12);
+        assert!(drik(180.0, &[asp(Graha::Venus, 170.0, true)]).abs() < 1e-12);
+        assert!(drik(180.0, &[asp(Graha::Venus, 200.0, true)]).abs() < 1e-12);
+        // Rahu and Ketu cast none.
+        assert!(drik(180.0, &[asp(Graha::Rahu, 0.0, false)]).abs() < 1e-12);
+        assert!(drik(180.0, &[asp(Graha::Ketu, 0.0, false)]).abs() < 1e-12);
+    }
+
+    #[test]
+    fn mercury_and_jupiter_add_their_whole_aspect() {
+        // Aspected point at 180.
+        //   Jupiter at 0, benefic: x = 180 -> 60. Quarter +15, whole +60.
+        //   Jupiter at 60: x = 120, c = 4, d = 0: his special 60 - 2d = 60
+        //     (generic would be 30) -> +15 + 60 = 75.
+        //   Mercury at 90, benefic: 45 -> +11.25 + 45 = 56.25.
+        //   Mercury at 90, malefic (joined with a malefic): the quarter is
+        //     taken away, the whole is still added: -11.25 + 45 = 33.75.
+        let drik_as = |full, a: DrikAspector| {
+            drik_bala_sputa(180.0, &[a], SputaSpecialRule::PerSignRemainder, full)
+        };
+        let added = FullAspectReading::AddedToQuarter;
+        let instead = FullAspectReading::InPlaceOfQuarter;
+        let jupiter = asp(Graha::Jupiter, 0.0, true);
+        assert!((drik_as(added, jupiter) - 75.0).abs() < 1e-12);
+        assert!((drik_as(instead, jupiter) - 60.0).abs() < 1e-12);
+        let jupiter4 = asp(Graha::Jupiter, 60.0, true);
+        assert!((drik_as(added, jupiter4) - 75.0).abs() < 1e-12);
+        assert!((drik_as(instead, jupiter4) - 60.0).abs() < 1e-12);
+        let mercury = asp(Graha::Mercury, 90.0, true);
+        assert!((drik_as(added, mercury) - 56.25).abs() < 1e-12);
+        assert!((drik_as(instead, mercury) - 45.0).abs() < 1e-12);
+        let bad_mercury = asp(Graha::Mercury, 90.0, false);
+        assert!((drik_as(added, bad_mercury) - 33.75).abs() < 1e-12);
+        assert!((drik_as(instead, bad_mercury) - 45.0).abs() < 1e-12);
+        // Venus gets no such whole aspect, under either reading.
+        let venus = asp(Graha::Venus, 90.0, true);
+        assert!((drik_as(added, venus) - 11.25).abs() < 1e-12);
+        assert!((drik_as(instead, venus) - 11.25).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_special_aspect_recension_reaches_drik_bala() {
+        // Mars (malefic) at 0 on a point at 100: x = 100, c = 3, d = 10.
+        // Per sign remainder: Mars's 60 - d = 50 -> -12.5. Added steps: the
+        // generic (30 - 10) / 2 + 30 = 40 plus 15 for Mars in the 4th sign
+        // from himself = 55 -> -13.75.
+        let mars = [asp(Graha::Mars, 0.0, false)];
+        let by = |rule| drik_bala_sputa(100.0, &mars, rule, FullAspectReading::AddedToQuarter);
+        assert!((by(SputaSpecialRule::PerSignRemainder) + 12.5).abs() < 1e-12);
+        assert!((by(SputaSpecialRule::AddedSteps) + 13.75).abs() < 1e-12);
+    }
+
+    #[test]
+    fn the_benefics_are_those_of_bphs_3_11() {
+        let at = |sun: f64, moon: f64, mercury: f64, others: &[(Graha, f64)]| {
+            let mut v = vec![
+                gp(Graha::Sun, sun, 1),
+                gp(Graha::Moon, moon, 1),
+                gp(Graha::Mercury, mercury, 1),
+            ];
+            v.extend(others.iter().map(|&(g, l)| gp(g, l, 1)));
+            v
+        };
+        let same = MercuryCompany::SameRashi;
+        let shubha = |g, v: &[GrahaPosition]| shubha_by_nature(g, v, same).expect("sun and moon");
+        // Always malefic: the Sun, Mars, Saturn, Rahu, Ketu. Always benefic
+        // by nature: Jupiter and Venus.
+        let v = at(10.0, 100.0, 200.0, &[]);
+        for g in [
+            Graha::Sun,
+            Graha::Mars,
+            Graha::Saturn,
+            Graha::Rahu,
+            Graha::Ketu,
+        ] {
+            assert!(!shubha(g, &v), "{g:?}");
+        }
+        for g in [Graha::Jupiter, Graha::Venus] {
+            assert!(shubha(g, &v), "{g:?}");
+        }
+        // The Moon: waxing for an elongation under six signs (100 - 10 = 90),
+        // waning over it (280 - 10 = 270); at the full moon (190 - 10 = 180)
+        // not yet waning, a hair past it waning.
+        assert!(shubha(Graha::Moon, &at(10.0, 100.0, 200.0, &[])));
+        assert!(!shubha(Graha::Moon, &at(10.0, 280.0, 200.0, &[])));
+        assert!(shubha(Graha::Moon, &at(10.0, 190.0, 200.0, &[])));
+        assert!(!shubha(Graha::Moon, &at(10.0, 190.001, 200.0, &[])));
+        // Mercury alone, or with a benefic, is benefic; with a malefic in his
+        // rashi he is not (Mercury at 62, Gemini).
+        assert!(shubha(Graha::Mercury, &at(126.0, 100.0, 62.0, &[])));
+        assert!(shubha(
+            Graha::Mercury,
+            &at(126.0, 100.0, 62.0, &[(Graha::Jupiter, 70.0)])
+        ));
+        for malefic in [Graha::Mars, Graha::Saturn, Graha::Rahu, Graha::Ketu] {
+            assert!(
+                !shubha(Graha::Mercury, &at(126.0, 100.0, 62.0, &[(malefic, 85.0)])),
+                "{malefic:?}"
+            );
+        }
+        // The Sun in his rashi.
+        assert!(!shubha(Graha::Mercury, &at(75.0, 100.0, 62.0, &[])));
+        // The Moon in his rashi counts only while waning (Sun at 200: the
+        // Moon at 70 is 230 ahead, waning; the Moon at 250 is 50 ahead).
+        assert!(!shubha(Graha::Mercury, &at(200.0, 70.0, 62.0, &[])));
+        assert!(shubha(Graha::Mercury, &at(200.0, 250.0, 62.0, &[])));
+        // A malefic in the next rashi is not company by default, and is
+        // within 5 degrees across the boundary (Mercury 89, Mars 91).
+        let across = at(200.0, 250.0, 89.0, &[(Graha::Mars, 91.0)]);
+        assert!(shubha(Graha::Mercury, &across));
+        assert_eq!(
+            shubha_by_nature(Graha::Mercury, &across, MercuryCompany::WithinDegrees(5.0)),
+            Some(false)
+        );
+        // And one in his rashi is not company by a 5 degree orb when it is
+        // 7 degrees away (Mercury 5, Saturn 12).
+        let apart = at(200.0, 250.0, 5.0, &[(Graha::Saturn, 12.0)]);
+        assert!(!shubha(Graha::Mercury, &apart));
+        assert_eq!(
+            shubha_by_nature(Graha::Mercury, &apart, MercuryCompany::WithinDegrees(5.0)),
+            Some(true)
+        );
+        // Without the Sun or Moon the phase is unknown.
+        let no_moon = [gp(Graha::Sun, 10.0, 1), gp(Graha::Mercury, 20.0, 1)];
+        assert_eq!(shubha_by_nature(Graha::Venus, &no_moon, same), None);
+    }
+
+    /// The drik bala of one graha in the complete form's chart, with the
+    /// options and Mercury's longitude as given.
+    fn chart_drik(
+        graha: Graha,
+        tweak: impl Fn(&mut Vec<CompletePlanetData>),
+        o: ShadbalaOptions,
+    ) -> f64 {
+        let mut planets = chart_data();
+        tweak(&mut planets);
+        compute_shadbala_complete(&planets, &context(), &o)
+            .expect("ok")
+            .into_iter()
+            .find(|r| r.planet == graha)
+            .expect("graha")
+            .drik_bala
+    }
+
+    #[test]
+    fn drik_bala_in_the_complete_form_is_worked_from_the_chart() {
+        // Sun 126, Moon 32, Mars 5.5, Mercury 62, Jupiter 245, Venus 100,
+        // Saturn 190. The Moon is 266 ahead of the Sun: waning, so malefic;
+        // Mercury (Gemini) has no malefic in his rashi: benefic. Aspects on
+        // VENUS (100), x = 100 - the aspector:
+        //   Sun     x = 334 (over ten signs)          0
+        //   Moon    x = 68, c = 2, d = 8: 8 + 15 = 23; malefic       -5.75
+        //   Mars    x = 94.5, c = 3, d = 4.5: his 60 - d = 55.5;
+        //           malefic                                         -13.875
+        //   Mercury x = 38, c = 1, d = 8: 8 / 2 = 4; benefic quarter 1
+        //           and the whole 4                                  +5
+        //   Jupiter x = 215, c = 7, d = 5: his 45 + d / 2 = 47.5;
+        //           benefic quarter 11.875 and the whole 47.5       +59.375
+        //   Saturn  x = 270, c = 9, d = 0: his 2 (30 - d) = 60;
+        //           malefic                                         -15
+        //   total 29.75.
+        let opts = ShadbalaOptions::default();
+        let none = |_: &mut Vec<CompletePlanetData>| {};
+        assert!((chart_drik(Graha::Venus, none, opts) - 29.75).abs() < 1e-9);
+        // On JUPITER (245):
+        //   Sun     x = 119, c = 3, d = 29: (30 - 29) / 2 + 30 = 30.5;
+        //           malefic                                         -7.625
+        //   Moon    x = 213, c = 7, d = 3: 150 - 105 - 1.5 = 43.5;
+        //           malefic                                         -10.875
+        //   Mars    x = 239.5, c = 7, d = 29.5: his 60 - d = 30.5;
+        //           malefic                                         -7.625
+        //   Mercury x = 183, c = 6, d = 3: 150 - 90 - 1.5 = 58.5;
+        //           quarter 14.625 and the whole 58.5               +73.125
+        //   Venus   x = 145, c = 4, d = 25: 30 - 25 = 5; benefic    +1.25
+        //   Saturn  x = 55, c = 1, d = 25: his 2d = 50; malefic     -12.5
+        //   total 35.75; Jupiter's own aspect is not counted.
+        assert!((chart_drik(Graha::Jupiter, none, opts) - 35.75).abs() < 1e-9);
+    }
+
+    #[test]
+    fn the_drik_options_change_exactly_what_they_say() {
+        let base = ShadbalaOptions::default();
+        let none = |_: &mut Vec<CompletePlanetData>| {};
+        // The whole aspect in place of the quarter: Venus loses Mercury's
+        // quarter (1) and Jupiter's (11.875).
+        let instead = ShadbalaOptions {
+            full_aspects: FullAspectReading::InPlaceOfQuarter,
+            ..base
+        };
+        assert!((chart_drik(Graha::Venus, none, instead) - (29.75 - 1.0 - 11.875)).abs() < 1e-9);
+        // The other recension's added steps, on Venus (sign 3, Cancer). Each
+        // is the generic value plus a step for the sign counted from the
+        // aspector (the aspector's own sign is the 1st):
+        //   Sun     x = 334                                  0
+        //   Moon    generic 23; malefic                     -5.75
+        //   Mars    generic (30 - 4.5) / 2 + 30 = 42.75, Cancer is the 4th
+        //           from Aries: +15 = 57.75; malefic        -14.4375
+        //   Mercury generic 4; quarter 1 and the whole 4    +5
+        //   Jupiter generic 150 - 105 - 2.5 = 42.5, Cancer is the 8th from
+        //           Sagittarius: no step; quarter 10.625 and the whole
+        //           42.5                                    +53.125
+        //   Saturn  generic 150 - 135 - 0 = 15, Cancer is the 10th from
+        //           Libra: +45 = 60; malefic                -15
+        //   total 22.9375.
+        let steps = ShadbalaOptions {
+            sputa_special: SputaSpecialRule::AddedSteps,
+            ..base
+        };
+        assert!((chart_drik(Graha::Venus, none, steps) - 22.9375).abs() < 1e-9);
+        // Mercury with Mars in Aries (Mercury 20): malefic, so on Venus his
+        // quarter is taken away: x = 80, c = 2, d = 20 -> 35; -8.75 + 35 =
+        // 26.25 where Mercury at 62 gave 5.
+        let mercury_in_aries = |planets: &mut Vec<CompletePlanetData>| {
+            for d in planets.iter_mut() {
+                if d.position.planet == Graha::Mercury {
+                    d.position = gp(Graha::Mercury, 20.0, 12);
+                }
+            }
+        };
+        assert!(
+            (chart_drik(Graha::Venus, mercury_in_aries, base) - (29.75 - 5.0 + 26.25)).abs() < 1e-9
+        );
+        // The same Mercury, benefic by a tight orb (Mars is 14.5 away):
+        // 8.75 + 35 = 43.75.
+        let tight = ShadbalaOptions {
+            mercury_company: MercuryCompany::WithinDegrees(5.0),
+            ..base
+        };
+        assert!(
+            (chart_drik(Graha::Venus, mercury_in_aries, tight) - (29.75 - 5.0 + 43.75)).abs()
+                < 1e-9
+        );
+        // Rahu given in Mercury's rashi (Gemini, 65) makes him malefic: on
+        // Venus his x = 38 aspect (4) is -1 + 4 = 3 where it was 5.
+        let rahu_with_mercury = |planets: &mut Vec<CompletePlanetData>| {
+            planets.push(data(gp(Graha::Rahu, 65.0, 12), 0.0));
+        };
+        assert!(
+            (chart_drik(Graha::Venus, rahu_with_mercury, base) - (29.75 - 5.0 + 3.0)).abs() < 1e-9
+        );
     }
 
     #[test]
