@@ -5,8 +5,8 @@ Accuracy, speed, and a much larger Vedic surface, in one release.
 - **Accuracy.** Mean agreement with JPL Horizons over the measured Delta T
   era (1900 to 2025) goes from 0.103″ to 0.096″ on the SPK path and from
   0.239″ to 0.160″ on the analytical path. The analytical Moon goes from
-  0.169″ to 0.094″, and to 0.055″ after 1962. Four engine defects are fixed
-  to get there; see "Changed answers, the engine".
+  0.169″ to 0.094″, and to 0.055″ after 1962. The engine changes behind it
+  are under "Changed answers, the engine".
 - **Speed.** The analytical Moon is about three times faster, a nine-body
   chart about three and a half times, and the long Vedic scans make a tenth
   to a twentieth of the ephemeris calls they did. A batch of MCP muhurta and
