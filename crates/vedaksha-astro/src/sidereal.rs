@@ -315,7 +315,12 @@ pub enum Ayanamsha {
     /// Caveat: the primaries publish arcminutes only (see the ayanamsha
     /// derivation spec), so the old/new distinction itself is finer than the
     /// sources' precision — treat this member as KSK's stated rule, not as
-    /// a measurement that could separate the two.
+    /// a measurement that could separate the two. The crate therefore carries
+    /// no separate new-KP member: no primary source consulted states a "new"
+    /// KP anchor, the only primary for this one (KSK's own table) is published
+    /// to the arcminute, which cannot support an offset of about 30 arcseconds,
+    /// and a member defined by a software label would rest on a non-primary
+    /// source.
     ///
     /// KSK's three published numbers are mutually inconsistent: his anchor
     /// divided by his rate gives a zero year of 297.5 CE against the 291 AD he
