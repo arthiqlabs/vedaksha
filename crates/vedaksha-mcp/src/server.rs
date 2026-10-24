@@ -3253,6 +3253,23 @@ mod tests {
             );
             assert!((f(&p["motion"]["speed_deg_per_day"]) - f(&n["speed"])).abs() < 1e-12);
             assert!(p["motion"]["state"].is_string());
+            // Ayana Bala reads the sayana longitude: the sidereal one put back
+            // by the ayanamsha the chart took off (the true value, reported).
+            let graha = match name {
+                "Sun" => vedaksha_vedic::graha::Graha::Sun,
+                "Moon" => vedaksha_vedic::graha::Graha::Moon,
+                "Mars" => vedaksha_vedic::graha::Graha::Mars,
+                "Mercury" => vedaksha_vedic::graha::Graha::Mercury,
+                "Jupiter" => vedaksha_vedic::graha::Graha::Jupiter,
+                "Venus" => vedaksha_vedic::graha::Graha::Venus,
+                _ => vedaksha_vedic::graha::Graha::Saturn,
+            };
+            let sayana = f(&n["longitude"]) + f(&natal["true_ayanamsha_value"]);
+            let ayana = vedaksha_vedic::shadbala::ayana_bala_khanda(graha, sayana);
+            assert!(
+                (f(&p["kala"]["ayana"]) - ayana).abs() < 1e-9,
+                "{name} ayana"
+            );
 
             // Each total is the sum of its parts, every part present.
             let sum = |obj: &serde_json::Value, keys: &[&str]| -> f64 {
@@ -3301,6 +3318,33 @@ mod tests {
         assert_eq!(jd, SHADBALA_JD);
         assert!(rise <= jd && rise < set && set < next && jd < next);
         assert_eq!(m["hindu_day_jdn"], 2_461_338);
+    }
+
+    #[test]
+    fn compute_shadbala_clock_offset_and_elevation_move_the_hindu_day() {
+        let base = McpServer::call_compute_shadbala(&shadbala_args()).expect("ok");
+        // Sunrise at Chennai is about 00:30 UT. Seen from UTC-12 that is 12:30
+        // on the evening before, so the Hindu day carries the previous date.
+        let mut west = shadbala_args();
+        west["tz_offset_minutes"] = (-720).into();
+        let west = McpServer::call_compute_shadbala(&west).expect("ok");
+        assert_eq!(base["moment"]["hindu_day_jdn"], 2_461_338);
+        assert_eq!(west["moment"]["hindu_day_jdn"], 2_461_337);
+        // The offset moves the day label and nothing else of the moment.
+        assert_eq!(base["moment"]["jd_sunrise"], west["moment"]["jd_sunrise"]);
+
+        // At 3650 m the horizon is lowered and the Sun rises sooner and sets
+        // later, by minutes.
+        let mut high = shadbala_args();
+        high["elevation_m"] = 3650.0.into();
+        let high = McpServer::call_compute_shadbala(&high).expect("ok");
+        let earlier = f(&base["moment"]["jd_sunrise"]) - f(&high["moment"]["jd_sunrise"]);
+        let later = f(&high["moment"]["jd_sunset"]) - f(&base["moment"]["jd_sunset"]);
+        assert!(
+            earlier > 5.0 / 1440.0 && earlier < 15.0 / 1440.0,
+            "{earlier}"
+        );
+        assert!(later > 5.0 / 1440.0 && later < 15.0 / 1440.0, "{later}");
     }
 
     #[test]
@@ -3653,6 +3697,32 @@ mod tests {
             "Sthira",
         ));
         assert!(bad_scheme.message.contains("karaka_scheme"));
+
+        // Rahu at 0.5 degrees of Pisces reflects to 29.5 degrees under the
+        // 8-karaka scheme, past the Sun's 29: Rahu is then the atmakaraka, in
+        // Pisces, and Maheshwara is drawn from the eighth and twelfth from
+        // Pisces (the lords of Libra and Aquarius: Venus, Saturn or Rahu). In
+        // the 7-karaka scheme the Sun is, in Aries, and the eighth lord of
+        // Aries's Scorpio is Mars or Ketu. The two cannot agree.
+        let maheshwara = |scheme: Option<&str>| {
+            let mut c = brahma_chart();
+            c["graha_longitudes"]["rahu"] = 330.5.into();
+            if let Some(scheme) = scheme {
+                c["karaka_scheme"] = scheme.into();
+            }
+            dasha(&with_system(c, "Maheshwara"))["maheshwara"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        let seven = maheshwara(None);
+        assert_eq!(seven, maheshwara(Some("7")), "7 is the default");
+        assert!(["Mars", "Ketu"].contains(&seven.as_str()), "{seven}");
+        let eight = maheshwara(Some("8"));
+        assert!(
+            ["Venus", "Saturn", "Rahu"].contains(&eight.as_str()),
+            "{eight}"
+        );
         let wrong_system = dasha_err(&serde_json::json!({
             "system": "Vimshottari", "moon_longitude": 45.0,
             "birth_jd": 2_451_545.0, "karaka_scheme": "8"
