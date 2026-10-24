@@ -22,11 +22,12 @@
 //! BPHS chapter 27 (the *spashta bala* chapter), verses 26 to 31. The Sanskrit
 //! was read at the verses in two recensions that agree on the dig rule, the
 //! aspect rule, the occupants and the classes of birth (only the first states
-//! the amount in 27.31); the verse numbers below are those of the recension that numbers this the 27th
-//! chapter and puts the aspect chapter before it (chapter 26). In the other
-//! recension (the Uttarakhanda), the same rules sit in the 6th chapter of
-//! that part, in a different order. Chapter 28 (ishta and kashta) is not
-//! bhava bala, and 27.32-33 are the shadbala requirements, not bhava bala.
+//! the amount in 27.31). The verse numbers below are those of the recension
+//! that numbers this the 27th chapter and puts the aspect chapter before it
+//! (chapter 26); in the other recension (the Uttarakhanda) the same rules sit
+//! in the 6th chapter of that part, in a different order. Chapter 28 (ishta
+//! and kashta) is not bhava bala, and 27.32-33 are the shadbala requirements,
+//! not bhava bala.
 //! Grades follow the convention of [`crate::drishti`]: (a) read at the verse,
 //! editions agree; (b) read at the verse in one recension only; (c) a choice
 //! the verse leaves open, made and stated here.
@@ -39,7 +40,7 @@
 //!     (`kanya-yugma-tula-kumbha-capadyardha`): the 7th bhava;
 //!   * Aries, Taurus, Leo, the first half of Capricorn and the second half of
 //!     Sagittarius (`go-aja-simha-mrgadyardha-capantyardha`): the 4th;
-//!   * Cancer and Scorpio (`karkali`): the lagna;
+//!   * Cancer and Scorpio (`karka-vrishchikato lagnam`): the lagna;
 //!   * the second half of Capricorn and Pisces (`mrgantyardha-jhasha`): the
 //!     10th.
 //!
@@ -61,9 +62,10 @@
 //!   grahas, and of Mercury, as benefic or malefic is not in these verses:
 //!   it is the caller's `shubha` reading. The verse does not make Mercury
 //!   benefic "whatever his company": it adds his aspect in full without
-//!   condition, and leaves his quarter to the caller's classification. The nodes cast no aspect here: the aspect values of
-//!   chapter 26 and the benefic and malefic quarters of these verses are given
-//!   for the seven grahas, Sun to Saturn, and none for Rahu or Ketu.
+//!   condition, and leaves his quarter to the caller's classification. The
+//!   nodes cast no aspect here: the aspect values of chapter 26 and the
+//!   benefic and malefic quarters of these verses are given for the seven
+//!   grahas, Sun to Saturn, and none for Rahu or Ketu.
 //! * **27.29, the lord (grade a).** The bhava's strength is joined with that of
 //!   its own lord (`svasvami-bala`): the pinda of the lord of the rashi
 //!   holding the madhya. The lords are those of BPHS chapter 4's description
@@ -100,7 +102,7 @@
 //!
 //! # Contract
 //!
-//! Locale-free and callback-free: the twelve bhava madhya longitudes, the
+//! Locale-free: the twelve bhava madhya longitudes, the
 //! seven grahas' longitudes and shadbala pindas, the benefic reading and the
 //! period of birth all come from the caller, so the strength is computed from
 //! the same shadbala and the same bhavas the caller shows. Longitudes are

@@ -45,14 +45,14 @@
 //!   takes as the beginning and calls the end of the portion mathematically
 //!   improper. The verse states this for Gulika only. It names no instant for
 //!   Kala, Mrityu, Ardhaprahara or Yamaghantaka, and no verse consulted names
-//!   the middle or the end of any portion; the functions for those four take the same
-//!   [`UpagrahaPoint`] as Gulika and carry no default. [`UpagrahaPoint`] has no
-//!   middle-of-the-portion variant because no source consulted reads one.
-//!   The end of Saturn's portion for Mandi, which the earlier documentation of
-//!   this module called the common reading, is a later convention: BPHS's
-//!   yoga chapters use the name Mandi where this chapter says Gulika, and the
-//!   commentaries gloss the one as the other. [`mandi`] therefore returns
-//!   the same portion as [`gulika`] and takes the point as a parameter.
+//!   the middle or the end of any portion. The functions for those four take
+//!   the same [`UpagrahaPoint`] as Gulika and carry no default, and
+//!   [`UpagrahaPoint`] has no middle-of-the-portion variant because no source
+//!   consulted reads one. The end of Saturn's portion, which some read for
+//!   Mandi, is a later convention: BPHS's yoga chapters use the name Mandi
+//!   where this chapter says Gulika, and the commentaries gloss the one as the
+//!   other. [`mandi`] therefore returns the same portion as [`gulika`] and
+//!   takes the point as a parameter.
 //! * **Dhuma through Upaketu** are fixed offsets from the (sidereal) Sun's
 //!   longitude: Dhuma = Sun + 133°20'; Vyatipata = 360° − Dhuma;
 //!   Parivesha = Vyatipata + 180°; Indrachapa = 360° − Parivesha;
