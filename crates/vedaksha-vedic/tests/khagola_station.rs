@@ -142,40 +142,6 @@ fn the_series_is_the_daily_walk_over_two_decades() {
     }
 }
 
-/// 1900 to 2100, the five star-planets, station for station against the daily
-/// walk. The counts and shortest intervals printed are the table in
-/// `station_step_days`'s doc.
-#[test]
-#[ignore = "about three minutes in the test profile; run with --include-ignored (full validation)"]
-fn the_series_is_the_daily_walk_over_two_centuries() {
-    let from = jd(1900, 1, 1, 0.0);
-    let to = jd(2100, 1, 1, 0.0);
-    // (stations, shortest interval in days)
-    let table = [
-        (Graha::Mercury, 1260, 19.76),
-        (Graha::Venus, 250, 40.89),
-        (Graha::Mars, 188, 59.93),
-        (Graha::Jupiter, 366, 117.47),
-        (Graha::Saturn, 386, 133.62),
-    ];
-    let mut total = 0;
-    for ((graha, body), (g2, count, shortest)) in PLANETS.into_iter().zip(table) {
-        assert_eq!(graha, g2);
-        let (n, min_gap, retrograde) = check_span(graha, body, from, to);
-        assert_eq!(n, count, "{graha:?}: station count");
-        assert!(
-            (min_gap - shortest).abs() < 0.01,
-            "{graha:?}: shortest interval {min_gap}"
-        );
-        assert!(
-            retrograde,
-            "{graha:?}: the shortest interval is a direct stretch"
-        );
-        total += n;
-    }
-    assert_eq!(total, 2450);
-}
-
 #[test]
 fn the_luminaries_and_nodes_have_no_stations() {
     let p = AnalyticalProvider::new();

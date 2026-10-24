@@ -440,8 +440,9 @@ pub fn graha_ingress(
 /// are the largest daily motion this crate's analytical positions give from
 /// 1900 to 2100, sampled every 0.25 to 2 days. The margin over the larger of
 /// the two is 3 to 7 per cent for the planets and Sun, 16 per cent for the
-/// nodes, whose motion is not Keplerian. Both are checked by tests
-/// (`speed_bounds_*` in `tests/khagola_ingress.rs`).
+/// nodes, whose motion is not Keplerian. The 1900 to 2100 figures were measured
+/// once (2026-10-24); a test holds the bounds over one to ten years per graha
+/// from 2010 (`tests/khagola_ingress.rs`).
 ///
 /// A bound that is too small is caught when a long step lands in another
 /// rashi (see [`graha_ingresses`]); a bound that is too large only costs
@@ -468,13 +469,14 @@ pub const fn ingress_speed_bound_deg_per_day(graha: Graha) -> f64 {
 /// the previous one (the first is seeded at `jd_start`) and, where that finds
 /// none in its 400 days, from the window's end. The two sample the same grid of
 /// whole days from the seed, straddle a crossing with the same two samples and
-/// refine from the same one, so they agree to the bit (the tests walk nine
-/// spans of 6 months to 42 years across every graha and find no difference);
+/// refine from the same one, so they agree to the bit (`tests/khagola_ingress.rs`
+/// walks nine spans of 6 months to 10 years across every graha and finds no
+/// difference);
 /// at worst they differ by the refinement's own 1e-6 degree. The cost differs: where [`graha_ingress`] reads the callback once a day, this
 /// steps as many whole days as the nearer rashi edge is away at the graha's
 /// speed bound ([`ingress_speed_bound_deg_per_day`]), and reads it daily only
 /// within a day's travel of an edge. Measured on this crate's analytical
-/// positions from 2001 to 2043 (`tests/khagola_ingress.rs`): the 37 shani
+/// positions from 2001 to 2043 (once, 2026-10-24): the 37 shani
 /// entries cost 15,968 reads one day at a time and 1,118 here (7 per cent);
 /// the 78 of Jupiter 15,883 and 2,133 (13 per cent); 12 years of Mars (77
 /// entries) 4,911 and 1,533 (31 per cent).
@@ -583,7 +585,8 @@ const STATION_TOL_D: f64 = 1.0e-8;
 /// 250, 187, 366 and 386 in the 73,048 days). The step is under half the
 /// interval, not the interval, so that a retrograde somewhere outside 1900 to
 /// 2100 a little shorter than these still cannot put two stations in one step.
-/// `tests/khagola_station.rs` holds the figures above to the data.
+/// The figures above were measured once (2026-10-24); `tests/khagola_station.rs`
+/// checks the series against the daily walk over 2020 to 2040.
 #[must_use]
 pub const fn station_step_days(graha: Graha) -> Option<f64> {
     match graha {
@@ -605,8 +608,8 @@ pub const fn station_step_days(graha: Graha) -> Option<f64> {
 /// re-seeded just past the previous one, to the bisection's own resolution,
 /// and no station is skipped: over 1900 to 2100 and the five star-planets it
 /// finds the same 2450 stations as the daily walk of [`station`], to 5e-8 days,
-/// with 95,000 reads of the callback against 495,000 (`tests/khagola_station.rs`,
-/// the ignored full-span test).
+/// with 95,000 reads of the callback against 495,000 (measured once,
+/// 2026-10-24).
 ///
 /// A rate that is exactly zero at a sample is a station there. The walk ends
 /// early where the callback returns `None`.

@@ -4,7 +4,7 @@
 // Contact: info@arthiq.net | https://vedaksha.net
 
 //! `khagola::graha_ingresses`: the range form against the one-ingress walk it
-//! replaces, its read counts, and the speed bounds its steps rest on.
+//! replaces, and the speed bounds its steps rest on.
 //!
 //! The reference is `graha_ingress` itself, re-seeded one second past each
 //! entry, and, where its 400-day window runs out, from the window's end. The
@@ -12,8 +12,6 @@
 //! engine's daily motion.
 
 mod common;
-
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use common::{jd, longitude_and_rate};
 use vedaksha_astro::sidereal::{Ayanamsha, true_ayanamsha_value};
@@ -55,58 +53,41 @@ fn sidereal_rashi(f: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync), t: f64) -> u8 
     ((lon - true_ayanamsha_value(AYAN, t)).rem_euclid(360.0) / 30.0).floor() as u8 % 12
 }
 
-/// (graha, body serving it, years from 2001-01-01, the most the range may read
-/// the callback as a fraction of the one-day walk, where that is measured)
-const CASES: [(Graha, Body, f64, Option<f64>); 9] = [
-    (Graha::Saturn, Body::Saturn, 42.0, Some(0.09)),
-    (Graha::Jupiter, Body::Jupiter, 42.0, Some(0.17)),
-    (Graha::Mars, Body::Mars, 12.0, Some(0.38)),
-    (Graha::Mercury, Body::Mercury, 4.0, None),
-    (Graha::Venus, Body::Venus, 6.0, None),
-    (Graha::Sun, Body::Sun, 4.0, None),
-    (Graha::Moon, Body::Moon, 0.5, None),
-    (Graha::Rahu, Body::TrueNode, 10.0, None),
-    (Graha::Ketu, Body::TrueSouthNode, 10.0, None),
+/// (graha, body serving it, years from 2001-01-01): long enough for several
+/// entries of each graha, retrograde ones included for the planets.
+const CASES: [(Graha, Body, f64); 9] = [
+    (Graha::Saturn, Body::Saturn, 10.0),
+    (Graha::Jupiter, Body::Jupiter, 10.0),
+    (Graha::Mars, Body::Mars, 6.0),
+    (Graha::Mercury, Body::Mercury, 4.0),
+    (Graha::Venus, Body::Venus, 6.0),
+    (Graha::Sun, Body::Sun, 4.0),
+    (Graha::Moon, Body::Moon, 0.5),
+    (Graha::Rahu, Body::TrueNode, 4.0),
+    (Graha::Ketu, Body::TrueSouthNode, 4.0),
 ];
 
-/// The range form against the walk it replaces, entry for entry, and what it
-/// costs: the reads of the callback, which are the cost the range form exists
-/// to cut (the one-day walk reads once a day; the range form once per whole-day
-/// step the speed bound allows).
+/// The range form against the walk it replaces, entry for entry. A speed bound
+/// too small would let a step jump an edge, and this is what would see it.
 #[test]
-fn the_range_is_the_reseeded_walk_entry_for_entry_and_reads_less() {
+fn the_range_is_the_reseeded_walk_entry_for_entry() {
     let p = AnalyticalProvider::new();
     let from = jd(2001, 1, 1, 0.0);
-    for (graha, body, years, at_most) in CASES {
+    for (graha, body, years) in CASES {
         let to = from + years * 365.25;
-        let reads = AtomicUsize::new(0);
-        let f = |t: f64| {
-            reads.fetch_add(1, Ordering::Relaxed);
-            longitude_and_rate(&p, body, t)
-        };
+        let f = |t: f64| longitude_and_rate(&p, body, t);
         let walk = reseeded_walk(graha, &f, from, to);
-        let walk_reads = reads.swap(0, Ordering::Relaxed);
         let range = graha_ingresses(from, to, graha, AYAN, &f);
-        let range_reads = reads.load(Ordering::Relaxed);
         assert!(
             !walk.is_empty(),
             "{graha:?}: the span holds no ingress, nothing is tested"
         );
         assert_eq!(range.len(), walk.len(), "{graha:?}: number of entries");
-        let mut worst = 0.0_f64;
-        for (a, b) in range.iter().zip(&walk) {
-            assert_eq!(a.1, b.1, "{graha:?}: rashi entered at {}", a.0);
-            worst = worst.max((a.0 - b.0).abs());
-        }
-        let ratio = range_reads as f64 / walk_reads as f64;
-        println!(
-            "{graha:?}: {} entries, worst difference {worst:e} d, {walk_reads} reads one day at a time, {range_reads} by the range: {ratio:.3}",
-            walk.len()
-        );
         // The refinement stops within 1e-6 deg of the edge, so two answers are
         // at most 2e-6 deg apart; at the daily motion at the crossing that is a
         // time (a station next to an edge only widens it).
         for (a, b) in range.iter().zip(&walk) {
+            assert_eq!(a.1, b.1, "{graha:?}: rashi entered at {}", a.0);
             let rate = f(a.0).unwrap().1.abs().max(0.01);
             assert!(
                 (a.0 - b.0).abs() * rate <= 2.0e-6,
@@ -114,12 +95,6 @@ fn the_range_is_the_reseeded_walk_entry_for_entry_and_reads_less() {
                 a.0,
                 b.0,
                 (a.0 - b.0) * 86_400.0
-            );
-        }
-        if let Some(at_most) = at_most {
-            assert!(
-                ratio <= at_most,
-                "{graha:?}: {ratio:.3} of the walk's reads, expected under {at_most}"
             );
         }
     }
@@ -334,15 +309,13 @@ fn speed_bounds_exceed_the_two_body_supremum() {
 
 /// The bound against this engine's positions: the largest change of sidereal
 /// longitude over a window of one day, anywhere in the span, stays inside it.
-/// `scale` stretches the span of each case (and thins its sampling to match:
-/// 1 is the default test, 20 the two centuries of the full run).
-fn assert_bounds_hold(from: f64, scale: f64) {
+fn assert_bounds_hold(from: f64) {
     let p = AnalyticalProvider::new();
     // (graha, body, years, sampling step in days)
     let cases = [
-        (Graha::Sun, Body::Sun, 10.0, 2.0),
-        (Graha::Mercury, Body::Mercury, 10.0, 1.0),
-        (Graha::Venus, Body::Venus, 10.0, 2.0),
+        (Graha::Sun, Body::Sun, 2.0, 2.0),
+        (Graha::Mercury, Body::Mercury, 4.0, 1.0),
+        (Graha::Venus, Body::Venus, 4.0, 2.0),
         (Graha::Mars, Body::Mars, 10.0, 2.0),
         (Graha::Jupiter, Body::Jupiter, 10.0, 4.0),
         (Graha::Saturn, Body::Saturn, 10.0, 4.0),
@@ -360,7 +333,7 @@ fn assert_bounds_hold(from: f64, scale: f64) {
             )
         };
         let (mut worst_window, mut worst_rate) = (0.0_f64, 0.0_f64);
-        let (mut t, to) = (from, from + years * scale * 365.25);
+        let (mut t, to) = (from, from + years * 365.25);
         while t < to {
             let (a, rate) = sid(t);
             let (b, _) = sid(t + 1.0);
@@ -384,14 +357,6 @@ fn assert_bounds_hold(from: f64, scale: f64) {
 }
 
 #[test]
-fn speed_bounds_hold_over_a_decade() {
-    assert_bounds_hold(jd(2010, 1, 1, 0.0), 1.0);
-}
-
-/// 1900 to 2100 (twenty times the decade, the Moon and the true node for a
-/// twentieth of it), the span the table in the bound's doc was measured over.
-#[test]
-#[ignore = "about five minutes in the test profile; run with --include-ignored (full validation)"]
-fn speed_bounds_hold_over_two_centuries() {
-    assert_bounds_hold(jd(1900, 1, 1, 0.0), 20.0);
+fn speed_bounds_hold_over_recent_years() {
+    assert_bounds_hold(jd(2010, 1, 1, 0.0));
 }

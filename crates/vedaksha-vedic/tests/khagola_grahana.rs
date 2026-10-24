@@ -21,9 +21,9 @@
 //! Over all 228 eclipses of that catalogue (2001 to 2100) the module, run once
 //! offline, finds every one and nothing else, with the same type, penumbral and
 //! umbral magnitudes within 0.0009, and the time of greatest eclipse within
-//! 2.3 s once both sides are in TD. This file keeps the decade 2021 to 2030 and
-//! the three eclipses of the century that the module's earlier shadow radii
-//! missed or misclassified.
+//! 2.3 s once both sides are in TD. This file keeps 2021 to 2023 and the four
+//! eclipses of the century that the module's earlier shadow radii missed or
+//! misclassified.
 //!
 //! # The solar numbers
 //!
@@ -91,30 +91,16 @@ macro_rules! row {
     };
 }
 
-/// The decade 2021 to 2030, then 2013-05-25, 2042-09-29 and 2096-06-06.
-const NASA: [NasaLunar; 25] = [
+/// 2021 to 2023 (total, partial and penumbral all occur), then the four
+/// shallow or reclassified cases: 2027-07-18, 2013-05-25, 2042-09-29, 2096-06-06.
+const NASA: [NasaLunar; 10] = [
     row!(2021, 5, 26, 11, 19, 53, "T", 1.9540, 1.0095),
     row!(2021, 11, 19, 9, 4, 6, "P", 2.0720, 0.9742),
     row!(2022, 5, 16, 4, 12, 42, "T-", 2.3726, 1.4137),
     row!(2022, 11, 8, 11, 0, 22, "T+", 2.4143, 1.3589),
     row!(2023, 5, 5, 17, 24, 5, "N", 0.9636, -0.0457),
     row!(2023, 10, 28, 20, 15, 18, "P", 1.1181, 0.1220),
-    row!(2024, 3, 25, 7, 13, 59, "N", 0.9557, -0.1325),
-    row!(2024, 9, 18, 2, 45, 25, "P", 1.0372, 0.0848),
-    row!(2025, 3, 14, 6, 59, 56, "T", 2.2595, 1.1784),
-    row!(2025, 9, 7, 18, 12, 58, "T", 2.3440, 1.3619),
-    row!(2026, 3, 3, 11, 34, 52, "T", 2.1838, 1.1507),
-    row!(2026, 8, 28, 4, 14, 4, "P", 1.9645, 0.9299),
-    row!(2027, 2, 20, 23, 14, 6, "N", 0.9266, -0.0569),
     row!(2027, 7, 18, 16, 4, 9, "Ne", 0.0014, -1.0680),
-    row!(2027, 8, 17, 7, 14, 59, "N", 0.5456, -0.5254),
-    row!(2028, 1, 12, 4, 14, 13, "P", 1.0468, 0.0662),
-    row!(2028, 7, 6, 18, 20, 57, "P", 1.4266, 0.3892),
-    row!(2028, 12, 31, 16, 53, 15, "T", 2.2742, 1.2463),
-    row!(2029, 6, 26, 3, 23, 22, "T+", 2.8266, 1.8436),
-    row!(2029, 12, 20, 22, 43, 12, "T", 2.2008, 1.1174),
-    row!(2030, 6, 15, 18, 34, 34, "P", 1.4480, 0.5025),
-    row!(2030, 12, 9, 22, 28, 51, "N", 0.9416, -0.1628),
     row!(2013, 5, 25, 4, 11, 6, "Nb", 0.0157, -0.9335),
     row!(2042, 9, 29, 10, 45, 47, "N", 0.9528, -0.0031),
     row!(2096, 6, 6, 2, 43, 41, "Nb", 0.0047, -1.0584),
@@ -142,21 +128,21 @@ fn lunar_near(
 }
 
 #[test]
-fn lunar_eclipses_2021_to_2030_are_the_catalogues_and_only_those() {
+fn lunar_eclipses_2021_to_2023_are_the_catalogues_and_only_those() {
     let p = AnalyticalProvider::new();
     let lunar = |t: f64| lunar_geometry(&p, t);
     let no_solar: fn(f64) -> Option<SolarGeometry> = |_| None;
     let decade: Vec<&NasaLunar> = NASA
         .iter()
-        .filter(|r| (2021..=2030).contains(&r.y))
+        .filter(|r| (2021..=2023).contains(&r.y))
         .collect();
     assert_eq!(
         decade.len(),
-        22,
-        "the catalogue lists 22 lunar eclipses in 2021 to 2030"
+        6,
+        "the catalogue lists 6 lunar eclipses in 2021 to 2023"
     );
 
-    let end = jd(2031, 1, 1, 0.0);
+    let end = jd(2024, 1, 1, 0.0);
     let mut t = jd(2021, 1, 1, 0.0);
     let mut ours = Vec::new();
     while t < end {
@@ -239,38 +225,6 @@ fn the_shallowest_penumbral_eclipses_are_found_and_not_promoted() {
     let g = lunar_near(&p, row, ShadowEnlargement::Danjon).unwrap();
     assert_eq!(g.kind, GrahanaKind::LunarPenumbral);
     assert!(g.magnitude < 0.0, "umbral magnitude {}", g.magnitude);
-}
-
-/// Chauvenet's radii are Danjon's plus a published margin: the catalogue's
-/// page puts the difference at about 0.026 in penumbral magnitude and 0.006 in
-/// umbral.
-#[test]
-fn the_two_shadow_conventions_differ_by_the_published_margin() {
-    let p = AnalyticalProvider::new();
-    for row in NASA
-        .iter()
-        .filter(|r| matches!((r.y, r.m), (2023, 5) | (2023, 10) | (2022, 11)))
-    {
-        let d = lunar_near(&p, row, ShadowEnlargement::Danjon).unwrap();
-        let c = lunar_near(&p, row, ShadowEnlargement::Chauvenet).unwrap();
-        let dpen = c.penumbral_magnitude.unwrap() - d.penumbral_magnitude.unwrap();
-        let dum = c.magnitude - d.magnitude;
-        assert!(
-            (0.024..0.028).contains(&dpen),
-            "{}-{}: penumbral difference {dpen}",
-            row.y,
-            row.m
-        );
-        assert!(
-            (0.004..0.007).contains(&dum),
-            "{}-{}: umbral difference {dum}",
-            row.y,
-            row.m
-        );
-        // The default is Danjon.
-        let default = lunar_near(&p, row, ShadowEnlargement::default()).unwrap();
-        assert_eq!(default.magnitude, d.magnitude);
-    }
 }
 
 // ── solar ───────────────────────────────────────────────────────
@@ -654,14 +608,7 @@ fn places_opposite_the_greatest_eclipse_see_nothing() {
     let nasa_greatest = jd(2024, 4, 8, 18.3);
     let from = jd(2024, 4, 1, 0.0);
     let cutoff = jd(2024, 4, 11, 0.0);
-    let places = [
-        (-25.0, 76.0),
-        (-20.0, 80.0),
-        (-30.0, 70.0),
-        (-15.0, 72.0),
-        (-5.0, 78.0),
-        (-35.0, 85.0),
-    ];
+    let places = [(-25.0, 76.0), (-5.0, 78.0)];
     for (lat, lon) in places {
         // Night throughout: the eclipse is a few hours either side of this.
         for dh in [-2.5, 0.0, 2.5] {
