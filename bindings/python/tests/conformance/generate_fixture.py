@@ -18,8 +18,8 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[3]  # repo root (…/vedaksha)
 
-# The worked chart of BPHS chapter 46 (Aquarius lagna), as the sign indices
-# `compute_dasha` takes for Chara.
+# An Aquarius-lagna chart, as the sign indices `compute_dasha` takes for
+# Chara (the MCP server's chara tests count its durations by hand).
 CHARA_SIGNS = {
     "sun": 9, "moon": 2, "mars": 1, "mercury": 10,
     "jupiter": 10, "venus": 10, "saturn": 4, "rahu": 2,

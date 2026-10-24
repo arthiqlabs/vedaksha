@@ -2246,10 +2246,11 @@ mod tests {
         assert!(dasha["maha_periods"].is_array());
     }
 
-    /// BPHS ch. 46's worked Aquarius-lagna chart (see
-    /// `vedaksha_vedic::dasha::chara`'s `BPHS_46_CHART` test fixture), as a
-    /// `graha_signs` JSON fragment for MCP-level requests.
-    const BPHS_46_GRAHA_SIGNS_JSON: &str = r#""graha_signs":{
+    /// An Aquarius-lagna chart as a `graha_signs` JSON fragment for
+    /// MCP-level requests: the Sun in Capricorn, the Moon and Rahu in Gemini,
+    /// Mars in Taurus, Mercury, Jupiter and Venus in Aquarius, Saturn in Leo
+    /// (so Ketu in Sagittarius).
+    const AQUARIUS_LAGNA_GRAHA_SIGNS_JSON: &str = r#""graha_signs":{
         "sun":9,"moon":2,"mars":1,"mercury":10,"jupiter":10,"venus":10,"saturn":4,"rahu":2
     }"#;
 
@@ -2273,7 +2274,7 @@ mod tests {
             let aries = dasha_text(
                 &s,
                 &format!(
-                    r#"{{"system":"{system}","lagna_sign":0,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                    r#"{{"system":"{system}","lagna_sign":0,"birth_jd":2451545.0,{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"#
                 ),
             );
             let periods = periods_array(system, &aries);
@@ -2286,7 +2287,7 @@ mod tests {
             let pisces = dasha_text(
                 &s,
                 &format!(
-                    r#"{{"system":"{system}","lagna_sign":11,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                    r#"{{"system":"{system}","lagna_sign":11,"birth_jd":2451545.0,{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"#
                 ),
             );
             let periods = periods_array(system, &pisces);
@@ -2354,23 +2355,29 @@ mod tests {
         }
     }
 
-    /// Duration VALUES, pinned against BPHS ch. 46's worked example — not
-    /// just response shape. Previously this tool's tests asserted only
-    /// `is_number()`/`is_array()`/`sign_name`, never a `duration_years`,
-    /// which is exactly why a fully green gate covered chart-independent
-    /// durations for this tool's entire life.
+    /// Duration VALUES, not just response shape, each counted by hand from
+    /// the rule in `vedaksha_vedic::dasha::chara`. Previously this tool's
+    /// tests asserted only `is_number()`/`is_array()`/`sign_name`, never a
+    /// `duration_years`, which is exactly why a fully green gate covered
+    /// chart-independent durations for this tool's entire life.
+    ///
+    /// The two dual-lord signs: Scorpio's co-lords Mars (Taurus) and Ketu
+    /// (Sagittarius) both stand alone, so the rashi's nature decides, dual
+    /// over fixed, and the count runs forward to Sagittarius, 1. Aquarius's
+    /// Rahu has the Moon with it in Gemini and Saturn stands alone in Leo, so
+    /// Rahu is the stronger and the count runs in reverse to Gemini, 8.
     #[test]
-    fn compute_dasha_chara_duration_values_match_bphs_46() {
+    fn compute_dasha_chara_duration_values_follow_the_rule() {
         let s = server();
         let dasha = dasha_text(
             &s,
             &format!(
-                r#"{{"system":"Chara","lagna_sign":10,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                r#"{{"system":"Chara","lagna_sign":10,"birth_jd":2451545.0,{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"#
             ),
         );
         let periods = periods_array("Chara", &dasha);
-        // The BPHS worked chart is an AQUARIUS-lagna chart, so assert the
-        // sequence actually starts there. Durations depend only on the graha
+        // The chart has an Aquarius lagna, so assert the sequence actually
+        // starts there. Durations depend only on the graha
         // positions and never on the lagna, so without this the lagna value
         // is inert and a wrong ascendant would pass every assertion below --
         // which is exactly what happened when this parameter switched from
@@ -2378,8 +2385,8 @@ mod tests {
         assert_eq!(
             periods[0]["sign_name"].as_str().unwrap(),
             "Aquarius",
-            "BPHS ch. 46's worked chart has an Aquarius lagna; lagna_sign is \
-             0-indexed, so Aquarius is 10"
+            "the chart has an Aquarius lagna; lagna_sign is 0-indexed, so \
+             Aquarius is 10"
         );
         let mut by_sign = std::collections::HashMap::new();
         for p in periods {
@@ -2392,23 +2399,23 @@ mod tests {
         assert_eq!(by_sign["Aries"], 1.0);
         assert_eq!(by_sign["Taurus"], 9.0);
         assert_eq!(
-            by_sign["Scorpio"], 6.0,
-            "Scorpio is a dual-lord sign (Mars/Ketu)"
+            by_sign["Scorpio"], 1.0,
+            "Scorpio is a dual-lord sign (Mars/Ketu); Ketu's dual rashi is the stronger"
         );
         assert_eq!(
             by_sign["Aquarius"], 8.0,
-            "Aquarius is a dual-lord sign (Saturn/Rahu)"
+            "Aquarius is a dual-lord sign (Saturn/Rahu); Rahu has the Moon with it"
         );
         assert_eq!(by_sign["Pisces"], 1.0);
     }
 
     #[test]
-    fn compute_dasha_narayana_duration_values_match_bphs_46() {
+    fn compute_dasha_narayana_duration_values_follow_the_rule() {
         let s = server();
         let dasha = dasha_text(
             &s,
             &format!(
-                r#"{{"system":"Narayana","lagna_sign":10,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                r#"{{"system":"Narayana","lagna_sign":10,"birth_jd":2451545.0,{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"#
             ),
         );
         let periods = periods_array("Narayana", &dasha);
@@ -2421,12 +2428,12 @@ mod tests {
         }
         assert_eq!(by_sign["Aries"], 1.0);
         assert_eq!(
-            by_sign["Scorpio"], 6.0,
-            "Scorpio is a dual-lord sign (Mars/Ketu)"
+            by_sign["Scorpio"], 1.0,
+            "Scorpio is a dual-lord sign (Mars/Ketu); Ketu's dual rashi is the stronger"
         );
         assert_eq!(
             by_sign["Aquarius"], 8.0,
-            "Aquarius is a dual-lord sign (Saturn/Rahu)"
+            "Aquarius is a dual-lord sign (Saturn/Rahu); Rahu has the Moon with it"
         );
     }
 
@@ -2437,10 +2444,10 @@ mod tests {
     #[test]
     fn compute_dasha_chara_duration_depends_on_graha_signs() {
         let s = server();
-        let bphs_chart = dasha_text(
+        let aquarius_chart = dasha_text(
             &s,
             &format!(
-                r#"{{"system":"Chara","lagna_sign":1,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}}}"#
+                r#"{{"system":"Chara","lagna_sign":1,"birth_jd":2451545.0,{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"#
             ),
         );
         let all_aries_chart = dasha_text(
@@ -2448,10 +2455,10 @@ mod tests {
             r#"{"system":"Chara","lagna_sign":1,"birth_jd":2451545.0,
                 "graha_signs":{"sun":0,"moon":0,"mars":0,"mercury":0,"jupiter":0,"venus":0,"saturn":0,"rahu":0}}"#,
         );
-        let bphs_periods = periods_array("Chara", &bphs_chart);
+        let aquarius_periods = periods_array("Chara", &aquarius_chart);
         let aries_periods = periods_array("Chara", &all_aries_chart);
         assert_ne!(
-            bphs_periods[0]["duration_years"], aries_periods[0]["duration_years"],
+            aquarius_periods[0]["duration_years"], aries_periods[0]["duration_years"],
             "different graha_signs on the same lagna must not produce the same \
              durations -- that was exactly the original defect"
         );
@@ -3525,7 +3532,7 @@ mod tests {
     fn chara_antardashas_are_opt_in_and_leave_the_mahadashas_untouched() {
         let args = |extra: &str| -> serde_json::Value {
             serde_json::from_str(&format!(
-                r#"{{"system":"Chara","lagna_sign":10,"birth_jd":2451545.0,{BPHS_46_GRAHA_SIGNS_JSON}{extra}}}"#
+                r#"{{"system":"Chara","lagna_sign":10,"birth_jd":2451545.0,{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}{extra}}}"#
             ))
             .unwrap()
         };
@@ -3812,7 +3819,7 @@ mod tests {
         // Signs are not the input here, and both are not accepted.
         let mut both = with_system(brahma_chart(), "NiryanaShoola");
         both["graha_signs"] =
-            serde_json::from_str::<serde_json::Value>(&format!("{{{BPHS_46_GRAHA_SIGNS_JSON}}}"))
+            serde_json::from_str::<serde_json::Value>(&format!("{{{AQUARIUS_LAGNA_GRAHA_SIGNS_JSON}}}"))
                 .unwrap()["graha_signs"]
                 .clone();
         assert!(dasha_err(&both).message.contains("graha_longitudes"));
