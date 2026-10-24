@@ -381,7 +381,7 @@
           },
           "rounds": {
             "default": 1,
-            "description": "Yogini only: how many whole 36-year rounds of the cycle to produce. Round 1 is the round from birth, whose first maha is the birth yogini's unelapsed share; each later round runs all eight yoginis whole. Every maha and sub-period carries its `round`. Defaults to 1. Exclusive with `until`.",
+            "description": "Yogini only: how many whole 36-year rounds of the cycle to produce. Round 1 is the round from birth, whose first maha is the birth yogini's unelapsed share; each later round runs all eight yoginis whole. Every maha and sub-period carries its `round`. Defaults to 1. Exclusive with `until`. One response carries at most 50,000 periods: ten rounds at four levels, one at five.",
             "maximum": 10,
             "minimum": 1,
             "type": "integer"

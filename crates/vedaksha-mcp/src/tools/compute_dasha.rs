@@ -17,6 +17,11 @@ use crate::validation::{self, McpError};
 /// Maximum number of dasha levels supported (Moon-based systems).
 const MAX_LEVELS: u8 = 5;
 
+/// The most Yogini periods one response may carry. One round has
+/// 8 + 8^2 + ... + 8^levels periods (584 at the default three levels, 37,448
+/// at five), so this admits ten rounds at four levels and one at five.
+const MAX_YOGINI_PERIODS: u64 = 50_000;
+
 /// Dasha system selector.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DashaSystem {
@@ -379,7 +384,8 @@ pub fn definition() -> super::ToolDefinition {
                         to produce. Round 1 is the round from birth, whose first maha is the \
                         birth yogini's unelapsed share; each later round runs all eight \
                         yoginis whole. Every maha and sub-period carries its `round`. \
-                        Defaults to 1. Exclusive with `until`.",
+                        Defaults to 1. Exclusive with `until`. One response carries at most \
+                        50,000 periods: ten rounds at four levels, one at five.",
                     "minimum": 1,
                     "maximum": vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS,
                     "default": 1
@@ -744,6 +750,40 @@ fn validate_extensions(input: &ComputeDashaInput, system: DashaSystem) -> Result
             "must be a finite Julian Day",
         ));
     }
+    if system == DashaSystem::Yogini {
+        let levels = u32::from(input.levels.unwrap_or(3).clamp(1, MAX_LEVELS));
+        let per_round: u64 = (1..=levels).map(|l| 8_u64.pow(l)).sum();
+        let max = u64::from(vedaksha_vedic::dasha::yogini::MAX_YOGINI_ROUNDS);
+        // `until` stops at the first round ending at or past it; a round is
+        // 36 years, and the first round is the shortest, so this counts high.
+        let rounds = match (input.rounds, input.until) {
+            (Some(r), _) => u64::from(r),
+            (None, Some(until)) => {
+                let years = (until - input.birth_jd) / (36.0 * 365.25);
+                if years > 0.0 {
+                    (years.ceil() as u64 + 1).min(max)
+                } else {
+                    1
+                }
+            }
+            (None, None) => 1,
+        };
+        if per_round * rounds > MAX_YOGINI_PERIODS {
+            return Err(McpError::invalid_parameter(
+                if input.rounds.is_some() {
+                    "rounds"
+                } else {
+                    "until"
+                },
+                &format!(
+                    "{rounds} rounds at {levels} levels is {} periods, over the \
+                     {MAX_YOGINI_PERIODS} one response may carry: ask for fewer levels or \
+                     rounds",
+                    per_round * rounds
+                ),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -1088,6 +1128,33 @@ mod tests {
                     .contains("graha_longitudes")
             );
         }
+    }
+
+    // Ten rounds at four levels is 46,800 periods and passes; one more level
+    // is 374,480 and does not. At five levels one round (37,448) passes and
+    // two (74,896) do not; `until` 40 years out counts as up to three rounds.
+    #[test]
+    fn validate_caps_the_yogini_response_size() {
+        let yogini = |levels: u8, rounds: Option<u8>, until: Option<f64>| ComputeDashaInput {
+            system: Some("Yogini".to_string()),
+            levels: Some(levels),
+            rounds,
+            until,
+            ..moon_input()
+        };
+        assert!(validate(&yogini(4, Some(10), None)).is_ok());
+        assert!(validate(&yogini(5, Some(10), None)).is_err());
+        assert!(validate(&yogini(5, Some(1), None)).is_ok());
+        assert!(validate(&yogini(5, Some(2), None)).is_err());
+        assert!(validate(&yogini(5, None, None)).is_ok());
+        let forty_years = 2_451_545.0 + 40.0 * 365.25;
+        assert!(validate(&yogini(4, None, Some(forty_years))).is_ok());
+        assert!(
+            validate(&yogini(5, None, Some(forty_years)))
+                .unwrap_err()
+                .message
+                .contains("periods")
+        );
     }
 
     #[test]
