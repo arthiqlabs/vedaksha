@@ -20,6 +20,9 @@
 //! ```
 //! where `t` = Julian millennia from J2000.0 = (JD − 2 451 545.0) / 365 250.0.
 
+use core::cell::RefCell;
+use std::sync::LazyLock;
+
 use wide::f64x4;
 
 use super::coefficients;
@@ -39,17 +42,151 @@ pub enum Planet {
     Neptune,
 }
 
-/// Evaluate a single Poisson power series for one coordinate.
+// ─── Evaluation by angle addition over shared frequencies ──────────────────────
+//
+// Every term is `A · cos(B + C·t)`. The straightforward evaluation forms the
+// angle `B + C·t` and calls `sincos` on it, once per term. But
+//
+//     cos(B + C·t) = cos B · cos C·t − sin B · sin C·t
+//     sin(B + C·t) = sin B · cos C·t + cos B · sin C·t
+//
+// and `B` is a constant of the term, so `cos B` and `sin B` can be taken once,
+// when the tables are built. What is left to compute per evaluation is the sine
+// and cosine of `C·t`, and the frequencies `C` repeat: the X, Y and Z series
+// and their six powers of `t` draw on the same few hundred frequencies per
+// planet (Earth: 624 distinct `C` among 2,202 terms; Saturn: 1,870 among
+// 7,512). So one `sincos` per *distinct frequency*, and each term costs two
+// multiply-adds for its position and two for its velocity.
+//
+// Measured over the loaded tables by `tests::vsop_tables_share_their_frequencies`.
+//
+// **Accuracy.** The old route rounded `C·t`, added `B` and rounded again, so
+// its angle was good to the `ulp` of the sum (1.5e-11 rad at |C·t| ≈ 1e5, the
+// edge of the supported range). This route rounds `C·t` once and never forms
+// the sum: its angle error is at most the old route's. The two differ by that
+// rounding times the term's amplitude; `tests::tables_match_the_direct_angle_route`
+// bounds it.
+
+/// One power-of-`t` group of one coordinate, as table indices and coefficients.
+struct Group {
+    /// Index into [`PlanetTables::freqs`] of each term's frequency.
+    freq: Vec<u32>,
+    /// Per term `[A cos B, −A sin B, A C sin B, A C cos B]`: the position term
+    /// is `p·cos(Ct) + q·sin(Ct)` and the velocity term `r·cos(Ct) + s·sin(Ct)`.
+    coef: Vec<[f64; 4]>,
+}
+
+/// One planet's tables: its distinct frequencies and its 18 groups
+/// (X, Y, Z times the six powers of `t`).
+struct PlanetTables {
+    freqs: Vec<f64>,
+    groups: [[Group; 6]; 3],
+}
+
+impl PlanetTables {
+    fn build(planet: Planet) -> Self {
+        let series: [[&'static [Vsop87Term]; 6]; 3] = [
+            get_series(planet, 0),
+            get_series(planet, 1),
+            get_series(planet, 2),
+        ];
+        // Distinct frequencies, in a fixed order (sorted by bit pattern).
+        let mut bits: Vec<u64> = series
+            .iter()
+            .flatten()
+            .flat_map(|terms| terms.iter().map(|t| t.frequency.to_bits()))
+            .collect();
+        bits.sort_unstable();
+        bits.dedup();
+        let freqs: Vec<f64> = bits.iter().map(|&b| f64::from_bits(b)).collect();
+
+        let group = |terms: &[Vsop87Term]| -> Group {
+            let mut freq = Vec::with_capacity(terms.len());
+            let mut coef = Vec::with_capacity(terms.len());
+            // Within a group the order is free (it is summed), and ordering by
+            // frequency makes the reads of the shared sine/cosine table walk it
+            // forward instead of jumping across it.
+            let mut ordered: Vec<(u32, [f64; 4])> = terms
+                .iter()
+                .map(|t| {
+                    let k = bits
+                        .binary_search(&t.frequency.to_bits())
+                        .expect("every frequency is in the table")
+                        as u32;
+                    let (sin_b, cos_b) = libm::sincos(t.phase);
+                    let ac = t.amplitude * t.frequency;
+                    (
+                        k,
+                        [
+                            t.amplitude * cos_b,
+                            -(t.amplitude * sin_b),
+                            ac * sin_b,
+                            ac * cos_b,
+                        ],
+                    )
+                })
+                .collect();
+            ordered.sort_by_key(|&(k, _)| k);
+            for (k, c) in ordered {
+                freq.push(k);
+                coef.push(c);
+            }
+            Group { freq, coef }
+        };
+        let groups = series.map(|coord| coord.map(group));
+        Self { freqs, groups }
+    }
+}
+
+static TABLES: [LazyLock<PlanetTables>; 8] = [
+    LazyLock::new(|| PlanetTables::build(Planet::Mercury)),
+    LazyLock::new(|| PlanetTables::build(Planet::Venus)),
+    LazyLock::new(|| PlanetTables::build(Planet::Earth)),
+    LazyLock::new(|| PlanetTables::build(Planet::Mars)),
+    LazyLock::new(|| PlanetTables::build(Planet::Jupiter)),
+    LazyLock::new(|| PlanetTables::build(Planet::Saturn)),
+    LazyLock::new(|| PlanetTables::build(Planet::Uranus)),
+    LazyLock::new(|| PlanetTables::build(Planet::Neptune)),
+];
+
+thread_local! {
+    /// `(sin C_k·t, cos C_k·t)` for the planet being evaluated.
+    static TRIG: RefCell<Vec<[f64; 2]>> = const { RefCell::new(Vec::new()) };
+}
+
+/// `(Σ p·cos + q·sin,  Σ r·cos + s·sin)` over one group, with four
+/// independent accumulators.
+fn group_sums(group: &Group, trig: &[[f64; 2]]) -> (f64, f64) {
+    let mut pos = [0.0_f64; 4];
+    let mut vel = [0.0_f64; 4];
+    let idx = group.freq.chunks_exact(4);
+    let coef = group.coef.chunks_exact(4);
+    let (idx_rest, coef_rest) = (idx.remainder(), coef.remainder());
+    for (ic, cc) in idx.zip(coef) {
+        for (lane, (&k, c)) in ic.iter().zip(cc).enumerate() {
+            let [sin_ct, cos_ct] = trig[k as usize];
+            pos[lane] += c[0] * cos_ct + c[1] * sin_ct;
+            vel[lane] += c[2] * cos_ct + c[3] * sin_ct;
+        }
+    }
+    let mut p = (pos[0] + pos[1]) + (pos[2] + pos[3]);
+    let mut v = (vel[0] + vel[1]) + (vel[2] + vel[3]);
+    for (&k, c) in idx_rest.iter().zip(coef_rest) {
+        let [sin_ct, cos_ct] = trig[k as usize];
+        p += c[0] * cos_ct + c[1] * sin_ct;
+        v += c[2] * cos_ct + c[3] * sin_ct;
+    }
+    (p, v)
+}
+
+/// One coordinate: `Σ_α t^α · Σ_i A cos(B + C t)` and its time derivative.
 ///
-/// Returns `(position, velocity)` in AU and AU/millennium respectively.
-///
-/// Each `series` slice element `series[alpha]` is a list of `(A, B, C)` triples
-/// representing terms `A * cos(B + C*t)`.
-fn eval_series(series: &[&[Vsop87Term]; 6], t: f64) -> (f64, f64) {
+/// Returns `(position, velocity)` in AU and AU/millennium.
+fn eval_coordinate(groups: &[Group; 6], trig: &[[f64; 2]], t: f64) -> (f64, f64) {
     let mut pos = 0.0_f64;
     let mut vel = 0.0_f64;
 
-    for (alpha, terms) in series.iter().enumerate() {
+    for (alpha, group) in groups.iter().enumerate() {
         let alpha_f = alpha as f64;
 
         // t^alpha — precomputed
@@ -70,44 +207,8 @@ fn eval_series(series: &[&[Vsop87Term]; 6], t: f64) -> (f64, f64) {
             t.powi((alpha - 1) as i32)
         };
 
-        let mut sum_cos = 0.0_f64;
-        let mut sum_sin_c = 0.0_f64; // sum of C_i * A_i * sin(B_i + C_i*t)
-
-        // Vectorized in the same pattern `elp_mpp02.rs`'s `eval_main_series`
-        // uses: gather up to 4 term angles in original order, call
-        // `sincos_f64x4`, then accumulate scalar in that same original order.
-        // `sincos_f64x4` and scalar `libm::sincos` agree only to 1-2 ULP (see
-        // `sincos_matches_libm_at_real_vsop87a_phase_domain`), so which terms
-        // land in the vector body and which in the scalar tail is part of the
-        // output's bit pattern, not an implementation detail.
-        let n_chunks = terms.len() / 4;
-        for ci in 0..n_chunks {
-            let base = ci * 4;
-            let mut angles = [0.0_f64; 4];
-            for (lane, angle) in angles.iter_mut().enumerate() {
-                let term = &terms[base + lane];
-                *angle = term.phase + term.frequency * t;
-            }
-            let (sin4, cos4) = sincos_f64x4(f64x4::from(angles));
-            let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
-            for lane in 0..4 {
-                let term = &terms[base + lane];
-                let a = term.amplitude;
-                let c = term.frequency;
-                sum_cos += a * cos4[lane];
-                sum_sin_c += a * c * sin4[lane];
-            }
-        }
-        for term in &terms[(n_chunks * 4)..] {
-            let a = term.amplitude;
-            let b = term.phase;
-            let c = term.frequency;
-            let angle = b + c * t;
-            // Single argument reduction for both sin and cos (same angle).
-            let (sin_val, cos_val) = libm::sincos(angle);
-            sum_cos += a * cos_val;
-            sum_sin_c += a * c * sin_val;
-        }
+        // sum_cos = Σ A cos(B + C t);  sum_sin_c = Σ A·C·sin(B + C t)
+        let (sum_cos, sum_sin_c) = group_sums(group, trig);
 
         // Position contribution: t^alpha * sum_cos
         pos += t_pow * sum_cos;
@@ -345,11 +446,33 @@ pub fn vsop87a_heliocentric(planet: Planet, jd: f64) -> ([f64; 3], [f64; 3]) {
     // Julian millennia from J2000.0
     let t = (jd - 2_451_545.0) / 365_250.0;
 
-    let (px, vx) = eval_series(&get_series(planet, 0), t);
-    let (py, vy) = eval_series(&get_series(planet, 1), t);
-    let (pz, vz) = eval_series(&get_series(planet, 2), t);
+    let tables = &*TABLES[planet as usize];
+    TRIG.with_borrow_mut(|scratch| {
+        // sin and cos of C·t for every distinct frequency of this planet.
+        let n = tables.freqs.len();
+        if scratch.len() < n {
+            scratch.resize(n, [0.0, 0.0]);
+        }
+        let trig = &mut scratch[..n];
+        for (freqs, out) in tables.freqs.chunks(4).zip(trig.chunks_mut(4)) {
+            let mut angles = [0.0_f64; 4];
+            for (angle, &c) in angles.iter_mut().zip(freqs) {
+                *angle = c * t;
+            }
+            let (sin4, cos4) = sincos_f64x4(f64x4::from(angles));
+            let (sin4, cos4) = (sin4.to_array(), cos4.to_array());
+            for (k, slot) in out.iter_mut().enumerate() {
+                *slot = [sin4[k], cos4[k]];
+            }
+        }
 
-    ([px, py, pz], [vx, vy, vz])
+        let trig = &*trig;
+        let (px, vx) = eval_coordinate(&tables.groups[0], trig, t);
+        let (py, vy) = eval_coordinate(&tables.groups[1], trig, t);
+        let (pz, vz) = eval_coordinate(&tables.groups[2], trig, t);
+
+        ([px, py, pz], [vx, vy, vz])
+    })
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -452,6 +575,158 @@ mod tests {
         let (pos, vel) = vsop87a_heliocentric(Planet::Earth, J2000);
         for &v in pos.iter().chain(vel.iter()) {
             assert!(v.is_finite(), "value at t=0 is not finite: {v}");
+        }
+    }
+
+    const ALL_PLANETS: [Planet; 8] = [
+        Planet::Mercury,
+        Planet::Venus,
+        Planet::Earth,
+        Planet::Mars,
+        Planet::Jupiter,
+        Planet::Saturn,
+        Planet::Uranus,
+        Planet::Neptune,
+    ];
+
+    /// The sharing the evaluation is built on, re-measured from the tables.
+    #[test]
+    fn vsop_tables_share_their_frequencies() {
+        for planet in ALL_PLANETS {
+            let tables = &*TABLES[planet as usize];
+            let terms: usize = tables.groups.iter().flatten().map(|g| g.freq.len()).sum();
+            let ratio = tables.freqs.len() as f64 / terms as f64;
+            println!(
+                "{planet:?}: {terms} terms, {} distinct frequencies ({:.0}%)",
+                tables.freqs.len(),
+                100.0 * ratio
+            );
+            // Measured 25% to 36%. At 50% the saving would be gone.
+            assert!(
+                ratio < 0.45,
+                "{planet:?}: {ratio} of terms have a distinct frequency"
+            );
+        }
+    }
+
+    fn two_sum(a: f64, b: f64) -> (f64, f64) {
+        let s = a + b;
+        let bb = s - a;
+        (s, (a - (s - bb)) + (b - bb))
+    }
+
+    /// `(sin, cos)` of `B + C·t` with the sum carried in double-double and
+    /// reduced modulo 2π in extended precision. `f64::mul_add` here is the exact
+    /// error of a product wherever it runs, not a speed choice.
+    fn exact_pair(b: f64, c: f64, t: f64) -> (f64, f64) {
+        const TAU_LO: f64 = 2.449_293_598_294_706_4e-16;
+        let hi = c * t;
+        let lo = c.mul_add(t, -hi);
+        let (s, e) = two_sum(b, hi);
+        let (hi, lo) = two_sum(s, e + lo);
+        let n = (hi / core::f64::consts::TAU).round();
+        let p = n * core::f64::consts::TAU;
+        let p_err = n.mul_add(core::f64::consts::TAU, -p);
+        let d = hi - p;
+        let small = lo - p_err - n * TAU_LO;
+        let (sn, cs) = libm::sincos(d);
+        (sn + small * cs, cs - small * sn)
+    }
+
+    /// The route this file used to take: one `sincos` of the rounded angle per
+    /// term. Kept here as a reference, with the exact-phase reference beside it.
+    fn reference_position(planet: Planet, jd: f64, exact: bool) -> [f64; 3] {
+        let t = (jd - J2000) / 365_250.0;
+        let mut out = [0.0; 3];
+        for (coord, slot) in out.iter_mut().enumerate() {
+            for (alpha, terms) in get_series(planet, coord).iter().enumerate() {
+                let mut sum = 0.0;
+                for term in terms.iter() {
+                    let cos = if exact {
+                        exact_pair(term.phase, term.frequency, t).1
+                    } else {
+                        libm::cos(term.phase + term.frequency * t)
+                    };
+                    sum += term.amplitude * cos;
+                }
+                *slot += if alpha == 0 {
+                    1.0
+                } else {
+                    t.powi(alpha as i32)
+                } * sum;
+            }
+        }
+        out
+    }
+
+    /// Positions from the shared-frequency route against the exact-phase
+    /// reference, with the old per-term-angle route measured beside it.
+    ///
+    /// Both approximate the exact value to the rounding of an angle that at the
+    /// range edge is of order 1e5 radians (`ulp` 1.5e-11) times an amplitude of
+    /// a fraction of an AU: millimetres to metres. The new route rounds `C·t`
+    /// once where the old rounded it and then the sum, so it must not be worse,
+    /// and the test asserts both that and an absolute bound on the new route.
+    #[test]
+    fn tables_match_the_exact_phase_reference_no_worse_than_the_old_route() {
+        use crate::analytical::{JD_MAX, JD_MIN};
+        let au_m = crate::jpl::AU_KM * 1000.0;
+        let mut worst_new = 0.0_f64;
+        let mut worst_old = 0.0_f64;
+        for planet in ALL_PLANETS {
+            let (mut planet_new, mut planet_old) = (0.0_f64, 0.0_f64);
+            for k in 0..=24 {
+                let jd = JD_MIN + (JD_MAX - JD_MIN) * f64::from(k) / 24.0;
+                let want = reference_position(planet, jd, true);
+                let old = reference_position(planet, jd, false);
+                let (got, _) = vsop87a_heliocentric(planet, jd);
+                for ((g, w), o) in got.iter().zip(&want).zip(&old) {
+                    planet_new = planet_new.max((g - w).abs() * au_m);
+                    planet_old = planet_old.max((o - w).abs() * au_m);
+                }
+            }
+            println!(
+                "{planet:?}: new route {planet_new:.2e} m, old route {planet_old:.2e} m from the exact-phase value"
+            );
+            worst_new = worst_new.max(planet_new);
+            worst_old = worst_old.max(planet_old);
+        }
+        // Summation order differs too, which is a few units in the last place of a
+        // 1 AU sum (about 3e-5 m): allow it on top of "no worse".
+        assert!(
+            worst_new <= worst_old + 1e-3,
+            "new {worst_new:e} m is worse than old {worst_old:e} m"
+        );
+        assert!(
+            worst_new < 5.0,
+            "new route off by {worst_new:e} m from the exact phase"
+        );
+    }
+
+    /// The velocity coefficients (`A·C·sin B`, `A·C·cos B`) against a central
+    /// difference of the positions: a sign or factor error in either shows up
+    /// at order one.
+    #[test]
+    fn velocity_is_the_derivative_of_position() {
+        // 0.073 day: the central difference's truncation error is (omega h)^2 / 6,
+        // 4.5e-6 for Mercury's 88-day period, inside the 1e-4 allowed below.
+        let h = 2.0e-7; // millennia
+        for planet in ALL_PLANETS {
+            for jd in [J2000, J2000 + 20_000.0, J2000 - 150_000.0] {
+                let t0 = (jd - J2000) / 365_250.0;
+                let at = |t: f64| vsop87a_heliocentric(planet, J2000 + t * 365_250.0).0;
+                let (lo, hi) = (at(t0 - h), at(t0 + h));
+                let (_, vel) = vsop87a_heliocentric(planet, jd);
+                for c in 0..3 {
+                    let numeric = (hi[c] - lo[c]) / (2.0 * h);
+                    let tolerance = 1e-4 * vel[c].abs().max(1e-3);
+                    assert!(
+                        (vel[c] - numeric).abs() < tolerance,
+                        "{planet:?} jd {jd} component {c}: velocity {} vs central difference {numeric}",
+                        vel[c]
+                    );
+                }
+            }
         }
     }
 

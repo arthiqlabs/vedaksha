@@ -36,6 +36,7 @@ pub mod analytical;
 pub mod bodies;
 #[cfg(feature = "std")]
 pub mod cache;
+pub mod chebyshev;
 pub mod coordinates;
 pub mod deflection;
 pub mod delta_t;
@@ -49,3 +50,4 @@ pub mod obliquity;
 pub mod precession;
 pub mod sidereal_time;
 pub mod stars;
+pub mod walk;
