@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: BUSL-1.1
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Delta T (TT - UT1) knots, 1900 to the present. GENERATED, do not edit.
+//! Delta T (TT - UT1) knots, 1900 to 2033.75. GENERATED, do not edit.
 //!
-//! Written by `scripts/generate_delta_t_table.py` from two public-domain files
+//! Written by `scripts/generate_delta_t_table.py` from three public-domain files
 //! of the IERS Rapid Service/Prediction Center at the U.S. Naval Observatory
 //! (Distribution Statement A, approved for public release), retrieved
 //! 2026-10-24:
@@ -18,13 +18,18 @@
 //!   "Monthly determinations of Delta T (TT - UT1) since 1973", the value at
 //!   0h on the first of each month, 1973-02-01 to 2026-10-01
 //!   (645 rows, sha256 `7396fcfdad33856b5242f288887678d75f3803494fa79394bc02f37eb99efc1e`).
+//! * <https://maia.usno.navy.mil/ser7/deltat.preds>
+//!   "Long-term predictions of Delta T (TT - UT1) from finals.data", the
+//!   quarterly rows after 2026-10-01, 2027-01-01 to
+//!   2033-10-01 (28 rows, sha256 `5d864fddd30b2c64d2a86d3debbb25604eb5de44370c96bccf2abd5463f3db08`).
+//!   A prediction: the file states an error of 0.03 s in 2022 growing to 1 s by 2032.75.
 //!
 //! Each knot is `(decimal year, seconds)`. A decimal year is
 //! `year + (JD - JD(Jan 1)) / length of year`, the function `delta_t.rs` uses to
 //! turn a Julian Day into a year. See `delta_t.rs` for how the knots are used.
 
 /// Delta T knots from 1900.0 to the last monthly row, strictly increasing in
-/// time.
+/// time. Measured.
 pub(super) static MODERN: &[(f64, f64)] = &[
     // McCarthy and Babcock (1986), USNO historic_deltat.data, half-year rows.
     (1900.0, -2.70),
@@ -820,4 +825,38 @@ pub(super) static MODERN: &[(f64, f64)] = &[
     (2026.580_821_918, 69.1713),
     (2026.665_753_425, 69.1816),
     (2026.747_945_205, 69.2065),
+];
+
+/// Predicted Delta T knots after the last monthly row, strictly increasing in
+/// time, continuing [`MODERN`]. A prediction, not a measurement.
+pub(super) static PREDICTED: &[(f64, f64)] = &[
+    // USNO deltat.preds, quarterly rows.
+    (2027.000_000_000, 69.14),
+    (2027.249_315_068, 69.21),
+    (2027.498_630_137, 69.26),
+    (2027.750_684_932, 69.26),
+    (2028.000_000_000, 69.34),
+    (2028.248_633_880, 69.44),
+    (2028.500_000_000, 69.51),
+    (2028.748_633_880, 69.54),
+    (2028.997_267_760, 69.63),
+    (2029.249_315_068, 69.75),
+    (2029.498_630_137, 69.83),
+    (2029.747_945_205, 69.87),
+    (2030.000_000_000, 69.97),
+    (2030.249_315_068, 70.08),
+    (2030.498_630_137, 70.17),
+    (2030.747_945_205, 70.21),
+    (2031.000_000_000, 70.32),
+    (2031.249_315_068, 70.42),
+    (2031.498_630_137, 70.51),
+    (2031.750_684_932, 70.53),
+    (2032.000_000_000, 70.62),
+    (2032.248_633_880, 70.72),
+    (2032.500_000_000, 70.82),
+    (2032.748_633_880, 70.86),
+    (2032.997_267_760, 70.98),
+    (2033.249_315_068, 71.10),
+    (2033.498_630_137, 71.20),
+    (2033.747_945_205, 71.25),
 ];

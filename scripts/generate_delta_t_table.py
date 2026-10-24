@@ -15,6 +15,10 @@ public-domain USNO files, concatenated:
   one row per month, the value at 0h on the first of the month. Every row is
   used.
   https://maia.usno.navy.mil/ser7/deltat.data
+* `deltat.preds` -- "Long-term predictions of Delta T (TT - UT1) from
+  finals.data", one row per quarter with its stated error. The rows dated after
+  the last monthly row are used, through the file's last row.
+  https://maia.usno.navy.mil/ser7/deltat.preds
 
 Both are products of the IERS Rapid Service/Prediction Center at the U.S. Naval
 Observatory (Distribution Statement A: approved for public release; a US
@@ -29,6 +33,7 @@ directory of their own, and pass their paths:
     python3 -I scripts/generate_delta_t_table.py \\
         --historic /path/to/historic_deltat.data \\
         --monthly  /path/to/deltat.data \\
+        --preds    /path/to/deltat.preds \\
         --retrieved 2026-10-24                    # writes delta_t_table.rs
     python3 -I scripts/generate_delta_t_table.py ... --verify   # compare only
 
@@ -37,6 +42,9 @@ non-zero on a difference. It is not wired into CI: `deltat.data` gains a row
 every month, so a fresh download is expected to differ from the committed
 snapshot, and the point of `--verify` is to check a snapshot against the very
 files it was made from (their sha256 sums are in the generated header).
+
+The predicted rows are knots like the others. They are a prediction, not a
+measurement: the file's error column grows from 0.03 s in 2022 to 1 s by 2032.75.
 
 The knot time is a decimal year, `year + (JD - JD(Jan 1)) / length of year`,
 the same function `delta_t.rs` uses to turn a Julian Day into a year, so a knot
@@ -57,6 +65,7 @@ OUTPUT = REPO_ROOT / "crates" / "vedaksha-ephem-core" / "src" / "delta_t_table.r
 
 HISTORIC_URL = "https://maia.usno.navy.mil/ser7/historic_deltat.data"
 MONTHLY_URL = "https://maia.usno.navy.mil/ser7/deltat.data"
+PREDS_URL = "https://maia.usno.navy.mil/ser7/deltat.preds"
 
 # Half-year rows are taken from this decimal year (inclusive) to the year the
 # monthly file takes over (inclusive: 1973.0 is the last half-year row, and the
@@ -116,14 +125,44 @@ def read_monthly(path: pathlib.Path) -> list[tuple[int, int, str]]:
     return rows
 
 
+MJD_EPOCH = datetime.date(1858, 11, 17)  # MJD 0
+
+
+def read_preds(path: pathlib.Path, after: datetime.date) -> list[tuple[int, int, int, str]]:
+    """Rows of deltat.preds dated after `after`, as (year, month, day, TT-UT)."""
+    rows = []
+    for line in path.read_text().splitlines():
+        parts = line.split()
+        if len(parts) < 3:
+            continue
+        try:
+            mjd = float(parts[0])
+        except ValueError:
+            continue  # header
+        if mjd != int(mjd):
+            raise SystemExit(f"{path}: expected whole-day MJD rows, saw {parts[0]}")
+        date = MJD_EPOCH + datetime.timedelta(days=int(mjd))
+        if date > after:
+            rows.append((date.year, date.month, date.day, parts[2]))
+    if not rows:
+        raise SystemExit(f"{path}: no rows after {after}")
+    dates = [datetime.date(y, m, d) for y, m, d, _ in rows]
+    if any(b <= a for a, b in zip(dates, dates[1:])):
+        raise SystemExit(f"{path}: rows are not strictly increasing in time")
+    return rows
+
+
 def sha256(path: pathlib.Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def render(historic: pathlib.Path, monthly: pathlib.Path, retrieved: str) -> str:
+def render(
+    historic: pathlib.Path, monthly: pathlib.Path, preds: pathlib.Path, retrieved: str
+) -> str:
     hist = read_historic(historic)
     mon = read_monthly(monthly)
     last_year, last_month, _ = mon[-1]
+    pre = read_preds(preds, datetime.date(last_year, last_month, 1))
     out = []
     out.append(
         "// Copyright © 2026 ArthIQ Labs LLC. All rights reserved.\n"
@@ -131,9 +170,9 @@ def render(historic: pathlib.Path, monthly: pathlib.Path, retrieved: str) -> str
         "// SPDX-License-Identifier: BUSL-1.1\n"
         "// Contact: info@arthiq.net | https://vedaksha.net\n"
         "\n"
-        "//! Delta T (TT - UT1) knots, 1900 to the present. GENERATED, do not edit.\n"
+        "//! Delta T (TT - UT1) knots, 1900 to 2033.75. GENERATED, do not edit.\n"
         "//!\n"
-        "//! Written by `scripts/generate_delta_t_table.py` from two public-domain files\n"
+        "//! Written by `scripts/generate_delta_t_table.py` from three public-domain files\n"
         "//! of the IERS Rapid Service/Prediction Center at the U.S. Naval Observatory\n"
         "//! (Distribution Statement A, approved for public release), retrieved\n"
         f"//! {retrieved}:\n"
@@ -146,13 +185,18 @@ def render(historic: pathlib.Path, monthly: pathlib.Path, retrieved: str) -> str
         "//!   \"Monthly determinations of Delta T (TT - UT1) since 1973\", the value at\n"
         f"//!   0h on the first of each month, 1973-02-01 to {last_year}-{last_month:02d}-01\n"
         f"//!   ({len(mon)} rows, sha256 `{sha256(monthly)}`).\n"
+        f"//! * <{PREDS_URL}>\n"
+        "//!   \"Long-term predictions of Delta T (TT - UT1) from finals.data\", the\n"
+        f"//!   quarterly rows after {last_year}-{last_month:02d}-01, {pre[0][0]}-{pre[0][1]:02d}-{pre[0][2]:02d} to\n"
+        f"//!   {pre[-1][0]}-{pre[-1][1]:02d}-{pre[-1][2]:02d} ({len(pre)} rows, sha256 `{sha256(preds)}`).\n"
+        "//!   A prediction: the file states an error of 0.03 s in 2022 growing to 1 s by 2032.75.\n"
         "//!\n"
         "//! Each knot is `(decimal year, seconds)`. A decimal year is\n"
         "//! `year + (JD - JD(Jan 1)) / length of year`, the function `delta_t.rs` uses to\n"
         "//! turn a Julian Day into a year. See `delta_t.rs` for how the knots are used.\n"
         "\n"
         "/// Delta T knots from 1900.0 to the last monthly row, strictly increasing in\n"
-        "/// time.\n"
+        "/// time. Measured.\n"
         "pub(super) static MODERN: &[(f64, f64)] = &[\n"
         "    // McCarthy and Babcock (1986), USNO historic_deltat.data, half-year rows.\n"
     )
@@ -161,6 +205,15 @@ def render(historic: pathlib.Path, monthly: pathlib.Path, retrieved: str) -> str
     out.append("    // USNO deltat.data, monthly rows (0h on the first of the month).\n")
     for year, month, value in mon:
         out.append(f"    ({group(f'{decimal_year(year, month, 1):.9f}')}, {value}),\n")
+    out.append("];\n\n")
+    out.append(
+        "/// Predicted Delta T knots after the last monthly row, strictly increasing in\n"
+        "/// time, continuing [`MODERN`]. A prediction, not a measurement.\n"
+        "pub(super) static PREDICTED: &[(f64, f64)] = &[\n"
+        "    // USNO deltat.preds, quarterly rows.\n"
+    )
+    for year, month, day, value in pre:
+        out.append(f"    ({group(f'{decimal_year(year, month, day):.9f}')}, {value}),\n")
     out.append("];\n")
     return "".join(out)
 
@@ -169,12 +222,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--historic", type=pathlib.Path, required=True)
     ap.add_argument("--monthly", type=pathlib.Path, required=True)
+    ap.add_argument("--preds", type=pathlib.Path, required=True)
     ap.add_argument("--retrieved", required=True, help="date the files were fetched, YYYY-MM-DD")
     ap.add_argument("--verify", action="store_true", help="compare with the committed file; do not write")
     ap.add_argument("--out", type=pathlib.Path, default=OUTPUT)
     args = ap.parse_args()
 
-    text = render(args.historic, args.monthly, args.retrieved)
+    text = render(args.historic, args.monthly, args.preds, args.retrieved)
     if args.verify:
         committed = args.out.read_text()
         if committed != text:
