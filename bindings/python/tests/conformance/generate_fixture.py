@@ -18,6 +18,20 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[3]  # repo root (…/vedaksha)
 
+# The worked chart of BPHS chapter 46 (Aquarius lagna), as the sign indices
+# `compute_dasha` takes for Chara.
+CHARA_SIGNS = {
+    "sun": 9, "moon": 2, "mars": 1, "mercury": 10,
+    "jupiter": 10, "venus": 10, "saturn": 4, "rahu": 2,
+}
+
+# Lagna Aries; the lords of the sixth, eighth and twelfth leave Jupiter, in
+# Sagittarius, as the Brahma graha (the vedic crate's sthira tests derive it).
+BRAHMA_CHART = {
+    "sun": 29.0, "moon": 95.0, "mars": 100.0, "mercury": 38.0,
+    "jupiter": 252.0, "venus": 63.0, "saturn": 124.0, "rahu": 350.0,
+}
+
 MCP_CASES = [
     ("natal_j2000", {
         "jsonrpc": "2.0", "id": 1, "method": "tools/call",
@@ -44,6 +58,58 @@ MCP_CASES = [
         "params": {"name": "compute_panchanga", "arguments": {
             "jd": 2459016.0, "sun": 84.0, "moon": 200.0,
             "latitude": 78.22, "longitude": 15.65, "tz_offset_minutes": 60}}}),
+    # The complete shadbala for a moment and place. The first leaves every
+    # optional argument at its default; the second sets all three, in the
+    # southern hemisphere, so an argument the wasm build dropped would show.
+    ("shadbala_chennai", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_shadbala", "arguments": {
+            "julian_day": 2461338.0, "latitude": 13.08, "longitude": 80.27,
+            "ayanamsha": "IndianOfficial", "tz_offset_minutes": 330}}}),
+    ("shadbala_sydney_options", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_shadbala", "arguments": {
+            "julian_day": 2461338.25, "latitude": -33.87, "longitude": 151.21,
+            "ayanamsha": "IndianOfficial", "house_system": "WholeSign",
+            "elevation_m": 500.0, "tz_offset_minutes": 660}}}),
+    # Under the midnight sun there is no sunset and so no Hindu day: both
+    # builds must refuse in the same words, not only agree when they succeed.
+    ("shadbala_polar_refused", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_shadbala", "arguments": {
+            "julian_day": 2459016.0, "latitude": 78.22, "longitude": 15.65,
+            "ayanamsha": "IndianOfficial"}}}),
+    # The dasha systems and options added with the complete shadbala.
+    ("dasha_yogini_rounds", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_dasha", "arguments": {
+            "system": "Yogini", "moon_longitude": 45.0, "birth_jd": 2451545.0,
+            "levels": 2, "rounds": 2}}}),
+    ("dasha_chara_antardashas", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_dasha", "arguments": {
+            "system": "Chara", "lagna_sign": 10, "birth_jd": 2451545.0,
+            "antardashas": True, "graha_signs": CHARA_SIGNS}}}),
+    ("dasha_sthira", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_dasha", "arguments": {
+            "system": "Sthira", "lagna_sign": 0, "birth_jd": 2451545.0,
+            "graha_longitudes": BRAHMA_CHART}}}),
+    ("dasha_sthira_no_brahma", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_dasha", "arguments": {
+            "system": "Sthira", "lagna_sign": 0, "birth_jd": 2451545.0,
+            "graha_longitudes": {**BRAHMA_CHART, "mercury": 8.0, "jupiter": 112.0}}}}),
+    ("dasha_niryana_shoola", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_dasha", "arguments": {
+            "system": "NiryanaShoola", "lagna_sign": 0, "birth_jd": 2451545.0,
+            "graha_longitudes": BRAHMA_CHART}}}),
+    ("dasha_maheshwara", {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {"name": "compute_dasha", "arguments": {
+            "system": "Maheshwara", "lagna_sign": 0, "birth_jd": 2451545.0,
+            "graha_longitudes": BRAHMA_CHART}}}),
     ("tools_list", {"jsonrpc": "2.0", "id": 1, "method": "tools/list"}),
 ]
 

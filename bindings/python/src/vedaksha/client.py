@@ -109,6 +109,17 @@ class Vedaksha:
     #                  latitude=28.6139, longitude=77.2090,
     #                  elevation_m=216.0, tz_offset_minutes=330)
     #
+    #     vk.call_tool("compute_shadbala", julian_day=2461338.0, latitude=13.08,
+    #                  longitude=80.27, ayanamsha="IndianOfficial",
+    #                  tz_offset_minutes=330)
+    #
+    # ``compute_shadbala`` takes a moment and a place, casts the chart itself
+    # and returns every part of each graha's strength; the ayanamsha is
+    # required, and the Sun must both rise and set at the place. The rashi
+    # dashas Sthira, NiryanaShoola and Maheshwara take ``lagna_sign`` and
+    # ``graha_longitudes`` (the eight sidereal longitudes, Sun to Rahu);
+    # Yogini takes ``rounds`` or ``until``, Chara ``antardashas=True``.
+    #
     # ``compute_panchanga`` requires an observer: its vara (weekday) runs
     # local-sunrise to local-sunrise, so ``latitude``/``longitude`` are
     # mandatory and a call without them is rejected. ``elevation_m``
