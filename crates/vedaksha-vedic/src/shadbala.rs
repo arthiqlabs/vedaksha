@@ -37,8 +37,10 @@
 //!   `moon_phase_waxing` and a speed. It cannot carry the inputs the verse
 //!   needs (a time of day in ghatis, the Sun and Moon longitudes, the
 //!   other six grahas for the friendships, a mean longitude), so it keeps the
-//!   0-or-30 steps it always had, and it is what the MCP and WASM surfaces
-//!   serve. Its coverage is listed at the end of this section.
+//!   0-or-30 steps it always had. The MCP and WASM surfaces served it through
+//!   the release before this one and now serve the complete form, through
+//!   [`crate::shadbala_chart`]; it stays for library callers. Its coverage is
+//!   listed at the end of this section.
 //!
 //! # What the complete form implements
 //!
@@ -468,7 +470,7 @@ pub fn sthana_bala(planet: Graha, _sign: u8, longitude: f64) -> f64 {
 /// **Not the verse's rule.** BPHS 27.8 to 27.11 make Nathonnata and Paksha
 /// Bala continuous, up to 60 virupas each; this keeps the 0-or-30 steps the
 /// boolean inputs allow, and omits Tribhaga, Abda, Masa, Vara, Hora, Ayana
-/// and Yuddha. It is what the MCP and WASM surfaces serve. For the verse use
+/// and Yuddha. For the verse use
 /// [`nathonnata_bala`], [`paksha_bala`] and the rest, or
 /// [`compute_shadbala_complete`].
 ///
@@ -509,8 +511,8 @@ pub fn kala_bala(planet: Graha, is_daytime: bool, moon_phase_waxing: bool) -> f6
 /// **Not a verse rule.** BPHS 27.24 and 27.25 take Cheshta Bala from the
 /// cheshta kendra (see [`cheshta_kendra`], [`cheshta_bala_at`]); 27.18 gives
 /// the Sun the ayana bala and the Moon the paksha bala. This speed grade is a
-/// stand-in for callers who have a speed and no mean longitudes, and it is
-/// what the MCP and WASM surfaces serve. 27.21 to 27.23 do grade eight motion
+/// stand-in for callers who have a speed and no mean longitudes. 27.21 to
+/// 27.23 do grade eight motion
 /// states by strength; [`crate::cheshta::Cheshta::virupas`] carries those.
 ///
 /// - Retrograde: 60 virupas (strongest — planet re-traverses degrees)
@@ -643,9 +645,9 @@ pub fn compute_shadbala(positions: &[GrahaPosition], _lagna_sign: u8) -> Vec<Sha
 ///
 /// Sthana Bala omits Saptavargaja Bala, Kala Bala covers Nathonnatha and
 /// Paksha only as steps, and Cheshta Bala is the speed grade; see the module
-/// documentation for the full accounting. This is the form the MCP and WASM
-/// surfaces serve and its answers do not change; the form that follows the
-/// verse is [`compute_shadbala_complete`].
+/// documentation for the full accounting. Its answers do not change; the form
+/// that follows the verse is [`compute_shadbala_complete`], which the MCP and
+/// WASM surfaces serve (through [`crate::shadbala_chart`]) in its place.
 ///
 /// # Arguments
 /// * `planets` — slice of extended planet data (position, speed, aspects)
@@ -4817,8 +4819,8 @@ mod tests {
 
     #[test]
     fn the_coarse_form_is_untouched() {
-        // The MCP and WASM surfaces serve compute_shadbala_full; its answers
-        // are the 0-or-30 steps they always were.
+        // The coarse form's answers are the 0-or-30 steps they always were,
+        // though no surface serves it any more.
         let data = [planet_data(Graha::Jupiter, 3, 4, -0.05, 0.08, 2, 1)];
         let sb = &compute_shadbala_full(&data, true, true)[0];
         assert!((sb.kala_bala - 60.0).abs() < f64::EPSILON);
