@@ -9,6 +9,7 @@ license.workspace = true
 rust-version.workspace = true
 description = "Western astrology: house systems, aspects, dignities, chart computation"
 keywords = ["astrology", "horoscope", "houses", "aspects", "natal-chart"]
+readme = "README.md"
 categories = ["science", "mathematics"]
 
 [dependencies]

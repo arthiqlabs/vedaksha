@@ -1,6 +1,6 @@
-# Vedaksha — Vision from Vedas
+# Vedaksha: Rust ephemeris and Vedic astrology (Jyotish) engine
 
-**Clean-room Rust ephemeris and Vedic astrology engine, built for the agentic-AI era.** Sub-arcsecond planetary precision, every algorithm traced to a primary source, any chart queryable as a property graph.
+**For developers building kundli (kundali) apps, panchang calendars and AI agents.** Natal charts, dashas, vargas, shadbala and panchanga, computed from an ephemeris that agrees with JPL Horizons to 0.096″ mean in longitude, in Rust, Python and WebAssembly, and as 17 MCP tools. Clean-room: every algorithm is traced to a primary source. Source-available under BUSL-1.1, with no AGPL obligations; each release becomes Apache-2.0 four years after it ships.
 
 [![crates.io](https://img.shields.io/crates/v/vedaksha.svg?logo=rust)](https://crates.io/crates/vedaksha)
 [![docs.rs](https://img.shields.io/docsrs/vedaksha?logo=docsdotrs)](https://docs.rs/vedaksha)
@@ -14,7 +14,7 @@
 
 `clean-room` · `0.096″ mean longitude vs JPL Horizons` · `1,603 tests (per push) + 24,350 oracle rows` · `MCP-native` · `BUSL-1.1 → Apache 2.0`
 
-[Install](#install) · [Quick start](#quick-start) · [Accuracy](#accuracy) · [What's inside](#whats-inside) · [MCP + property graph](#mcp--property-graph) · [Provenance](#clean-room-provenance) · [License](#license)
+[Install](#install) · [Quick start](#quick-start) · [Accuracy](#accuracy) · [What's inside](#whats-inside) · [MCP + property graph](#mcp--property-graph) · [Provenance](#clean-room-provenance) · [FAQ](#faq) · [License](#license)
 
 ---
 
@@ -45,20 +45,61 @@ flowchart LR
 
 ## Quick start
 
+**Python** (`pip install vedaksha`): a sidereal (Lahiri) whole-sign chart, i.e. a kundli.
+
 ```python
 from vedaksha import Vedaksha
 
 vk = Vedaksha()
-chart = vk.natal_chart(julian_day=2451545.0, latitude=28.6139, longitude=77.2090)
+chart = vk.natal_chart(julian_day=2451545.0, latitude=28.6139, longitude=77.2090,
+                       ayanamsha="IndianOfficial", house_system="WholeSign")
+print(chart["houses"]["asc"], [(p["name"], p["sign"]) for p in chart["planets"]])
 ```
 
-```bash
-cargo install vedaksha-mcp && vedaksha-mcp     # stdio: Claude Desktop, Cursor, VS Code
+**Rust** (`cargo add vedaksha`):
+
+```rust
+use vedaksha::prelude::*;
+
+fn main() {
+    // 2024-03-20 12:00 UT1. The day is a fraction: noon on the 20th is 20.5.
+    let jd = calendar_to_jd(2024, 3, 20.5);
+    let moon = apparent_position(&AnalyticalProvider, Body::Moon, jd).expect("in range");
+    println!("Moon {:.4}°", moon.ecliptic.longitude.to_degrees());
+}
 ```
 
-The Rust path is a compiled doctest in [`crates/vedaksha/src/lib.rs`](crates/vedaksha/src/lib.rs).
+A full chart, with houses and a sidereal zodiac, is the compiled doctest in [`crates/vedaksha/src/lib.rs`](crates/vedaksha/src/lib.rs).
 
-**Every Julian Day on the public surfaces is UT1**, not TT and not TDB. The engine converts to TT internally for the dynamical terms and uses UT1 for Earth rotation, which fixes the ascendant, MC and all twelve cusps. Passing a TDB Julian Day adds ΔT worth of rotation instead of removing it — 0.289° (17.3′) at today's ΔT ≈ 69 s, on every cusp. The one exception is the raw SPK query (`state_vector`), which indexes the kernel directly and takes TDB.
+**JavaScript in the browser** (`npm install vedaksha-wasm`; no data files):
+
+```js
+import init, { compute_natal_chart } from "vedaksha-wasm";
+
+await init();
+const chart = JSON.parse(compute_natal_chart(JSON.stringify({
+  year: 2024, month: 3, day: 20, hour: 12, minute: 0,   // UTC
+  latitude: 28.6139, longitude: 77.2090,
+  ayanamsha: "IndianOfficial", house_system: "WholeSign",
+})));
+```
+
+**MCP** (Claude Desktop `claude_desktop_config.json`, Cursor `.cursor/mcp.json`, or any stdio MCP client):
+
+```json
+{
+  "mcpServers": {
+    "vedaksha": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "ghcr.io/arthiqlabs/vedaksha-mcp", "--stdio"]
+    }
+  }
+}
+```
+
+Without Docker, `cargo install vedaksha-mcp` and set `"command": "vedaksha-mcp"` with no arguments, or `pip install vedaksha` and use `vedaksha-mcp` the same way.
+
+**Every Julian Day on the public surfaces is UT1**, not TT and not TDB. The engine converts to TT internally for the dynamical terms and uses UT1 for Earth rotation, which fixes the ascendant, MC and all twelve cusps. Passing a TDB Julian Day adds ΔT worth of rotation instead of removing it — 0.289° (17.3′) at today's ΔT ≈ 69 s, on every cusp. Two exceptions say so in their names: the raw SPK query (`state_vector`), which indexes the kernel directly and takes TDB, and the Python binding's `analytical_position(body, julian_day_tt)`, which takes TT.
 
 ## Accuracy
 
@@ -120,7 +161,7 @@ provenance of every algorithm: [`docs/paper/main.tex`](docs/paper/main.tex) (bui
 
 It goes well beyond the summary above, and reports several things that are stated nowhere else:
 
-- **Independent cross-validation by a third party** against two national-agency ephemerides from
+- **Cross-validation against two national-agency ephemerides**, measured with a separate parity harness maintained by the same authors (not a third party), from
   two different agencies (JPL DE440 and IMCCE INPOP21a), rather than agreement with JPL alone.
 - **Analytical-path accuracy across 1550–2650 CE**, per body and per century-band of distance
   from J2000, with the time scale removed from the comparison by addressing both sides in TT so
@@ -178,6 +219,29 @@ Every implemented algorithm carries a `// Source:` doc-comment naming its primar
 |---------|------------|
 | [kundalimcp.com](https://kundalimcp.com) | Agentic-AI Jyotish MCP with the full computation suite. Builds directly on the `vedaksha-*` crates. |
 | [kundali.live](https://kundali.live) | Consumer endpoint — chat-based readings and self-serve PDF reports. |
+
+## FAQ
+
+### What is Vedaksha?
+A Rust engine for astronomical ephemeris and Vedic astrology (Jyotish), with Python and WebAssembly bindings and an MCP server of 17 tools for AI agents. It computes planetary positions, natal charts, panchanga, dashas, vargas and shadbala.
+
+### Can it compute a kundli (kundali, janam kundali)?
+Yes. Pass a sidereal ayanamsha, for example `IndianOfficial` (Lahiri), with a house system such as `WholeSign`. The MCP tools and the Python binding default to tropical, so a kundli needs the ayanamsha stated; the WASM `compute_natal_chart` defaults to `IndianOfficial`.
+
+### Is it free to use? Is it AGPL?
+It is not AGPL, and it contains no AGPL code. It is source-available under BUSL-1.1: non-commercial use is free; commercial use (a product or service earning revenue from external customers) needs a one-time licence of USD $500 per organisation, covering that version and every later one. Each release converts to Apache-2.0 four years after it ships. BUSL is not an OSI open-source licence.
+
+### Does it need ephemeris data files?
+No. `AnalyticalProvider` evaluates VSOP87A and ELP/MPP02 compiled into the binary, which is what the WASM package and the MCP server use. `SpkReader` reads a JPL DE440s kernel (~31 MB, fetched by `scripts/download_de440s.sh`) for the highest accuracy.
+
+### How accurate is it?
+Against JPL Horizons over 1900 to 2025, in apparent geocentric longitude: 0.096″ mean and 0.272″ at worst on the SPK path, 0.160″ mean and 1.473″ at worst on the analytical path. House cusps are not validated against an external reference; see [Accuracy](#accuracy).
+
+### Which ayanamshas and dasha systems are supported?
+Eleven ayanamshas, each derived from a primary source, and eight dasha systems: Vimshottari, Ashtottari, Yogini, Chara, Narayana, Sthira, Niryana Shoola and Maheshwara.
+
+### Can an AI agent use it?
+Yes. The MCP server runs over stdio or HTTP and is listed in the official MCP Registry as `io.github.arthiqlabs/vedaksha`. See [Quick start](#quick-start) for a client config.
 
 ## License
 

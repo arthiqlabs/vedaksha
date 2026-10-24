@@ -37,8 +37,10 @@ pub fn definition() -> super::ToolDefinition {
     super::ToolDefinition {
         name: "compute_natal_chart",
         description: "Compute a natal astrological chart for a given time and location. \
-            Returns a ChartGraph in JSON format containing planetary positions, house cusps, \
-            aspects, nakshatras, and dignities.",
+            Returns JSON with each body's longitude, latitude, speed, sign, house, dignity and \
+            retrograde flag, the house cusps with ascendant and MC, the aspects, and the \
+            ayanamsha applied. Pass a sidereal ayanamsha for a Vedic chart (kundali); the \
+            default is tropical. To get a property graph, pass this output to emit_graph.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {

@@ -188,7 +188,7 @@ invalidating condition is met.
 Stated first because it has been misread twice, both times from the same evidence: a CI job
 that takes over an hour, and a stack full of `elp_mpp02::eval_pert_series`.
 
-**Push CI invokes no generator at all.** `ci.yml` runs no script in `scripts/`. The VSOP87A and
+**Push CI invokes no generator at all.** `ci.yml` runs only the guard scripts in `scripts/`, never a coefficient generator. The VSOP87A and
 ELP/MPP02 coefficients are committed binaries under
 `crates/vedaksha-ephem-core/src/analytical/coefficients/` — 331 files, ~30,000 retained terms —
 and they change only when a human runs a generator without `--verify` and commits the result.

@@ -43,6 +43,21 @@ def main() -> int:
               "in the wrong place.", file=sys.stderr)
         return 1
 
+    # A published crate with no LICENSE of its own ships none: `cargo package`
+    # archives only the crate directory. The umbrella `vedaksha` crate did
+    # exactly that through v9.4.1, and the drift check above could not see it,
+    # because it only compares copies that exist.
+    missing = [
+        m.parent for m in sorted((ROOT / "crates").glob("*/Cargo.toml"))
+        if "publish = false" not in m.read_text()
+        and not (m.parent / "LICENSE").is_file()
+    ]
+    for d in missing:
+        print(f"::error::{d.relative_to(ROOT)} is published but has no LICENSE. "
+              f"Copy the root LICENSE into it.")
+    if missing:
+        return 1
+
     drifted = [p for p in copies if p.read_bytes() != want]
     for p in drifted:
         print(f"::error::{p.relative_to(ROOT)} differs from the workspace root "

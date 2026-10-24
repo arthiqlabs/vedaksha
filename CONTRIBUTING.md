@@ -99,7 +99,8 @@ Every source file must include:
 
 ### Bug Report
 - Julian Day and coordinates used
-- Expected output (from JPL Horizons or textbook)
+- Expected output, and where it comes from: JPL Horizons for a position, or the rule as a
+  classical text states it (by chapter and verse) for a Jyotish quantity
 - Actual output from Vedaksha
 - Vedaksha version
 

@@ -20,7 +20,7 @@ python3 scripts/generate_horizons_oracle.py --verify   # drift check only
 | Grid | 1900-01-01 → 2100-01-01, step 30 d, 10 bodies |
 | Rows | 24,350 (2,435 per body) |
 
-Horizons serves **DE441**, while `SpkReader` reads the bundled **DE440s**. The
+Horizons serves **DE441**, while `SpkReader` reads **DE440s** (downloaded by `scripts/download_de440s.sh`; it is not in the repository). The
 comparison is therefore against a genuinely independent kernel rather than a
 restatement of our own input, and it exercises our DAF/SPK Chebyshev evaluation
 and the whole apparent-place pipeline.

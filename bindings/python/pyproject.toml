@@ -9,11 +9,13 @@ description = "Clean-room Vedic astronomy & Jyotish engine — the Rust Vedaksha
 readme = "README.md"
 requires-python = ">=3.9"
 license = "BUSL-1.1"
+license-files = ["LICENSE"]
 authors = [{ name = "ArthIQ Labs LLC", email = "info@arthiq.net" }]
 keywords = [
     "astronomy", "ephemeris", "vedic", "jyotish", "astrology", "wasm",
     "kundali", "panchang", "panchanga", "nakshatra", "dasha", "horoscope",
     "natal-chart", "muhurta", "sidereal", "ayanamsha", "mcp",
+    "kundli", "jyotisha", "vedic-astrology", "astrology-software",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -57,7 +59,7 @@ artifacts = ["src/vedaksha/_wasm/vedaksha.wasm"]
 "src/vedaksha/_wasm/vedaksha.wasm" = "vedaksha/_wasm/vedaksha.wasm"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/vedaksha", "engine", "scripts", "tests", "README.md", "ARCHITECTURE.md"]
+include = ["src/vedaksha", "engine", "scripts", "tests", "README.md", "ARCHITECTURE.md", "LICENSE"]
 artifacts = ["src/vedaksha/_wasm/vedaksha.wasm"]
 
 [tool.ruff]

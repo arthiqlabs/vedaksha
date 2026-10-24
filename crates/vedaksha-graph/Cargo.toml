@@ -9,6 +9,7 @@ license.workspace = true
 rust-version.workspace = true
 description = "Graph data model and ontology for astronomical/astrological charts"
 keywords = ["graph", "ontology", "cypher", "json-ld", "astrology"]
+readme = "README.md"
 categories = ["science", "data-structures"]
 
 [dependencies]

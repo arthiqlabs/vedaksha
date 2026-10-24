@@ -12,8 +12,8 @@ ELP/MPP02 series (mean 0.160″, worst case 1.473″ over 1900–2025).
 
 This package is not a reimplementation. It ships the real Rust engine compiled to
 WebAssembly and runs it via [`wasmtime`](https://pypi.org/project/wasmtime/). Every value it
-returns is the Rust engine's own — verified bit-for-bit against the native build, including
-the sub-arcsecond JPL ephemeris tier. Because the engine is a single architecture-independent
+returns is the Rust engine's own, checked bit-for-bit against the native build on a committed
+conformance fixture that CI regenerates on every push, including the JPL ephemeris tier. Because the engine is a single architecture-independent
 `.wasm` blob, one `py3-none-any` wheel works on every OS and CPU `wasmtime` supports (Linux
 glibc/musl, macOS, Windows, Android — x86-64 and arm64), on any Python ≥ 3.9.
 
@@ -34,12 +34,14 @@ vk = Vedaksha()
 for tool in vk.list_tools():
     print(tool["name"])
 
-# Typed wrapper for a natal chart / kundali (analytical ephemeris tier).
+# Typed wrapper for a natal chart (analytical ephemeris tier). Pass a sidereal
+# ayanamsha for a kundali; without one the chart is tropical.
 # Every Julian Day on the tool surface is UT1 (Universal Time) — not TT, not
 # TDB. The engine converts to TT internally for the dynamical terms and uses
 # UT1 directly for the Earth's rotation, which sets the ascendant and all
 # twelve house cusps; passing TDB rotates every cusp by ~0.29 degrees.
-chart = vk.natal_chart(julian_day=2451545.0, latitude=28.6139, longitude=77.2090)
+chart = vk.natal_chart(julian_day=2451545.0, latitude=28.6139, longitude=77.2090,
+                       ayanamsha="IndianOfficial", house_system="WholeSign")
 
 # Every tool is callable by name — inspect its inputs with list_tools():
 vargas = vk.call_tool("compute_vargas", julian_day=2451545.0,
@@ -80,8 +82,8 @@ vk.state_vector("moon", julian_day=2451545.0)
 
 ```bash
 vedaksha tools
-vedaksha chart --julian-day 2451545.0 --latitude 28.6 --longitude 77.2
-vedaksha call compute_vargas --args '{"julian_day":2451545.0,"latitude":28.6,"longitude":77.2}'
+vedaksha chart --julian-day 2451545.0 --latitude 28.6 --longitude 77.2 --ayanamsha IndianOfficial
+vedaksha call compute_vargas --args '{"julian_day":2451545.0,"latitude":28.6,"longitude":77.2,"ayanamsha":"IndianOfficial","divisions":["D9"]}'
 ```
 
 ## MCP server
@@ -91,7 +93,7 @@ the original motivation for this package, since it needs no Rust toolchain anywh
 equivalent ways to start it over stdio:
 
 ```bash
-uvx vedaksha mcp      # no install — what the MCP Registry launches
+uvx vedaksha mcp      # no install
 vedaksha-mcp          # after `pip install vedaksha`
 python -m vedaksha.mcp
 ```
@@ -102,8 +104,8 @@ HTTP is available from the `python -m` form only, with bearer-token auth on by d
 VEDAKSHA_MCP_TOKEN=secret python -m vedaksha.mcp --http --port 3100
 ```
 
-Unlike the Rust engine's HTTP server, this one **requires auth by default** and binds to
-`127.0.0.1`; pass `--insecure-no-auth` and `--host 0.0.0.0` only behind a trusted boundary.
+As with the Rust engine's HTTP server, auth is on by default; this one also binds to
+`127.0.0.1`. Pass `--insecure-no-auth` and `--host 0.0.0.0` only behind a trusted boundary.
 
 ## REST (optional)
 
@@ -115,11 +117,13 @@ python -m vedaksha.rest      # FastAPI app; each tool is POST /v1/<tool_name>
 ## Licensing
 
 Business Source License 1.1, identical terms to the [Rust engine](https://github.com/arthiqlabs/vedaksha).
-Production deployment is a commercial use — confirm your commercial licence before go-live.
+Non-commercial use is free. Commercial use (any product or service generating revenue from
+external customers) needs a one-time commercial licence, USD $500 per organisation; each
+release converts to Apache-2.0 four years after it ships. See [LICENSE](https://github.com/arthiqlabs/vedaksha/blob/main/LICENSE).
 
 ## How it relates to the Rust engine
 
 The Rust engine at [`arthiqlabs/vedaksha`](https://github.com/arthiqlabs/vedaksha) is
 normative. This package pins a specific engine commit, compiles it to wasm, and ships the
-blob. Version numbers track the engine. See `docs/` for the design and the
-SPK-over-wasm validation.
+blob. Version numbers track the engine. See [ARCHITECTURE.md](https://github.com/arthiqlabs/vedaksha/blob/main/bindings/python/ARCHITECTURE.md)
+for the design and the SPK-over-wasm validation.

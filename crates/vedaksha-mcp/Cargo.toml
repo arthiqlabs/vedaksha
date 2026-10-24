@@ -9,6 +9,7 @@ license.workspace = true
 rust-version.workspace = true
 description = "MCP server for AI-agent Vedic astrology — kundali, panchanga, dashas, and ephemeris via JSON-RPC"
 keywords = ["mcp", "astrology", "ephemeris", "jyotish", "kundali"]
+readme = "README.md"
 categories = ["science", "api-bindings"]
 
 [[bin]]

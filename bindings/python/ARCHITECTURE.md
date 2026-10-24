@@ -17,9 +17,10 @@ WebAssembly module, and the Python package loads that module with
   agree forever. Hosting the compiled engine means there is exactly one
   implementation; the binding is a transport.
 - **Bit-identical results.** Because it *is* the engine, the wasm output matches
-  the native Rust build to the bit — verified by `tests/conformance/`, which
+  the native Rust build to the bit on every input of `tests/conformance/`, which
   asserts exact equality against a fixture generated from the native binary, not
-  a tolerance.
+  a tolerance. It is a claim about those inputs on the platforms CI runs, not a
+  proof for every input.
 
 ## Components
 

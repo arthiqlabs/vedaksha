@@ -37,10 +37,12 @@ to address the issue before public disclosure.
 
 ## Source-Code Clean-Room Rule
 
-Vedaksha's ephemeris and astrological algorithms are derived exclusively
-from NASA JPL ephemeris data and published academic sources. No source
-code was inspected, translated, or adapted from any GPL or AGPL
-ephemeris implementation.
+Vedaksha's ephemeris and astrological algorithms, as shipped, are derived
+from NASA JPL ephemeris data and published primary sources. The shipped
+implementation contains no source code translated or adapted from any GPL
+or AGPL ephemeris implementation. Where earlier work did not meet that rule,
+it was quarantined and re-derived from primary sources; the record of each
+such case is in [DATA_PROVENANCE.md](DATA_PROVENANCE.md).
 
 Algorithmic sources cited in code comments:
 
@@ -53,18 +55,19 @@ Algorithmic sources cited in code comments:
 ## Supply Chain
 
 - Release artifacts are published by `.github/workflows/release.yml` on `v*` tag push.
-- No third-party build-time code execution. VSOP87A and ELP/MPP02 coefficient tables are committed as pre-generated Rust source. The Python generators in `scripts/` are not invoked by `cargo build`.
+- No workspace crate has a build script, and no coefficient generator runs at build time. The VSOP87A and ELP/MPP02 coefficients are committed binary tables under `crates/vedaksha-ephem-core/src/analytical/coefficients/`; the Python generators in `scripts/` that produced them are not invoked by `cargo build` or by push CI. Third-party dependencies may carry their own build scripts and proc macros, as any Rust dependency can.
 - MSRV (minimum supported Rust version): 1.89. Rust edition 2024.
 - Dependabot alerts, secret scanning, and push protection are enabled on this repository.
 
 ## Cryptographic Integrity
 
-- Release tags and commits are SSH-signed by the ArthIQ Labs maintainer key.
-- Commercial license keys are Ed25519-signed; the public key is shipped in the `vedaksha` crate and the MCP server.
+- Release tags and commits are SSH-signed by an ArthIQ Labs maintainer key.
 
-Maintainer signing key fingerprint:
+Maintainer signing key fingerprints (Ed25519, both registered as signing keys on the
+`arthiqlabs` GitHub account):
 
 ```
+SHA256:H2QUSGvE1R8Jq2NHihXoVpTsTRNt5zuqZrNPLt3vswU
 SHA256:VO0RcM+XCrSmeZGk/BXmGr5IqUp7qUX6gFHAOVDiGTA
 ```
 
