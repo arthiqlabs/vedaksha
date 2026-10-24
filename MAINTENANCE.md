@@ -21,15 +21,17 @@ Polar motion is not applied either. It displaces the pole by under 0.5 arcsecond
 
 **Status: there is no leap-second table in this engine, and no maintenance task attaches to one.** It follows from the same contract as §1: the engine is handed UT1 and never performs a UTC conversion, which is the only place a leap-second table would be consulted.
 
+The one leap-second table in the repository is test data, not engine: `crates/vedaksha-ephem-core/tests/common/tai_utc.rs` lets the Horizons oracle tests convert Horizons' UTC time tags to TT (§3, step 4). Nothing in a shipped crate reads it.
+
 If your application converts civil UTC to UT1 before calling, that conversion is where leap seconds belong, and keeping the table current is your side of the boundary. IERS Bulletin C announces insertions about six months ahead. No leap second has been inserted since 2016-12-31, and the 27th CGPM (2022, Resolution 4) resolved to stop inserting them by 2035.
 
 ---
 
 ## 3. Delta T (TT − UT1)
 
-**What:** The difference between Terrestrial Time (TT, uniform atomic time) and UT1 (Earth rotation time). Historical values are measured; future values are predicted using polynomial approximations.
+**What:** The difference between Terrestrial Time (TT, uniform atomic time) and UT1 (Earth rotation time). The values are measurements to 2026-10 (the Stephenson, Morrison and Hohenkerk spline before 1962.0, the USNO rows from then), USNO's own predictions to 2033.75, and an extrapolation after that. `delta_t.rs` has the table of eras and the joins between them.
 
-**Why it matters:** Converting between the Julian Day used in ephemeris computation (TDB/TT) and the UTC/UT1 used by humans requires Delta T. The prediction polynomial drifts over time as Earth's rotation deviates from the model.
+**Why it matters:** Converting between the Julian Day used in ephemeris computation (TDB/TT) and the UTC/UT1 used by humans requires Delta T. The extrapolation beyond USNO's predictions drifts over time as Earth's rotation deviates from the model.
 
 **Impact if neglected:** The prediction error grows roughly quadratically. After 5 years without update, the error is typically < 2 seconds. After 20 years, it could be 10–30 seconds. For the Moon (fastest-moving body), 1 second ≈ 0.5 arcsecond.
 
@@ -306,17 +308,145 @@ scheduled Full Validation job runs it.
 - Measured over all 21,915 rows: longitude max **0.00014 arcsec** (21,912 rows), latitude max
   **0.0010 arcsec** (21,915 rows), distance max 1.4e-14 AU, speed max 3.8e-7 °/day.
 - Accepted: the correction moves results **toward** the IAU 2006 model, and 0.001 arcsec is
-  three orders of magnitude inside VSOP87A's own 2.06 arcsec mean truncation error. The SPK
-  path is untouched.
+  three orders of magnitude inside the analytical path's mean error against Horizons (2.06
+  arcsec then; the observer fix of 2026-08-20 showed that figure was a defect of ours and not
+  truncation, and it is 0.160 arcsec at v9.5.0). The SPK path is untouched.
 - **The values in v6.0.0 and v6.0.1 are the corrected ones.** Re-pinning changed no shipped
   behaviour; it recorded a change that had already been released.
 
 
+### The VSOP87A frame rotation — `vedaksha-ephem-core::analytical`
+
+`VSOP87A_TO_EQUATORIAL` is the matrix the VSOP87 authors publish for taking VSOP87A's
+dynamical ecliptic and equinox of J2000 to the equatorial frame (FK5 J2000). It replaced
+`Rx(84381.448″)` alone, which the Moon still uses (`ecliptic_to_equatorial`).
+
+- **Value:** the matrix printed to twelve decimals in the authors' `vsop87.doc`, section
+  "REFERENCE SYSTEM" (Bretagnon and Francou, distributed with the series at
+  `https://ftp.imcce.fr/pub/ephem/planets/vsop87/`). It equals `Rz(−0.0990″) · Rx(84381.4091″)`.
+  The authors state the matrix, not those two angles;
+  `tests::vsop87a_matrix_is_rz_phi_rx_eps` pins that the matrix reproduces from them.
+- **Established by:** reading the authors' documentation, then measuring against DE440s over
+  1900 to 2100 (geometric heliocentric vectors, no light time or aberration). The mean angular
+  residual went, for example, Mercury 0.102″ to 0.021″, Venus 0.090″ to 0.014″, Jupiter 0.236″
+  to 0.170″. The full table is in the doc comment on the constant.
+- **Already answered, do not re-search:** (1) VSOP2013's rotation constants (`eps = 84381.41136`,
+  `phi = −0.05188` arcsec) belong to a theory fitted to a different integration and are not
+  VSOP87A's. (2) Nothing read for this change gave a rotation from FK5 to the ICRS for a theory
+  fitted to DE200, so none is applied; Venus and Earth still sit about 16 mas from DE440s, which
+  is evidence and not a correction. (3) The outer planets' remaining residual is not the 1e-7 AU
+  truncation: the untruncated series gives the same residuals to four decimals. The authors
+  fitted the theory to DE200 (`vsop87.doc`, "PRECISION").
+- **Invalidated by:** the theory, or its authors' published frame relation, changing. Nothing else.
+
+### ELP/MPP02 and VSOP87A phases by angle addition — `analytical/phase_graph.rs`, `analytical/vsop87a.rs`
+
+Both series build a term's sine and cosine from shared ones instead of calling a sine and
+cosine per term.
+
+- **Method, lunar:** each term's phase is a sum of multiples of a few fundamental arguments.
+  The sine and cosine of the fundamentals are evaluated once, and every term's is built from
+  them by the addition formulas through a prefix tree shared between terms (`phase_graph`).
+- **Method, VSOP87A:** `cos(B + C t) = cos B cos(C t) − sin B sin(C t)`, with `cos B` and
+  `sin B` taken once when the tables are built, and one sine and cosine per distinct frequency
+  (Earth: 624 distinct among 2,202 terms).
+- **Output movement, measured** by dumping every row before and after: the lunar series moves
+  by at most 7.5e-7″ over 1610 to 2390 (1.2e-5″ over the whole supported range, near −1340);
+  VSOP87A by at most 5.7e-8″ over 1900 to 2100. Both are far inside the series' own
+  arcsecond-level fit, so no accuracy figure moves.
+- **Speed, measured:** one ELP/MPP02 evaluation 188 µs to 56 µs; VSOP87A Mercury, Earth,
+  Jupiter, Neptune 4.6, 6.1, 12.8, 6.4 µs to 1.8, 2.9, 6.0, 3.5 µs (`CHANGELOG-v9.5.0.md`).
+- **Bits:** the lunar series no longer calls `simd_trig::sincos_f64x4`, so its bits are the same
+  on aarch64 and x86_64. VSOP87A still calls that kernel, so `analytical_bit_digest` keeps one
+  pin per architecture.
+- **Invalidated by:** a change to the series tables themselves (a new ELP/MPP02 or VSOP87 fit).
+  Nothing else.
+
+### Fused multiply-add — measured and rejected
+
+- **Result:** no gain outside the noise, so the `analytical::fused` gate was removed
+  (`a65bae5`; `git show -s a65bae5` has the measurement).
+- **Established by:** the same code with plain multiply-adds against the fused form,
+  interleaved, on aarch64: no difference outside the noise of a loaded machine (about 5
+  percent either way). The change FMA would have made to the output was at most 5.9e-9″ for
+  the Moon and 8.2e-11″ for the planets.
+- **Why it stays rejected:** the main consumer is x86_64 without FMA, so the gate would add
+  output that depends on the target for no measured gain. Without it the lunar series uses
+  only IEEE multiply and add and pure-Rust libm.
+- **Invalidated by:** a measured gain outside the noise on a target consumers actually run.
+  Even then the price is target-dependent output.
+
+### Delta T sources and joins — `vedaksha-ephem-core::delta_t`
+
+`delta_t.rs`'s module notes are the record; this is the pointer. Read "Where the values come
+from", "Why the handover is at 1962.0" and "The joins" there, and `DATA_PROVENANCE.md` for the
+sources, retrieval dates and checksums. In short: before −720 the Espenak and Meeus (2006)
+long-term parabola; −720 to 1962.0 the Stephenson, Morrison and Hohenkerk (2016) spline
+(Table S15); 1962.0 to 1973.0 the USNO half-year rows; 1973-02 to 2026-10 the USNO monthly
+rows; to 2033.75 USNO's predictions (`deltat.preds`); after that the Espenak and Meeus
+expressions shifted to meet the last prediction, so there is no step.
+
+- **Already answered, do not re-search:** (1) Why the USNO rows, not the spline, from 1962.0:
+  SMH2016 itself uses the atomic-time data over 1962 to 2015 only as a control, and USNO states
+  an error of 0.001 s from 1962.0. (2) The joins: every one is continuous except two, a step of
+  −74.5 s at −720 and +0.371 s at 1962.0. They are stated, not smoothed, because there is no
+  published rule for blending these sources and none was invented. (3) Horizons has the same
+  step between its own pre-1962 series and its Earth-orientation file, but at 1962-01-20 where
+  the engine hands over at 1962.0. The 19 days between are where the two disagree by 0.371 s,
+  which is 0.2″ of Moon longitude, and the oracle's worst SPK row sits in them.
+- **Held by:** `delta_t_is_continuous_at_every_join` and `delta_t_has_no_unstated_step`.
+- **Invalidated by:** adopting a revision of the spline (JPL Horizons cites an "Addendum 2020",
+  which §3 step 0 records as not taken up), or a published rule for blending the sources.
+  Refreshing the USNO rows is routine (§3), not an invalidation.
+
+### The Horizons convention floor — `oracle_comparison.rs`, `analytical_oracle.rs`
+
+After 1962-01-20 every body on the SPK path sits at 0.047″ to 0.054″ mean against Horizons
+(Pluto 0.054″, at most 0.062″). Before it, the bodies sit at 0.138″ to 0.146″ mean on the SPK
+path and 0.131″ to 0.153″ on the analytical path.
+
+- **Cause:** Horizons builds its ecliptic of date from IAU 1976/1980 precession and nutation;
+  this engine uses IAU 2006/2000B. The offset is shared by every body, so it is a difference of
+  convention and not engine error. It is **not emulated**: the engine implements the newer
+  models, and the offset is the other side's older convention.
+- **Established by:** the report both oracle tests print, split at 1962-01-20 and by body; the
+  ceilings in `oracle_comparison.rs` (0.10″ maximum and 0.07″ mean after 1962) are set from it.
+- **Not part of the floor:** the worst SPK row, the Moon at 1962-01-06 (0.272″), is the Delta T
+  handover of the previous entry (0.371 s is 0.2″ of Moon longitude). Without it the worst row
+  is 0.251″ (Pluto).
+- **Invalidated by:** Horizons changing its precession and nutation model, or this engine
+  changing its own.
+
+### Known bit-level drift: v9.5.0 (Delta T, nutation, deflection, VSOP87A frame, angle addition)
+
+Every analytical row moved. The causes are six deliberate changes in one release, listed with
+their measured effect in the doc comment on `EXPECTED_DIGEST` in
+`crates/vedaksha-ephem-core/tests/analytical_bit_digest.rs` ("Why this moved at v9.5.0").
+
+| Pin | v9.4.1 | v9.5.0 |
+|---|---|---|
+| `analytical_bit_digest`, aarch64 | `b8aecba3f726ebd2a516b5a63aee5a4647f45942bf3be6cc3e04c6b8d6701571` | `732350622f43d4ee27f1a2d9e5288f2b503353cb1df59ee0c1b367168ab86298` |
+| `analytical_bit_digest`, x86_64 | `64dcc4cf991cf5b087dde0492882157b64503d87468ddd51922e59cb2afa7ab2` | `392fb9e71c3735dfda1fafc1798fd3dc094b6f93f2153f8c124fdf5c8468f3aa` |
+| `lunar_series_bit_digest`, aarch64 | `e8b21c8863fa0065e125e16a4b3396371f7de6a386d19f35f233c07ac5e1394b` | `181ab376450f17b5986e682b665cf8a217f5f137fcd4fec2e439a057e516313b` |
+| `lunar_series_bit_digest`, x86_64 | `a2af33c87957fd15249d6f5b714749a8623f0ad4593a1fbc1ce0d4b51c0cccfe` | `181ab376450f17b5986e682b665cf8a217f5f137fcd4fec2e439a057e516313b` |
+| lunar series, position-only, aarch64 | `6edec0b1dd362d83a0a31e993b940b1119d8a49a9062a4afbf9ecd53ec255e93` | `53a769cb566760984de44bf9263e39dedd4b736d98bf349f2fe4cca519caa2e2` |
+| lunar series, position-only, x86_64 | `57821af832a46e6de2cb9c6a20d1bbee6c4e654f55d7ec950850c8a699784363` | `53a769cb566760984de44bf9263e39dedd4b736d98bf349f2fe4cca519caa2e2` |
+
+- **The lunar series is now one value on both architectures**, because it no longer calls the
+  SIMD kernel whose rounding differs between AVX2 and NEON. The analytical provider still has
+  one per architecture, because VSOP87A still calls it.
+- **x86_64 digests can be measured on an Apple Silicon machine**, under Rosetta, with no remote
+  box: `rustup target add x86_64-apple-darwin`, then
+  `cargo test --release --target x86_64-apple-darwin -p vedaksha-ephem-core --test analytical_bit_digest --test lunar_series_bit_digest -- --include-ignored`.
+  That route was validated before the v9.5.0 pins were taken from it: built at the v9.4.1 tag
+  it reproduced all three of that release's x86_64 pins exactly. Re-validate it the same way
+  after a toolchain or Rosetta change before trusting it for a new pin.
+
 ## 11. Validation Harness — Audit Backlog (2026-09-01)
 
 **None of the following is a defect.** An independent verification pass over the validation
-harness re-ran the accuracy suite and confirmed the published 0.103″ mean is correct and
-reproducible for the quantity it actually measures (see the Accuracy section of `README.md`
+harness re-ran the accuracy suite and confirmed the published mean (0.103″ then, 0.096″ at
+v9.5.0) is correct and reproducible for the quantity it actually measures (see the Accuracy section of `README.md`
 and `metrics.json`'s `accuracy` block). The six items below are the auditor's longer-term
 suggestions for making the harness itself more thorough, recorded here so the next person to
 audit it does not have to re-derive them from scratch. Nothing here changes a shipped number.
@@ -351,8 +481,9 @@ audit it does not have to re-derive them from scratch. Nothing here changes a sh
    give a comparison that is actually independent in the way the current one is assumed to be.
 
 5. **Percentile statistics (P50/P90/P99).** `metrics.json`'s `accuracy` block publishes mean
-   and max only. A single outlier (e.g. the 1.187″ Uranus max) says nothing about the shape of
-   the distribution between the mean and that max. P50/P90/P99 would show whether error is
+   and max only. A single outlier (the 1.187″ Uranus max at the time of the audit; the 0.272″
+   Moon row at 1962-01-06 at v9.5.0) says nothing about the shape of the distribution between
+   the mean and that max. P50/P90/P99 would show whether error is
    concentrated in a few dates/bodies or spread evenly, which the current two numbers cannot
    distinguish.
 
@@ -360,13 +491,13 @@ audit it does not have to re-derive them from scratch. Nothing here changes a sh
    standing in for the whole engine. As of this writing: SPK longitude is externally validated
    against Horizons; latitude and distance are not (see item 2); house cusps are not externally
    validated at all; ayanamsha values are re-derived from primary sources but not
-   cross-checked against an independent implementation. A reader who sees "0.103″" without this
+   cross-checked against an independent implementation. A reader who sees "0.096″" without this
    breakdown can reasonably assume it covers more of the engine than it does.
 
 ## Quick Reference: Annual Maintenance Checklist
 
 ```
-[ ] Delta T — compare predicted vs. observed, update if drift > 0.5s
+[ ] Delta T — re-download the three USNO files and regenerate the table (§3); USNO's predictions end at 2033.75
 [ ] JPL ephemeris — check if NASA released a new DE version (DE440s coverage ends 2150)
 [ ] Ayanamsha — check for Indian Astronomical Ephemeris revisions (rare), and run `python3 scripts/generate_ayanamsha.py --check-catalogue`
 [ ] cargo audit — run and resolve any advisories
@@ -388,6 +519,8 @@ If Vedaksha is abandoned entirely, here is the degradation timeline:
 | 5–10 years | **Minor.** Delta T drift grows to 5–10 seconds. Sidereal time off by a comparable amount. House cusps could shift by a few arcseconds. Still well below astrological significance. Rust edition may require a `cargo fix --edition`. |
 | 10–20 years | **Moderate for precision users.** Delta T error could reach 30+ seconds. Moon error ~15 arcseconds. Planetary positions still accurate to < 1 arcsecond. Astrologically still perfectly usable. |
 | 20+ years | **Core math remains valid.** IAU precession/nutation models hold for centuries and the Rust code will still compile and produce correct results. The shipped DE440s kernel covers to **2150**; past that the SPK path has no data and `AnalyticalProvider` is the only route. |
+
+The Delta T rows are order-of-magnitude estimates, not measurements. Since v9.5.0 the table carries USNO's own predictions to 2033.75, each with the error the file states (0.33 s at 2027, 0.77 s at 2030, 1 s from 2032.75), and `delta_t.rs` treats everything after 2033.75 as a guess.
 
 **Bottom line:** The math does not expire. The shipped DE440s kernel covers 1850–2150, which bounds the SPK path and nothing else. The things that decay are the ones that decay in any software project — toolchains and library dependencies.
 
