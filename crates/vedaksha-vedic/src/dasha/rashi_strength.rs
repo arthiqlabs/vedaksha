@@ -367,14 +367,12 @@ impl Strength for JaiminiStrength<'_> {
         }
         let pick = |a_wins: bool| if a_wins { a } else { b };
 
-        // 2.3.6 and 2.3.7: grahas present, then how many.
+        // 2.3.6 and 2.3.7: grahas present, then how many; an empty rashi
+        // has the fewest, so one comparison covers both.
         let (na, nb) = (
             self.placements.occupants_of(a).len(),
             self.placements.occupants_of(b).len(),
         );
-        if (na > 0) != (nb > 0) {
-            return pick(na > 0);
-        }
         if na != nb {
             return pick(na > nb);
         }
@@ -422,11 +420,8 @@ impl JaiminiStrength<'_> {
         let pick = |a_wins: bool| Some(if a_wins { a } else { b });
         let p = self.placements;
 
-        // Companions: any at all, then how many.
+        // Companions: any at all, then how many; none is the fewest.
         let (ca, cb) = (p.companions_of(a), p.companions_of(b));
-        if (ca > 0) != (cb > 0) {
-            return pick(ca > 0);
-        }
         if ca != cb {
             return pick(ca > cb);
         }

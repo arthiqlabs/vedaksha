@@ -521,6 +521,49 @@ mod tests {
         assert_eq!(antars[1].sign_name, "Cancer");
     }
 
+    // 9b. Exact tiling does not depend on round numbers: for birth instants
+    // with awkward fractions the last antar still ends exactly where its
+    // dasha ends, and adjacent antars share their bound bit for bit.
+    #[test]
+    fn tiling_is_exact_for_awkward_instants() {
+        let p = aries_chart();
+        for (i, jd) in [
+            2_451_545.123_456_789,
+            2_460_000.333_333_333,
+            2_415_020.987_654_321,
+            2_488_069.071_428_571,
+            2_433_282.714_285_714,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for years in [7.0, 8.0, 9.0, 11.0] {
+                let end = jd + years * DASHA_YEAR_DAYS;
+                for length in [
+                    AntarLength::EqualTwelfths,
+                    AntarLength::ProportionalToSthiraYears,
+                ] {
+                    let antars = build_antars(
+                        i as u8 * 2,
+                        jd,
+                        end,
+                        years,
+                        AntarRules::default(),
+                        length,
+                        &p,
+                        &FirstWins,
+                    );
+                    assert_eq!(antars[0].start_jd.to_bits(), jd.to_bits());
+                    assert_eq!(antars[11].end_jd.to_bits(), end.to_bits());
+                    for w in antars.windows(2) {
+                        assert_eq!(w[0].end_jd.to_bits(), w[1].start_jd.to_bits());
+                        assert!(w[0].start_jd < w[0].end_jd);
+                    }
+                }
+            }
+        }
+    }
+
     // 10. Proportional lengths: weight = the antar rashi's own sthira years.
     // A 9-year Pisces dasha (Pisces is dual: 9), RashiItself, ByModality:
     // 11 8 5 2 7 4 1 10 3 0 9 6 with weights 9 9 9 9 8 8 8 8 7 7 7 7 (96).
