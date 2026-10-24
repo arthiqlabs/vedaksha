@@ -39,6 +39,14 @@
 //!   ceiling (`MEASURED_MAX_ARCSEC`), so any change smaller than that — a
 //!   1-ULP shift in the lunar series, say — passes it silently. For bit-level
 //!   movement use `analytical_bit_digest.rs`.
+//!
+//! # Time scale
+//!
+//! Horizons' "UT" is UT1 before 1962-01-20 and UTC from then. Rows from that date
+//! are converted to TT with `TT = UTC + 32.184 s + (TAI − UTC)`
+//! (`common::horizons_jd_tt`) and read with `ecliptic_position_tt`; earlier rows
+//! go through `apparent_position` and the engine's Delta T. The report splits the
+//! measured era at that date. See `oracle_comparison.rs`.
 
 mod common;
 
@@ -68,15 +76,18 @@ const MEASURED_DT_JD: f64 = 2_461_041.5;
 
 /// Per-point ceiling over the measured-ΔT era for the analytical provider.
 ///
-/// Necessarily looser than the SpkReader bound: VSOP87A is a truncated
-/// analytical theory, not an interpolated numerical kernel. Observed max is
-/// 24.2″ (Venus, 1958) across 13,815 comparisons.
+/// Observed max is 1.565″ (Neptune, 2025-09-02) across 13,815 comparisons, with
+/// the time scale matched to Horizons' (UTC tags converted with the leap-second
+/// count from 1962-01-20; see `oracle_comparison.rs`). The ceiling is 2.0″, 28
+/// percent over it. Necessarily looser than the SpkReader bound: VSOP87A is a
+/// truncated analytical theory, not an interpolated numerical kernel, and the
+/// outer planets carry its truncation (Neptune 0.50″ mean, Uranus 1.11″ max).
 ///
-/// Note this is materially worse than the 13.09″ that `analytical_accuracy.rs`
-/// reports for the same provider — that test samples 10 dates, this one 2,435
-/// per body. The sparse grid simply never lands near Venus's worst case. Trust
-/// this number; it is the better-sampled one.
-const MEASURED_MAX_ARCSEC: f64 = 30.0;
+/// This was 30″, on the strength of figures that no longer reproduce (24.2″,
+/// Venus 1958, here; 13.09″ in `analytical_accuracy.rs`). At 30″ the gate sat
+/// twenty times above the truth: dropping the leap seconds from the time
+/// conversion, which puts the Moon 23.4″ out, passed it. At 2.0″ that fails it.
+const MEASURED_MAX_ARCSEC: f64 = 2.0;
 
 fn body_from_name(name: &str) -> Option<Body> {
     match name {
@@ -132,6 +143,11 @@ fn analytical_oracle_regression() {
     let mut m_max_body = String::new();
     let mut m_max_date = String::new();
 
+    // Measured-ΔT era split at the oracle's time-scale boundary, 1962-01-20:
+    // (post-1962?, body) -> (count, sum_arcsec, max_arcsec).
+    let mut split: std::collections::BTreeMap<(bool, String), (u32, f64, f64)> =
+        std::collections::BTreeMap::new();
+
     for dp in &data_points {
         let body = match body_from_name(&dp.body) {
             Some(b) => b,
@@ -142,9 +158,15 @@ fn analytical_oracle_regression() {
             continue;
         }
 
-        let result = coordinates::apparent_position(&provider, body, dp.jd);
+        // In Horizons' own time scale: rows from 1962-01-20 carry a UTC tag and
+        // are converted to TT with the leap-second count; earlier rows carry UT1
+        // and go through the engine's Delta T. See `oracle_comparison.rs`.
+        let result = match common::horizons_jd_tt(dp.jd) {
+            Some(jd_tt) => coordinates::ecliptic_position_tt(&provider, body, jd_tt),
+            None => coordinates::apparent_position(&provider, body, dp.jd).map(|p| p.ecliptic),
+        };
         let lon = match result {
-            Ok(pos) => pos.ecliptic.longitude.to_degrees(),
+            Ok(pos) => pos.longitude.to_degrees(),
             Err(e) => {
                 eprintln!(
                     "  ERROR: {} at {} (JD {}): {:?}",
@@ -181,6 +203,12 @@ fn analytical_oracle_regression() {
             }
             let e = per_body
                 .entry(dp.body.clone())
+                .or_insert((0u32, 0.0f64, 0.0f64));
+            e.0 += 1;
+            e.1 += diff_arcsec;
+            e.2 = e.2.max(diff_arcsec);
+            let e = split
+                .entry((dp.jd >= common::HORIZONS_UTC_START_JD, dp.body.clone()))
                 .or_insert((0u32, 0.0f64, 0.0f64));
             e.0 += 1;
             e.1 += diff_arcsec;
@@ -224,10 +252,28 @@ fn analytical_oracle_regression() {
         );
     }
 
-    // Assert where the residual is attributable to the provider rather than to
-    // ΔT extrapolation. Beyond 2025 our ΔT and Horizons' diverge (~68 s by
-    // 2099), which for the Moon alone is ~45″ — that is a time-scale
-    // disagreement, not a VSOP87A/ELP-MPP02 error.
+    // The measured-ΔT era split where Horizons' UT changes meaning. Before
+    // 1962-01-20 it is UT1 and the engine's Delta T is in the comparison; from
+    // then it is UTC and Delta T and UT1 - UTC are out of it.
+    eprintln!("\nSPLIT AT 1962-01-20 (measured-ΔT era)");
+    eprintln!(
+        "\n{:<10} {:<10} {:>7} {:>10} {:>10}",
+        "Body", "Era", "n", "mean\"", "max\""
+    );
+    for ((post, body), (n, sum, max)) in &split {
+        eprintln!(
+            "{:<10} {:<10} {:>7} {:>10.3} {:>10.3}",
+            body,
+            if *post { "post-1962" } else { "pre-1962" },
+            n,
+            sum / f64::from(*n),
+            max
+        );
+    }
+
+    // Assert where the residual is attributable to the provider: the time scale
+    // is matched to Horizons', so what is left is VSOP87A / ELP-MPP02 truncation
+    // and the frame convention, not Delta T or UT1 - UTC.
     assert!(
         m_max < MEASURED_MAX_ARCSEC,
         "measured-ΔT era max error {m_max:.3}″ ({m_max_body} at {m_max_date}) exceeds \

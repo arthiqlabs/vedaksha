@@ -3,154 +3,92 @@
 // SPDX-License-Identifier: BUSL-1.1
 // Contact: info@arthiq.net | https://vedaksha.net
 
-//! Delta T (TT - UT1) knots, 1900 to the present. GENERATED, do not edit.
+//! Delta T (TT - UT1) table, -720 to 2033.75. GENERATED, do not edit.
 //!
-//! Written by `scripts/generate_delta_t_table.py` from two public-domain files
-//! of the IERS Rapid Service/Prediction Center at the U.S. Naval Observatory
-//! (Distribution Statement A, approved for public release), retrieved
-//! 2026-10-24:
+//! Written by `scripts/generate_delta_t_table.py` from four published sources,
+//! retrieved 2026-10-24:
 //!
-//! * <https://maia.usno.navy.mil/ser7/historic_deltat.data>
-//!   "Historic Delta T and LOD values from McCarthy and Babcock (1986)",
-//!   half-year rows 1900.0 to 1973.0 (147 rows,
-//!   sha256 `9f43514119060601a00624a5d9287a91b0b1f5e12bec5209bbabda90b392b70b`).
-//! * <https://maia.usno.navy.mil/ser7/deltat.data>
-//!   "Monthly determinations of Delta T (TT - UT1) since 1973", the value at
-//!   0h on the first of each month, 1973-02-01 to 2026-10-01
-//!   (645 rows, sha256 `7396fcfdad33856b5242f288887678d75f3803494fa79394bc02f37eb99efc1e`).
+//! * Stephenson, F. R., Morrison, L. V. and Hohenkerk, C. Y., "Measurement of the
+//!   Earth's rotation: 720 BC to AD 2015", Proc. R. Soc. A 472: 20160404 (2016),
+//!   doi:10.1098/rspa.2016.0404. Table S15 of the electronic supplementary material,
+//!   "The Polynomial Coefficients for DT -720.0 to 2016.0", intervals 1 to
+//!   36 (-720.0 to 1962.0) of 54. The supplement is the zip
+//!   `rspa20160404supp2.zip` (sha256 `ae44da13701d36e4e449991c59391af5b0ab60d5068cc70f99ab6d24816fb860`),
+//!   member `Table-S15.txt` (sha256 `b972e922e6a2b666c7fb4baa4014b84818066458a3c3d300d630d991621cd037`), figshare collection
+//!   doi:10.6084/m9.figshare.c.3579767. Licensed Creative Commons Attribution 4.0
+//!   (<https://creativecommons.org/licenses/by/4.0/>); the numbers are transcribed
+//!   unchanged. Intervals 37 to 54 (1962 to 2016) are not used: see `delta_t.rs`.
+//! * U.S. Naval Observatory, IERS Rapid Service/Prediction Center (public domain,
+//!   Distribution Statement A, approved for public release):
+//!   * <https://maia.usno.navy.mil/ser7/historic_deltat.data>
+//!     "Historic Delta T and LOD values from McCarthy and Babcock (1986)",
+//!     half-year rows 1962.0 to 1973.0 (23 rows,
+//!     sha256 `9f43514119060601a00624a5d9287a91b0b1f5e12bec5209bbabda90b392b70b`).
+//!   * <https://maia.usno.navy.mil/ser7/deltat.data>
+//!     "Monthly determinations of Delta T (TT - UT1) since 1973", the value at
+//!     0h on the first of each month, 1973-02-01 to 2026-10-01
+//!     (645 rows, sha256 `7396fcfdad33856b5242f288887678d75f3803494fa79394bc02f37eb99efc1e`).
+//!   * <https://maia.usno.navy.mil/ser7/deltat.preds>
+//!     "Long-term predictions of Delta T (TT - UT1) from finals.data", the
+//!     quarterly rows after 2026-10-01, 2027-01-01 to
+//!     2033-10-01 (28 rows, sha256 `5d864fddd30b2c64d2a86d3debbb25604eb5de44370c96bccf2abd5463f3db08`).
+//!     A prediction: the file states an error of 0.03 s in 2022 growing to 1 s by 2032.75.
 //!
-//! Each knot is `(decimal year, seconds)`. A decimal year is
-//! `year + (JD - JD(Jan 1)) / length of year`, the function `delta_t.rs` uses to
-//! turn a Julian Day into a year. See `delta_t.rs` for how the knots are used.
+//! The spline is evaluated as Table S15's notes state: for the year and fraction
+//! `Y` take row `i` with `K_i <= Y <= K_{i+1}`, form `t = (Y - K_i) / (K_{i+1} - K_i)`,
+//! and `DT = a_0 + a_1 t + a_2 t^2 + a_3 t^3` seconds. The USNO and predicted knots are
+//! `(decimal year, seconds)`. A decimal year is `year + (JD - JD(Jan 1)) / length of
+//! year`, the function `delta_t.rs` uses to turn a Julian Day into a year. See
+//! `delta_t.rs` for how the pieces are used and joined.
 
-/// Delta T knots from 1900.0 to the last monthly row, strictly increasing in
-/// time.
+/// One interval of the SMH2016 cubic spline: `(K_i, K_{i+1}, a_0, a_1, a_2, a_3)`.
+pub(super) type SplineRow = (f64, f64, f64, f64, f64, f64);
+
+/// Table S15 intervals 1 to 36, -720.0 to 1962.0, contiguous and increasing.
+#[rustfmt::skip]
+pub(super) static SPLINE: &[SplineRow] = &[
+    (-720.0, 400.0, 20_550.593, -21_268.478, 11_863.418, -4541.129),
+    (400.0, 1000.0, 6604.404, -5981.266, -505.093, 1349.609),
+    (1000.0, 1500.0, 1467.654, -2452.187, 2460.927, -1183.759),
+    (1500.0, 1600.0, 292.635, -216.322, -43.614, 56.681),
+    (1600.0, 1650.0, 89.380, -66.754, 31.607, -10.497),
+    (1650.0, 1720.0, 43.736, -49.043, 0.227, 15.811),
+    (1720.0, 1800.0, 10.730, -1.321, 62.250, -52.946),
+    (1800.0, 1810.0, 18.714, -4.457, -1.509, 2.507),
+    (1810.0, 1820.0, 15.255, 0.046, 6.012, -4.634),
+    (1820.0, 1830.0, 16.679, -1.831, -7.889, 3.799),
+    (1830.0, 1840.0, 10.758, -6.211, 3.509, -0.388),
+    (1840.0, 1850.0, 7.668, -0.357, 2.345, -0.338),
+    (1850.0, 1855.0, 9.317, 1.659, 0.332, -0.932),
+    (1855.0, 1860.0, 10.376, -0.472, -2.463, 1.596),
+    (1860.0, 1865.0, 9.038, -0.610, 2.325, -2.497),
+    (1865.0, 1870.0, 8.256, -3.450, -5.166, 2.729),
+    (1870.0, 1875.0, 2.369, -5.596, 3.020, -0.919),
+    (1875.0, 1880.0, -1.126, -2.312, 0.264, -0.037),
+    (1880.0, 1885.0, -3.211, -1.894, 0.154, 0.562),
+    (1885.0, 1890.0, -4.388, 0.101, 1.841, -1.438),
+    (1890.0, 1895.0, -3.884, -0.531, -2.473, 1.870),
+    (1895.0, 1900.0, -5.017, 0.134, 3.138, -0.232),
+    (1900.0, 1905.0, -1.977, 5.715, 2.443, -1.257),
+    (1905.0, 1910.0, 4.923, 6.828, -1.329, 0.720),
+    (1910.0, 1915.0, 11.142, 6.330, 0.831, -0.825),
+    (1915.0, 1920.0, 17.479, 5.518, -1.643, 0.262),
+    (1920.0, 1925.0, 21.617, 3.020, -0.856, 0.008),
+    (1925.0, 1930.0, 23.789, 1.333, -0.831, 0.127),
+    (1930.0, 1935.0, 24.418, 0.052, -0.449, 0.142),
+    (1935.0, 1940.0, 24.164, -0.419, -0.022, 0.702),
+    (1940.0, 1945.0, 24.426, 1.645, 2.086, -1.106),
+    (1945.0, 1950.0, 27.050, 2.499, -1.232, 0.614),
+    (1950.0, 1953.0, 28.932, 1.127, 0.220, -0.277),
+    (1953.0, 1956.0, 30.002, 0.737, -0.610, 0.631),
+    (1956.0, 1959.0, 30.760, 1.409, 1.282, -0.799),
+    (1959.0, 1962.0, 32.652, 1.577, -1.115, 0.507),
+];
+
+/// Delta T knots from 1962.0 to the last monthly row, strictly increasing in
+/// time. Measured.
 pub(super) static MODERN: &[(f64, f64)] = &[
     // McCarthy and Babcock (1986), USNO historic_deltat.data, half-year rows.
-    (1900.0, -2.70),
-    (1900.5, -2.09),
-    (1901.0, -1.48),
-    (1901.5, -0.75),
-    (1902.0, -0.08),
-    (1902.5, 0.62),
-    (1903.0, 1.26),
-    (1903.5, 1.95),
-    (1904.0, 2.59),
-    (1904.5, 3.28),
-    (1905.0, 3.92),
-    (1905.5, 4.61),
-    (1906.0, 5.20),
-    (1906.5, 5.73),
-    (1907.0, 6.29),
-    (1907.5, 7.00),
-    (1908.0, 7.68),
-    (1908.5, 8.45),
-    (1909.0, 9.13),
-    (1909.5, 9.78),
-    (1910.0, 10.38),
-    (1910.5, 10.99),
-    (1911.0, 11.64),
-    (1911.5, 12.47),
-    (1912.0, 13.23),
-    (1912.5, 14.00),
-    (1913.0, 14.69),
-    (1913.5, 15.38),
-    (1914.0, 16.00),
-    (1914.5, 16.64),
-    (1915.0, 17.19),
-    (1915.5, 17.72),
-    (1916.0, 18.19),
-    (1916.5, 18.67),
-    (1917.0, 19.13),
-    (1917.5, 19.69),
-    (1918.0, 20.14),
-    (1918.5, 20.54),
-    (1919.0, 20.86),
-    (1919.5, 21.14),
-    (1920.0, 21.41),
-    (1920.5, 21.78),
-    (1921.0, 22.06),
-    (1921.5, 22.30),
-    (1922.0, 22.51),
-    (1922.5, 22.79),
-    (1923.0, 23.01),
-    (1923.5, 23.29),
-    (1924.0, 23.46),
-    (1924.5, 23.55),
-    (1925.0, 23.63),
-    (1925.5, 23.80),
-    (1926.0, 23.95),
-    (1926.5, 24.25),
-    (1927.0, 24.39),
-    (1927.5, 24.42),
-    (1928.0, 24.34),
-    (1928.5, 24.22),
-    (1929.0, 24.10),
-    (1929.5, 24.08),
-    (1930.0, 24.02),
-    (1930.5, 24.04),
-    (1931.0, 23.98),
-    (1931.5, 23.91),
-    (1932.0, 23.89),
-    (1932.5, 23.95),
-    (1933.0, 23.93),
-    (1933.5, 23.92),
-    (1934.0, 23.88),
-    (1934.5, 23.94),
-    (1935.0, 23.91),
-    (1935.5, 23.82),
-    (1936.0, 23.76),
-    (1936.5, 23.87),
-    (1937.0, 23.91),
-    (1937.5, 23.95),
-    (1938.0, 23.96),
-    (1938.5, 24.00),
-    (1939.0, 24.04),
-    (1939.5, 24.20),
-    (1940.0, 24.35),
-    (1940.5, 24.61),
-    (1941.0, 24.82),
-    (1941.5, 25.09),
-    (1942.0, 25.30),
-    (1942.5, 25.56),
-    (1943.0, 25.77),
-    (1943.5, 26.05),
-    (1944.0, 26.27),
-    (1944.5, 26.54),
-    (1945.0, 26.76),
-    (1945.5, 27.04),
-    (1946.0, 27.27),
-    (1946.5, 27.55),
-    (1947.0, 27.77),
-    (1947.5, 28.03),
-    (1948.0, 28.25),
-    (1948.5, 28.50),
-    (1949.0, 28.70),
-    (1949.5, 28.95),
-    (1950.0, 29.15),
-    (1950.5, 29.38),
-    (1951.0, 29.57),
-    (1951.5, 29.80),
-    (1952.0, 29.97),
-    (1952.5, 30.19),
-    (1953.0, 30.36),
-    (1953.5, 30.57),
-    (1954.0, 30.72),
-    (1954.5, 30.93),
-    (1955.0, 31.07),
-    (1955.5, 31.24),
-    (1956.0, 31.349),
-    (1956.5, 31.516),
-    (1957.0, 31.677),
-    (1957.5, 31.923),
-    (1958.0, 32.166),
-    (1958.5, 32.449),
-    (1959.0, 32.671),
-    (1959.5, 32.919),
-    (1960.0, 33.150),
-    (1960.5, 33.397),
-    (1961.0, 33.584),
-    (1961.5, 33.804),
     (1962.0, 33.992),
     (1962.5, 34.240),
     (1963.0, 34.466),
@@ -820,4 +758,38 @@ pub(super) static MODERN: &[(f64, f64)] = &[
     (2026.580_821_918, 69.1713),
     (2026.665_753_425, 69.1816),
     (2026.747_945_205, 69.2065),
+];
+
+/// Predicted Delta T knots after the last monthly row, strictly increasing in
+/// time, continuing [`MODERN`]. A prediction, not a measurement.
+pub(super) static PREDICTED: &[(f64, f64)] = &[
+    // USNO deltat.preds, quarterly rows.
+    (2027.000_000_000, 69.14),
+    (2027.249_315_068, 69.21),
+    (2027.498_630_137, 69.26),
+    (2027.750_684_932, 69.26),
+    (2028.000_000_000, 69.34),
+    (2028.248_633_880, 69.44),
+    (2028.500_000_000, 69.51),
+    (2028.748_633_880, 69.54),
+    (2028.997_267_760, 69.63),
+    (2029.249_315_068, 69.75),
+    (2029.498_630_137, 69.83),
+    (2029.747_945_205, 69.87),
+    (2030.000_000_000, 69.97),
+    (2030.249_315_068, 70.08),
+    (2030.498_630_137, 70.17),
+    (2030.747_945_205, 70.21),
+    (2031.000_000_000, 70.32),
+    (2031.249_315_068, 70.42),
+    (2031.498_630_137, 70.51),
+    (2031.750_684_932, 70.53),
+    (2032.000_000_000, 70.62),
+    (2032.248_633_880, 70.72),
+    (2032.500_000_000, 70.82),
+    (2032.748_633_880, 70.86),
+    (2032.997_267_760, 70.98),
+    (2033.249_315_068, 71.10),
+    (2033.498_630_137, 71.20),
+    (2033.747_945_205, 71.25),
 ];
