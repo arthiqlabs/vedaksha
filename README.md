@@ -28,7 +28,7 @@
 | MCP | `cargo install vedaksha-mcp` | stdio + HTTP (bearer auth) |
 | Docker | `docker run -e VEDAKSHA_MCP_TOKEN=… -p 3100:3100 ghcr.io/arthiqlabs/vedaksha-mcp` | multi-arch (amd64 + arm64) |
 
-Compute **janam kundali** (natal charts), **panchanga**, **dashas**, **nakshatras**, **vargas**, **shadbala**, **ashtakavarga**, **muhurta** and **transits/gochara** from a sub-arcsecond ephemeris (VSOP87A, ELP/MPP02, JPL DE440s/DE441).
+Compute **janam kundali** (natal charts), **panchanga**, **dashas**, **nakshatras**, **vargas**, **shadbala**, **ashtakavarga**, **muhurta** and **transits/gochara** from a sub-arcsecond ephemeris (JPL DE440s/DE441, worst case 0.272″ against Horizons) or from the data-file-free VSOP87A + ELP/MPP02 series (mean 0.160″, worst case 1.473″ over 1900–2025).
 
 ```mermaid
 flowchart LR

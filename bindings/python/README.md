@@ -6,8 +6,9 @@ The clean-room [Vedaksha](https://vedaksha.net) Vedic-astronomy and Jyotish engi
 runnable from Python with **no Rust toolchain and no per-platform build**. Compute
 **kundali / janam kundali** (natal charts), **panchanga**, **vimshottari and other
 dashas**, **nakshatras**, **vargas** (divisional charts), **shadbala**, **ashtakavarga**,
-**muhurta**, and **transits / gochara** — from a sub-arcsecond ephemeris (VSOP87A,
-ELP/MPP02, JPL DE440s/DE441).
+**muhurta**, and **transits / gochara** — from a sub-arcsecond ephemeris (JPL
+DE440s/DE441, worst case 0.272″ against Horizons) or from the data-file-free VSOP87A and
+ELP/MPP02 series (mean 0.160″, worst case 1.473″ over 1900–2025).
 
 This package is not a reimplementation. It ships the real Rust engine compiled to
 WebAssembly and runs it via [`wasmtime`](https://pypi.org/project/wasmtime/). Every value it
