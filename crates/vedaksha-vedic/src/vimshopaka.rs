@@ -17,18 +17,20 @@
 //! # Source
 //!
 //! BPHS chapter 7 (the *varga viveka* chapter), verses 17 to 27, read at the
-//! verses in the recension that numbers it chapter 7 (the numbering the
-//! request uses). The Sanskrit was read in two recensions; a third edition,
+//! verses in the recension that numbers it chapter 7. The Sanskrit was read in
+//! two recensions; a third edition,
 //! which runs the rashi descriptions and the vargas together in the third
 //! chapter of its first part, numbers the same verses 119 to 129.
 //! Grades follow [`crate::drishti`]: (a) read at the verse, editions agree;
 //! (b) read at the verse in one recension only; (c) a choice the verse leaves
 //! open, made and stated here.
 //!
-//! * **7.17, the shadvarga (grade a).** The six vargas are named in the verse
-//!   by their numbers: *lagna*, *hora*, *dreshkana*, *anka-bhaga* (the part of
-//!   nine, navamsha), *surya-amsha* (the part of twelve) and *trimshamsha*.
-//!   Their weights, `kramat`, are 6, 2, 4, 5, 2, 1 ([`SHADVARGA`]).
+//! * **7.17 and the first half of 7.18, the shadvarga (grade a).** The six
+//!   vargas are named in 7.17 (in one recension by their numbers): *lagna*,
+//!   *hora*, *dreshkana*, *anka-bhaga* (the part of nine, navamsha),
+//!   *surya-amsha* (the part of twelve) and *trimshamsha*. Their weights,
+//!   `kramat`, are 6, 2, 4, 5, 2, 1 (`rasa-netra-abdhi-pancha-akshi-
+//!   bhumayah`, [`SHADVARGA`]).
 //! * **7.18-19, the saptavarga (grade a for the numbers, c for which varga
 //!   takes which).** "With the saptamsha", the weights are 5, 2, 3, 2.5, 4.5,
 //!   2, 1 (`pancha locanam trayam sardha-dvayam sardha-vedam dvau
@@ -44,7 +46,7 @@
 //!   [`SAPTAVARGA_SEQUENCE`]
 //!   reads the seven numbers in the order of the six of 7.17 and then the
 //!   saptamsha (navamsha 2.5, dvadashamsha 4.5, trimshamsha 2, saptamsha 1);
-//!   the request's table is this reading. No classical commentary consulted
+//!   some printed tables give this reading. No classical commentary consulted
 //!   settles it.
 //! * **7.20, the dashavarga (grade a).** The saptavarga with the dashamsha
 //!   (`dik-amsha`), shodashamsha (`kalamsha`) and shashtiamsha
@@ -317,7 +319,7 @@ mod tests {
         ("shodashavarga", &SHODASHAVARGA),
     ];
 
-    /// The request's first property: each scheme's weights sum to 20, with no
+    /// Each scheme's weights sum to 20, with no
     /// varga listed twice.
     #[test]
     fn every_scheme_sums_to_twenty_over_distinct_vargas() {
@@ -471,7 +473,7 @@ mod tests {
         assert!(close(VargaRelation::Adhishatru.viswa(), 5.0));
     }
 
-    /// The request's second property: in its own varga rashi everywhere, a
+    /// In its own varga rashi everywhere, a
     /// graha scores the whole 20, in every scheme.
     #[test]
     fn own_everywhere_scores_twenty() {
@@ -482,7 +484,7 @@ mod tests {
         }
     }
 
-    /// The request's third property: every relation neutral scores 10.
+    /// Every relation neutral scores 10.
     #[test]
     fn neutral_everywhere_scores_ten() {
         let neutral = |_: VargaType, _: u8| VargaRelation::Sama.viswa();
@@ -492,7 +494,7 @@ mod tests {
         }
     }
 
-    /// The request's fourth property: one varga's part is its weight times
+    /// One varga's part is its weight times
     /// the relation over 20. Rashi 6 (shadvarga) at extreme friend 18 gives
     /// 5.4.
     #[test]

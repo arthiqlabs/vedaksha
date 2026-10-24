@@ -45,8 +45,9 @@
 //!   Over three: take `x` from four signs, halve it and add 30. Over two:
 //!   drop the signs and add 15 to the degrees. Over one: drop the signs and
 //!   halve the degrees. At one sign or less the verses give nothing, and the
-//!   same edition's worked example treats a difference over ten signs as nil
-//!   (the ten-sign subtraction would go negative); this module does both.
+//!   same edition's commentary and worked example treat a difference over ten
+//!   signs as nil (the ten-sign subtraction would go negative); this module
+//!   does both.
 //!   Every branch meets its neighbours, so the curve is continuous: 0 at 30
 //!   degrees, 15 at 60, 45 at 90, 30 at 120, 0 at 150, 60 at 180 (the 7th,
 //!   full), 0 at 300.
@@ -62,8 +63,9 @@
 //!   (`dvigunair lavair unah`); some printed renderings drop the doubling,
 //!   but only with the doubling does the curve reach 0 at 150 degrees where
 //!   the generic curve starts from 0. And Jupiter's `c = 3`/`7` verse names
-//!   half of the *elapsed* degrees (`bhoga`): only that reading meets the
-//!   neighbouring values at 90, 120, 210 and 240 degrees. With these
+//!   half of the degrees (`bhagardham`) without saying which part of the
+//!   sign: the degrees past the whole signs, `d`, is the reading that meets
+//!   the neighbouring values at 90, 120, 210 and 240 degrees. With these
 //!   readings Saturn's and Mars's curves are continuous and no value
 //!   exceeds 60. Jupiter's is continuous except at 270 degrees, where the
 //!   `c = 8` value has fallen to 0 and the generic `c = 9` value starts at
@@ -79,8 +81,9 @@
 //!   the recension reads. The recensions disagree and no source consulted
 //!   settles which is BPHS's, so both are offered; the default is the one
 //!   whose special aspects join the generic curve and stay within a rupa.
-//! * **The nodes.** The verses name the seven grahas. For Rahu and Ketu
-//!   [`sputa_drishti_graha`] returns the generic value under either rule.
+//! * **The nodes.** The special aspects belong to Saturn, Mars and Jupiter and
+//!   the verses give none for Rahu or Ketu, so [`sputa_drishti_graha`] returns
+//!   the generic value for them under either rule.
 
 /// Vedic aspect strength.
 #[derive(Debug, Clone, Copy, PartialEq)]

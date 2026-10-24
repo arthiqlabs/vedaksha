@@ -37,12 +37,15 @@
 //!   action each name suggests). Either way the portions depend on the
 //!   place's own day and night, which is why the bounds are the caller's, for
 //!   the place and date of birth.
-//! * **The point (3.70, grade a for Gulika, nothing for the rest).**
-//!   `Gulikarambha-samayat lagnam samsadhayet`: the lagna is computed for the
-//!   instant the portion *begins*, and that lagna is the upagraha. The verse
-//!   states this for Gulika only. It names no instant for Kala, Mrityu,
-//!   Ardhaprahara or Yamaghantaka, and no verse consulted names the middle
-//!   or the end of any portion; the functions for those four take the same
+//! * **The point (3.70, grade b for Gulika, nothing for the rest).** One
+//!   recension reads `gulikarambha-samayat lagnam samsadhayet`: the lagna is
+//!   computed from the instant the portion *begins*, and that lagna is the
+//!   upagraha. The other reads `gulikeshta-vashat lagnam sphutam yat
+//!   svasvadeshajam`, the lagna for Gulika's own ishta, which its commentary
+//!   takes as the beginning and calls the end of the portion mathematically
+//!   improper. The verse states this for Gulika only. It names no instant for
+//!   Kala, Mrityu, Ardhaprahara or Yamaghantaka, and no verse consulted names
+//!   the middle or the end of any portion; the functions for those four take the same
 //!   [`UpagrahaPoint`] as Gulika and carry no default. [`UpagrahaPoint`] has no
 //!   middle-of-the-portion variant because no source consulted reads one.
 //!   The end of Saturn's portion for Mandi, which the earlier documentation of

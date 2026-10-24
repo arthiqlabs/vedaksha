@@ -20,8 +20,9 @@
 //! # Source
 //!
 //! BPHS chapter 27 (the *spashta bala* chapter), verses 26 to 31. The Sanskrit
-//! was read at the verses in two recensions that agree on the content; the
-//! verse numbers below are those of the recension that numbers this the 27th
+//! was read at the verses in two recensions that agree on the dig rule, the
+//! aspect rule, the occupants and the classes of birth (only the first states
+//! the amount in 27.31); the verse numbers below are those of the recension that numbers this the 27th
 //! chapter and puts the aspect chapter before it (chapter 26). In the other
 //! recension (the Uttarakhanda), the same rules sit in the 6th chapter of
 //! that part, in a different order. Chapter 28 (ishta and kashta) is not
@@ -43,10 +44,10 @@
 //!     10th.
 //!
 //!   The result runs from 0 at the powerless point to 60 at the point
-//!   opposite it. The request asks for a second, "stepped" reading that gives
+//!   opposite it. A second, "stepped" reading is in circulation that gives
 //!   only 0, 10, 20, 30 and 40 virupas. No verse or classical commentary
 //!   consulted states it; the verse says divide the arc by 3, and the stepped
-//!   values are from a modern worked example. It is not implemented.
+//!   values come from a modern worked example. It is not implemented.
 //! * **27.28-29, the aspect (grade a for the rule, c for one detail).** To the
 //!   dig is added a quarter of the aspect ([`crate::drishti::sputa_drishti_graha`],
 //!   BPHS 26.6-26.12) of each benefic on the bhava madhya (`sad-drishti-pada-yuk`)
@@ -58,26 +59,30 @@
 //!   Mercury 0.75 times (grade c; no classical source consulted reads the
 //!   second clause as replacing the first). The classification of the other
 //!   grahas, and of Mercury, as benefic or malefic is not in these verses:
-//!   it is the caller's `shubha` reading. On the request's question: the verse
-//!   does not make Mercury benefic "whatever his company". It adds his aspect
-//!   in full without condition, and leaves his quarter to the caller's
-//!   classification. The nodes cast no aspect here, because the verse names
-//!   the seven.
+//!   it is the caller's `shubha` reading. The verse does not make Mercury
+//!   benefic "whatever his company": it adds his aspect in full without
+//!   condition, and leaves his quarter to the caller's classification. The nodes cast no aspect here: the aspect values of
+//!   chapter 26 and the benefic and malefic quarters of these verses are given
+//!   for the seven grahas, Sun to Saturn, and none for Rahu or Ketu.
 //! * **27.29, the lord (grade a).** The bhava's strength is joined with that of
 //!   its own lord (`svasvami-bala`): the pinda of the lord of the rashi
 //!   holding the madhya. The lords are those of BPHS chapter 4's description
 //!   of each rashi (Aries and Scorpio Mars, Taurus and Libra Venus, Gemini
 //!   and Virgo Mercury, Cancer Moon, Leo Sun, Sagittarius and Pisces Jupiter,
 //!   Capricorn and Aquarius Saturn); the nodes are not lords here.
-//! * **27.30, the occupants (grade a for the amounts, c for two details).** A
-//!   bhava joined with Mercury or Jupiter has one rupa added, one joined with
-//!   Saturn, Mars or the Sun has one rupa taken away (`ekena`, the singular
-//!   rupa). "Joined" is read as standing in the bhava, which is the span from
-//!   the sandhi before its madhya to the sandhi after it, a sandhi being half
-//!   the sum of two adjacent madhyas (BPHS's own bhava rule, `purvaparayuter
-//!   ardham sandhih syad bhavayor dvayoh`). The singular amount is read as
-//!   once per class and not once per graha: a bhava holding both Mercury and
-//!   Jupiter gets one rupa. Both are choices the verse leaves open.
+//! * **27.30, the occupants (grade a for the amounts and for what "joined"
+//!   means, c for the count).** A bhava joined with Mercury or Jupiter has one
+//!   rupa added, one joined with Saturn, Mars or the Sun has one rupa taken
+//!   away (`ekena`, the singular rupa). A graha is joined with a bhava when it
+//!   stands in it, and BPHS's bhava rule says where a bhava ends: a graha
+//!   between two sandhis belongs to the bhava they enclose (`graha
+//!   sandhi-dvayantastho jneyas tad-bhavagah sada`), a sandhi being half the
+//!   sum of two adjacent bhavas (`purvaparayuter ardham sandhih syad bhavayor
+//!   dvayoh`, in the other recension). So the bhava runs from the midpoint of
+//!   the previous madhya and its own to the midpoint of its own and the next.
+//!   The singular amount is read as once per class and not once per graha: a
+//!   bhava holding both Mercury and Jupiter gets one rupa. The verse leaves
+//!   that count open.
 //! * **27.31, the time of birth (grade a for the classes, b for the
 //!   amount).** By day a bhava in a shirshodaya rashi, at twilight one in an
 //!   ubhayodaya rashi, by night one in a prishthodaya rashi, is given a
@@ -86,9 +91,9 @@
 //!   4's own, each rashi's description naming how it rises: shirshodaya are
 //!   Gemini, Leo, Virgo, Libra, Scorpio and Aquarius; prishthodaya are Aries,
 //!   Taurus, Cancer, Sagittarius and Capricorn; **ubhayodaya is Pisces
-//!   alone**. The request's "a dual rashi at twilight" is a gloss that does
-//!   not match chapter 4: the dual (dvisvabhava) signs are a different
-//!   classification, and the twilight bonus here goes to Pisces only.
+//!   alone**. Glossing *ubhayodaya* as "a dual rashi" does not match chapter 4:
+//!   the dual (dvisvabhava) signs are a different classification, and the
+//!   twilight bonus here goes to Pisces only.
 //!
 //! The ranking [`BhavaBala::krama`] and [`BhavaBala::rupa`] are conveniences
 //! and not in the verses.
