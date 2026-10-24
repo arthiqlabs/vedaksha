@@ -117,22 +117,27 @@ as Horizons itself does.
   `latitude`, `longitude`, `ayanamsha` (all required), and optional
   `house_system`, `elevation_m` and `tz_offset_minutes`. It casts the chart
   itself and returns every part of BPHS 27 for the seven grahas, the birth
-  moment it used, the four angular cusps and each graha's motion state. The
+  moment it used, the four angular cusps, `polar_fallback` (true where the
+  house system is undefined at the latitude and the chart's fallback cusps are
+  the ones Dig Bala reads) and each graha's motion state. The
   earlier `planets` array and day and paksha flags are refused by name, and
   `PlanetEntry` and `parse_planet` are removed from `vedaksha-mcp`. A
   `Tropical` ayanamsha is refused, since shadbala reads the sidereal signs.
   Where the Sun does not both rise and set (polar day and night) the tool
   returns an error naming that, because there is no Hindu day to divide.
 - **WASM `compute_shadbala(input_json)`** takes the MCP tool's arguments key
-  for key, the same Julian Day range, and returns the same result.
+  for key, the same Julian Day range, and returns the same result; it refuses
+  what the tool refuses, in the same order and words.
 - **WASM `compute_dasha(input_json)`** takes the MCP `compute_dasha` arguments
   as one JSON object and serves all eight systems; it took three positional
   numbers and served Vimshottari only. `{"moon_longitude": m, "birth_jd": j,
   "levels": l}` reproduces the old call. `levels` outside 1 to 5, a
   `birth_jd` outside 1800 to 2400 CE and a `moon_longitude` outside [0, 360)
   are refused, with the MCP tool's messages.
-- **MCP `compute_dasha`, Yogini** refuses a request for more than 50,000
-  periods (`rounds`, or `until` far ahead, at deep `levels`).
+- **MCP and WASM `compute_dasha`, Yogini** refuse a request for more than
+  50,000 periods (`rounds`, or `until` far ahead, at deep `levels`), counting
+  the rounds an `until` reaches as the engine does. The longitude inputs
+  declare `exclusiveMaximum: 360`, as the handler always refused 360.
 
 ## Performance
 
