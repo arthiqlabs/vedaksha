@@ -59,7 +59,7 @@
       ]
     },
     "era": {
-      "$comment": "Both mean/max figures above describe 1900-2025, the span the published count and definition cover. The full 24,350-row grid is a different quantity (SPK mean 0.088 arcsec over 1900-2100), so never write '24,350 positions ... 0.096 arcsec': the headline is the 15,350 rows of 1900-2025. Since v9.5.0 the oracle converts Horizons' UTC time tags from 1962-01-20 to TT with the leap-second count, so Delta T is not part of those rows' residual, and the rows after 2025 print a worst case of 0.189 arcsec (Moon, 2099-10-04). The predictedEra* fields below are the earlier measurement, from the oracle that read those tags through the engine's own Delta T prediction; they are not what the oracle prints now.",
+      "$comment": "Both mean/max figures above describe the measured-Delta T era ONLY. Past 2025 both Horizons and delta_t.rs must PREDICT Delta T rather than read it from the IERS record, and the two predictions diverge; the residual out there is time-scale disagreement, not ephemeris error, and scales with each body's angular rate. Quoting a mean over the full 24,350 rows alongside the sub-arcsecond claim overstates it. Never write '24,350 positions ... 0.103 arcsec'.",
       "measured": "1900-2025",
       "full": "1900-2100",
       "predictedEraMaxArcsec": 44.912,
