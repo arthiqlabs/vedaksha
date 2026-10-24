@@ -310,7 +310,7 @@ scheduled Full Validation job runs it.
 - Accepted: the correction moves results **toward** the IAU 2006 model, and 0.001 arcsec is
   three orders of magnitude inside the analytical path's mean error against Horizons (2.06
   arcsec then; the observer fix of 2026-08-20 showed that figure was a defect of ours and not
-  truncation, and it is 0.160 arcsec at v9.5.0). The SPK path is untouched.
+  truncation, and it is 0.160 arcsec at v10.0.0). The SPK path is untouched.
 - **The values in v6.0.0 and v6.0.1 are the corrected ones.** Re-pinning changed no shipped
   behaviour; it recorded a change that had already been released.
 
@@ -355,7 +355,7 @@ cosine per term.
   VSOP87A by at most 5.7e-8″ over 1900 to 2100. Both are far inside the series' own
   arcsecond-level fit, so no accuracy figure moves.
 - **Speed, measured:** one ELP/MPP02 evaluation 188 µs to 56 µs; VSOP87A Mercury, Earth,
-  Jupiter, Neptune 4.6, 6.1, 12.8, 6.4 µs to 1.8, 2.9, 6.0, 3.5 µs (`CHANGELOG-v9.5.0.md`).
+  Jupiter, Neptune 4.6, 6.1, 12.8, 6.4 µs to 1.8, 2.9, 6.0, 3.5 µs (`CHANGELOG-v10.0.0.md`).
 - **Bits:** the lunar series no longer calls `simd_trig::sincos_f64x4`, so its bits are the same
   on aarch64 and x86_64. VSOP87A still calls that kernel, so `analytical_bit_digest` keeps one
   pin per architecture.
@@ -417,13 +417,13 @@ path and 0.131″ to 0.153″ on the analytical path.
 - **Invalidated by:** Horizons changing its precession and nutation model, or this engine
   changing its own.
 
-### Known bit-level drift: v9.5.0 (Delta T, nutation, deflection, VSOP87A frame, angle addition)
+### Known bit-level drift: v10.0.0 (Delta T, nutation, deflection, VSOP87A frame, angle addition)
 
 Every analytical row moved. The causes are six deliberate changes in one release, listed with
 their measured effect in the doc comment on `EXPECTED_DIGEST` in
-`crates/vedaksha-ephem-core/tests/analytical_bit_digest.rs` ("Why this moved at v9.5.0").
+`crates/vedaksha-ephem-core/tests/analytical_bit_digest.rs` ("Why this moved at v10.0.0").
 
-| Pin | v9.4.1 | v9.5.0 |
+| Pin | v9.4.1 | v10.0.0 |
 |---|---|---|
 | `analytical_bit_digest`, aarch64 | `b8aecba3f726ebd2a516b5a63aee5a4647f45942bf3be6cc3e04c6b8d6701571` | `732350622f43d4ee27f1a2d9e5288f2b503353cb1df59ee0c1b367168ab86298` |
 | `analytical_bit_digest`, x86_64 | `64dcc4cf991cf5b087dde0492882157b64503d87468ddd51922e59cb2afa7ab2` | `392fb9e71c3735dfda1fafc1798fd3dc094b6f93f2153f8c124fdf5c8468f3aa` |
@@ -438,7 +438,7 @@ their measured effect in the doc comment on `EXPECTED_DIGEST` in
 - **x86_64 digests can be measured on an Apple Silicon machine**, under Rosetta, with no remote
   box: `rustup target add x86_64-apple-darwin`, then
   `cargo test --release --target x86_64-apple-darwin -p vedaksha-ephem-core --test analytical_bit_digest --test lunar_series_bit_digest -- --include-ignored`.
-  That route was validated before the v9.5.0 pins were taken from it: built at the v9.4.1 tag
+  That route was validated before the v10.0.0 pins were taken from it: built at the v9.4.1 tag
   it reproduced all three of that release's x86_64 pins exactly. Re-validate it the same way
   after a toolchain or Rosetta change before trusting it for a new pin.
 
@@ -446,7 +446,7 @@ their measured effect in the doc comment on `EXPECTED_DIGEST` in
 
 **None of the following is a defect.** An independent verification pass over the validation
 harness re-ran the accuracy suite and confirmed the published mean (0.103″ then, 0.096″ at
-v9.5.0) is correct and reproducible for the quantity it actually measures (see the Accuracy section of `README.md`
+v10.0.0) is correct and reproducible for the quantity it actually measures (see the Accuracy section of `README.md`
 and `metrics.json`'s `accuracy` block). The six items below are the auditor's longer-term
 suggestions for making the harness itself more thorough, recorded here so the next person to
 audit it does not have to re-derive them from scratch. Nothing here changes a shipped number.
@@ -482,7 +482,7 @@ audit it does not have to re-derive them from scratch. Nothing here changes a sh
 
 5. **Percentile statistics (P50/P90/P99).** `metrics.json`'s `accuracy` block publishes mean
    and max only. A single outlier (the 1.187″ Uranus max at the time of the audit; the 0.272″
-   Moon row at 1962-01-06 at v9.5.0) says nothing about the shape of the distribution between
+   Moon row at 1962-01-06 at v10.0.0) says nothing about the shape of the distribution between
    the mean and that max. P50/P90/P99 would show whether error is
    concentrated in a few dates/bodies or spread evenly, which the current two numbers cannot
    distinguish.
@@ -520,7 +520,7 @@ If Vedaksha is abandoned entirely, here is the degradation timeline:
 | 10–20 years | **Moderate for precision users.** Delta T error could reach 30+ seconds. Moon error ~15 arcseconds. Planetary positions still accurate to < 1 arcsecond. Astrologically still perfectly usable. |
 | 20+ years | **Core math remains valid.** IAU precession/nutation models hold for centuries and the Rust code will still compile and produce correct results. The shipped DE440s kernel covers to **2150**; past that the SPK path has no data and `AnalyticalProvider` is the only route. |
 
-The Delta T rows are order-of-magnitude estimates, not measurements. Since v9.5.0 the table carries USNO's own predictions to 2033.75, each with the error the file states (0.33 s at 2027, 0.77 s at 2030, 1 s from 2032.75), and `delta_t.rs` treats everything after 2033.75 as a guess.
+The Delta T rows are order-of-magnitude estimates, not measurements. Since v10.0.0 the table carries USNO's own predictions to 2033.75, each with the error the file states (0.33 s at 2027, 0.77 s at 2030, 1 s from 2032.75), and `delta_t.rs` treats everything after 2033.75 as a guess.
 
 **Bottom line:** The math does not expire. The shipped DE440s kernel covers 1850–2150, which bounds the SPK path and nothing else. The things that decay are the ones that decay in any software project — toolchains and library dependencies.
 

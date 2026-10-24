@@ -93,7 +93,7 @@ so they are like for like.
     neither does the engine.
 * **2026–2100** — worst row 0.189″ (the Moon, 2099-10-04): the frame offset plus
   a small drift between the DE440s the engine reads and the DE441 Horizons
-  serves. Before v9.5.0 these rows were compared through each side's own Delta T
+  serves. Before v10.0.0 these rows were compared through each side's own Delta T
   prediction and the Moon picked up ~45″ in 2099; that was one prediction
   against another, not ephemeris error, and it is gone with the mismatch that
   produced it. It also means this oracle says nothing about the accuracy of Delta

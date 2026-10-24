@@ -54,7 +54,7 @@
 //! consecutive spans therefore tile exactly (`end_jd` of one is `start_jd`
 //! of the next, bit for bit), and a boundary instant belongs to the lunation
 //! it opens. The refined instant is the root finder's, run to the resolution of
-//! a Julian Day (about 0.1 ms; until v9.5.0 it stopped within 1e-6 degree, about
+//! a Julian Day (about 0.1 ms; until v10.0.0 it stopped within 1e-6 degree, about
 //! 8 ms of time).
 
 //! # Contract

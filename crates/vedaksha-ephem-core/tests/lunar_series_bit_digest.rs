@@ -128,7 +128,7 @@ const EXPECTED_ROWS: u64 = (FULL_RANGE_SAMPLES as u64 + CONTEMPORARY_SAMPLES as 
 /// decide whether it is acceptable, and re-pin in a commit that records the
 /// reason. Do not re-pin to make a red test green.
 ///
-/// # Re-pinned at v9.5.0: angle addition, and one value for both architectures
+/// # Re-pinned at v10.0.0: angle addition, and one value for both architectures
 ///
 /// ELP/MPP02's term phases are now built by angle addition from a few
 /// fundamental sines and cosines (`phase_graph`) instead of one `sincos` per
@@ -140,7 +140,7 @@ const EXPECTED_ROWS: u64 = (FULL_RANGE_SAMPLES as u64 + CONTEMPORARY_SAMPLES as 
 /// The series no longer calls `simd_trig::sincos_f64x4`, so its bits no
 /// longer depend on the architecture: the same value was measured on aarch64
 /// and on x86_64 under Rosetta (`--target x86_64-apple-darwin`, after that
-/// build reproduced v9.4.1's three x86_64 pins exactly). Before v9.5.0 this
+/// build reproduced v9.4.1's three x86_64 pins exactly). Before v10.0.0 this
 /// constant had one arm per architecture, because `wide`'s `f64x4` computes
 /// differently on AVX2 than on NEON (see `analytical_bit_digest.rs`, whose
 /// pin still has two arms because VSOP87A still uses that kernel). An
@@ -303,7 +303,7 @@ const POSITION_ONLY_EXPECTED_ROWS: u64 =
 /// position half of the full computation.** Same investigation procedure as
 /// [`EXPECTED_DIGEST`]'s doc comment. Do not re-pin to make a red test green.
 ///
-/// **Re-pinned at v9.5.0**, one value for both measured architectures, for
+/// **Re-pinned at v10.0.0**, one value for both measured architectures, for
 /// the reasons under [`EXPECTED_DIGEST`].
 #[cfg(any(target_arch = "aarch64", target_arch = "x86_64"))]
 const POSITION_ONLY_EXPECTED_DIGEST: &str =

@@ -45,7 +45,7 @@
 //! 180-4 that cannot drift.
 //!
 //! Restrict to one body by inserting, for example, `| grep ' Moon '` before
-//! the `tr`. Since v9.5.0 VSOP87A is the only consumer of `simd_trig`/`wide`;
+//! the `tr`. Since v10.0.0 VSOP87A is the only consumer of `simd_trig`/`wide`;
 //! the lunar series no longer calls it.
 //!
 //! # Why this test is `#[ignore]`d — measured, not assumed
@@ -98,9 +98,9 @@ use vedaksha_ephem_core::jpl::EphemerisProvider;
 /// measurement — and one that would otherwise be silently accepted.
 const EXPECTED_ROWS: u32 = 21_915;
 
-/// Digest of all 21,915 rows, re-pinned at v9.5.0.
+/// Digest of all 21,915 rows, re-pinned at v10.0.0.
 ///
-/// # Why this moved at v9.5.0
+/// # Why this moved at v10.0.0
 ///
 /// Six deliberate changes in one release move the rows: Delta T read
 /// from the SMH2016 spline before 1962, the USNO monthly values to the present
@@ -205,8 +205,8 @@ const EXPECTED_ROWS: u32 = 21_915;
 /// encoded 84381.448 arcsec (IAU 1976), which is the frame VSOP87A and
 /// ELP/MPP02 are defined against; only `OBLIQUITY_J2000`'s own literal and the
 /// comments claimed otherwise, and those were corrected to match the values.
-/// (Since v9.5.0 VSOP87A no longer goes through that rotation; it takes its
-/// authors' published matrix. See "Why this moved at v9.5.0".)
+/// (Since v10.0.0 VSOP87A no longer goes through that rotation; it takes its
+/// authors' published matrix. See "Why this moved at v10.0.0".)
 ///
 /// # Why this did NOT move at the EMB/Moon cancellation removal (2026-08-29)
 ///
@@ -385,8 +385,8 @@ const EXPECTED_DIGEST: &str = "732350622f43d4ee27f1a2d9e5288f2b503353cb1df59ee0c
 
 /// x86_64 counterpart of [`EXPECTED_DIGEST`] — see its doc comment.
 ///
-/// Re-pinned at v9.5.0, measured under Rosetta; see "Why this moved at
-/// v9.5.0". Earlier, re-pinned at v9.4.0 for the 1830–1900 ΔT fix, measured under emulated
+/// Re-pinned at v10.0.0, measured under Rosetta; see "Why this moved at
+/// v10.0.0". Earlier, re-pinned at v9.4.0 for the 1830–1900 ΔT fix, measured under emulated
 /// x86_64 (QEMU): the v9.3.0 tree reproduced the old `a50d…` pin there
 /// exactly, so the emulation measures what CI's ubuntu runner measures.
 /// Same scope as aarch64, verified by diffing all 21,915 ROW lines either

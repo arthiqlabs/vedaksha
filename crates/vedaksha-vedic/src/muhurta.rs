@@ -649,7 +649,7 @@ pub fn assess_muhurta(
 /// The iteration stops when its step no longer moves the Julian Day by more
 /// than one unit in its last places ([`f64::EPSILON`] times the day number,
 /// 5.5e-10 day or 0.05 ms near 2.46 million), so the instant returned is within
-/// a few such units of the root, about 0.1 ms. Until v9.5.0 it stopped as soon
+/// a few such units of the root, about 0.1 ms. Until v10.0.0 it stopped as soon
 /// as the angle was within 1e-6° of the target, which left it up to 7.9 ms
 /// (the Moon's 1e-6° at 12 to 13°/day) from the root and made two callbacks that
 /// differ in their last digits disagree by up to 12 ms.
@@ -2971,7 +2971,7 @@ mod tests {
     /// `refine_crossing` lands within 2e-9 day (0.17 ms, about four Julian Day
     /// quanta) of an independently converged root, from either side of it, with
     /// a rate that is right, 7 per cent high, and 7 per cent low with an offset.
-    /// Until v9.5.0 it stopped within 1e-6 degree of the target, which here is up
+    /// Until v10.0.0 it stopped within 1e-6 degree of the target, which here is up
     /// to 7.6e-8 day (6.6 ms) away, and two of the rates below put it there.
     #[test]
     fn refine_crossing_lands_on_an_independently_converged_root() {

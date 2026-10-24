@@ -12,7 +12,7 @@
 //! function under test reads `apparent_position`, whose rate is a central
 //! difference over a day and so differs from the true rate by a few parts in a
 //! thousand for the Moon. The rate may steer the iteration but must not move its
-//! root, which until v9.5.0 it did, by up to the 1e-6 degree the iteration
+//! root, which until v10.0.0 it did, by up to the 1e-6 degree the iteration
 //! stopped at (7.9 ms for the Moon).
 
 mod common;

@@ -1,7 +1,7 @@
 {
   "$comment": "Machine-readable release metrics for arthiqlabs/vedaksha. vedaksha.net fetches this file from raw.githubusercontent so the site stays current without a deploy — before it existed, every engine release needed a matching hand-edit and deploy of the site, and the site drifted twice. Update it in the same commit as a version bump; CI's version-check asserts engineVersion against the tag, so it cannot be silently forgotten. The test counts are the numbers the two CI commands printed at that tag, not an enumeration.",
-  "engineVersion": "9.4.1",
-  "released": "2026-09-20",
+  "engineVersion": "10.0.0",
+  "released": "2026-10-24",
   "tests": {
     "perPush": 1215,
     "full": 1225,
@@ -12,7 +12,7 @@
   "accuracy": {
     "$comment": "Measured agreement with JPL Horizons (DE441), re-run at the tag rather than carried forward. Published here so the site reads them live like every other figure: they were hand-maintained site constants until 2026-09-01 and had gone unverified from v7.0.0 to v9.1.0. Asserted against the engine's own oracle output by check_metrics_accuracy.py, so they cannot drift from what the tests actually print. The SPK and analytical paths are separately implemented and separately measured - neither figure says anything about the other.",
     "verified": "2026-10-24",
-    "verifiedAtVersion": "9.5.0",
+    "verifiedAtVersion": "10.0.0",
     "quantity": "Mean angular residual in apparent geocentric ecliptic longitude (of date) vs JPL Horizons. Not a general position-accuracy figure: the oracle fixture also stores ref_latitude, ref_distance and ref_speed (see oracle_comparison.rs), but none of those enter this number -- longitude only.",
     "targetConvention": "Comparisons query planetary-system barycentre IDs (Body::naif_id()), matching what the DE440s kernel stores and what SpkReader returns -- not physical planet centres. Querying centres instead would inject a spurious ~0.1 arcsecond offset for the outer planets (scripts/generate_horizons_oracle.py), the same order of magnitude as the headline mean itself.",
     "spk": {
@@ -59,7 +59,7 @@
       ]
     },
     "era": {
-      "$comment": "The mean/max figures above cover 1900-2025, the era where the engine's Delta T was measured data when the figure was defined; the cut is kept so the published count and definition keep their meaning. Since v9.5.0 the oracle converts Horizons' UTC time tags (from 1962-01-20) to TT with the leap-second count, as Horizons itself does, so from then on neither Delta T nor UT1-UTC is in the comparison, only the ephemeris and the apparent-place pipeline; before 1962-01-20 the tag is UT1 and the engine's Delta T is in it. predictedEraMax is the SPK maximum over 2026-2100, likewise like for like. Before v9.5.0 those rows compared two Delta T predictions, which is where a 44.9 arcsec Moon in 2099 came from.",
+      "$comment": "The mean/max figures above cover 1900-2025, the era where the engine's Delta T was measured data when the figure was defined; the cut is kept so the published count and definition keep their meaning. Since v10.0.0 the oracle converts Horizons' UTC time tags (from 1962-01-20) to TT with the leap-second count, as Horizons itself does, so from then on neither Delta T nor UT1-UTC is in the comparison, only the ephemeris and the apparent-place pipeline; before 1962-01-20 the tag is UT1 and the engine's Delta T is in it. predictedEraMax is the SPK maximum over 2026-2100, likewise like for like. Before v10.0.0 those rows compared two Delta T predictions, which is where a 44.9 arcsec Moon in 2099 came from.",
       "measured": "1900-2025",
       "full": "1900-2100",
       "predictedEraMaxArcsec": 0.189,
@@ -72,6 +72,6 @@
   "licence": {
     "spdx": "BUSL-1.1",
     "changeLicense": "Apache-2.0",
-    "changeDate": "2030-09-20"
+    "changeDate": "2030-10-24"
   }
 }

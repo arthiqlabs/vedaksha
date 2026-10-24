@@ -1,4 +1,4 @@
-# v9.5.0
+# v10.0.0
 
 Accuracy, speed, and a much larger Vedic surface, in one release.
 
@@ -19,8 +19,9 @@ Accuracy, speed, and a much larger Vedic surface, in one release.
 
 Several answers change, each because the old one was wrong or less exact;
 every one is listed under "Changed answers". The MCP `compute_shadbala` tool
-and the WASM `compute_dasha` and `compute_shadbala` exports take new inputs;
-see "Breaking changes".
+and the WASM `compute_dasha` and `compute_shadbala` exports take new inputs,
+and two public items leave `vedaksha-mcp`, so this is a major release; see
+"Breaking changes".
 
 ## Changed answers, the engine
 
@@ -58,7 +59,7 @@ see "Breaking changes".
 
 Measured against Horizons, 1900 to 2025, mean and max:
 
-| Path | v9.4.1 | v9.5.0 |
+| Path | v9.4.1 | v10.0.0 |
 |---|---|---|
 | SPK (DE440s) | 0.103″, 1.187″ | 0.096″, 0.272″ |
 | Analytical | 0.239″, 1.896″ | 0.160″, 1.473″ |
@@ -142,10 +143,10 @@ as Horizons itself does.
 ## Performance
 
 Criterion medians, `cargo bench -p vedaksha-ephem-core --bench ephemeris`,
-v9.4.1 and v9.5.0 run alternately twice on one Apple M5 Pro under a load
+v9.4.1 and v10.0.0 run alternately twice on one Apple M5 Pro under a load
 average of 10 to 22. The ratio from the other run is in brackets.
 
-| Benchmark | v9.4.1 | v9.5.0 | Faster |
+| Benchmark | v9.4.1 | v10.0.0 | Faster |
 |---|---|---|---|
 | ELP/MPP02 Moon, one evaluation | 188 µs | 56 µs | 3.3× (3.0×) |
 | Apparent positions, nine-body chart | 3.73 ms | 0.97 ms | 3.8× (3.4×) |
@@ -161,7 +162,7 @@ End to end over MCP: one batch of 25 requests (20 `search_muhurta` windows of
 scans of the Moon, the Sun and Mars), the same 1,220 windows and 928 events
 from both releases, best of three runs at a load of 13 to 17:
 
-| | v9.4.1 | v9.5.0 |
+| | v9.4.1 | v10.0.0 |
 |---|---|---|
 | Wall time | 17.5 s | 0.46 s |
 

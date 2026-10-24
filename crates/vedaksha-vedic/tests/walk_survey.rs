@@ -638,8 +638,8 @@ fn pair_of(src: &Src) -> impl Fn(f64) -> Option<MoonAndSun> + Sync + '_ {
 }
 
 /// Newton to convergence (a step under half a JD quantum, 2.3e-10 d): what
-/// `refine_crossing` does since v9.5.0, written out so the survey does not rest
-/// on the function it measures. Until v9.5.0 that function stopped within 1e-6
+/// `refine_crossing` does since v10.0.0, written out so the survey does not rest
+/// on the function it measures. Until v10.0.0 that function stopped within 1e-6
 /// degree.
 fn tight(
     target: f64,
@@ -670,7 +670,7 @@ fn tight(
 /// on the walk, and by Newton run to convergence on each callback. The converged
 /// pair differs by the walk's own effect on the root; the `refine_crossing`
 /// answers differ from their converged roots by what `refine_crossing` leaves
-/// (nothing since v9.5.0; 7.9 ms for the Moon before, measured 2026-10-24).
+/// (nothing since v10.0.0; 7.9 ms for the Moon before, measured 2026-10-24).
 fn century_root_shift() {
     let (a, b) = (jd(1950, 1, 1, 0.0), jd(2050, 1, 1, 0.0));
     let walk = Src::walk(a - 2.0, b + 4.0, &[]);

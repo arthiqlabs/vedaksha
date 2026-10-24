@@ -101,7 +101,7 @@ That growth belongs to the theory, not to how the tables are cut. `scripts/gener
 
 Until 2026-08-20 those figures were 2.06″ mean and 24.22″ worst, and this README attributed the gap to VSOP87A being a truncated theory. That was wrong, and the wording protected a defect of ours: the analytical provider answered `EarthMoonBarycenter` with VSOP87A's Earth-centre series, so the observer sat 4,671 km off, and `earth_state` divided a barycentre-relative Moon by `1 + EMRAT` instead of `EMRAT` for a further 56.8 km. Both are fixed. The second one moved the SPK path too, 0.106″ → 0.103″.
 
-At v9.5.0 the SPK mean goes from 0.103″ to 0.096″ and its worst row from 1.187″ to 0.272″; the analytical mean from 0.239″ to 0.160″ and its worst row from 1.896″ to 1.473″; the analytical Moon from 0.169″ to 0.094″. One body is worse at its maximum: analytical Uranus, 1.111″ to 1.201″. The causes are in [`CHANGELOG-v9.5.0.md`](CHANGELOG-v9.5.0.md): ΔT read from the measurements and the published predictions, 30 corrected nutation rows, the Sun's light deflection of the planets, VSOP87A rotated by the matrix its authors publish, and an oracle that compares Horizons' UTC tags in TT.
+At v10.0.0 the SPK mean goes from 0.103″ to 0.096″ and its worst row from 1.187″ to 0.272″; the analytical mean from 0.239″ to 0.160″ and its worst row from 1.896″ to 1.473″; the analytical Moon from 0.169″ to 0.094″. One body is worse at its maximum: analytical Uranus, 1.111″ to 1.201″. The causes are in [`CHANGELOG-v10.0.0.md`](CHANGELOG-v10.0.0.md): ΔT read from the measurements and the published predictions, 30 corrected nutation rows, the Sun's light deflection of the planets, VSOP87A rotated by the matrix its authors publish, and an oracle that compares Horizons' UTC tags in TT.
 
 **ELP/MPP02 Moon** — `lunar_horizons.rs`: **0.015″ at J2000**, 0.020–0.053″ across 1500–2500 CE.
 
@@ -130,7 +130,7 @@ It goes well beyond the summary above, and reports several things that are state
   apparent-place pipeline layered on top.
 - **A methodological note on reproducibility**: bit-level output is architecture-scoped, because
   the SIMD trigonometric kernel maps to one AVX2 register but two NEON registers. Accuracy is
-  not — measured identical to a milliarcsecond on both. (Since v9.5.0 the lunar series alone no longer calls
+  not — measured identical to a milliarcsecond on both. (Since v10.0.0 the lunar series alone no longer calls
   that kernel and is bit-identical on both architectures; the whole analytical provider still is not.)
 - **What is not validated, stated plainly**, including house cusps, the true node, and every
   ayanamsha.

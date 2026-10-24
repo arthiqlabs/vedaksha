@@ -37,7 +37,7 @@ list, not by a per-run measurement. Every *numeric* field in the accuracy
 block -- including each `perBody[].comparisons` and the `era` block's
 predicted-era maximum -- is covered by `compare()` and `compare_era()`; only
 this pair of descriptive strings is exempt, deliberately. (The predicted-era
-maximum went unchecked until v9.5.0 and sat at a v9.1.0 figure, 44.9", for
+maximum went unchecked until v10.0.0 and sat at a v9.1.0 figure, 44.9", for
 three releases after it had fallen below 0.2".)
 
 # Running it
