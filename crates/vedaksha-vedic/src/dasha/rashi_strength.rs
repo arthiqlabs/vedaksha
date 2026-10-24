@@ -72,6 +72,21 @@
 //! from the other end of the rashi, as `karaka` does for Rahu, because it
 //! moves backward). Grade (b) overall: the text applies "stronger" to
 //! grahas in several places without listing the tests once.
+//!
+//! # Not the chara dasha's choice between two lords
+//!
+//! The tests above are the strength section's. They do not choose between the
+//! two lords of Scorpio or Aquarius when `dasha::chara` counts a duration.
+//! The verses that make that choice (BPHS ch. 46, slokas 158 to 166, and the
+//! old verses edited with the sutras at 1.1.7 to 1.1.13) are self-contained
+//! and run their own cascade: companions, then the nature of the rashi, then
+//! exaltation, then the longer count. Against the graha tests here that moves
+//! exaltation behind the nature of the rashi, adds the longer count and has
+//! no test of degrees. Neither text says that one governs the other, so each
+//! is implemented as it is stated, over the same primitives
+//! ([`NatalPlacements::companions_of`], [`exaltation_sign`], the nature of a
+//! rashi) and no rule is written twice. [`effective_lord`] is the strength
+//! section's reading of "the lord" in 2.3.10 and nothing more.
 
 use serde::{Deserialize, Serialize};
 
@@ -314,8 +329,10 @@ pub fn effective_lord(sign: u8, strength: &dyn Strength) -> Graha {
     }
 }
 
-/// Rank of a rashi's natural strength: dual over fixed over movable (2.3.9).
-const fn natural_rank(sign: u8) -> u8 {
+/// Rank of a rashi's natural strength: dual over fixed over movable (2.3.9;
+/// also *jneyash chara-sthira-dvandvah kramato bala-shalinah* in BPHS 46.162
+/// and 163, which `dasha::chara` reads for the two-lord signs).
+pub(crate) const fn natural_rank(sign: u8) -> u8 {
     match modality(sign) {
         Modality::Movable => 0,
         Modality::Fixed => 1,
