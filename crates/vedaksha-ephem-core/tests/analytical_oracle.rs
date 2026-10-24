@@ -76,12 +76,14 @@ const MEASURED_DT_JD: f64 = 2_461_041.5;
 
 /// Per-point ceiling over the measured-ΔT era for the analytical provider.
 ///
-/// Observed max is 1.565″ (Neptune, 2025-09-02) across 13,815 comparisons, with
+/// Observed max is 1.473″ (Neptune, 2025-09-02) across 13,815 comparisons, with
 /// the time scale matched to Horizons' (UTC tags converted with the leap-second
-/// count from 1962-01-20; see `oracle_comparison.rs`). The ceiling is 2.0″, 28
-/// percent over it. Necessarily looser than the SpkReader bound: VSOP87A is a
-/// truncated analytical theory, not an interpolated numerical kernel, and the
-/// outer planets carry its truncation (Neptune 0.50″ mean, Uranus 1.11″ max).
+/// count from 1962-01-20; see `oracle_comparison.rs`). The ceiling is 2.0″, 36
+/// percent over it. Necessarily looser than the SpkReader bound: VSOP87A is an
+/// analytical theory fitted to an older integration (DE200), not an interpolated
+/// numerical kernel, and the outer planets carry that (Neptune 0.41″ mean,
+/// Uranus 1.20″ max; the untruncated series gives the same residuals, see
+/// `VSOP87A_TO_EQUATORIAL` in `analytical/mod.rs`).
 ///
 /// This was 30″, on the strength of figures that no longer reproduce (24.2″,
 /// Venus 1958, here; 13.09″ in `analytical_accuracy.rs`). At 30″ the gate sat
