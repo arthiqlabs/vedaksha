@@ -134,7 +134,24 @@ as Horizons itself does.
 
 ## Performance
 
-<!-- PERFORMANCE TABLE: measured at v9.4.1 and v9.5.0 on one machine, inserted at release prep -->
+Criterion medians, `cargo bench -p vedaksha-ephem-core --bench ephemeris`,
+v9.4.1 and v9.5.0 run alternately twice on one Apple M5 Pro under a load
+average of 10 to 22. The ratio from the other run is in brackets.
+
+| Benchmark | v9.4.1 | v9.5.0 | Faster |
+|---|---|---|---|
+| ELP/MPP02 Moon, one evaluation | 188 µs | 56 µs | 3.3× (3.0×) |
+| Apparent positions, nine-body chart | 3.73 ms | 0.97 ms | 3.8× (3.4×) |
+| Same, batched (`apparent_positions`) | 2.97 ms | 1.01 ms | 2.9× (2.9×) |
+| Moon, daily for a year | 72.4 ms | 17.9 ms | 4.0× (2.9×) |
+| Sun, `ecliptic_position` | 6.06 µs | 2.90 µs | 2.1× |
+| VSOP87A Mercury / Earth / Jupiter / Neptune | 4.6 / 6.1 / 12.8 / 6.4 µs | 1.8 / 2.9 / 6.0 / 3.5 µs | 1.8× to 2.5× |
+
+The Sun's other run was disturbed by load and is not quoted. The MCP
+`search_muhurta` and `search_transits` tools together ran a batch of 25
+requests in 0.47 s, where the same release without the walk took 2.94 s
+(measured once at a load of 38, so treat that ratio as rough; against v9.4.1
+the gap is wider, since the series beneath the walk is faster too).
 
 How it is done, none of it an approximation of the answer:
 
