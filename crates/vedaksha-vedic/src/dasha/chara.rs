@@ -165,14 +165,38 @@
 //! computation above, not sequence direction — and are no longer cited for
 //! direction. See `DATA_PROVENANCE.md` Fix 12 for the full history of that
 //! correction.
+//!
+//! **Antardashas.** [`compute_chara`] returns the twelve mahadashas only and
+//! is unchanged; [`compute_chara_antar`] and [`compute_chara_with_antars`]
+//! return the same twelve with their twelve antardashas each. The rule is
+//! BPHS's, from the chapter on working out antardashas (ch. 51 in the
+//! recension this crate follows, slokas 5 to 9): each antardasha a twelfth
+//! of its mahadasha; the twelve starting from the dasha rashi or the seventh
+//! from it, whichever is stronger; unbroken for a movable dasha rashi, every
+//! sixth rashi for a fixed one, kendra groups for a dual one; forward from an
+//! odd dasha rashi and in reverse from an even one. The Upadesha Sutras do
+//! not state the length. The order shapes are the sutras *prathame
+//! prak-pratyaktvam* (2.4.8), *dvitiye ravitah* (2.4.9) and *prithak-
+//! kramena trtiye catushtayadi* (2.4.10), numbering of the critical edition
+//! used throughout `dasha::rashi_antar`, whose commentary says these three
+//! give the order "everywhere in the chara-paryaya dasha". Grade (a) for the
+//! BPHS rule, whose own worked examples are encoded as tests in
+//! `dasha::rashi_antar`; grade (b) for the sutras (the commentary's
+//! extension to every chara dasha is the commentator's). The rules that the
+//! texts leave open (where the series starts when the chapters conflict,
+//! whether to keep the sixth-sixth and kendra shapes) are
+//! [`AntarRules`](super::rashi_antar::AntarRules); see that module's doc.
 
 use serde::{Deserialize, Serialize};
+
+use super::rashi_antar::{AntarLength, AntarRules, RashiPeriod, build_antars};
+use super::rashi_strength::{JaiminiStrength, NatalPlacements, Strength};
 
 /// Dasha year length in days (Julian year).
 const DASHA_YEAR_DAYS: f64 = 365.25;
 
 /// English names of the 12 signs, zero-indexed from Aries.
-const SIGN_NAMES: [&str; 12] = [
+pub(crate) const SIGN_NAMES: [&str; 12] = [
     "Aries",
     "Taurus",
     "Gemini",
@@ -352,6 +376,70 @@ pub fn compute_chara(lagna_sign: u8, birth_jd: f64, positions: GrahaSigns) -> Ve
     periods
 }
 
+/// Compute the Chara Dasha with the antardashas of every period.
+///
+/// The twelve mahadashas are exactly [`compute_chara`]'s: same signs, same
+/// bounds, same durations, bit for bit. Each carries its twelve antardashas
+/// under `rules`, each a twelfth of the mahadasha, tiling it exactly.
+/// `strength` decides "the stronger of the dasha rashi and its seventh" when
+/// `rules.start` asks for it; pass [`JaiminiStrength`] over the same chart
+/// for the Jaimini comparison, or your own [`Strength`].
+#[must_use]
+pub fn compute_chara_antar(
+    lagna_sign: u8,
+    birth_jd: f64,
+    positions: GrahaSigns,
+    rules: AntarRules,
+    strength: &dyn Strength,
+) -> Vec<RashiPeriod> {
+    let placements = NatalPlacements::from_signs(lagna_sign, positions);
+    compute_chara(lagna_sign, birth_jd, positions)
+        .into_iter()
+        .map(|p| RashiPeriod {
+            sign_index: p.sign_index,
+            sign_name: p.sign_name.to_string(),
+            start_jd: p.start_jd,
+            end_jd: p.end_jd,
+            duration_years: p.duration_years,
+            antar: build_antars(
+                p.sign_index,
+                p.start_jd,
+                p.end_jd,
+                p.duration_years,
+                rules,
+                AntarLength::EqualTwelfths,
+                &placements,
+                strength,
+            ),
+        })
+        .collect()
+}
+
+/// [`compute_chara_antar`] with the default rules (BPHS 51.5 to 51.9) and
+/// the Jaimini strength comparison read from `positions`.
+#[must_use]
+pub fn compute_chara_with_antars(
+    lagna_sign: u8,
+    birth_jd: f64,
+    positions: GrahaSigns,
+) -> Vec<RashiPeriod> {
+    let placements = NatalPlacements::from_signs(lagna_sign, positions);
+    let strength = JaiminiStrength::new(&placements);
+    compute_chara_antar(
+        lagna_sign,
+        birth_jd,
+        positions,
+        AntarRules::default(),
+        &strength,
+    )
+}
+
+/// Whether the chara sequence for `lagna_sign` runs forward through the
+/// zodiac (the 9th-from-lagna test of the module doc).
+pub(crate) fn sequence_runs_forward(lagna_sign: u8) -> bool {
+    matches!(chara_direction(lagna_sign), Direction::Forward)
+}
+
 /// Chara Dasha's counting direction for a given lagna sign.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
@@ -401,7 +489,7 @@ fn chara_direction(lagna: u8) -> Direction {
 
 /// Resolve the sign occupied by `sign`'s lord (or lords), given natal graha
 /// positions. See the module doc for the full dual-lordship rule.
-fn lord_sign_for(sign: u8, pos: GrahaSigns) -> u8 {
+pub(crate) fn lord_sign_for(sign: u8, pos: GrahaSigns) -> u8 {
     match sign {
         0 => pos.mars,        // Aries -> Mars
         1 | 6 => pos.venus,   // Taurus -> Venus, Libra -> Venus
@@ -865,6 +953,134 @@ mod tests {
         assert!(
             seen.iter().all(|&s| s),
             "not all 12 signs appeared going backward"
+        );
+    }
+
+    // ── Antardashas ──────────────────────────────────────────────────────
+
+    use crate::dasha::rashi_antar::{AntarOrder, AntarStart};
+
+    // 19. The mahadashas of `compute_chara_antar` are `compute_chara`'s,
+    // bit for bit, for every lagna and two charts.
+    #[test]
+    fn antar_variant_leaves_the_mahadashas_untouched() {
+        for chart in [ALL_ARIES, BPHS_46_CHART] {
+            for lagna in 0..12u8 {
+                let plain = compute_chara(lagna, TEST_JD, chart);
+                let full = compute_chara_with_antars(lagna, TEST_JD, chart);
+                assert_eq!(plain.len(), full.len());
+                for (a, b) in plain.iter().zip(&full) {
+                    assert_eq!(a.sign_index, b.sign_index);
+                    assert_eq!(a.sign_name, b.sign_name);
+                    assert_eq!(a.start_jd.to_bits(), b.start_jd.to_bits());
+                    assert_eq!(a.end_jd.to_bits(), b.end_jd.to_bits());
+                    assert_eq!(a.duration_years.to_bits(), b.duration_years.to_bits());
+                }
+            }
+        }
+    }
+
+    // 20. Each mahadasha's twelve antars tile it exactly, each is a twelfth
+    // of it, and together they name all twelve rashis once.
+    #[test]
+    fn antars_tile_each_mahadasha_and_name_every_rashi_once() {
+        for lagna in 0..12u8 {
+            for p in compute_chara_with_antars(lagna, TEST_JD, BPHS_46_CHART) {
+                assert_eq!(p.antar.len(), 12);
+                assert_eq!(p.antar[0].start_jd, p.start_jd);
+                assert_eq!(p.antar[11].end_jd, p.end_jd);
+                let mut seen = [false; 12];
+                for (k, a) in p.antar.iter().enumerate() {
+                    assert_eq!(a.duration_years, p.duration_years / 12.0);
+                    if k > 0 {
+                        assert_eq!(a.start_jd, p.antar[k - 1].end_jd);
+                    }
+                    assert!(!seen[usize::from(a.sign_index)]);
+                    seen[usize::from(a.sign_index)] = true;
+                }
+            }
+        }
+    }
+
+    // 21. BPHS ch. 46's chart (Aquarius lagna) with ch. 51's antar rule.
+    // The mahadashas run Aquarius (8 years), Pisces (1), Aries (1), ...
+    //
+    // Aquarius is fixed and odd: from its own rashi, every sixth, forward:
+    // 10 3 8 1 6 11 4 9 2 7 0 5. Aquarius, not Leo (its seventh), is the
+    // start: Aquarius holds Mercury, Jupiter and Venus, Leo only Saturn.
+    //
+    // Pisces is dual and even: itself, then kendras in reverse, then the
+    // groups from its fifth and ninth in reverse: 11 8 5 2 7 4 1 10 3 0 9 6.
+    // Pisces and Virgo (its seventh) hold no graha and are both dual; their
+    // lords, Jupiter and Mercury, each stand in Aquarius with two companions
+    // and neither is exalted, so no test of 2.3.6 to 2.3.10 separates the two
+    // rashis. Neither lord stands in its own rashi and both rashis are even,
+    // so the comparison is a total tie, which keeps the dasha rashi first.
+    //
+    // Aries is movable and odd: 0 1 2 ... 11. Aries and Libra are both
+    // empty movable signs; Mars (Aries's lord) stands in Taurus with no
+    // companion and Venus (Libra's lord) in Aquarius with two, so Libra's
+    // lord is the stronger by 2.3.10 and the series starts at Libra: 6 7 8 9
+    // 10 11 0 1 2 3 4 5.
+    #[test]
+    fn bphs_51_worked_examples_through_the_default_rule() {
+        let periods = compute_chara_with_antars(10, TEST_JD, BPHS_46_CHART);
+        let signs = |p: &RashiPeriod| p.antar.iter().map(|a| a.sign_index).collect::<Vec<_>>();
+        assert_eq!(periods[0].sign_index, 10);
+        assert_eq!(
+            signs(&periods[0]),
+            vec![10, 3, 8, 1, 6, 11, 4, 9, 2, 7, 0, 5]
+        );
+        // Eight years in twelve equal parts: "8 months each".
+        assert_eq!(periods[0].antar[0].duration_years * 12.0, 8.0);
+        assert_eq!(periods[1].sign_index, 11);
+        assert_eq!(
+            signs(&periods[1]),
+            vec![11, 8, 5, 2, 7, 4, 1, 10, 3, 0, 9, 6]
+        );
+        assert_eq!(periods[2].sign_index, 0);
+        assert_eq!(
+            signs(&periods[2]),
+            vec![6, 7, 8, 9, 10, 11, 0, 1, 2, 3, 4, 5]
+        );
+    }
+
+    // 22. The start rules differ where the two BPHS chapters conflict.
+    // Aquarius's lord resolves to Rahu in Gemini(2) for this chart (see the
+    // duration tests), so the lord-occupied start gives every sixth from
+    // Gemini: 2 7 0 5 10 3 8 1 6 11 4 9. The itself-always start gives the
+    // worked example; consecutive order ignores the sixth-sixth shape.
+    #[test]
+    fn antar_rules_change_the_series() {
+        let placements = NatalPlacements::from_signs(10, BPHS_46_CHART);
+        let strength = JaiminiStrength::new(&placements);
+        let series = |rules: AntarRules| {
+            compute_chara_antar(10, TEST_JD, BPHS_46_CHART, rules, &strength)[0]
+                .antar
+                .iter()
+                .map(|a| a.sign_index)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            series(AntarRules {
+                start: AntarStart::LordOccupied,
+                order: AntarOrder::ByModality,
+            }),
+            vec![2, 7, 0, 5, 10, 3, 8, 1, 6, 11, 4, 9]
+        );
+        assert_eq!(
+            series(AntarRules {
+                start: AntarStart::RashiItself,
+                order: AntarOrder::ByModality,
+            }),
+            vec![10, 3, 8, 1, 6, 11, 4, 9, 2, 7, 0, 5]
+        );
+        assert_eq!(
+            series(AntarRules {
+                start: AntarStart::RashiItself,
+                order: AntarOrder::Consecutive,
+            }),
+            vec![10, 11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
         );
     }
 }
