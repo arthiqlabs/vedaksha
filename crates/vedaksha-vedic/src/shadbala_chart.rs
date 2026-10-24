@@ -344,6 +344,10 @@ mod tests {
         assert_eq!(m.hindu_day_jdn, 2_461_337);
         // ... and that sunrise is itself the previous one, not a day early.
         assert!(before_sunrise - m.jd_sunrise < 1.0);
+        // The sunset is the one that followed that sunrise, before the birth
+        // (it is night) and before the next sunrise, not the next evening's.
+        assert!(m.jd_sunrise < m.jd_sunset && m.jd_sunset < before_sunrise);
+        assert!(before_sunrise < m.jd_next_sunrise);
     }
 
     #[test]
