@@ -55,70 +55,29 @@ fn sidereal_rashi(f: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync), t: f64) -> u8 
     ((lon - true_ayanamsha_value(AYAN, t)).rem_euclid(360.0) / 30.0).floor() as u8 % 12
 }
 
-/// (graha, body serving it, years from 2001-01-01)
-const CASES: [(Graha, Body, f64); 9] = [
-    (Graha::Saturn, Body::Saturn, 42.0),
-    (Graha::Jupiter, Body::Jupiter, 42.0),
-    (Graha::Mars, Body::Mars, 12.0),
-    (Graha::Mercury, Body::Mercury, 4.0),
-    (Graha::Venus, Body::Venus, 6.0),
-    (Graha::Sun, Body::Sun, 4.0),
-    (Graha::Moon, Body::Moon, 0.5),
-    (Graha::Rahu, Body::TrueNode, 10.0),
-    (Graha::Ketu, Body::TrueSouthNode, 10.0),
+/// (graha, body serving it, years from 2001-01-01, the most the range may read
+/// the callback as a fraction of the one-day walk, where that is measured)
+const CASES: [(Graha, Body, f64, Option<f64>); 9] = [
+    (Graha::Saturn, Body::Saturn, 42.0, Some(0.09)),
+    (Graha::Jupiter, Body::Jupiter, 42.0, Some(0.17)),
+    (Graha::Mars, Body::Mars, 12.0, Some(0.38)),
+    (Graha::Mercury, Body::Mercury, 4.0, None),
+    (Graha::Venus, Body::Venus, 6.0, None),
+    (Graha::Sun, Body::Sun, 4.0, None),
+    (Graha::Moon, Body::Moon, 0.5, None),
+    (Graha::Rahu, Body::TrueNode, 10.0, None),
+    (Graha::Ketu, Body::TrueSouthNode, 10.0, None),
 ];
 
+/// The range form against the walk it replaces, entry for entry, and what it
+/// costs: the reads of the callback, which are the cost the range form exists
+/// to cut (the one-day walk reads once a day; the range form once per whole-day
+/// step the speed bound allows).
 #[test]
-fn the_range_is_the_reseeded_walk_entry_for_entry() {
+fn the_range_is_the_reseeded_walk_entry_for_entry_and_reads_less() {
     let p = AnalyticalProvider::new();
     let from = jd(2001, 1, 1, 0.0);
-    for (graha, body, years) in CASES {
-        let to = from + years * 365.25;
-        let f = |t: f64| longitude_and_rate(&p, body, t);
-        let walk = reseeded_walk(graha, &f, from, to);
-        let range = graha_ingresses(from, to, graha, AYAN, &f);
-        assert!(
-            !walk.is_empty(),
-            "{graha:?}: the span holds no ingress, nothing is tested"
-        );
-        assert_eq!(range.len(), walk.len(), "{graha:?}: number of entries");
-        let mut worst = 0.0_f64;
-        for (a, b) in range.iter().zip(&walk) {
-            assert_eq!(a.1, b.1, "{graha:?}: rashi entered at {}", a.0);
-            worst = worst.max((a.0 - b.0).abs());
-        }
-        println!(
-            "{graha:?}: {} entries, worst difference {worst:e} d",
-            walk.len()
-        );
-        // The refinement stops within 1e-6 deg of the edge, at most
-        // 2e-6 deg between two answers. At the daily motion at the crossing
-        // that is a time; a station next to an edge only widens it.
-        for (a, b) in range.iter().zip(&walk) {
-            let rate = f(a.0).unwrap().1.abs().max(0.01);
-            assert!(
-                (a.0 - b.0).abs() * rate <= 2.0e-6,
-                "{graha:?}: {} vs {} ({} s)",
-                a.0,
-                b.0,
-                (a.0 - b.0) * 86_400.0
-            );
-        }
-    }
-}
-
-/// Reads of the position callback, the cost the range form exists to cut: the
-/// one-day walk reads once a day, the range form once per whole-day step the
-/// speed bound allows.
-#[test]
-fn the_range_reads_the_callback_a_fraction_as_often() {
-    let p = AnalyticalProvider::new();
-    let from = jd(2001, 1, 1, 0.0);
-    for (graha, body, years, at_most) in [
-        (Graha::Saturn, Body::Saturn, 42.0, 0.09),
-        (Graha::Jupiter, Body::Jupiter, 42.0, 0.17),
-        (Graha::Mars, Body::Mars, 12.0, 0.38),
-    ] {
+    for (graha, body, years, at_most) in CASES {
         let to = from + years * 365.25;
         let reads = AtomicUsize::new(0);
         let f = |t: f64| {
@@ -129,16 +88,40 @@ fn the_range_reads_the_callback_a_fraction_as_often() {
         let walk_reads = reads.swap(0, Ordering::Relaxed);
         let range = graha_ingresses(from, to, graha, AYAN, &f);
         let range_reads = reads.load(Ordering::Relaxed);
-        assert_eq!(range.len(), walk.len());
+        assert!(
+            !walk.is_empty(),
+            "{graha:?}: the span holds no ingress, nothing is tested"
+        );
+        assert_eq!(range.len(), walk.len(), "{graha:?}: number of entries");
+        let mut worst = 0.0_f64;
+        for (a, b) in range.iter().zip(&walk) {
+            assert_eq!(a.1, b.1, "{graha:?}: rashi entered at {}", a.0);
+            worst = worst.max((a.0 - b.0).abs());
+        }
         let ratio = range_reads as f64 / walk_reads as f64;
         println!(
-            "{graha:?}: {} entries, {walk_reads} reads one day at a time, {range_reads} by the range: {ratio:.3}",
+            "{graha:?}: {} entries, worst difference {worst:e} d, {walk_reads} reads one day at a time, {range_reads} by the range: {ratio:.3}",
             walk.len()
         );
-        assert!(
-            ratio <= at_most,
-            "{graha:?}: {ratio:.3} of the walk's reads, expected under {at_most}"
-        );
+        // The refinement stops within 1e-6 deg of the edge, so two answers are
+        // at most 2e-6 deg apart; at the daily motion at the crossing that is a
+        // time (a station next to an edge only widens it).
+        for (a, b) in range.iter().zip(&walk) {
+            let rate = f(a.0).unwrap().1.abs().max(0.01);
+            assert!(
+                (a.0 - b.0).abs() * rate <= 2.0e-6,
+                "{graha:?}: {} vs {} ({} s)",
+                a.0,
+                b.0,
+                (a.0 - b.0) * 86_400.0
+            );
+        }
+        if let Some(at_most) = at_most {
+            assert!(
+                ratio <= at_most,
+                "{graha:?}: {ratio:.3} of the walk's reads, expected under {at_most}"
+            );
+        }
     }
 }
 
