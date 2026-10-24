@@ -19,13 +19,15 @@
 //!   dasha, starts from the stronger of the lagna (*sthula*, the first) and
 //!   the seventh (*adarsha*, the facing), goes by trikona groups in a
 //!   four-fold round, and has its direction from odd and even
-//!   (*vaishamya-ashraya*). The critical edition's commentary spells the
-//!   shape: the lagna, fifth and ninth, then the second, sixth and tenth,
-//!   then the third, seventh and eleventh, then the fourth, eighth and
-//!   twelfth. Grade (a) for years, anchor and groups; (b) for the direction,
-//!   which the commentary derives from "odd and even" without spelling the
-//!   even case, so an even anchor mirrors the whole figure (the fifth and
-//!   ninth are then counted backward).
+//!   (*vaishamya-ashraya*). The Sanskrit commentary says only "trikona after
+//!   trikona, in four ways"; the critical edition's English spells the shape
+//!   as the lagna, fifth and ninth, then the second, sixth and tenth, then
+//!   the third, seventh and eleventh, then the fourth, eighth and twelfth,
+//!   which is what [`ShoolaOrder::TrikonaGroups`] runs. Grade (a) for years
+//!   and anchor; (b) for the group order and the direction: the example is
+//!   the editor's, and "odd and even" is not spelled out for the even case,
+//!   so an even anchor mirrors the whole figure (the fifth and ninth are then
+//!   counted backward).
 //! - **2.4.16**, *niryana-labha-adih shoola-dasha phale*: the shoola dasha is
 //!   this same figure ("like the manduka-trikuta", in the four-fold round of
 //!   trikona groups) made for the result of death, and begins, per the
@@ -52,8 +54,8 @@
 //!   brother, and not for the other two, which the same pattern implies.
 //! - **2.2.1 to 2.2.11** instead name the parents' karakas (the stronger of
 //!   Surya and Shukra for the father, of Chandra and Mangala for the mother,
-//!   Guru for a wife, the respective karaka for others) and have the death in the
-//!   trikona dashas of the rashi that karaka occupies. That is
+//!   Guru for a wife, the respective karaka for others) and have the death in
+//!   the trikona dashas of the rashi that karaka occupies. That is
 //!   [`ShoolaAnchor::Explicit`] with the karaka's rashi, which the caller
 //!   picks (the stronger-of-two choice is [`Strength::stronger_graha`]).
 //!

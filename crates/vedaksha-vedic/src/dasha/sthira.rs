@@ -30,20 +30,20 @@
 //!   states a direction in words. Grade (c) for every option:
 //!   [`SthiraDirection::AnchorParity`] (the default) takes forward from an
 //!   odd anchor and in reverse from an even one. It is what the same chapter
-//!   states, in so many words, for each of the dashas it describes as having
-//!   "years as in sthira" (BPHS 46.180 for mandooka, 46.182 for shoola,
-//!   46.184 for trikona, and 46.174 for yogardha), what the English of the
-//!   recension reads into 46.169, and what the critical edition's commentary
-//!   gives for every antardasha series (2.3.1 and 2.3.2). The other options
-//!   are rules in circulation: chara's vishama-pada test at the ninth from
-//!   the lagna (2.3.32, read with 2.3.33 as the chara dasha's own rule), the modality of the
-//!   anchor (forward from a movable or dual rashi, reverse from a fixed
-//!   one), and an explicit direction.
+//!   states, in so many words, for the mandooka and shoola dashas, both with
+//!   years as in sthira (BPHS 46.180 and 46.182), and for the trikona dasha
+//!   (46.184); what the English of the recension reads into 46.169 itself;
+//!   and what the critical edition's commentary reports commentators giving
+//!   for every antardasha series (2.3.1 and 2.3.2). The other options are
+//!   rules in circulation: chara's vishama-pada test at the ninth from the
+//!   lagna (2.3.32, read with 2.3.33 as the chara dasha's own rule), the
+//!   modality of the anchor (forward from a movable or dual rashi, reverse
+//!   from a fixed one), and an explicit direction.
 //! - **Antardashas.** BPHS 51.5 to 51.9 give the antar rule, and slokas 11 and
 //!   12 of the same chapter, on the paka and bhoga rashis, name "the chara
 //!   paryaya, the sthira paryaya and the trikona dasha" as the dashas it
-//!   covers; so the defaults of [`super::rashi_antar`] apply. Grade (a) for the rule,
-//!   (c) for the proportional-length alternative.
+//!   covers; so the defaults of [`super::rashi_antar`] apply. Grade (a) for
+//!   the rule, (c) for the proportional-length alternative.
 //!
 //! # The Brahma graha (Jaimini 2.1.52 to 2.1.57; BPHS 46.170 to 173)
 //!
