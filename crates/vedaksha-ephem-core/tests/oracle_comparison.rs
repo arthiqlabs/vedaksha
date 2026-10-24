@@ -104,17 +104,23 @@ struct OracleDataPoint {
 /// ΔT prediction, and is gone with the mismatch that produced it.
 const MEASURED_DT_JD: f64 = 2_461_041.5;
 
-/// Per-point ceiling over the measured-ΔT era. Observed max is 0.501″: the Moon
-/// in 1906, where Horizons' pre-1962 ΔT (Stephenson, Morrison & Hohenkerk 2016)
-/// sits about 1 s above the USNO series `delta_t.rs` uses, and the Moon moves
-/// 0.55″ per second of time. Without the Moon the worst point is 0.266″
-/// (Mercury). It was 1.187″ (Uranus, 0.36° from the Sun) until the Sun's light
-/// deflection was added to the pipeline, and the old 2.0″ ceiling would not have
-/// noticed that coming back; 0.6″ would.
-const MEASURED_MAX_ARCSEC: f64 = 0.6;
+/// Per-point ceiling over the measured-ΔT era. Observed max is 0.272″: the Moon
+/// at 1962-01-06, one of the 19 days between 1962-01-01, where the engine hands
+/// over from the SMH2016 spline to the IERS-based USNO rows, and 1962-01-20, where
+/// Horizons does; across that handover the two series differ by 0.371 s, which is
+/// 0.2″ of Moon (`delta_t.rs`, "The joins"). Without that row the worst point is
+/// 0.251″ (Pluto), and the Moon's worst is 0.225″ (1900-05-31), the same as
+/// every other body's, which is the frame offset of 1900. It was 1.187″ (Uranus, 0.36° from
+/// the Sun) until the Sun's light deflection was added to the pipeline, and the old
+/// 2.0″ ceiling would not have noticed that coming back; 0.35″, 28 percent over the
+/// observed, would.
+const MEASURED_MAX_ARCSEC: f64 = 0.35;
 
-/// Mean ceiling over the measured-ΔT era. Observed mean is 0.099″.
-const MEASURED_MEAN_ARCSEC: f64 = 0.15;
+/// Mean ceiling over the measured-ΔT era. Observed mean is 0.096″; 0.12″ is 25
+/// percent over it. Most of it is a frame offset before 1962 (0.14″, the
+/// difference between IAU 2006 / 2000 and Horizons' IAU 1976 / 1980 conventions)
+/// and the same after (0.05″).
+const MEASURED_MEAN_ARCSEC: f64 = 0.12;
 
 /// Per-point ceiling over the measured-ΔT era from 1962-01-20 (UTC tags, converted
 /// with the leap-second count). Observed max is 0.062″ (Pluto): a frame offset of
