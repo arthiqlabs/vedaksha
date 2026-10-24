@@ -150,16 +150,49 @@ pub fn moon_equatorial(
     provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
     jd_ut: f64,
 ) -> Option<(f64, f64, f64)> {
-    use vedaksha_ephem_core::{bodies::Body, coordinates, delta_t, jpl::AU_KM};
+    use vedaksha_ephem_core::{bodies::Body, coordinates};
 
     let pos = coordinates::ecliptic_position(provider, Body::Moon, jd_ut).ok()?;
+    Some(moon_equatorial_of(&pos, jd_ut))
+}
+
+/// [`moon_equatorial`] with the Moon's apparent place read from `walk`, a
+/// [`BodyWalk::moon`](vedaksha_ephem_core::walk::BodyWalk::moon) on `provider`,
+/// instead of computed. Sixty days of moonrise and moonset ask for about fifty
+/// reads a day; measured on the analytical provider this makes a sixteenth of
+/// the provider calls, and every rise, set and transit comes out within 0.1 ms
+/// (two Julian Day quanta) of the direct search. The true obliquity of date is
+/// still computed per read.
+///
+/// A time outside the walk's span is read from `provider` directly, which is
+/// [`moon_equatorial`] itself.
+#[must_use]
+pub fn moon_equatorial_walked(
+    walk: &vedaksha_ephem_core::walk::BodyWalk<'_>,
+    provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
+    jd_ut: f64,
+) -> Option<(f64, f64, f64)> {
+    match walk.ecliptic(jd_ut) {
+        Some(pos) => Some(moon_equatorial_of(&pos, jd_ut)),
+        None => moon_equatorial(provider, jd_ut),
+    }
+}
+
+/// `(right_ascension_deg, declination_deg, distance_km)` of an apparent
+/// ecliptic position by the true obliquity of date.
+fn moon_equatorial_of(
+    pos: &vedaksha_ephem_core::coordinates::EclipticCoords,
+    jd_ut: f64,
+) -> (f64, f64, f64) {
+    use vedaksha_ephem_core::{coordinates, delta_t, jpl::AU_KM};
+
     let eps = coordinates::frame_for(delta_t::ut1_to_tt(jd_ut)).true_obliquity();
     let (ra, dec) = coordinates::ecliptic_to_equatorial_deg(
         pos.longitude.to_degrees(),
         pos.latitude.to_degrees(),
         eps.to_degrees(),
     );
-    Some((ra, dec, pos.distance * AU_KM))
+    (ra, dec, pos.distance * AU_KM)
 }
 
 /// Moonrise, moonset and the Moon's upper-meridian transit in the 24 hours
@@ -723,5 +756,37 @@ mod tests {
             "worst day took {} Moon evaluations",
             tally.max_calls
         );
+    }
+
+    /// `moon_equatorial_walked` is `moon_equatorial` with the Moon's place read
+    /// from a walk: the same to 1e-6 degree and 0.1 m inside the span, and to
+    /// the bit outside it, where it reads the provider.
+    #[test]
+    fn the_walked_moon_is_the_provider_moon_inside_and_outside_the_span() {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::walk::BodyWalk;
+
+        let provider = AnalyticalProvider::new();
+        let (lo, hi) = (2_460_000.0, 2_460_040.0);
+        let walk = BodyWalk::moon(&provider, lo, hi);
+        let (mut angle, mut metres) = (0.0_f64, 0.0_f64);
+        for k in 0..=160 {
+            let jd = lo + 0.25 * f64::from(k);
+            let (ra, dec, km) = moon_equatorial_walked(&walk, &provider, jd).unwrap();
+            let (want_ra, want_dec, want_km) = moon_equatorial(&provider, jd).unwrap();
+            angle = angle
+                .max(normalize_degrees_signed(ra - want_ra).abs())
+                .max((dec - want_dec).abs());
+            metres = metres.max((km - want_km).abs() * 1000.0);
+        }
+        assert!(angle < 1.0e-6, "walked Moon off by {angle:e} degree");
+        assert!(metres < 0.1, "walked Moon distance off by {metres} m");
+        assert!(angle > 0.0, "the walk was never used");
+        for jd in [lo - 3.3, hi + 9.1] {
+            assert_eq!(
+                moon_equatorial_walked(&walk, &provider, jd),
+                moon_equatorial(&provider, jd)
+            );
+        }
     }
 }

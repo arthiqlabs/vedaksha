@@ -24,9 +24,12 @@
 //! Fitting a segment costs `nodes` calls of
 //! [`ecliptic_position`](crate::coordinates::ecliptic_position). A walk pays
 //! off when it is asked about more than `nodes` times per segment: for the
-//! default Moon walk, more than three times a day on average. A scan that
-//! samples the Moon once a day, and never again, costs more through a walk than
-//! directly. The break-even for the usual search shapes (an hourly bracket scan,
+//! default Moon walk, more than three times a day on average when each ask
+//! would be one `ecliptic_position`, and more than about once a day when each
+//! would be an [`apparent_position`](crate::coordinates::apparent_position),
+//! which is three of them (measured: a Moon ingress scan at 1.9 asks a day makes
+//! a quarter of the provider calls through a walk). A scan that samples the
+//! Moon once a day, and never again, costs more through a walk than directly. The break-even for the usual search shapes (an hourly bracket scan,
 //! then bisection to the second) is a factor of several in the walk's favour.
 //!
 //! # Accuracy
@@ -59,14 +62,36 @@
 //! direct call's treatment of Delta T exactly, steps included, whatever the
 //! table does.
 //!
+//! # Threads
+//!
+//! A walk is `Send + Sync`: the provider is `&(dyn EphemerisProvider + Sync)`
+//! and each segment is a [`OnceLock`], so a closure over a walk is the
+//! `Fn + Sync` callback the scans of `vedaksha-astro` and `vedaksha-vedic`
+//! take, and threads asking for different segments fit them in parallel. Two
+//! threads asking for the same unfitted segment fit it once; the second waits.
+//!
+//! # Why not the planets
+//!
+//! The Moon and the Sun are smooth functions of time at the bound above. The
+//! planets are not, near their conjunctions with the Sun:
+//! [`solar_deflection`](crate::deflection::solar_deflection) returns zero when
+//! the straight ray from the planet to the observer crosses the Sun's disc, so
+//! the apparent longitude steps where the planet's elongation crosses the
+//! Sun's limb (Jupiter, JD 2454457.49435 TT: 1.089 arcsec between two samples
+//! 1e-7 day apart, at an elongation of 0.2709 degree). No polynomial follows a
+//! step, and a shorter segment or more nodes do not shrink it: the segment that
+//! holds one is off by the step. The Moon and the Sun are not deflected and
+//! have none. Do not build a walk for a planet; the segment tests below that
+//! use planets pick instants away from a disc crossing.
+//!
 //! # Determinism
 //!
 //! Segments sit on a fixed grid (`J2000 + i · segment_days`, in TT) and are
 //! fitted at fixed nodes, so the answer at a time does not depend on the span
 //! the walk was created for, nor on the order times are asked in.
 
-use core::cell::OnceCell;
 use core::f64::consts::{PI, TAU};
+use std::sync::OnceLock;
 
 use crate::bodies::Body;
 use crate::chebyshev::Chebyshev;
@@ -105,7 +130,7 @@ type Segment = Chebyshev<3>;
 /// Apparent ecliptic coordinates of one body, interpolated from short fitted
 /// segments. See the [module documentation](self).
 pub struct BodyWalk<'p> {
-    provider: &'p dyn EphemerisProvider,
+    provider: &'p (dyn EphemerisProvider + Sync),
     body: Body,
     spec: WalkSpec,
     /// The span asked for, in UT1.
@@ -114,7 +139,7 @@ pub struct BodyWalk<'p> {
     /// Index (on the global TT grid) of `segments[0]`.
     first_index: i64,
     /// `None` inside the cell means the provider could not supply a node.
-    segments: Vec<OnceCell<Option<Segment>>>,
+    segments: Vec<OnceLock<Option<Segment>>>,
 }
 
 impl<'p> BodyWalk<'p> {
@@ -142,7 +167,11 @@ impl<'p> BodyWalk<'p> {
     ///
     /// If `jd_ut_end < jd_ut_start`.
     #[must_use]
-    pub fn moon(provider: &'p dyn EphemerisProvider, jd_ut_start: f64, jd_ut_end: f64) -> Self {
+    pub fn moon(
+        provider: &'p (dyn EphemerisProvider + Sync),
+        jd_ut_start: f64,
+        jd_ut_end: f64,
+    ) -> Self {
         Self::with_spec(provider, Body::Moon, jd_ut_start, jd_ut_end, WalkSpec::MOON)
     }
 
@@ -158,7 +187,7 @@ impl<'p> BodyWalk<'p> {
     /// If `jd_ut_end < jd_ut_start`, `spec.days <= 0` or `spec.nodes < 2`.
     #[must_use]
     pub fn with_spec(
-        provider: &'p dyn EphemerisProvider,
+        provider: &'p (dyn EphemerisProvider + Sync),
         body: Body,
         jd_ut_start: f64,
         jd_ut_end: f64,
@@ -176,7 +205,7 @@ impl<'p> BodyWalk<'p> {
             start: jd_ut_start,
             end: jd_ut_end,
             first_index,
-            segments: (0..count).map(|_| OnceCell::new()).collect(),
+            segments: (0..count).map(|_| OnceLock::new()).collect(),
         }
     }
 
@@ -555,8 +584,24 @@ mod tests {
         );
     }
 
+    /// Elongation from the Sun in degrees, from the exact apparent places.
+    fn elongation_deg(exact: &dyn EphemerisProvider, body: Body, jd: f64) -> f64 {
+        let a = ecliptic_position(exact, body, jd).unwrap();
+        let s = ecliptic_position(exact, Body::Sun, jd).unwrap();
+        let cos = a.latitude.sin() * s.latitude.sin()
+            + a.latitude.cos() * s.latitude.cos() * (a.longitude - s.longitude).cos();
+        cos.clamp(-1.0, 1.0).acos().to_degrees()
+    }
+
     /// A walk is not special to the Moon or to the exact-series provider: a
     /// planet with longer segments, and the Chebyshev provider underneath.
+    ///
+    /// The planet is only asked about where it stands well away from the Sun.
+    /// Close to a conjunction the Sun's light deflection peaks as `1 / elongation`
+    /// (and switches off across the Sun's disc, see
+    /// `a_planet_walk_misses_the_step_where_the_sun_deflection_switches_off`), a
+    /// shape 12 nodes over 8 days do not hold: Saturn at 2459236.9, three days
+    /// before its conjunction, is off by 4e-3 arcsec.
     #[test]
     fn other_bodies_and_other_providers_work() {
         let exact = AnalyticalProvider::new();
@@ -571,14 +616,148 @@ mod tests {
         for body in [Body::Mars, Body::Saturn, Body::Sun] {
             let walk = BodyWalk::with_spec(&fitted, body, 2_455_000.0, 2_465_000.0, spec);
             let mut worst = 0.0_f64;
-            for jd in instants(0x0B0D, 80, 2_455_000.0, 2_465_000.0) {
+            let mut asked = 0;
+            for jd in instants(0x0B0D, 120, 2_455_000.0, 2_465_000.0) {
+                // A segment is 8 days, 8 days of the fastest planet is 12 degrees.
+                if body != Body::Sun
+                    && (elongation_deg(&exact, body, jd - 8.0) < 30.0
+                        || elongation_deg(&exact, body, jd) < 30.0
+                        || elongation_deg(&exact, body, jd + 8.0) < 30.0)
+                {
+                    continue;
+                }
                 let want = ecliptic_position(&exact, body, jd).unwrap();
                 let got = walk.ecliptic(jd).unwrap();
                 worst = worst.max(wrapped_arcsec(want.longitude, got.longitude));
+                asked += 1;
             }
-            println!("{body:?} through the Chebyshev provider: {worst:.2e} arcsec");
+            println!(
+                "{body:?} through the Chebyshev provider: {worst:.2e} arcsec, {asked} instants"
+            );
+            assert!(
+                asked >= 50,
+                "{body:?}: only {asked} instants away from the Sun"
+            );
             assert!(worst < 5e-5, "{body:?} off by {worst:e} arcsec");
         }
+    }
+
+    /// Why the planets are not walked. `solar_deflection` returns zero when the
+    /// straight ray crosses the Sun's disc, so Jupiter's apparent longitude
+    /// steps by about 1.09 arcsec where its elongation crosses the Sun's limb
+    /// (2454457.49435 TT, 0.2709 degree). The walk's segment holding it is off
+    /// by the step, at every node count and segment size.
+    #[test]
+    fn a_planet_walk_misses_the_step_where_the_sun_deflection_switches_off() {
+        use crate::coordinates::ecliptic_position_tt;
+        use crate::delta_t::tt_to_ut1;
+
+        let provider = AnalyticalProvider::new();
+        let step_tt = 2_454_457.494_347_5;
+        let lon = |jd_tt: f64| {
+            ecliptic_position_tt(&provider, Body::Jupiter, jd_tt)
+                .unwrap()
+                .longitude
+        };
+        // The step itself: the longitude falls by about an arcsecond across 4e-6
+        // day, where it moves 3e-3 arcsec.
+        let drop = (lon(step_tt - 2.0e-6) - lon(step_tt + 2.0e-6)) * ARCSEC;
+        assert!(
+            (0.9..1.3).contains(&drop),
+            "no step of about 1.09 arcsec at {step_tt}: {drop}"
+        );
+
+        let around = tt_to_ut1(step_tt);
+        for spec in [
+            WalkSpec {
+                days: 8.0,
+                nodes: 12,
+            },
+            WalkSpec {
+                days: 2.0,
+                nodes: 16,
+            },
+        ] {
+            let walk =
+                BodyWalk::with_spec(&provider, Body::Jupiter, around - 20.0, around + 20.0, spec);
+            let mut worst = 0.0_f64;
+            for k in -40..=40 {
+                let jd_tt = step_tt + f64::from(k) * 0.01;
+                let want = lon(jd_tt);
+                let got = walk.ecliptic_tt(jd_tt).unwrap().longitude;
+                worst = worst.max(wrapped_arcsec(want, got));
+            }
+            assert!(
+                worst > 0.3,
+                "{spec:?}: the walk followed a step it cannot (worst {worst} arcsec)"
+            );
+            // Away from it, a few segments off, the same walk is as good as ever.
+            let far = (-20..=-10).chain(10..=20).map(|d| {
+                let jd_tt = step_tt + f64::from(d);
+                wrapped_arcsec(lon(jd_tt), walk.ecliptic_tt(jd_tt).unwrap().longitude)
+            });
+            let far = far.fold(0.0_f64, f64::max);
+            assert!(far < 1.0e-3, "{spec:?}: {far} arcsec away from the step");
+        }
+    }
+
+    /// The walk is shared between threads: that is what lets a closure over it
+    /// be the `Fn + Sync` callback the scans take.
+    #[test]
+    fn a_walk_is_send_and_sync() {
+        fn both<T: Send + Sync>() {}
+        both::<BodyWalk<'static>>();
+    }
+
+    /// Threads asking for the same segments, in different orders, get the bits a
+    /// single thread gets, and no segment is fitted twice.
+    #[test]
+    fn threads_sharing_a_walk_agree_with_one_thread() {
+        let provider = AnalyticalProvider::new();
+        let (lo, hi) = (2_460_000.0, 2_460_200.0);
+        let jds = instants(0x7EAD, 400, lo, hi);
+        let alone = BodyWalk::moon(&provider, lo, hi);
+        let want: Vec<[u64; 2]> = jds
+            .iter()
+            .map(|&jd| {
+                [
+                    alone.longitude(jd).unwrap().to_bits(),
+                    alone.longitude_speed(jd).unwrap().to_bits(),
+                ]
+            })
+            .collect();
+
+        let shared = BodyWalk::moon(&provider, lo, hi);
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = (0..6)
+                .map(|t| {
+                    let (shared, jds, want) = (&shared, &jds, &want);
+                    scope.spawn(move || {
+                        // Each thread walks the same instants in its own order.
+                        let mut order: Vec<usize> = (0..jds.len()).collect();
+                        order.rotate_left(t * 61);
+                        if t % 2 == 1 {
+                            order.reverse();
+                        }
+                        for i in order {
+                            let got = [
+                                shared.longitude(jds[i]).unwrap().to_bits(),
+                                shared.longitude_speed(jds[i]).unwrap().to_bits(),
+                            ];
+                            assert_eq!(got, want[i], "thread {t}, jd {}", jds[i]);
+                        }
+                    })
+                })
+                .collect();
+            for h in handles {
+                h.join().unwrap();
+            }
+        });
+        assert_eq!(
+            shared.segments_fitted(),
+            alone.segments_fitted(),
+            "the same segments were fitted"
+        );
     }
 
     #[test]

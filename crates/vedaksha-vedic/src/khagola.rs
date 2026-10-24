@@ -26,6 +26,16 @@
 //! here. [`crate::muhurta::refine_crossing`] is the shared longitude solver
 //! — this module brackets, it refines.
 //!
+//! A scan that reads the Moon or the Sun many times over a span (the Moon's
+//! ingresses at a few reads a day, an eclipse search at fourteen) can take its
+//! callbacks from [`crate::walked::WalkedSky`]: on the analytical provider it
+//! makes 4 to 23 times fewer provider calls and the ingresses and the eclipse
+//! contacts come out within 0.1 ms of the direct callbacks'. The eclipse's
+//! `madhya` does not: it is a ternary-search minimum and moves by 5 to 12 ms
+//! between two callbacks that agree to 1e-8 degree. The planets (the solar
+//! disc's step in the light deflection) and [`stations`] (the rate is the
+//! answer) are not served from a walk.
+//!
 //! # Frames and approximations (read before citing a result)
 //!
 //! - Altitudes use MEAN equinox LST (`gmst` + longitude): nutation (±1")
@@ -127,7 +137,7 @@ fn rashi_idx(lon_deg: f64) -> u8 {
 /// (angle, rate) adapter over a position-only callback, rate by central
 /// difference (h = 0.002 d ≈ 3 min), branch-cut unwrapped. For the smooth
 /// scanning angles here (Sun, Moon, elongation) the truncation error is
-/// ~1e-7 °/day — far below the 1e-6° refinement stop.
+/// ~1e-7 °/day — and the rate only steers the refinement, never sets its root.
 fn numeric_angle_rate(pos: &(dyn Fn(f64) -> Option<f64> + Sync), t: f64) -> Option<(f64, f64)> {
     let h = 0.002;
     let (a0, a1) = (pos(t - h)?, pos(t + h)?);
@@ -472,7 +482,8 @@ pub const fn ingress_speed_bound_deg_per_day(graha: Graha) -> f64 {
 /// refine from the same one, so they agree to the bit (`tests/khagola_ingress.rs`
 /// walks nine spans of 6 months to 10 years across every graha and finds no
 /// difference);
-/// at worst they differ by the refinement's own 1e-6 degree. The cost differs: where [`graha_ingress`] reads the callback once a day, this
+/// at worst they differ by the refinement's own resolution, about 0.1 ms. The cost
+/// differs: where [`graha_ingress`] reads the callback once a day, this
 /// steps as many whole days as the nearer rashi edge is away at the graha's
 /// speed bound ([`ingress_speed_bound_deg_per_day`]), and reads it daily only
 /// within a day's travel of an edge. Measured on this crate's analytical

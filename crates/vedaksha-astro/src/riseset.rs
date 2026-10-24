@@ -1080,10 +1080,42 @@ pub fn sun_equatorial_deg(
     provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
     jd_ut: f64,
 ) -> Option<(f64, f64)> {
-    use vedaksha_ephem_core::{bodies::Body, coordinates, delta_t, obliquity};
+    use vedaksha_ephem_core::{bodies::Body, coordinates};
 
     let pos = coordinates::ecliptic_position(provider, Body::Sun, jd_ut).ok()?;
-    let (lambda, beta) = (pos.longitude, pos.latitude);
+    Some(sun_equatorial_of(pos.longitude, pos.latitude, jd_ut))
+}
+
+/// [`sun_equatorial_deg`] with the Sun's apparent place read from `walk`, a
+/// [`BodyWalk`](vedaksha_ephem_core::walk::BodyWalk) of the Sun, instead of
+/// computed: the same closure for [`rise_set`] and [`sun_rise_set`] at the cost
+/// of a polynomial per read. A year of daily sunrises asks for about fifteen
+/// reads a day; measured on the analytical provider it makes a tenth of the
+/// provider calls, and sunrise, sunset and transit come out to the bit.
+///
+/// The walk must be of [`Body::Sun`](vedaksha_ephem_core::bodies::Body::Sun) on
+/// `provider`, with segments the Sun's apparent place is smooth on (8 days and
+/// 12 nodes is off by 1e-7 arcsec; see
+/// `vedaksha_vedic::walked::WalkedSky::SUN_LONGITUDE_ERROR_ARCSEC`). A time
+/// outside the walk's span is read from `provider` directly, which is
+/// [`sun_equatorial_deg`] itself.
+#[must_use]
+pub fn sun_equatorial_deg_walked(
+    walk: &vedaksha_ephem_core::walk::BodyWalk<'_>,
+    provider: &dyn vedaksha_ephem_core::jpl::EphemerisProvider,
+    jd_ut: f64,
+) -> Option<(f64, f64)> {
+    match walk.ecliptic(jd_ut) {
+        Some(pos) => Some(sun_equatorial_of(pos.longitude, pos.latitude, jd_ut)),
+        None => sun_equatorial_deg(provider, jd_ut),
+    }
+}
+
+/// The Sun's `(right_ascension, declination)` in degrees from its apparent
+/// ecliptic longitude and latitude in radians, by the mean obliquity at `jd_ut`.
+fn sun_equatorial_of(lambda: f64, beta: f64, jd_ut: f64) -> (f64, f64) {
+    use vedaksha_ephem_core::{delta_t, obliquity};
+
     let jd_tt = delta_t::ut1_to_tt(jd_ut);
     let eps = obliquity::mean_obliquity(jd_tt);
 
@@ -1095,7 +1127,7 @@ pub fn sun_equatorial_deg(
         libm::cos(lambda),
     );
 
-    Some((normalize_degrees(rad_to_deg(ra)), rad_to_deg(dec)))
+    (normalize_degrees(rad_to_deg(ra)), rad_to_deg(dec))
 }
 
 /// [`rise_set`] specialised to the Sun: applies the standard −0°50′ altitude
@@ -4509,5 +4541,40 @@ mod tests {
              limit and its derivation rather than leaving a claim standing that the \
              measurement no longer supports"
         );
+    }
+
+    /// `sun_equatorial_deg_walked` is `sun_equatorial_deg` with the Sun's place
+    /// read from a walk: the same to 1e-6 degree inside the span, and to the bit
+    /// outside it, where it reads the provider.
+    #[test]
+    fn the_walked_sun_is_the_provider_sun_inside_and_outside_the_span() {
+        use vedaksha_ephem_core::analytical::AnalyticalProvider;
+        use vedaksha_ephem_core::bodies::Body;
+        use vedaksha_ephem_core::walk::{BodyWalk, WalkSpec};
+
+        let provider = AnalyticalProvider::new();
+        let (lo, hi) = (2_460_000.0, 2_460_040.0);
+        let spec = WalkSpec {
+            days: 8.0,
+            nodes: 12,
+        };
+        let walk = BodyWalk::with_spec(&provider, Body::Sun, lo, hi, spec);
+        let mut worst = 0.0_f64;
+        for k in 0..=80 {
+            let jd = lo + 0.5 * f64::from(k);
+            let (ra, dec) = sun_equatorial_deg_walked(&walk, &provider, jd).unwrap();
+            let (want_ra, want_dec) = sun_equatorial_deg(&provider, jd).unwrap();
+            worst = worst
+                .max(normalize_degrees_signed(ra - want_ra).abs())
+                .max((dec - want_dec).abs());
+        }
+        assert!(worst < 1.0e-6, "walked Sun off by {worst:e} degree");
+        assert!(worst > 0.0, "the walk was never used: {worst}");
+        for jd in [lo - 3.3, hi + 9.1] {
+            assert_eq!(
+                sun_equatorial_deg_walked(&walk, &provider, jd),
+                sun_equatorial_deg(&provider, jd)
+            );
+        }
     }
 }

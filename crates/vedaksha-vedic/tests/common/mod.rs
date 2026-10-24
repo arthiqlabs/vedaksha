@@ -9,12 +9,16 @@
 
 #![allow(dead_code)]
 
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+use vedaksha_ephem_core::analytical::AnalyticalProvider;
 use vedaksha_ephem_core::bodies::Body;
 use vedaksha_ephem_core::coordinates::{
     apparent_position, apparent_positions, ecliptic_to_equatorial_deg, frame_for,
 };
 use vedaksha_ephem_core::delta_t;
-use vedaksha_ephem_core::jpl::EphemerisProvider;
+use vedaksha_ephem_core::error::ComputeError;
+use vedaksha_ephem_core::jpl::{EphemerisProvider, Position, StateVector};
 use vedaksha_vedic::khagola::{LunarGeometry, SolarGeometry};
 
 /// Julian Day of a Gregorian calendar date and fractional hours (Meeus Ch. 7).
@@ -98,4 +102,54 @@ pub fn equatorial(
         a.ecliptic.latitude.to_degrees(),
         eps,
     ))
+}
+
+/// `AnalyticalProvider`, counting every call that reaches it: the instrument for
+/// "how many provider calls did this scan make".
+pub struct Counting {
+    pub state: AtomicU64,
+    pub earth: AtomicU64,
+    pub moon_position: AtomicU64,
+    pub moon_distance: AtomicU64,
+}
+
+impl Counting {
+    pub const fn new() -> Self {
+        Self {
+            state: AtomicU64::new(0),
+            earth: AtomicU64::new(0),
+            moon_position: AtomicU64::new(0),
+            moon_distance: AtomicU64::new(0),
+        }
+    }
+
+    /// Every call so far, of any kind.
+    pub fn total(&self) -> u64 {
+        self.state.load(Relaxed)
+            + self.earth.load(Relaxed)
+            + self.moon_position.load(Relaxed)
+            + self.moon_distance.load(Relaxed)
+    }
+}
+
+impl EphemerisProvider for Counting {
+    fn compute_state(&self, body: Body, jd: f64) -> Result<StateVector, ComputeError> {
+        self.state.fetch_add(1, Relaxed);
+        AnalyticalProvider.compute_state(body, jd)
+    }
+    fn earth_state(&self, jd: f64) -> Result<StateVector, ComputeError> {
+        self.earth.fetch_add(1, Relaxed);
+        AnalyticalProvider.earth_state(jd)
+    }
+    fn moon_position(&self, jd: f64) -> Result<Position, ComputeError> {
+        self.moon_position.fetch_add(1, Relaxed);
+        AnalyticalProvider.moon_position(jd)
+    }
+    fn moon_distance(&self, jd: f64) -> Option<f64> {
+        self.moon_distance.fetch_add(1, Relaxed);
+        AnalyticalProvider.moon_distance(jd)
+    }
+    fn time_range(&self) -> (f64, f64) {
+        AnalyticalProvider.time_range()
+    }
 }

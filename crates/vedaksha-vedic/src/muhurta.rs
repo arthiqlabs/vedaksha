@@ -628,43 +628,63 @@ pub fn assess_muhurta(
 }
 
 /// Refine the Julian Day at which a monotonically-increasing angle (degrees)
-/// reaches `target_deg`, by Newton iteration `jd ← jd + (target − angle)/rate`.
+/// reaches `target_deg`, by Newton iteration `jd ← jd + (target − angle)/rate`,
+/// run to convergence at the resolution of a Julian Day.
 ///
 /// `angle_at(jd)` returns `(angle_deg ∈ [0, 360), rate_deg_per_day)` — the rate
 /// is the body's daily motion, i.e. the analytic derivative. The lunar and
 /// elongation angles are smooth and monotone, so this converges in a few steps.
+/// The rate only steers the iteration: the root is where `angle_at` crosses the
+/// target, whatever rate (a central difference, a derivative, a few per cent
+/// off) the callback reports, so two callbacks that agree on the angle agree on
+/// the answer.
 ///
 /// This is the engine's public longitude-crossing solver: callers bracket a
 /// crossing coarsely (the angle must be monotone across the bracket — a
 /// retrograde loop inside the bracket misleads Newton), then refine here.
 /// Returns `None` where the callback is unavailable or the rate vanishes.
 ///
+/// # Resolution
+///
+/// The iteration stops when its step no longer moves the Julian Day by more
+/// than one unit in its last places ([`f64::EPSILON`] times the day number,
+/// 5.5e-10 day or 0.05 ms near 2.46 million), so the instant returned is within
+/// a few such units of the root, about 0.1 ms. Until v9.5.0 it stopped as soon
+/// as the angle was within 1e-6° of the target, which left it up to 7.9 ms
+/// (the Moon's 1e-6° at 12 to 13°/day) from the root and made two callbacks that
+/// differ in their last digits disagree by up to 12 ms.
+///
 /// # Walking successive crossings
 ///
-/// The refinement stops within 1e-6° of the target on either side, so the
-/// instant returned can sit a fraction of a second BEFORE it. To step to the
-/// next crossing, call from a moment after it (a second is ample).
+/// The instant returned can sit a few units in the last place (about 0.1 ms)
+/// BEFORE the crossing. To step to the next crossing, call from a moment after
+/// it (a second is ample).
 #[must_use]
 pub fn refine_crossing(
     target_deg: f64,
     jd_init: f64,
     angle_at: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Option<f64> {
+    // Linear convergence under a rate a few per cent off needs about ten
+    // passes from a day away; quadratic convergence needs four or five.
+    const PASSES: usize = 24;
     let mut jd = jd_init;
-    for _ in 0..8 {
+    for _ in 0..PASSES {
         let (angle, rate) = angle_at(jd)?;
         // Signed (target − angle), wrapped to (−180, 180].
         let mut f = (target_deg - angle).rem_euclid(360.0);
         if f > 180.0 {
             f -= 360.0;
         }
-        if f.abs() < 1.0e-6 {
-            return Some(jd); // < ~0.0036 arcsec ⇒ sub-second in time
-        }
         if rate.abs() < 1.0e-9 {
-            return None; // degenerate (no motion)
+            // No motion: the root is here or nowhere this callback can reach.
+            return (f.abs() < 1.0e-6).then_some(jd);
         }
-        jd += f / rate;
+        let step = f / rate;
+        jd += step;
+        if step.abs() <= f64::EPSILON * jd.abs() {
+            return Some(jd);
+        }
     }
     Some(jd)
 }
@@ -703,10 +723,15 @@ pub type MoonAndSun = ((f64, f64), (f64, f64));
 ///
 /// # Walking successive ends
 ///
-/// The refinement stops within 1e-6° of the boundary on either side, so the
-/// instant returned can sit a fraction of a second BEFORE it. Calling again
-/// from that instant can return the same end. To step to the next one, call
-/// from a moment after it (a second is ample).
+/// The refinement runs to the resolution of a Julian Day (see
+/// [`refine_crossing`]), so the instant returned can sit about 0.1 ms BEFORE the
+/// boundary. Calling again from that instant can return the same end. To step to
+/// the next one, call from a moment after it (a second is ample).
+///
+/// The ends of a month of days read the pair about four times each. Serve the
+/// callback from one [`crate::walked::WalkedSky`] over the month and a day's
+/// four ends (tithi, nakshatra, karana, yoga) make 23 times fewer provider
+/// calls (60 days, measured) and agree with the direct callback to 0.04 ms.
 ///
 /// # Errors / `None`
 /// Returns `None` if the callback yields `None` or the elongation rate
@@ -734,10 +759,10 @@ pub fn compute_tithi_end(
 ///
 /// # Walking successive ends
 ///
-/// The refinement stops within 1e-6° of the boundary on either side, so the
-/// instant returned can sit a fraction of a second BEFORE it. Calling again
-/// from that instant can return the same end. To step to the next one, call
-/// from a moment after it (a second is ample).
+/// The refinement runs to the resolution of a Julian Day (see
+/// [`refine_crossing`]), so the instant returned can sit about 0.1 ms BEFORE the
+/// boundary. Calling again from that instant can return the same end. To step to
+/// the next one, call from a moment after it (a second is ample).
 ///
 /// # Errors / `None`
 /// Returns `None` if the callback yields `None` or the lunar rate vanishes.
@@ -771,10 +796,10 @@ pub fn compute_nakshatra_end(
 ///
 /// # Walking successive ends
 ///
-/// The refinement stops within 1e-6° of the boundary on either side, so the
-/// instant returned can sit a fraction of a second BEFORE it. Calling again
-/// from that instant can return the same end. To step to the next one, call
-/// from a moment after it (a second is ample).
+/// The refinement runs to the resolution of a Julian Day (see
+/// [`refine_crossing`]), so the instant returned can sit about 0.1 ms BEFORE the
+/// boundary. Calling again from that instant can return the same end. To step to
+/// the next one, call from a moment after it (a second is ample).
 ///
 /// # Errors / `None`
 /// Returns `None` if the callback yields `None` or the combined rate vanishes.
@@ -808,10 +833,10 @@ pub fn compute_yoga_end(
 ///
 /// # Walking successive ends
 ///
-/// The refinement stops within 1e-6° of the boundary on either side, so the
-/// instant returned can sit a fraction of a second BEFORE it. Calling again
-/// from that instant can return the same end. To step to the next one, call
-/// from a moment after it (a second is ample).
+/// The refinement runs to the resolution of a Julian Day (see
+/// [`refine_crossing`]), so the instant returned can sit about 0.1 ms BEFORE the
+/// boundary. Calling again from that instant can return the same end. To step to
+/// the next one, call from a moment after it (a second is ample).
 ///
 /// # Errors / `None`
 /// Returns `None` if the callback yields `None` or the elongation rate
@@ -872,6 +897,12 @@ pub fn compute_karana_end(
 /// boundary — a step landing between local midnight and local sunrise gets
 /// the *previous* civil day's stale vara, not the one actually in force), the
 /// cached interval **is** the vara's real extent, so it cannot go stale.
+///
+/// Taking `get_moon_lon`, `get_sun_lon` and `equatorial` from one
+/// [`crate::walked::WalkedSky`] over the span makes about a tenth of the
+/// provider calls (30 days, measured) and returns the same 61 assessments: the
+/// same instants, tithis, nakshatras, weekdays and factors, and quality scores
+/// within 1e-12.
 ///
 /// What the memo cannot remove is the vara work itself, and about four fifths
 /// of a scan's cost sits under `vedaksha_astro::riseset` in those two sunrise
@@ -2907,5 +2938,86 @@ mod tests {
             }
             assert!(wrapped, "{label}: the walk never crossed the index wrap");
         }
+    }
+
+    // --- refine_crossing ---
+
+    /// The unwrapped test angle, degrees: a Moon-like drift of about 13 degrees a
+    /// day with a 1.6 degree periodic term, monotone (its rate stays above 11).
+    fn drifting_angle(jd: f64) -> f64 {
+        const J: f64 = 2_460_000.5;
+        40.0 + 13.2 * (jd - J) + 1.6 * libm::sin(0.93 * (jd - J))
+    }
+
+    /// Root of `drifting_angle(jd) = unwrapped_target` by bisection on the angle
+    /// itself: no Newton, no rate, halved until the bracket is one Julian Day
+    /// quantum wide.
+    fn bisected_root(unwrapped_target: f64) -> f64 {
+        let (mut lo, mut hi) = (2_459_990.0_f64, 2_460_010.0_f64);
+        for _ in 0..200 {
+            let mid = 0.5 * (lo + hi);
+            if mid == lo || mid == hi {
+                break;
+            }
+            if drifting_angle(mid) < unwrapped_target {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        0.5 * (lo + hi)
+    }
+
+    /// `refine_crossing` lands within 2e-9 day (0.17 ms, about four Julian Day
+    /// quanta) of an independently converged root, from either side of it, with
+    /// a rate that is right, 7 per cent high, and 7 per cent low with an offset.
+    /// Until v9.5.0 it stopped within 1e-6 degree of the target, which here is up
+    /// to 7.6e-8 day (6.6 ms) away, and two of the rates below put it there.
+    #[test]
+    fn refine_crossing_lands_on_an_independently_converged_root() {
+        const TOLERANCE_DAYS: f64 = 2.0e-9;
+        let rates: [(&str, fn(f64) -> f64); 3] = [
+            ("exact", |r| r),
+            ("7% high", |r| r * 1.07),
+            ("7% low and offset", |r| r * 0.93 + 0.2),
+        ];
+        let mut worst = 0.0_f64;
+        let mut cases = 0;
+        for k in -5..=5 {
+            let unwrapped = drifting_angle(2_460_000.5) + 12.0 * f64::from(k) + 0.37;
+            let target = unwrapped.rem_euclid(360.0);
+            let root = bisected_root(unwrapped);
+            for (label, distort) in rates {
+                for start in [root - 0.7, root - 0.05, root + 0.4] {
+                    let angle_at = |jd: f64| {
+                        let rate = 13.2 + 1.6 * 0.93 * libm::cos(0.93 * (jd - 2_460_000.5));
+                        Some((drifting_angle(jd).rem_euclid(360.0), distort(rate)))
+                    };
+                    let got = refine_crossing(target, start, &angle_at).expect("a root");
+                    let off = (got - root).abs();
+                    assert!(
+                        off <= TOLERANCE_DAYS,
+                        "target {target}, rate {label}, start {start}: {got} is {off:e} day from {root}"
+                    );
+                    worst = worst.max(off);
+                    cases += 1;
+                }
+            }
+        }
+        assert_eq!(cases, 99);
+        println!("refine_crossing: worst {worst:e} day from the bisected root");
+    }
+
+    /// With no motion the root is here or nowhere: the answer is the start when
+    /// the angle already stands within 1e-6 degree of the target, otherwise none.
+    #[test]
+    fn refine_crossing_without_motion_is_here_or_nowhere() {
+        let still = |_: f64| Some((10.0, 0.0));
+        assert_eq!(
+            refine_crossing(10.0, 2_460_000.5, &still),
+            Some(2_460_000.5)
+        );
+        assert_eq!(refine_crossing(11.0, 2_460_000.5, &still), None);
+        assert_eq!(refine_crossing(11.0, 2_460_000.5, &|_| None), None);
     }
 }

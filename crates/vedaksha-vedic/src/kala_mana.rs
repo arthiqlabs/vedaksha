@@ -53,8 +53,9 @@
 //! comes out as the same `f64` whichever instant the search starts from;
 //! consecutive spans therefore tile exactly (`end_jd` of one is `start_jd`
 //! of the next, bit for bit), and a boundary instant belongs to the lunation
-//! it opens. The refined instant carries the root finder's 1e-6 degree stop
-//! tolerance (about 8 ms of time), as it always did.
+//! it opens. The refined instant is the root finder's, run to the resolution of
+//! a Julian Day (about 0.1 ms; until v9.5.0 it stopped within 1e-6 degree, about
+//! 8 ms of time).
 
 //! # Contract
 //!
@@ -64,6 +65,12 @@
 //! caller's `moon_and_sun` callback (tropical or sidereal — the ayanamsha
 //! cancels in the elongation); the Sun's sidereal longitude is derived
 //! inside via `ayanamsha`.
+//!
+//! A calendar asks for many instants of one span, and each [`lunar_month_span`]
+//! reads the pair about a hundred times. Take the callback from one
+//! [`crate::walked::WalkedSky`] over the span and it makes 18 to 37 times fewer
+//! provider calls (measured over a year of every-fourth-day spans and four
+//! months of both schemes) and the same spans to 0.1 ms.
 
 use vedaksha_astro::sidereal::{Ayanamsha, true_ayanamsha_value};
 use vedaksha_ephem_core::julian;
