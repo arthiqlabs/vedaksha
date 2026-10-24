@@ -211,12 +211,81 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Compute Vedic dasha (planetary period) sequences. Supports five classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (sign based, require BOTH `lagna_sign` AND `graha_signs`, since each sign's period length is counted to the sign its lord occupies in this chart). `graha_signs` takes the eight `sign_index` values compute_natal_chart already returns; Ketu is derived from Rahu and must not be supplied. Returns a JSON dasha tree with start/end Julian Days.",
+      "description": "Compute Vedic dasha (planetary period) sequences. Supports eight classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (sign based, require BOTH `lagna_sign` AND `graha_signs`, since each sign's period length is counted to the sign its lord occupies in this chart); Sthira, NiryanaShoola (`niryana_shoola` is accepted too) and Maheshwara (Jaimini rashi dashas, require `lagna_sign` AND `graha_longitudes`, since the atmakaraka and the tie-breaks of the strength tests read degrees). `graha_signs` takes the eight `sign_index` values compute_natal_chart already returns, `graha_longitudes` the eight sidereal longitudes; Ketu is derived from Rahu and must not be supplied. Yogini takes `rounds` (1 to 10 whole 36-year rounds) or `until` (a horizon Julian Day); Chara takes `antardashas` (twelve per period, BPHS 51.5-51.9). Sthira, NiryanaShoola and Maheshwara use the defaults of the vedic crate's dasha functions (see their module docs) and always carry their antardashas. Sthira and Maheshwara start from the Brahma graha; a chart whose marks leave none returns `no_brahma: true` with a message, not an error. Returns a JSON dasha tree with start/end Julian Days.",
       "inputSchema": {
         "properties": {
+          "antardashas": {
+            "default": false,
+            "description": "Chara only: when true each of the twelve periods carries its twelve antardashas in `antar` (BPHS 51.5-51.9: the stronger of the dasha rashi and its seventh starts, by modality, a twelfth of the period each). Defaults to false. Sthira, NiryanaShoola and Maheshwara always carry theirs.",
+            "type": "boolean"
+          },
           "birth_jd": {
             "description": "Birth Julian Day used as the dasha epoch, in UT1 (Universal Time) — not TT, not TDB, i.e. the same scale as compute_natal_chart's julian_day. This epoch is only added to, never converted: every returned start_jd/end_jd is on the same UT1 scale as the input.",
             "type": "number"
+          },
+          "graha_longitudes": {
+            "description": "Sidereal longitudes in degrees [0, 360) of the seven classical grahas plus Rahu, as compute_natal_chart serves them (Rahu from its MeanNode). Required, with lagna_sign, for Sthira, NiryanaShoola and Maheshwara, whose Brahma graha, atmakaraka and strength tie-breaks read degrees within the sign. Ketu is not a field: it is derived 180 degrees from Rahu. Do not also pass graha_signs for these systems.",
+            "properties": {
+              "jupiter": {
+                "description": "Jupiter's sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              },
+              "mars": {
+                "description": "Mars's sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              },
+              "mercury": {
+                "description": "Mercury's sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              },
+              "moon": {
+                "description": "Moon's sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              },
+              "rahu": {
+                "description": "Rahu's (north lunar node's) sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              },
+              "saturn": {
+                "description": "Saturn's sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              },
+              "sun": {
+                "description": "Sun's sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              },
+              "venus": {
+                "description": "Venus's sidereal longitude.",
+                "maximum": 360,
+                "minimum": 0,
+                "type": "number"
+              }
+            },
+            "required": [
+              "sun",
+              "moon",
+              "mars",
+              "mercury",
+              "jupiter",
+              "venus",
+              "saturn",
+              "rahu"
+            ],
+            "type": "object"
           },
           "graha_signs": {
             "description": "Natal sign positions of the seven classical grahas plus Rahu, 0-11 each (0 = Aries), as served by compute_natal_chart's sign_index. Required for Chara, Narayana, whose period lengths are chart-dependent — each sign's duration is the count from that sign to the sign its lord actually occupies. Sign indices are used rather than longitudes: they chain directly from compute_natal_chart's sign_index with no conversion, carry no tropical-vs-sidereal ambiguity, and avoid the boundary question of a planet at exactly 30.0 degrees. Ketu is not a field: it is derived as (rahu + 6) mod 12, since the two lunar nodes are always exactly opposite.",
@@ -282,15 +351,24 @@
             ],
             "type": "object"
           },
+          "karaka_scheme": {
+            "default": "7",
+            "description": "Which chara karakas name the atmakaraka for Sthira and Maheshwara: \"7\" (Sun to Saturn) or \"8\" (adds Rahu), as compute_karakas takes it. Applies to those two systems only.",
+            "enum": [
+              "7",
+              "8"
+            ],
+            "type": "string"
+          },
           "lagna_sign": {
-            "description": "Lagna (ascendant) sign 0–11 (0 = Aries). Required for Chara, Narayana. This is the same 0-indexed convention compute_natal_chart, compute_bhavas and compute_vargas all serve as `sign_index`, so an ascendant read from any of them passes straight through. Through v8.1.0 this one parameter was 1-indexed while every other tool was 0-indexed; that mismatch is resolved here.",
+            "description": "Lagna (ascendant) sign 0–11 (0 = Aries). Required for Chara, Narayana, Sthira, NiryanaShoola, Maheshwara. This is the same 0-indexed convention compute_natal_chart, compute_bhavas and compute_vargas all serve as `sign_index`, so an ascendant read from any of them passes straight through. Through v8.1.0 this one parameter was 1-indexed while every other tool was 0-indexed; that mismatch is resolved here.",
             "maximum": 11,
             "minimum": 0,
             "type": "integer"
           },
           "levels": {
             "default": 3,
-            "description": "Number of nested dasha levels (1–5). Ignored by Chara and Narayana.",
+            "description": "Number of nested dasha levels (1–5). Ignored by the sign-based systems (Chara, Narayana, Sthira, NiryanaShoola, Maheshwara).",
             "maximum": 5,
             "minimum": 1,
             "type": "integer"
@@ -301,6 +379,13 @@
             "minimum": 0,
             "type": "number"
           },
+          "rounds": {
+            "default": 1,
+            "description": "Yogini only: how many whole 36-year rounds of the cycle to produce. Round 1 is the round from birth, whose first maha is the birth yogini's unelapsed share; each later round runs all eight yoginis whole. Every maha and sub-period carries its `round`. Defaults to 1. Exclusive with `until`.",
+            "maximum": 10,
+            "minimum": 1,
+            "type": "integer"
+          },
           "system": {
             "default": "Vimshottari",
             "description": "Dasha system selector",
@@ -309,9 +394,16 @@
               "Ashtottari",
               "Yogini",
               "Chara",
-              "Narayana"
+              "Narayana",
+              "Sthira",
+              "NiryanaShoola",
+              "Maheshwara"
             ],
             "type": "string"
+          },
+          "until": {
+            "description": "Yogini only: a horizon as a Julian Day (UT1). Whole rounds are produced until the tree reaches it, at least one and at most the maximum of `rounds`; compare the last maha's end_jd with it to see whether it was cut. Exclusive with `rounds`.",
+            "type": "number"
           }
         },
         "required": [
@@ -401,7 +493,7 @@
             "type": "object"
           },
           {
-            "description": "Sign-based systems. Twelve single-level periods, one per rashi, in dasha order. No nakshatra or balance: these systems are anchored on the lagna and the grahas' natal signs, not the Moon.",
+            "description": "Sign-based systems. Twelve single-level periods, one per rashi, in dasha order. No nakshatra or balance: these systems are anchored on the lagna and the grahas' natal signs, not the Moon. With `antardashas` true, Chara's periods also carry `antar`.",
             "properties": {
               "lagna_sign": {
                 "description": "Lagna the sequence starts from, 0-11 (0 = Aries).",
@@ -410,6 +502,13 @@
               "periods": {
                 "items": {
                   "properties": {
+                    "antar": {
+                      "description": "Chara with `antardashas` true only: the twelve antardashas, tiling the period.",
+                      "items": {
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
                     "duration_years": {
                       "description": "Counted from this sign to the sign its lord occupies in THIS chart, so it varies between charts.",
                       "type": "number"
@@ -444,6 +543,122 @@
               "periods"
             ],
             "title": "Chara / Narayana",
+            "type": "object"
+          },
+          {
+            "description": "Twelve periods of 7, 8 or 9 years by modality from the Brahma graha's rashi, each with twelve antardashas. When the chart has no Brahma graha, `no_brahma` is true, `message` says so, and `anchor_sign`, `brahma` and `direction` are null and `periods` is empty: the text names no other start.",
+            "properties": {
+              "anchor_sign": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "brahma": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "direction": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "message": {
+                "type": "string"
+              },
+              "no_brahma": {
+                "type": "boolean"
+              },
+              "periods": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "no_brahma",
+              "anchor_sign",
+              "brahma",
+              "direction",
+              "periods"
+            ],
+            "title": "Sthira",
+            "type": "object"
+          },
+          {
+            "description": "Twelve periods of 7, 8 or 9 years in trikona groups from the stronger of the lagna and the seventh, each with twelve antardashas.",
+            "properties": {
+              "anchor_sign": {
+                "type": "integer"
+              },
+              "direction": {
+                "type": "string"
+              },
+              "periods": {
+                "items": {
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "anchor_sign",
+              "direction",
+              "periods"
+            ],
+            "title": "Niryana Shoola",
+            "type": "object"
+          },
+          {
+            "description": "The Maheshwara graha, the span of life to the end of its rashi's sthira period, and the antardashas of that period that can carry death. When the sthira dasha has no Brahma anchor, `no_brahma` is true with a `message`, `maheshwara` and `rashi` are still given, and the rest is absent.",
+            "properties": {
+              "death_antars": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "death_trikona": {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              "eighth_lord": {
+                "type": "string"
+              },
+              "eighth_lord_rashi": {
+                "type": "integer"
+              },
+              "life_span_years": {
+                "type": "number"
+              },
+              "maheshwara": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "no_brahma": {
+                "type": "boolean"
+              },
+              "period": {
+                "type": "object"
+              },
+              "rashi": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "no_brahma",
+              "maheshwara",
+              "rashi"
+            ],
+            "title": "Maheshwara",
             "type": "object"
           }
         ],
@@ -661,162 +876,333 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Compute six-fold Shadbala (Sthana, Dig, Kala, Cheshta, Naisargika, Drik Bala) per planet, with the Sthana sub-components (uccha, ojhayugma, kendradi, drekkana) and ishta/kashta phala, per BPHS Ch.27-28. Sthana Bala omits Saptavargaja Bala and Kala Bala covers Nathonnatha and Paksha only.",
+      "description": "Compute the complete six-fold Shadbala of the seven grahas (Sun to Saturn) for a birth moment and place, per BPHS Ch.27, with Ishta and Kashta Phala per Ch.28, in virupas. Pass the moment and the place; the tool casts the chart itself and reads sunrise, sunset and the next sunrise from the engine. Every part is in the output, each in its own field: Sthana (uccha, saptavargaja, ojhayugma, kendradi, drekkana), Dig (continuous, the arc from the weak cusp over 3, 27.7), Kala (nathonnata, paksha, tribhaga, abda, masa, vara, hora, ayana and yuddha, which is signed), Cheshta (the cheshta kendra for Mars to Saturn, the Sun's ayana and the Moon's paksha bala, 27.18 and 27.24-25), Naisargika and Drik (a quarter of the benefic sphuta drishti added, a quarter of the malefic taken away, the aspect of Mercury and Jupiter added whole, 27.19; it can be negative or pass 60). The Sun's ayana and the Moon's paksha bala are counted once in kala and once in cheshta, each undoubled. The rules are the verses' defaults; the benefic and malefic grahas are those of BPHS 3.11, with Rahu (the mean node) and Ketu counting only as malefic company for Mercury. Each graha also carries its motion state (vakra, anuvakra, ... atichara, 27.21-23) against the mean geocentric motion; it is reported beside the strengths and is not part of any total. The Sun must both rise and set at the place: in the polar day or night there is no Hindu day to divide into thirds and horas, and the call fails by name.",
       "inputSchema": {
         "properties": {
-          "is_daytime": {
-            "default": false,
-            "description": "True if the birth moment falls between sunrise and sunset. Feeds Nathonnatha Bala within Kala Bala.",
-            "type": "boolean"
+          "ayanamsha": {
+            "description": "Sidereal zodiac system. Eleven systems, each derived forward from a primary source and none tuned to match another implementation. The chart's true_ayanamsha_value output field reports the TRUE ayanamsha (mean plus nutation in longitude) already applied — nutation is included, do not add it yourself. Pass Tropical for no rotation. Systems: IndianOfficial = Indian Astronomical Ephemeris 2022, AYANAMSA section: 23 deg 51 min 25.53 sec at J2000.0, propagated by P03 general precession | FaganBradley = Fagan & Firebrace, Primer of Sidereal Astrology: synetic vernal point 335 deg 57 min 28.64 sec at B1950.0, ayanamsha = 360 deg minus SVP | Krishnamurti = Krishnamurti Padhdhati Vol-I: 22 deg 22 min 00 sec on the 1st of Chitra 1900, propagated at KSK's stated 50.2388475 arcsec/yr | Raman = Raman, A Manual of Hindu Astrology (1935), Ch. III Art. 49 | SuryaSiddhanta = Surya Siddhanta Ch. 3 vv. 9-12 | Yukteshwar = Yukteswar, The Holy Science (1894) | RevatiPaksha [star] = Revati at the sidereal initial point, the majority reading against Surya Siddhanta Ch. 8's own 359 deg 50 min, zeta Piscium per Hipparcos | PushyaPaksha [star] = Narasimha Rao, Introducing Pushya-paksha Ayanamsa | TrueChitra [star] = Self-describing condition; Spica per Hipparcos | ChandraHari [star] = Chandra Hari, Indian J. History of Science 33(4), 1998 | GalacticCenter0Sag [star] = Self-describing condition; Sgr A* per Gordon, de Witt & Jacobs (2023), AJ 165, 49.",
+            "enum": [
+              "IndianOfficial",
+              "FaganBradley",
+              "Krishnamurti",
+              "Raman",
+              "SuryaSiddhanta",
+              "Yukteshwar",
+              "RevatiPaksha",
+              "PushyaPaksha",
+              "TrueChitra",
+              "ChandraHari",
+              "GalacticCenter0Sag",
+              "Tropical"
+            ],
+            "type": "string"
           },
-          "moon_phase_waxing": {
-            "default": false,
-            "description": "True during shukla paksha (waxing Moon). Feeds Paksha Bala within Kala Bala.",
-            "type": "boolean"
+          "elevation_m": {
+            "default": 0,
+            "description": "Observer elevation in metres above sea level [-500, 9000] (default 0). Lowers the horizon by the dip and so moves sunrise and sunset.",
+            "maximum": 9000,
+            "minimum": -500,
+            "type": "number"
           },
-          "planets": {
-            "description": "Array of planet data objects.",
-            "items": {
-              "properties": {
-                "average_speed": {
-                  "description": "Mean daily motion in degrees per day, compared against speed for Cheshta Bala.",
-                  "type": "number"
-                },
-                "benefic_aspect_count": {
-                  "default": 0,
-                  "description": "Number of benefic aspects received. Drives Drik Bala.",
-                  "type": "integer"
-                },
-                "bhava": {
-                  "description": "House occupied, 1-12. Drives Dig Bala and Kendradi Bala.",
-                  "maximum": 12,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                "longitude": {
-                  "description": "Sidereal longitude in degrees [0, 360). Drives Uchcha, Ojhayugma and Drekkana Bala.",
-                  "maximum": 360,
-                  "minimum": 0,
-                  "type": "number"
-                },
-                "malefic_aspect_count": {
-                  "default": 0,
-                  "description": "Number of malefic aspects received, subtracted in Drik Bala.",
-                  "type": "integer"
-                },
-                "planet": {
-                  "description": "Planet name: Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn",
-                  "type": "string"
-                },
-                "sign": {
-                  "description": "Sidereal sign index, which must agree with longitude (floor(longitude / 30)).",
-                  "maximum": 11,
-                  "minimum": 0,
-                  "type": "integer"
-                },
-                "speed": {
-                  "description": "Current apparent speed in degrees per day, negative when retrograde. Drives Cheshta Bala.",
-                  "type": "number"
-                }
-              },
-              "required": [
-                "planet",
-                "sign",
-                "longitude",
-                "bhava",
-                "speed",
-                "average_speed"
-              ],
-              "type": "object"
-            },
-            "type": "array"
+          "house_system": {
+            "default": "Placidus",
+            "description": "House system whose first, fourth, seventh and tenth cusps Dig Bala is measured from, and whose house placements give Kendradi Bala: Placidus, Koch, Equal, WholeSign, etc. The same names compute_natal_chart takes.",
+            "type": "string"
+          },
+          "julian_day": {
+            "description": "Julian Day number in UT1 (Universal Time) — not TT, not TDB, i.e. the same scale as compute_natal_chart's julian_day.",
+            "type": "number"
+          },
+          "latitude": {
+            "description": "Geographic latitude in degrees, north positive. The Hindu day is reckoned from this place's sunrise.",
+            "maximum": 90,
+            "minimum": -90,
+            "type": "number"
+          },
+          "longitude": {
+            "description": "Geographic longitude in degrees, east positive.",
+            "maximum": 180,
+            "minimum": -180,
+            "type": "number"
+          },
+          "tz_offset_minutes": {
+            "default": 0,
+            "description": "Offset of the observer's civil clock from UT, in minutes, in [-720, 840] (UTC-12:00 to UTC+14:00). Names the calendar date of the sunrise that begins the Hindu day, from which the lords of the year, month and day (abda, masa, vara) are reckoned.",
+            "maximum": 840,
+            "minimum": -720,
+            "type": "integer"
           }
         },
         "required": [
-          "planets"
+          "julian_day",
+          "latitude",
+          "longitude",
+          "ayanamsha"
         ],
         "type": "object"
       },
       "name": "compute_shadbala",
       "outputSchema": {
         "properties": {
+          "cusps": {
+            "description": "The four angular cusps Dig Bala is measured from, sidereal degrees.",
+            "properties": {
+              "first": {
+                "type": "number"
+              },
+              "fourth": {
+                "type": "number"
+              },
+              "seventh": {
+                "type": "number"
+              },
+              "tenth": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "first",
+              "fourth",
+              "seventh",
+              "tenth"
+            ],
+            "type": "object"
+          },
+          "house_system": {
+            "description": "The house system the cusps and house placements come from.",
+            "type": "string"
+          },
+          "julian_day": {
+            "description": "The Julian Day (UT1) the strengths were computed for, echoed back.",
+            "type": "number"
+          },
+          "moment": {
+            "description": "The birth moment Kala Bala was reckoned from. Every instant is a Julian Day (UT1).",
+            "properties": {
+              "apparent_hours_from_midnight": {
+                "description": "Local apparent solar time, hours since midnight, 0 to 24: the hour angle of the true Sun plus 12 hours.",
+                "type": "number"
+              },
+              "hindu_day_jdn": {
+                "description": "Julian Day Number of the local calendar date of jd_sunrise, at tz_offset_minutes.",
+                "type": "integer"
+              },
+              "jd": {
+                "description": "The birth.",
+                "type": "number"
+              },
+              "jd_next_sunrise": {
+                "description": "The sunrise that ends the Hindu day.",
+                "type": "number"
+              },
+              "jd_sunrise": {
+                "description": "The sunrise that begins the Hindu day holding the birth: the last at or before it.",
+                "type": "number"
+              },
+              "jd_sunset": {
+                "description": "The sunset of that day.",
+                "type": "number"
+              }
+            },
+            "required": [
+              "jd",
+              "jd_sunrise",
+              "jd_sunset",
+              "jd_next_sunrise",
+              "hindu_day_jdn",
+              "apparent_hours_from_midnight"
+            ],
+            "type": "object"
+          },
           "planets": {
-            "description": "One entry per graha supplied, in input order.",
+            "description": "The seven grahas, Sun to Saturn, in the order Sun, Moon, Mars, Mercury, Jupiter, Venus, Saturn. All strengths are in virupas.",
             "items": {
               "properties": {
                 "cheshta_bala": {
-                  "description": "Motional strength, from speed against average speed.",
+                  "description": "Motional strength: the Sun's ayana bala, the Moon's paksha bala, the folded cheshta kendra over 3 for the others (27.18, 27.24, 27.25).",
                   "type": "number"
                 },
                 "dig_bala": {
-                  "description": "Directional strength.",
-                  "type": "number"
-                },
-                "drekkana_bala": {
-                  "description": "Decanate strength, 0 or 15.",
+                  "description": "Directional strength, 0-60, continuous in the longitude (27.7).",
                   "type": "number"
                 },
                 "drik_bala": {
-                  "description": "Aspectual strength, benefic aspects minus malefic.",
+                  "description": "Aspectual strength from the sphuta drishti, signed (27.19).",
                   "type": "number"
                 },
                 "ishta_phala": {
-                  "description": "Benefic potential, 0-60.",
+                  "description": "Benefic potential, 0-60 (28.5-28.6).",
                   "type": "number"
                 },
-                "kala_bala": {
-                  "description": "Temporal strength. Nathonnatha and Paksha only; see the tool description.",
-                  "type": "number"
+                "kala": {
+                  "description": "Temporal strength by part.",
+                  "properties": {
+                    "abda": {
+                      "description": "15 to the lord of the year (27.13).",
+                      "type": "number"
+                    },
+                    "ayana": {
+                      "description": "Strength from the sayana longitude, 0-60 (27.15-27.17), undoubled.",
+                      "type": "number"
+                    },
+                    "hora": {
+                      "description": "60 to the lord of the hora.",
+                      "type": "number"
+                    },
+                    "masa": {
+                      "description": "30 to the lord of the month.",
+                      "type": "number"
+                    },
+                    "nathonnata": {
+                      "description": "Day/night strength from the time from local midnight, 0-60 (27.8-27.9).",
+                      "type": "number"
+                    },
+                    "paksha": {
+                      "description": "Strength from the Moon-Sun elongation, 0-60 (27.10-27.11), undoubled for the Moon.",
+                      "type": "number"
+                    },
+                    "total": {
+                      "description": "Sum of the nine.",
+                      "type": "number"
+                    },
+                    "tribhaga": {
+                      "description": "60 to Jupiter and to the lord of the third of the day or night (27.12).",
+                      "type": "number"
+                    },
+                    "vara": {
+                      "description": "45 to the lord of the day.",
+                      "type": "number"
+                    },
+                    "yuddha": {
+                      "description": "Signed planetary-war adjustment (27.20): the difference of the two strengths to the victor, from the vanquished.",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "nathonnata",
+                    "paksha",
+                    "tribhaga",
+                    "abda",
+                    "masa",
+                    "vara",
+                    "hora",
+                    "ayana",
+                    "yuddha",
+                    "total"
+                  ],
+                  "type": "object"
                 },
                 "kashta_phala": {
                   "description": "Malefic potential, 0-60.",
                   "type": "number"
                 },
-                "kendradi_bala": {
-                  "description": "Angularity strength, 15-60.",
-                  "type": "number"
+                "motion": {
+                  "description": "The graha's motion state (27.21-27.23). Reported beside the strengths and not part of any total.",
+                  "properties": {
+                    "mean_speed_deg_per_day": {
+                      "description": "Mean geocentric motion at the birth, the pace the state is judged against.",
+                      "type": "number"
+                    },
+                    "speed_deg_per_day": {
+                      "description": "Speed in longitude, negative when retrograde.",
+                      "type": "number"
+                    },
+                    "state": {
+                      "description": "Vakra, Anuvakra, Vikala, Manda, Mandatara, Sama, Chara or Atichara.",
+                      "type": "string"
+                    },
+                    "virupas": {
+                      "description": "The cheshta bala that state carries in the verse.",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "state",
+                    "virupas",
+                    "speed_deg_per_day",
+                    "mean_speed_deg_per_day"
+                  ],
+                  "type": "object"
                 },
                 "naisargika_bala": {
-                  "description": "Natural strength, fixed per graha.",
-                  "type": "number"
-                },
-                "ojhayugma_bala": {
-                  "description": "Odd/even sign strength, 0-30.",
+                  "description": "Natural strength, fixed per graha (27.14).",
                   "type": "number"
                 },
                 "planet": {
                   "description": "Graha assessed.",
                   "type": "string"
                 },
-                "sthana_bala": {
-                  "description": "Positional strength: the sum of the four sub-components below.",
-                  "type": "number"
+                "sthana": {
+                  "description": "Positional strength by part.",
+                  "properties": {
+                    "drekkana": {
+                      "description": "Decanate strength, 0 or 15 (27.6).",
+                      "type": "number"
+                    },
+                    "kendradi": {
+                      "description": "Angularity strength from the house, 15, 30 or 60.",
+                      "type": "number"
+                    },
+                    "ojhayugma": {
+                      "description": "Odd/even sign and navamsa strength, 0-30.",
+                      "type": "number"
+                    },
+                    "saptavargaja": {
+                      "description": "Dignity in the seven vargas D1, D2, D3, D7, D9, D12 and D30 (27.2-27.4).",
+                      "type": "number"
+                    },
+                    "total": {
+                      "description": "Sum of the five.",
+                      "type": "number"
+                    },
+                    "uccha": {
+                      "description": "Exaltation strength, 0-60 (27.1).",
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "uccha",
+                    "saptavargaja",
+                    "ojhayugma",
+                    "kendradi",
+                    "drekkana",
+                    "total"
+                  ],
+                  "type": "object"
                 },
                 "total": {
-                  "description": "Sum of the six balas, in virupas.",
-                  "type": "number"
-                },
-                "uccha_bala": {
-                  "description": "Exaltation strength, 0-60.",
+                  "description": "Sum of the six: sthana.total + dig_bala + kala.total + cheshta_bala + naisargika_bala + drik_bala.",
                   "type": "number"
                 }
               },
               "required": [
                 "planet",
-                "sthana_bala",
+                "sthana",
                 "dig_bala",
-                "kala_bala",
+                "kala",
                 "cheshta_bala",
                 "naisargika_bala",
                 "drik_bala",
-                "total"
+                "total",
+                "ishta_phala",
+                "kashta_phala",
+                "motion"
               ],
               "type": "object"
             },
             "type": "array"
+          },
+          "true_ayanamsha_value": {
+            "description": "True ayanamsha (mean plus nutation in longitude) applied, in degrees. Zero for a tropical chart.",
+            "type": "number"
           }
         },
         "required": [
+          "julian_day",
+          "true_ayanamsha_value",
+          "house_system",
+          "moment",
+          "cusps",
           "planets"
         ],
         "type": "object"
