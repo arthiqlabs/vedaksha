@@ -34,8 +34,11 @@ tests print. There is nothing in `--nocapture` output to assert them against;
 they are re-derivations of facts fixed by the fixture's own generator
 (`scripts/generate_horizons_oracle.py`) and by `oracle_comparison.rs`'s field
 list, not by a per-run measurement. Every *numeric* field in the accuracy
-block -- including each `perBody[].comparisons` -- is covered by `compare()`
-above; only this pair of descriptive strings is exempt, deliberately.
+block -- including each `perBody[].comparisons` and the `era` block's
+predicted-era maximum -- is covered by `compare()` and `compare_era()`; only
+this pair of descriptive strings is exempt, deliberately. (The predicted-era
+maximum went unchecked until v9.5.0 and sat at a v9.1.0 figure, 44.9", for
+three releases after it had fallen below 0.2".)
 
 # Running it
 
@@ -153,6 +156,41 @@ def parse_analytical(out: str) -> dict:
     }
 
 
+def parse_spk_predicted(out: str) -> dict:
+    """Pull the predicted-era maximum out of oracle_comparison's report."""
+    era = out.split("--- Predicted-")[1] if "--- Predicted-" in out else ""
+    mx = re.search(r"Max error:\s+([\d.]+) arcseconds \((\w+) at (\d{4})-(\w{3})-(\d{2})", era)
+    if not mx:
+        print("FAIL: could not parse oracle_comparison's predicted era; its format changed")
+        print(era[:1500])
+        sys.exit(1)
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+              "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    return {
+        "predictedEraMaxArcsec": float(mx.group(1)),
+        "predictedEraMaxBody": mx.group(2),
+        "predictedEraMaxDate": (
+            f"{mx.group(3)}-{months.index(mx.group(4)) + 1:02d}-{mx.group(5)}"
+        ),
+    }
+
+
+def compare_era(published: dict, measured: dict) -> list[str]:
+    problems = []
+    for key, value in measured.items():
+        pub = published.get(key)
+        same = (
+            isinstance(pub, (int, float)) and abs(pub - value) <= TOLERANCE
+            if isinstance(value, float)
+            else pub == value
+        )
+        if not same:
+            problems.append(
+                f"accuracy.era.{key}: metrics.json says {pub!r}, the test measured {value!r}"
+            )
+    return problems
+
+
 def compare(label: str, published: dict, measured: dict) -> list[str]:
     problems = []
     for key in ("comparisons", "maxBody"):
@@ -235,12 +273,15 @@ def main() -> int:
         return 1
 
     print("Running oracle_comparison (SPK path)...")
-    spk = parse_spk(run_oracle("oracle_comparison"))
+    spk_out = run_oracle("oracle_comparison")
+    spk = parse_spk(spk_out)
+    predicted = parse_spk_predicted(spk_out)
     print("Running analytical_oracle (analytical path)...")
     analytical = parse_analytical(run_oracle("analytical_oracle"))
 
     problems = compare("accuracy.spk", accuracy.get("spk", {}), spk)
     problems += compare("accuracy.analytical", accuracy.get("analytical", {}), analytical)
+    problems += compare_era(accuracy.get("era", {}), predicted)
 
     if problems:
         print("\nFAIL: metrics.json disagrees with what the engine measures.\n")

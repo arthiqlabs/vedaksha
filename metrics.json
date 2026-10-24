@@ -59,12 +59,12 @@
       ]
     },
     "era": {
-      "$comment": "Both mean/max figures above describe the measured-Delta T era ONLY. Past 2025 both Horizons and delta_t.rs must PREDICT Delta T rather than read it from the IERS record, and the two predictions diverge; the residual out there is time-scale disagreement, not ephemeris error, and scales with each body's angular rate. Quoting a mean over the full 24,350 rows alongside the sub-arcsecond claim overstates it. Never write '24,350 positions ... 0.103 arcsec'.",
+      "$comment": "The mean/max figures above cover 1900-2025, the era where the engine's Delta T was measured data when the figure was defined; the cut is kept so the published count and definition keep their meaning. Since v9.5.0 the oracle converts Horizons' UTC time tags (from 1962-01-20) to TT with the leap-second count, as Horizons itself does, so from then on neither Delta T nor UT1-UTC is in the comparison, only the ephemeris and the apparent-place pipeline; before 1962-01-20 the tag is UT1 and the engine's Delta T is in it. predictedEraMax is the SPK maximum over 2026-2100, likewise like for like. Before v9.5.0 those rows compared two Delta T predictions, which is where a 44.9 arcsec Moon in 2099 came from.",
       "measured": "1900-2025",
       "full": "1900-2100",
-      "predictedEraMaxArcsec": 44.912,
+      "predictedEraMaxArcsec": 0.189,
       "predictedEraMaxBody": "Moon",
-      "predictedEraMaxDate": "2099-02-06"
+      "predictedEraMaxDate": "2099-10-04"
     }
   },
   "mcpTools": 17,
