@@ -5,11 +5,13 @@
 
 //! Coordinate transformation pipeline.
 //!
-//! Chains light-time correction, precession (IAU 2006), nutation (IAU 2000B),
-//! annual aberration, and ecliptic rotation to produce apparent ecliptic
-//! positions from JPL SPK ephemeris data.
+//! Chains light-time correction, annual aberration, the Sun's gravitational
+//! deflection of light ([`crate::deflection`]), precession (IAU 2006), nutation
+//! (IAU 2000B), and ecliptic rotation to produce apparent ecliptic positions
+//! from JPL SPK ephemeris data.
 //!
-//! Source: Meeus, *Astronomical Algorithms*, 2nd ed., Chapters 22--23, 33.
+//! Source: Meeus, *Astronomical Algorithms*, 2nd ed., Chapters 22--23, 33;
+//! Klioner (2003, *Astronomical Journal* 125, 1580) for the light deflection.
 
 use core::f64::consts::PI;
 
@@ -55,10 +57,13 @@ pub struct ApparentPosition {
 ///    in one step; no separate stellar-aberration formula is needed for
 ///    solar-system bodies (cf. Meeus, *Astronomical Algorithms* 2nd ed.,
 ///    Ch. 33; Explanatory Supplement to the Astronomical Almanac §7.4).
-/// 2. Precession (J2000 → mean equator of date)
-/// 3. Nutation (mean → true equator of date)
-/// 4. Rotate from true equatorial to ecliptic of date using true obliquity
-/// 5. Extract longitude, latitude, distance
+/// 2. Gravitational deflection of light by the Sun, for every body but the
+///    Sun and the Moon ([`crate::deflection::solar_deflection`]): up to a few
+///    milliarcseconds at 90° from the Sun, 0.5″ at 1°.
+/// 3. Precession (J2000 → mean equator of date)
+/// 4. Nutation (mean → true equator of date)
+/// 5. Rotate from true equatorial to ecliptic of date using true obliquity
+/// 6. Extract longitude, latitude, distance
 ///
 /// The Moon special case: SPK / Analytical providers expose the Moon
 /// relative to EMB. Multiplying by `(1+EMRAT)/EMRAT` gives the geocentric
@@ -220,7 +225,9 @@ fn compute_ecliptic_with_frame(
     // We compute the geocentric vector with target AND observer at the
     // retarded time t-τ. For solar-system bodies this single step provides
     // the apparent direction in the observer's instantaneous rest frame —
-    // adding stellar aberration on top would double-count.
+    // adding stellar aberration on top would double-count. The same call
+    // bends the ray by the Sun's gravity for the planets (see
+    // `with_solar_deflection`).
     let geo = light_time_geocentric(provider, body, jd_tt)?;
 
     Ok(spherical_of(&ecliptic_of_date(geo, frame)))
@@ -229,11 +236,15 @@ fn compute_ecliptic_with_frame(
 /// Steps 2-4 of [`compute_ecliptic_with_frame`]: rotate a J2000
 /// mean-equatorial vector into the ecliptic of date.
 ///
-/// Apply the precomputed nutation·precession frame (the provider returns
-/// J2000 mean-equatorial vectors; SPK ICRF agrees to <25 mas — negligible
-/// here), then rotate true equatorial of date → ecliptic of date. `frame` must
-/// correspond to the observation time. The map is linear, so
-/// [`moon_apparent_position`] also passes a velocity through it.
+/// Apply the precomputed nutation·precession frame, then rotate true equatorial
+/// of date → ecliptic of date. The provider's vectors are ICRS; the IAU 2006
+/// matrix in [`precession::precession_matrix`] is built from
+/// Fukushima-Williams angles referred to the GCRS, so it already carries the
+/// ICRS-to-mean-J2000 frame bias (about 23 mas) and no separate bias rotation
+/// belongs here. `frame` must correspond to the observation time.
+///
+/// The map is linear, so [`moon_apparent_position`] also passes a velocity
+/// through it.
 fn ecliptic_of_date(geo: [f64; 3], frame: &CelestialFrame) -> Vector3 {
     let geo_vec = Vector3::new(geo[0], geo[1], geo[2]);
     let true_eq = frame.combined.apply(&geo_vec);
@@ -259,7 +270,8 @@ fn spherical_of(ecl_vec: &Vector3) -> EclipticCoords {
 }
 
 /// Compute the geocentric vector to `body` at observation time `jd` (TT),
-/// applying planetary-aberration-form light-time correction.
+/// applying planetary-aberration-form light-time correction and, for every
+/// body but the Sun and the Moon, the Sun's gravitational deflection of light.
 ///
 /// For Moon: scales the rel-EMB vector returned by providers up to a true
 /// geocentric vector via the (1+EMRAT)/EMRAT factor. Because Earth–EMB–Moon
@@ -270,6 +282,17 @@ fn light_time_geocentric(
     provider: &dyn EphemerisProvider,
     body: Body,
     jd: f64,
+) -> Result<[f64; 3], ComputeError> {
+    light_time_geocentric_with(provider, body, jd, true)
+}
+
+/// [`light_time_geocentric`] with the Sun's light deflection switchable, so a
+/// test can hold the one step apart from the rest of the pipeline.
+fn light_time_geocentric_with(
+    provider: &dyn EphemerisProvider,
+    body: Body,
+    jd: f64,
+    deflect: bool,
 ) -> Result<[f64; 3], ComputeError> {
     // For non-Moon bodies the geocentric vector subtracts Earth's barycentric
     // position at the retarded time t−τ. Re-evaluating Earth there pulls the
@@ -301,13 +324,62 @@ fn light_time_geocentric(
         let tau_new = norm3(&target_pos) / crate::aberration::C_AU_PER_DAY;
 
         if (tau_new - tau).abs() < LIGHT_TIME_TOL {
-            return Ok(target_pos);
+            return if deflect {
+                with_solar_deflection(provider, body, jd, &earth_anchor, tau, target_pos)
+            } else {
+                Ok(target_pos)
+            };
         }
         tau = tau_new;
     }
 
     // Not converged in 10 iterations: evaluate once more at the last τ.
-    retarded_geocentric(provider, body, jd, tau, earth_anchor)
+    let target_pos = retarded_geocentric(provider, body, jd, tau, earth_anchor)?;
+    if deflect {
+        with_solar_deflection(provider, body, jd, &earth_anchor, tau, target_pos)
+    } else {
+        Ok(target_pos)
+    }
+}
+
+/// Add the Sun's gravitational deflection of light to the geocentric vector
+/// `geo` that [`retarded_geocentric`] built with light time `tau`.
+///
+/// `geo` is the astrometric vector `target(t−τ) − Earth(t)` plus the
+/// first-order aberration displacement `v_Earth·τ`, so the deflection is
+/// computed from `geo − v_Earth·τ`. Deflection acts on the astrometric
+/// direction, before aberration: the two commute at first order, but at a
+/// degree from the Sun the aberration's 20″ would shift the deflection by a
+/// few milliarcseconds if it were left in.
+///
+/// The Sun is not deflected by itself, and the Moon, which never reaches this
+/// function, would be moved by under 0.01 milliarcsecond: its ray starts 0.15°
+/// from the Earth–Sun line as seen from the Sun, and the bending angle
+/// goes as the tangent of half that. See [`crate::deflection`] for the model.
+fn with_solar_deflection(
+    provider: &dyn EphemerisProvider,
+    body: Body,
+    jd: f64,
+    earth: &StateVector,
+    tau: f64,
+    geo: [f64; 3],
+) -> Result<[f64; 3], ComputeError> {
+    if body == Body::Sun {
+        return Ok(geo);
+    }
+    let sun = provider.compute_state(Body::Sun, jd)?.position;
+    let astrometric = [
+        geo[0] - earth.velocity.x * tau,
+        geo[1] - earth.velocity.y * tau,
+        geo[2] - earth.velocity.z * tau,
+    ];
+    let observer_from_sun = [
+        earth.position.x - sun.x,
+        earth.position.y - sun.y,
+        earth.position.z - sun.z,
+    ];
+    let shift = crate::deflection::solar_deflection(astrometric, observer_from_sun);
+    Ok([geo[0] + shift[0], geo[1] + shift[1], geo[2] + shift[2]])
 }
 
 /// Convergence threshold of the light-time iteration on `τ`, in days.
@@ -509,16 +581,21 @@ fn retarded_geocentric(
 ///
 /// Pipeline:
 /// 1. Get Earth's barycentric position (EMB + Earth-relative-to-EMB)
-/// 2. Apply light-time correction to get body's geometric position
+/// 2. Apply light-time correction to get body's geometric position, with
+///    Earth displaced to the retarded time to first order (the planetary
+///    aberration form, which carries annual aberration)
 /// 3. Compute geocentric position vector
-/// 4. Apply precession (J2000 -> date)
-/// 5. Apply nutation (mean -> true equatorial)
-/// 6. Apply annual aberration
+/// 4. Bend it by the Sun's gravity ([`crate::deflection::solar_deflection`]),
+///    for every body but the Sun and the Moon
+/// 5. Apply precession (J2000 -> date; the IAU 2006 matrix carries the ICRS
+///    frame bias)
+/// 6. Apply nutation (mean -> true equatorial)
 /// 7. Rotate from equatorial to ecliptic using true obliquity
 /// 8. Extract longitude, latitude, distance
 /// 9. Compute daily motion via numerical differentiation
 ///
-/// Source: Meeus, "Astronomical Algorithms" 2nd ed., Ch. 22-23, 33.
+/// Source: Meeus, "Astronomical Algorithms" 2nd ed., Ch. 22-23, 33; Klioner
+/// (2003) for step 4.
 ///
 /// # Errors
 /// Returns [`ComputeError`] if the ephemeris provider cannot compute the
@@ -873,6 +950,103 @@ mod tests {
         assert!(declination_deg(180.0, 0.0, eps).abs() < 1e-12);
         let (ra, _) = ecliptic_to_equatorial_deg(90.0, 0.0, eps);
         assert!((ra - 90.0).abs() < 1e-12);
+    }
+
+    /// Angle in radians between two 3-vectors, by `atan2(|a × b|, a · b)`, which
+    /// stays accurate for the nanoradian angles compared below.
+    fn angle3(a: &[f64; 3], b: &[f64; 3]) -> f64 {
+        let cross = [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ];
+        libm::atan2(norm3(&cross), a[0] * b[0] + a[1] * b[1] + a[2] * b[2])
+    }
+
+    /// The pipeline bends a planet's ray by the Sun's gravity, by the amount
+    /// the closed form says (Klioner 2003, eq. 77: `(2GM/c²·|r_o|)·tan(φ/2)`,
+    /// `φ` the angle at the Sun between the planet at emission and the Earth).
+    ///
+    /// The expectation is built here from the provider's own Sun, Earth and
+    /// planet states and that one formula, not from `deflection.rs`'s vector
+    /// code, so a sign slip, a missing term or a wrong time in the wiring
+    /// shows up as a different angle. Mercury and Venus are scanned for a date
+    /// a few degrees from the Sun, where the angle is tens of milliarcseconds
+    /// and a wiring fault cannot hide in rounding.
+    #[test]
+    fn planets_are_deflected_by_the_closed_form_angle() {
+        use crate::analytical::AnalyticalProvider;
+        let provider = AnalyticalProvider::new();
+        let c = crate::aberration::C_AU_PER_DAY;
+        let mut checked = 0;
+        for (body, start) in [(Body::Mercury, 2_460_000.5), (Body::Venus, 2_459_000.5)] {
+            // The date in the next 600 days with the smallest elongation that
+            // still clears the solar disc by a wide margin.
+            let mut best: Option<(f64, f64)> = None;
+            let mut jd = start;
+            while jd < start + 600.0 {
+                let sun = provider.compute_state(Body::Sun, jd).unwrap().position;
+                let earth = provider.earth_state(jd).unwrap().position;
+                let target = provider.compute_state(body, jd).unwrap().position;
+                let to_sun = [sun.x - earth.x, sun.y - earth.y, sun.z - earth.z];
+                let to_target = [target.x - earth.x, target.y - earth.y, target.z - earth.z];
+                let elongation = angle3(&to_sun, &to_target).to_degrees();
+                if elongation > 1.5 && best.is_none_or(|(e, _)| elongation < e) {
+                    best = Some((elongation, jd));
+                }
+                jd += 1.0;
+            }
+            let (elongation, jd) = best.expect("a date near the Sun");
+            assert!(elongation < 12.0, "scan found only {elongation}°");
+
+            let plain = light_time_geocentric_with(&provider, body, jd, false).unwrap();
+            let bent = light_time_geocentric_with(&provider, body, jd, true).unwrap();
+            let shift = angle3(&plain, &bent);
+
+            // Independent expectation: r_o = Earth - Sun at t, r_e = planet - Sun
+            // at the retarded time.
+            let tau = norm3(&plain) / c;
+            let sun = provider.compute_state(Body::Sun, jd).unwrap().position;
+            let earth = provider.earth_state(jd).unwrap().position;
+            let planet = provider.compute_state(body, jd - tau).unwrap().position;
+            let r_o = [earth.x - sun.x, earth.y - sun.y, earth.z - sun.z];
+            let r_e = [planet.x - sun.x, planet.y - sun.y, planet.z - sun.z];
+            let phi = angle3(&r_e, &r_o);
+            let expected = crate::deflection::SOLAR_SCHWARZSCHILD_RADIUS_AU * libm::tan(phi / 2.0)
+                / norm3(&r_o);
+
+            let mas = 206_264_806.247_096_36;
+            assert!(
+                expected * mas > 20.0,
+                "{body:?}: choose a date nearer the Sun, expected shift only {} mas",
+                expected * mas
+            );
+            assert!(
+                (shift - expected).abs() < 2e-3 * expected,
+                "{body:?} at JD {jd} ({elongation:.1}° from the Sun): pipeline shifts the \
+                 ray by {} mas, closed form says {} mas",
+                shift * mas,
+                expected * mas
+            );
+            checked += 1;
+        }
+        assert_eq!(checked, 2);
+    }
+
+    /// The Sun is not deflected by itself, and the Moon is left out on purpose
+    /// (its ray is bent by under 0.01 milliarcsecond): both come back
+    /// bit-identical with the step on or off.
+    #[test]
+    fn the_sun_and_the_moon_are_not_deflected() {
+        use crate::analytical::AnalyticalProvider;
+        let provider = AnalyticalProvider::new();
+        for jd in [2_451_545.0, 2_460_000.5, 2_433_000.5] {
+            for body in [Body::Sun, Body::Moon] {
+                let on = light_time_geocentric_with(&provider, body, jd, true).unwrap();
+                let off = light_time_geocentric_with(&provider, body, jd, false).unwrap();
+                assert_eq!(on.map(f64::to_bits), off.map(f64::to_bits), "{body:?}");
+            }
+        }
     }
 
     #[test]
