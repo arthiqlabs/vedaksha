@@ -415,6 +415,40 @@ mod tests {
         );
     }
 
+    // 4b. The request's two births, re-derived by hand under this module's
+    // reading (not the request's own numbering).
+    //
+    // F1: lagna Leo, atmakaraka Mercury in Aries(0); Sun and Jupiter in
+    // Taurus, Moon in Libra, Mars, Mercury and Venus in Aries, Saturn in
+    // Cancer, Rahu in Virgo, Ketu in Pisces. The eighth from Aries is
+    // Scorpio, lords Mars and Ketu. No node is with Mercury or in Scorpio.
+    // Mercury's rashi of exaltation, Virgo(5), holds Rahu, so 2.1.50 applies:
+    // the stronger of the eighth lord and the twelfth lord (Pisces: Jupiter).
+    // The eighth lord is the stronger of Mars (Aries, with Mercury and Venus:
+    // two companions) and Ketu (Pisces, alone): Mars. Against Jupiter
+    // (Taurus, with the Sun: one companion), Mars has more. Maheshwara is
+    // Mars. (The request guessed Jupiter if its 2.1.45 applied; here the
+    // companions decide for Mars.)
+    //
+    // F2: lagna Pisces, atmakaraka the Moon in Virgo(5); Sun, Moon and
+    // Mercury in Virgo, Mars in Libra, Jupiter and Venus in Leo, Saturn in
+    // Capricorn, Rahu in Sagittarius, Ketu in Gemini. The eighth from Virgo
+    // is Aries, lord Mars. The Moon's exaltation rashi, Taurus, is empty and
+    // no node is with the Moon or in Aries: 2.1.49 alone, Mars.
+    #[test]
+    fn request_births_f1_and_f2() {
+        let f1 = chart(4, [1, 6, 0, 0, 1, 0, 3, 5]);
+        assert_eq!(
+            maheshwara(&f1, Graha::Mercury, MaheshwaraRules::default()),
+            Graha::Mars
+        );
+        let f2 = chart(11, [5, 5, 6, 5, 4, 4, 9, 8]);
+        assert_eq!(
+            maheshwara(&f2, Graha::Moon, MaheshwaraRules::default()),
+            Graha::Mars
+        );
+    }
+
     // 5. The span of life and the death antars, end to end. Chart A (Saturn
     // is Maheshwara, in Pisces(11)), the sthira dasha anchored on the lagna
     // (Aries, odd, forward): Aries 7, Taurus 8, Gemini 9, Cancer 7, Leo 8,
@@ -501,8 +535,10 @@ mod tests {
         );
     }
 
-    // 8. The commentators' window. Chara from an Aries lagna with every
-    // graha in Aries: Aries, Taurus, ... The window of a rashi opens at its
+    // 8. The commentators' window. Its antar cycles are the ones the request
+    // gives for its two births (Scorpio, Cancer, Pisces repeating; Aries,
+    // Leo, Sagittarius repeating). The chara dasha here is from an Aries
+    // lagna with every graha in Aries. The window of a rashi opens at its
     // chara period and lasts twelve years of twelve one-year antars cycling
     // its trikona: Scorpio(7), even, in reverse: 7 3 11 repeating; Aries(0),
     // odd, forward: 0 4 8 repeating.
