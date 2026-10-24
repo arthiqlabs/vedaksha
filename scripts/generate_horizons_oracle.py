@@ -25,9 +25,13 @@ is meaningless:
   boundary (`compute_ecliptic_with_frame` and the analytical providers it
   calls) is addressed in TT and performs no further conversion; its
   parameter is named `jd_tt` precisely to mark that. Horizons OBSERVER
-  tables read input JD as UT and report `Date_________JDUT`. Both sides
-  therefore speak UT at the query boundary and no ΔT correction is applied
-  here.
+  tables read input JD as UT and report `Date_________JDUT`, and no ΔT
+  correction is applied here. But Horizons' UT is not UT1 throughout: its
+  manual (https://ssd.jpl.nasa.gov/horizons/manual.html, "The three time
+  systems") says UT means UT1 before 1962 and UTC from 1962. So
+  the two sides speak the same UT only before 1962; afterwards the engine's
+  UT1 and Horizons' UTC differ by DUT1 (up to 0.9 s, up to 0.5″ of Moon
+  longitude), which no ΔT table can remove.
 * **Target — barycentres.** `Body::naif_id()` returns barycentre IDs
   (Mercury=1, Venus=2, Mars=4, Jupiter=5 … Pluto=9), because `SpkReader`
   reads DE440s barycentre segments. We query the same IDs. Fetching planet
