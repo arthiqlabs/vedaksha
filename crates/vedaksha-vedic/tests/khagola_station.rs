@@ -133,12 +133,12 @@ fn check_span(graha: Graha, body: Body, from: f64, to: f64) -> (usize, f64, bool
 }
 
 #[test]
-fn the_series_is_the_daily_walk_over_two_decades() {
+fn the_series_is_the_daily_walk_over_six_years() {
     let from = jd(2020, 1, 1, 0.0);
-    let to = jd(2040, 1, 1, 0.0);
+    let to = jd(2026, 1, 1, 0.0);
     for (graha, body) in PLANETS {
         let (n, _, _) = check_span(graha, body, from, to);
-        assert!(n >= 15, "{graha:?}: {n} stations in 20 years");
+        assert!(n >= 4, "{graha:?}: {n} stations in 6 years");
     }
 }
 

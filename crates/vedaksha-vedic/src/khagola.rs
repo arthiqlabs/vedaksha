@@ -586,7 +586,7 @@ const STATION_TOL_D: f64 = 1.0e-8;
 /// interval, not the interval, so that a retrograde somewhere outside 1900 to
 /// 2100 a little shorter than these still cannot put two stations in one step.
 /// The figures above were measured once (2026-10-24); `tests/khagola_station.rs`
-/// checks the series against the daily walk over 2020 to 2040.
+/// checks the series against the daily walk over 2020 to 2026.
 #[must_use]
 pub const fn station_step_days(graha: Graha) -> Option<f64> {
     match graha {
