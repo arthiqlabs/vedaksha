@@ -30,4 +30,6 @@ The same engine ships as a Python package ([`vedaksha`](https://pypi.org/project
 
 ## Licence
 
-BUSL-1.1, source-available. Non-commercial use is free; commercial use (a product or service earning revenue from external customers) needs a one-time licence of USD $500 per organisation. Each release converts to Apache-2.0 four years after it ships. See [LICENSE](https://github.com/arthiqlabs/vedaksha/blob/main/LICENSE). By ArthIQ Labs.
+BUSL-1.1, source-available. Non-commercial use is free; commercial use (a product or service earning revenue from external customers) needs a one-time licence of USD $500 per organisation. Each release converts to Apache-2.0 four years after it ships. See [LICENSE][license]. By ArthIQ Labs.
+
+[license]: https://github.com/arthiqlabs/vedaksha/blob/main/LICENSE

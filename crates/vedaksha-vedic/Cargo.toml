@@ -10,7 +10,7 @@ rust-version.workspace = true
 description = "Vedic astrology: nakshatras, dashas, vargas, yogas, shadbala"
 keywords = ["jyotish", "vedic-astrology", "kundli", "dasha", "panchanga"]
 readme = "README.md"
-categories = ["science"]
+categories = ["science", "date-and-time"]
 
 [dependencies]
 vedaksha-math = { version = "10.0.0", path = "../vedaksha-math" }

@@ -119,7 +119,7 @@ python -m vedaksha.rest      # FastAPI app; each tool is POST /v1/<tool_name>
 Business Source License 1.1, identical terms to the [Rust engine](https://github.com/arthiqlabs/vedaksha).
 Non-commercial use is free. Commercial use (any product or service generating revenue from
 external customers) needs a one-time commercial licence, USD $500 per organisation; each
-release converts to Apache-2.0 four years after it ships. See [LICENSE](https://github.com/arthiqlabs/vedaksha/blob/main/LICENSE).
+release converts to Apache-2.0 four years after it ships. See [LICENSE][license].
 
 ## How it relates to the Rust engine
 
@@ -127,3 +127,5 @@ The Rust engine at [`arthiqlabs/vedaksha`](https://github.com/arthiqlabs/vedaksh
 normative. This package pins a specific engine commit, compiles it to wasm, and ships the
 blob. Version numbers track the engine. See [ARCHITECTURE.md](https://github.com/arthiqlabs/vedaksha/blob/main/bindings/python/ARCHITECTURE.md)
 for the design and the SPK-over-wasm validation.
+
+[license]: https://github.com/arthiqlabs/vedaksha/blob/main/LICENSE

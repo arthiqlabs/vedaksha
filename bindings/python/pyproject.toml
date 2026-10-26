@@ -31,7 +31,6 @@ classifiers = [
     "Operating System :: OS Independent",
     "Topic :: Scientific/Engineering :: Astronomy",
     "Topic :: Scientific/Engineering :: Mathematics",
-    "License :: Other/Proprietary License",
 ]
 dependencies = ["wasmtime>=20"]
 
@@ -47,6 +46,9 @@ vedaksha-mcp = "vedaksha.mcp.__main__:main"
 Homepage = "https://vedaksha.net"
 Source = "https://github.com/arthiqlabs/vedaksha/tree/main/bindings/python"
 Engine = "https://github.com/arthiqlabs/vedaksha"
+Documentation = "https://vedaksha.net/docs"
+Changelog = "https://github.com/arthiqlabs/vedaksha/releases"
+Issues = "https://github.com/arthiqlabs/vedaksha/issues"
 
 # The wasm blob is a build artifact (not committed): run scripts/build-wasm.sh
 # to produce src/vedaksha/_wasm/vedaksha.wasm before building the wheel/sdist.

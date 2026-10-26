@@ -8,9 +8,9 @@ repository.workspace = true
 license.workspace = true
 rust-version.workspace = true
 description = "Vedic and Western astrology engine — ephemeris, kundali/natal charts, panchanga, dashas, nakshatras, vargas, and more"
-keywords = ["astrology", "ephemeris", "vedic", "jyotish", "kundali"]
+keywords = ["astrology", "ephemeris", "vedic-astrology", "jyotish", "kundali"]
 readme = "README.md"
-categories = ["science", "mathematics"]
+categories = ["science", "mathematics", "date-and-time"]
 
 [dependencies]
 vedaksha-math = { version = "10.0.0", path = "../vedaksha-math" }
