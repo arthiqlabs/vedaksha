@@ -50,6 +50,16 @@ def test_handle_raw_null_id_is_still_a_request(server: McpServer) -> None:
     assert json.loads(resp)["result"]["tools"]
 
 
+@pytest.mark.parametrize("raw", [
+    '{"jsonrpc":"2.0","method":1,"params":"bar"}',
+    '{"method":"notifications/initialized"}',
+])
+def test_handle_raw_invalid_message_without_id_is_answered(server: McpServer, raw: str) -> None:
+    resp = server.handle_raw(raw)
+    assert resp is not None
+    assert "error" in json.loads(resp)
+
+
 def test_http_requires_token_by_default() -> None:
     with pytest.raises(ValueError):
         serve_http(require_auth=True, token=None)

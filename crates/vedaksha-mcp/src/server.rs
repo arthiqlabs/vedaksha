@@ -73,12 +73,18 @@ pub struct JsonRpcError {
     pub data: Option<serde_json::Value>,
 }
 
-/// True when `message_json` is a JSON-RPC 2.0 notification: an object carrying
-/// a `method` and no `id` member at all. An explicit `"id": null` is a request
-/// with a null id, not a notification, so it is still answered.
+/// True when `message_json` is a valid JSON-RPC 2.0 notification: an object
+/// with `"jsonrpc": "2.0"`, a string `method`, and no `id` member at all. An
+/// explicit `"id": null` is a request with a null id, so it is still answered,
+/// and so is an invalid message without an `id`, which gets an error reply
+/// rather than silence.
 fn is_notification(message_json: &str) -> bool {
     match serde_json::from_str::<serde_json::Value>(message_json) {
-        Ok(serde_json::Value::Object(obj)) => obj.contains_key("method") && !obj.contains_key("id"),
+        Ok(serde_json::Value::Object(obj)) => {
+            obj.get("jsonrpc").and_then(serde_json::Value::as_str) == Some("2.0")
+                && obj.get("method").is_some_and(serde_json::Value::is_string)
+                && !obj.contains_key("id")
+        }
         _ => false,
     }
 }
@@ -1990,6 +1996,23 @@ mod tests {
             .expect("a request with an explicit null id must be answered");
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         assert!(val["result"]["tools"].is_array());
+    }
+
+    #[test]
+    fn invalid_message_without_id_is_answered_not_silenced() {
+        // A non-string method or a missing `jsonrpc` makes the message invalid,
+        // not a notification, so the sender must hear about it.
+        let s = server();
+        for msg in [
+            r#"{"jsonrpc":"2.0","method":1,"params":"bar"}"#,
+            r#"{"method":"notifications/initialized"}"#,
+        ] {
+            let resp = s
+                .handle_message(msg)
+                .unwrap_or_else(|| panic!("invalid message {msg} must get a reply"));
+            let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+            assert!(val["error"].is_object(), "expected an error for {msg}");
+        }
     }
 
     #[test]

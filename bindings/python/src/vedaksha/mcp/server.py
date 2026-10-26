@@ -28,11 +28,12 @@ class McpServer:
     def handle_raw(self, raw: str) -> str | None:
         """Dispatch a raw JSON-RPC string, returning a raw JSON string.
 
-        Returns ``None`` for a notification (a message with a ``method`` and no
-        ``id``, such as the ``notifications/initialized`` every MCP client
-        sends after ``initialize``): JSON-RPC 2.0 forbids answering one, so the
-        transport writes nothing. An explicit ``"id": null`` is a request and
-        is answered.
+        Returns ``None`` for a valid notification (``"jsonrpc": "2.0"``, a
+        string ``method`` and no ``id``, such as the
+        ``notifications/initialized`` every MCP client sends after
+        ``initialize``): JSON-RPC 2.0 forbids answering one, so the transport
+        writes nothing. An explicit ``"id": null`` is a request and is
+        answered, and so is an invalid message without an ``id``.
 
         Malformed JSON yields a JSON-RPC parse-error response rather than an
         exception, matching the protocol's requirement that the transport
@@ -45,7 +46,12 @@ class McpServer:
                 {"jsonrpc": "2.0", "id": None,
                  "error": {"code": -32700, "message": "Parse error"}}
             )
-        if isinstance(request, dict) and "method" in request and "id" not in request:
+        if (
+            isinstance(request, dict)
+            and request.get("jsonrpc") == "2.0"
+            and isinstance(request.get("method"), str)
+            and "id" not in request
+        ):
             return None
         return json.dumps(self.handle(request))
 
