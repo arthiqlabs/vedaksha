@@ -8,7 +8,7 @@ abstract: >-
   queryable property graph. Validated against a 24,350-row JPL Horizons
   fixture at 0.096 arcsecond mean residual over 1900 to 2025.
 type: software
-version: 10.0.1
+version: 10.0.2
 date-released: "2026-10-26"
 url: "https://vedaksha.net"
 repository-code: "https://github.com/arthiqlabs/vedaksha"

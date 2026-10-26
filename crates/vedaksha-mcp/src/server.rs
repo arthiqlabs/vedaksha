@@ -73,6 +73,16 @@ pub struct JsonRpcError {
     pub data: Option<serde_json::Value>,
 }
 
+/// True when `message_json` is a JSON-RPC 2.0 notification: an object carrying
+/// a `method` and no `id` member at all. An explicit `"id": null` is a request
+/// with a null id, not a notification, so it is still answered.
+fn is_notification(message_json: &str) -> bool {
+    match serde_json::from_str::<serde_json::Value>(message_json) {
+        Ok(serde_json::Value::Object(obj)) => obj.contains_key("method") && !obj.contains_key("id"),
+        _ => false,
+    }
+}
+
 // ── Standard JSON-RPC error codes ────────────────────────────────────────────
 
 pub const PARSE_ERROR: i32 = -32700;
@@ -109,6 +119,21 @@ impl McpServer {
         Self {}
     }
 
+    /// Handle one raw JSON-RPC 2.0 message from a transport.
+    ///
+    /// Returns `None` for a notification (a message with a `method` and no
+    /// `id`, such as the `notifications/initialized` every MCP client sends
+    /// after `initialize`): JSON-RPC 2.0 forbids answering one, so the
+    /// transport writes nothing. Every other message is answered by
+    /// [`Self::handle_request`].
+    #[must_use]
+    pub fn handle_message(&self, message_json: &str) -> Option<String> {
+        if is_notification(message_json) {
+            return None;
+        }
+        Some(self.handle_request(message_json))
+    }
+
     /// Handle a raw JSON-RPC 2.0 request string and return a JSON-RPC response
     /// string.
     ///
@@ -116,6 +141,10 @@ impl McpServer {
     /// encoded as JSON-RPC error responses rather than propagated as Rust
     /// errors, matching the protocol requirement that the transport always
     /// receives a well-formed response.
+    ///
+    /// A transport should call [`Self::handle_message`] instead, which also
+    /// handles notifications. Called directly with a notification, this
+    /// returns a parse error, because a notification has no `id` to answer.
     #[must_use]
     pub fn handle_request(&self, request_json: &str) -> String {
         // 1. Parse the JSON-RPC request.
@@ -1936,6 +1965,41 @@ mod tests {
         let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
         assert_eq!(val["error"]["code"].as_i64().unwrap(), PARSE_ERROR as i64);
         assert_eq!(val["id"], serde_json::Value::Null);
+    }
+
+    // ── notifications ─────────────────────────────────────────────────────────
+
+    #[test]
+    fn initialized_notification_gets_no_reply() {
+        // Every MCP client sends this right after `initialize`. It has no
+        // `id`, and answering it with a parse error is what Glama's client
+        // logged against 10.0.1.
+        let s = server();
+        assert_eq!(
+            s.handle_message(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#),
+            None
+        );
+    }
+
+    #[test]
+    fn request_with_null_id_is_still_answered() {
+        // `"id": null` is present, so this is a request, not a notification.
+        let s = server();
+        let resp = s
+            .handle_message(r#"{"jsonrpc":"2.0","id":null,"method":"tools/list"}"#)
+            .expect("a request with an explicit null id must be answered");
+        let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+        assert!(val["result"]["tools"].is_array());
+    }
+
+    #[test]
+    fn handle_message_still_answers_malformed_json() {
+        let s = server();
+        let resp = s
+            .handle_message("this is not json")
+            .expect("malformed JSON must still get a parse-error reply");
+        let val: serde_json::Value = serde_json::from_str(&resp).unwrap();
+        assert_eq!(val["error"]["code"].as_i64().unwrap(), PARSE_ERROR as i64);
     }
 
     // ── unknown method ────────────────────────────────────────────────────────

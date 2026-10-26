@@ -113,7 +113,10 @@ fn run_stdio() {
             continue;
         }
 
-        let response = server.handle_request(trimmed);
+        // A notification gets no reply: JSON-RPC 2.0 forbids answering one.
+        let Some(response) = server.handle_message(trimmed) else {
+            continue;
+        };
         let _ = writeln!(stdout, "{response}");
         let _ = stdout.flush();
     }
@@ -355,7 +358,12 @@ fn serve_one(
         return;
     }
 
-    let response_json = mcp.handle_request(&body);
+    // A notification gets no JSON-RPC reply; the MCP HTTP transport answers
+    // it with 202 Accepted and an empty body.
+    let Some(response_json) = mcp.handle_message(&body) else {
+        let _ = request.respond(Response::empty(202).with_header(cors_origin_header()));
+        return;
+    };
 
     let _ = request.respond(
         Response::from_string(response_json)

@@ -25,8 +25,14 @@ class McpServer:
     def handle(self, request: dict[str, Any]) -> dict[str, Any]:
         return self._engine.call_json(request)
 
-    def handle_raw(self, raw: str) -> str:
+    def handle_raw(self, raw: str) -> str | None:
         """Dispatch a raw JSON-RPC string, returning a raw JSON string.
+
+        Returns ``None`` for a notification (a message with a ``method`` and no
+        ``id``, such as the ``notifications/initialized`` every MCP client
+        sends after ``initialize``): JSON-RPC 2.0 forbids answering one, so the
+        transport writes nothing. An explicit ``"id": null`` is a request and
+        is answered.
 
         Malformed JSON yields a JSON-RPC parse-error response rather than an
         exception, matching the protocol's requirement that the transport
@@ -39,6 +45,8 @@ class McpServer:
                 {"jsonrpc": "2.0", "id": None,
                  "error": {"code": -32700, "message": "Parse error"}}
             )
+        if isinstance(request, dict) and "method" in request and "id" not in request:
+            return None
         return json.dumps(self.handle(request))
 
 
@@ -49,7 +57,10 @@ def serve_stdio(server: McpServer | None = None) -> None:
         line = line.strip()
         if not line:
             continue
-        sys.stdout.write(server.handle_raw(line) + "\n")
+        response = server.handle_raw(line)
+        if response is None:  # a notification gets no reply
+            continue
+        sys.stdout.write(response + "\n")
         sys.stdout.flush()
 
 
@@ -102,8 +113,13 @@ def serve_http(
                 return
             length = int(self.headers.get("Content-Length", 0))
             raw = self.rfile.read(length).decode("utf-8", "replace")
-            resp = server.handle_raw(raw).encode()
-            self._send(200, resp)
+            resp = server.handle_raw(raw)
+            if resp is None:
+                # A notification gets no JSON-RPC reply; the MCP HTTP
+                # transport answers it with 202 Accepted and an empty body.
+                self._send(202, b"")
+                return
+            self._send(200, resp.encode())
 
         def do_GET(self) -> None:
             self._send(200, b'{"status":"ok","service":"vedaksha-mcp"}')

@@ -36,6 +36,20 @@ def test_handle_raw_bad_json_is_parse_error(server: McpServer) -> None:
     assert resp["error"]["code"] == -32700
 
 
+def test_handle_raw_initialized_notification_gets_no_reply(server: McpServer) -> None:
+    # Every MCP client sends this after `initialize`; it has no `id`, and
+    # JSON-RPC 2.0 forbids answering a notification.
+    assert server.handle_raw(
+        '{"jsonrpc":"2.0","method":"notifications/initialized"}'
+    ) is None
+
+
+def test_handle_raw_null_id_is_still_a_request(server: McpServer) -> None:
+    resp = server.handle_raw('{"jsonrpc":"2.0","id":null,"method":"tools/list"}')
+    assert resp is not None
+    assert json.loads(resp)["result"]["tools"]
+
+
 def test_http_requires_token_by_default() -> None:
     with pytest.raises(ValueError):
         serve_http(require_auth=True, token=None)

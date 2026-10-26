@@ -13,9 +13,9 @@ readme = "README.md"
 categories = ["science", "date-and-time"]
 
 [dependencies]
-vedaksha-math = { version = "10.0.1", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "10.0.1", path = "../vedaksha-ephem-core" }
-vedaksha-astro = { version = "10.0.1", path = "../vedaksha-astro" }
+vedaksha-math = { version = "10.0.2", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "10.0.2", path = "../vedaksha-ephem-core" }
+vedaksha-astro = { version = "10.0.2", path = "../vedaksha-astro" }
 serde = { workspace = true }
 libm = "0.2"
 
