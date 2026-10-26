@@ -241,7 +241,7 @@ Against JPL Horizons over 1900 to 2025, in apparent geocentric longitude: 0.096â
 Eleven ayanamshas, each derived from a primary source, and eight dasha systems: Vimshottari, Ashtottari, Yogini, Chara, Narayana, Sthira, Niryana Shoola and Maheshwara.
 
 ### Can an AI agent use it?
-Yes. The MCP server runs over stdio or HTTP and is listed in the official MCP Registry as `io.github.arthiqlabs/vedaksha`. See [Quick start](#quick-start) for a client config.
+Yes. The MCP server runs over stdio or HTTP and is listed in the official MCP Registry as `io.github.arthiqlabs/vedaksha-vedic-astrology`. See [Quick start](#quick-start) for a client config.
 
 ## License
 

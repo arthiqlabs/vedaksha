@@ -27,7 +27,7 @@ FROM debian:bookworm-slim
 # image predates this and is therefore not listable; the registry entry
 # regains its package block at the next release, when the image built from
 # that tag carries the label. `check_mcp_image_label.py` keeps the two in step.
-LABEL io.modelcontextprotocol.server.name="io.github.arthiqlabs/vedaksha"
+LABEL io.modelcontextprotocol.server.name="io.github.arthiqlabs/vedaksha-vedic-astrology"
 
 COPY --from=builder /app/target/release/vedaksha-mcp /usr/local/bin/vedaksha-mcp
 

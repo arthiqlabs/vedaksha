@@ -639,7 +639,7 @@ checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
 name = "vedaksha"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "vedaksha-astro",
  "vedaksha-ephem-core",
@@ -650,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-astro"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "libm",
  "serde",
@@ -661,7 +661,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-ephem-core"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "criterion",
  "libm",
@@ -675,7 +675,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-graph"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -684,14 +684,14 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-math"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "libm",
 ]
 
 [[package]]
 name = "vedaksha-mcp"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -706,7 +706,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-py-engine"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "vedaksha-ephem-core",
  "vedaksha-mcp",
@@ -714,7 +714,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-vedic"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "libm",
  "serde",
@@ -725,7 +725,7 @@ dependencies = [
 
 [[package]]
 name = "vedaksha-wasm"
-version = "10.0.0"
+version = "10.0.1"
 dependencies = [
  "serde",
  "serde-wasm-bindgen",

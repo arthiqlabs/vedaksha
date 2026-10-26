@@ -1,4 +1,4 @@
-<!-- mcp-name: io.github.arthiqlabs/vedaksha -->
+<!-- mcp-name: io.github.arthiqlabs/vedaksha-vedic-astrology -->
 
 # Vedaksha for Python — Vedic astrology & ephemeris
 
