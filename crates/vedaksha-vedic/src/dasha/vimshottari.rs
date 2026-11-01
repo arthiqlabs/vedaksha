@@ -14,6 +14,21 @@
 //! **Boundary convention:** Moon at exactly 0° sidereal is in Ashwini (not Revati).
 //! The nakshatra boundary uses `>=` lower / `<` upper, matching `Nakshatra::from_longitude`.
 //!
+//! **The first maha's sub-periods.** A maha always has its full length, and
+//! its sub-periods divide that full length in their fixed shares (BPHS 46-47).
+//! The birth falls part of the way through the first maha, by the share of the
+//! nakshatra the Moon has traversed, so that maha's **notional start** is the
+//! birth less that share of its full length, and its sub-periods run from the
+//! notional start. The maha itself still opens at the birth, with
+//! `initial_balance` of its length. Its sub-periods are all kept: those with
+//! `end_jd <= birth_jd` ended before birth, the one running at birth has
+//! `start_jd < birth_jd < end_jd` and carries its true start, and so on down
+//! every level. So the first maha's `sub_periods` sum to its full length, not to
+//! its `duration_days`; every later maha's sub-periods tile it exactly. Until
+//! v10.1.0 the first maha's balance alone was divided, from the birth, which
+//! named the wrong running sub-period whenever the elapsed share exceeded the
+//! maha lord's own.
+//!
 //! Source: BPHS Ch. 46-47.
 
 use serde::{Deserialize, Serialize};
@@ -164,8 +179,18 @@ pub fn compute_vimshottari(
 
         let end_jd = current_jd + duration;
 
+        // The sub-periods divide the maha's full length from its notional
+        // start, which for the first maha is the birth less the elapsed share.
+        let (sub_start, sub_span) = if i == 0 {
+            (
+                current_jd - full_duration_days * elapsed_fraction,
+                full_duration_days,
+            )
+        } else {
+            (current_jd, duration)
+        };
         let sub_periods = if levels > 1 {
-            compute_sub_periods(maha_lord, current_jd, duration, 2, levels)
+            compute_sub_periods(maha_lord, sub_start, sub_span, 2, levels)
         } else {
             Vec::new()
         };
@@ -346,5 +371,85 @@ mod tests {
             let gap = (result.maha_dashas[i].start_jd - result.maha_dashas[i - 1].end_jd).abs();
             assert!(gap < 1e-9, "gap between maha dashas {}-{}: {gap}", i - 1, i);
         }
+    }
+
+    // Rule test (handoff 2026-10-31): the first maha's sub-periods divide its
+    // FULL length from its notional start (birth less the elapsed share), so
+    // for an elapsed share `e` the sub-period running at birth is the first
+    // whose cumulative share exceeds `e`, and every sub-period has its full
+    // share. Checked at two levels against shares worked from the years table
+    // alone. The elapsed shares chosen put the running antar past the maha
+    // lord's own for most cases, which the pre-v10.1.0 builder got wrong.
+    #[test]
+    fn first_maha_sub_periods_run_from_the_notional_start() {
+        // The index of the first entry whose cumulative share exceeds `e`.
+        fn running(shares: &[f64], e: f64) -> (usize, f64) {
+            let mut cum = 0.0;
+            for (k, s) in shares.iter().enumerate() {
+                if cum + s > e {
+                    return (k, (e - cum) / s);
+                }
+                cum += s;
+            }
+            unreachable!("shares sum to one")
+        }
+        let mut moved = 0;
+        for nak_index in [0_u8, 4, 13, 26] {
+            for e in [0.05, 0.3, 0.5, 0.77, 0.95] {
+                let start_lon = f64::from(nak_index) * Nakshatra::SPAN;
+                let lon = start_lon + e * Nakshatra::SPAN;
+                let tree = compute_vimshottari(lon, TEST_JD, 3);
+                let maha = &tree.maha_dashas[0];
+                let first = dasha_sequence_index(Nakshatra::from_longitude(lon).dasha_lord());
+                let shares: Vec<f64> = (0..9)
+                    .map(|i| DASHA_SEQUENCE[(first + i) % 9].maha_dasha_years() / TOTAL_DASHA_YEARS)
+                    .collect();
+                let full = DASHA_SEQUENCE[first].maha_dasha_years() * DASHA_YEAR_DAYS;
+                let notional = TEST_JD - full * e;
+                let subs = &maha.sub_periods;
+                assert_eq!(subs.len(), 9);
+                assert!((subs[0].start_jd - notional).abs() < 1e-6);
+                assert!((subs[9 - 1].end_jd - maha.end_jd).abs() < 1e-6);
+                for (i, sub) in subs.iter().enumerate() {
+                    assert_eq!(sub.lord, DASHA_SEQUENCE[(first + i) % 9]);
+                    let want = full * shares[i];
+                    assert!(
+                        (sub.duration_days - want).abs() < 1e-9 * full,
+                        "nak {nak_index} e {e} sub {i}: {} vs full share {want}",
+                        sub.duration_days
+                    );
+                }
+                let (k, e2) = running(&shares, e);
+                if k > 0 {
+                    moved += 1;
+                }
+                let at_birth = subs
+                    .iter()
+                    .position(|p| p.start_jd <= TEST_JD && TEST_JD < p.end_jd)
+                    .expect("one sub-period holds the birth");
+                assert_eq!(at_birth, k, "nak {nak_index} e {e}: running antar");
+                // One level down, the same rule inside the running antar.
+                let antar = &subs[k];
+                let a_first = (first + k) % 9;
+                let a_shares: Vec<f64> = (0..9)
+                    .map(|i| {
+                        DASHA_SEQUENCE[(a_first + i) % 9].maha_dasha_years() / TOTAL_DASHA_YEARS
+                    })
+                    .collect();
+                let (k2, _) = running(&a_shares, e2);
+                let at_birth2 = antar
+                    .sub_periods
+                    .iter()
+                    .position(|p| p.start_jd <= TEST_JD && TEST_JD < p.end_jd)
+                    .expect("one pratyantar holds the birth");
+                assert_eq!(at_birth2, k2, "nak {nak_index} e {e}: running pratyantar");
+                for (i, p) in antar.sub_periods.iter().enumerate() {
+                    let want = antar.duration_days * a_shares[i];
+                    assert!((p.duration_days - want).abs() < 1e-9 * full);
+                }
+            }
+        }
+        // The probe can fail: most cases put the birth past the first antar.
+        assert!(moved >= 10, "only {moved} cases exercise a later antar");
     }
 }

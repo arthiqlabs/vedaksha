@@ -279,10 +279,17 @@ fn dasha_period_sums_equal_120_years() {
         let moon_lon = (i as f64) * 3.6;
         let dasha = vimshottari::compute_vimshottari(moon_lon, 2451545.0, 3);
 
-        for maha in &dasha.maha_dashas {
+        for (k, maha) in dasha.maha_dashas.iter().enumerate() {
             test_total += 1;
             let sub_sum: f64 = maha.sub_periods.iter().map(|s| s.duration_days).sum();
-            let diff = (sub_sum - maha.duration_days).abs();
+            // The first maha's sub-periods divide its full length, from its
+            // notional start before birth; every later maha's tile it.
+            let span = if k == 0 {
+                maha.lord.maha_dasha_years() * dasha_year_days
+            } else {
+                maha.duration_days
+            };
+            let diff = (sub_sum - span).abs();
             if diff < 0.01 {
                 pass += 1;
             } else {

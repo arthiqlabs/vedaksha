@@ -287,7 +287,11 @@ pub fn definition() -> super::ToolDefinition {
             docs) and always carry their antardashas. Sthira and Maheshwara start from \
             the Brahma graha; a chart whose marks leave none returns `no_brahma: true` \
             with a message, not an error. Returns a JSON dasha tree with start/end \
-            Julian Days.",
+            Julian Days. For Vimshottari, Ashtottari and Yogini the first maha opens \
+            at birth with `initial_balance` of its length, but its sub-periods keep \
+            their full shares from the maha's notional start before birth: those with \
+            end_jd <= birth_jd ended before birth, and the one running at birth starts \
+            before it.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {

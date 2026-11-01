@@ -576,7 +576,12 @@ fn compute_combustion_surfaces_agree_across_all_three_states() {
 /// first (partial) maha dasha runs 19 years × 365.25 d × 0.5 = 3469.875 d
 /// from `birth_jd`. The nine maha dashas then follow the fixed cycle from
 /// Saturn, so the second is Mercury; sub-periods restart from the parent
-/// lord, so the first antar dasha of the Saturn maha is Saturn's.
+/// lord, so the first antar dasha of the Saturn maha is Saturn's. They divide
+/// the maha's full 6939.75 d from its notional start, 3469.875 d before birth,
+/// so the antar running at birth is the first whose cumulative share passes
+/// 0.5: Saturn 19, Mercury 17, Ketu 7, Venus 20 of 120 reach 63/120, so it is
+/// Venus, index 3, from 6939.75 x 43/120 = 2486.74375 d after the notional
+/// start.
 #[test]
 fn compute_dasha_surfaces_agree() {
     let birth_jd = 2_446_231.937_5_f64;
@@ -605,6 +610,12 @@ fn compute_dasha_surfaces_agree() {
         "sub-periods start at the parent"
     );
     assert_eq!(antar[0]["level"], 2);
+    let notional = birth_jd - 3469.875;
+    assert!((antar[0]["start_jd"].as_f64().unwrap() - notional).abs() < 1e-6);
+    assert_eq!(antar[3]["lord"], "Venus", "the antar running at birth");
+    let venus_start = antar[3]["start_jd"].as_f64().unwrap();
+    assert!((venus_start - (notional + 2486.74375)).abs() < 1e-6);
+    assert!(venus_start < birth_jd && birth_jd < antar[3]["end_jd"].as_f64().unwrap());
     assert!(
         antar[0]["sub_periods"].as_array().unwrap().is_empty(),
         "levels = 2 must stop at antar"

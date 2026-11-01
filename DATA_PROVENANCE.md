@@ -388,6 +388,31 @@ companions. Counted exactly over every placement of the eight grahas with each s
 11.42%. Every later period of a changed chart moves by the difference in years. Narayana Dasha, an
 alias of Chara, changes identically.
 
+## Accuracy fixes — 2026-11-01
+
+### Fix 15 — The first maha's sub-periods divided its balance instead of its full length
+
+A maha always has its full length, and its sub-periods divide that full length in their fixed
+shares, the maha lord's own first (BPHS 46-47, the rule `dasha::vimshottari` cites; the same rule
+holds for Ashtottari and Yogini). The birth falls part of the way through the first maha, by the
+share of the nakshatra the Moon has traversed, so the sub-periods run from the maha's notional
+start, the birth less that share of its full length.
+
+Since v2.0.0 the three builders divided only the first maha's remaining balance, from the birth.
+Every sub-period of the first maha was shorter than its share by the factor `initial_balance`, its
+first sub-period always opened at the birth and was the maha lord's own, and the sub-period named as
+running at birth was wrong whenever the elapsed share exceeded the maha lord's own share. The error
+propagated to every lower level. Mahas after the first, `initial_balance` and every maha boundary
+were correct and are unchanged.
+
+The first maha's sub-periods now run over its full length from its notional start. All of them are
+kept: those with `end_jd <= birth_jd` ended before birth, and the one running at birth starts before
+it, with its true start. The maha itself still opens at the birth. So the first maha's sub-periods
+sum to its full length, not to its `duration_days`. The tree was kept whole, rather than cut at the
+birth, so that no field changed and a consumer can read the true start of every running period.
+Rule tests in each of the three modules (`first_maha_sub_periods_run_from_the_notional_start`)
+work the shares from the years table alone, and fail against the old builders.
+
 ## Standing rules
 
 - Every PR that adds a new external data source must add a row here.
