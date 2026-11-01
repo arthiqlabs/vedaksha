@@ -16,7 +16,7 @@ Part of [Vedaksha](https://github.com/arthiqlabs/vedaksha), a clean-room Rust ep
 
 ## Links
 
-[Repository and full README](https://github.com/arthiqlabs/vedaksha) · [Website](https://vedaksha.net) · [Accuracy evidence](https://vedaksha.net/accuracy) · [Changelog for v10.0.0](https://github.com/arthiqlabs/vedaksha/blob/main/CHANGELOG-v10.0.0.md)
+[Repository and full README](https://github.com/arthiqlabs/vedaksha) · [Website](https://vedaksha.net) · [Accuracy evidence](https://vedaksha.net/accuracy) · [Changelog for v10.1.0](https://github.com/arthiqlabs/vedaksha/blob/main/CHANGELOG-v10.1.0.md)
 
 ## Licence
 
