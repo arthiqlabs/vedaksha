@@ -203,6 +203,7 @@ fn compute_sub_periods(
     parent_idx: usize,
     start_jd: f64,
     parent_duration: f64,
+    parent_end: f64,
     current_level: u8,
     max_level: u8,
     round: u8,
@@ -214,13 +215,20 @@ fn compute_sub_periods(
         let idx = (parent_idx + i) % 8;
         let sub_lord = YOGINI_SEQUENCE[idx];
         let duration = parent_duration * sub_lord.years() / TOTAL_YOGINI_YEARS;
-        let end_jd = current_jd + duration;
+        // The last sub-period ends exactly at the parent's end, so each level
+        // tiles its parent to the bit rather than to the rounding of a sum.
+        let end_jd = if i == 7 {
+            parent_end
+        } else {
+            current_jd + duration
+        };
 
         let sub_periods = if current_level < max_level {
             compute_sub_periods(
                 idx,
                 current_jd,
                 duration,
+                end_jd,
                 current_level + 1,
                 max_level,
                 round,
@@ -375,7 +383,7 @@ fn build_yogini(
                 (current_jd, duration)
             };
             let sub_periods = if levels > 1 {
-                compute_sub_periods(idx, sub_start, sub_span, 2, levels, round)
+                compute_sub_periods(idx, sub_start, sub_span, end_jd, 2, levels, round)
             } else {
                 Vec::new()
             };
@@ -603,7 +611,7 @@ mod tests {
                 p.sub_periods[0].lord, p.lord,
                 "first sub is the period's own"
             );
-            assert!((p.sub_periods[7].end_jd - p.end_jd).abs() < 1e-6);
+            assert_eq!(p.sub_periods[7].end_jd.to_bits(), p.end_jd.to_bits());
             for w in p.sub_periods.windows(2) {
                 assert_eq!(w[0].end_jd, w[1].start_jd);
             }
@@ -685,15 +693,23 @@ mod tests {
         subs: Vec<Legacy>,
     }
 
-    fn legacy_subs(parent_idx: usize, start: f64, dur: f64, level: u8, max: u8) -> Vec<Legacy> {
+    fn legacy_subs(
+        parent_idx: usize,
+        start: f64,
+        dur: f64,
+        parent_end: f64,
+        level: u8,
+        max: u8,
+    ) -> Vec<Legacy> {
         let mut out = Vec::new();
         let mut cur = start;
         for i in 0..8 {
             let idx = (parent_idx + i) % 8;
             let lord = YOGINI_SEQUENCE[idx];
             let d = dur * lord.years() / TOTAL_YOGINI_YEARS;
+            let end = if i == 7 { parent_end } else { cur + d };
             let subs = if level < max {
-                legacy_subs(idx, cur, d, level + 1, max)
+                legacy_subs(idx, cur, d, end, level + 1, max)
             } else {
                 Vec::new()
             };
@@ -701,11 +717,11 @@ mod tests {
                 lord,
                 level,
                 start: cur,
-                end: cur + d,
+                end,
                 duration: d,
                 subs,
             });
-            cur += d;
+            cur = end;
         }
         out
     }
@@ -735,7 +751,7 @@ mod tests {
                 (cur, d)
             };
             let subs = if levels > 1 {
-                legacy_subs(idx, sub_start, sub_span, 2, levels)
+                legacy_subs(idx, sub_start, sub_span, cur + d, 2, levels)
             } else {
                 Vec::new()
             };
@@ -862,5 +878,35 @@ mod tests {
         }
         // The probe can fail: most cases put the birth past the first antar.
         assert!(moved >= 10, "only {moved} cases exercise a later antar");
+    }
+
+    // Every level tiles its parent to the bit (handoff 2026-11-01): adjacent
+    // sub-periods share their bound exactly, and the last ends exactly at the
+    // parent's end, in the first maha as in every other. Five levels, so the
+    // deepest chains of sums are checked.
+    #[test]
+    fn every_level_tiles_its_parent_to_the_bit() {
+        fn check(p: &YoginiPeriod) {
+            if let Some(last) = p.sub_periods.last() {
+                assert_eq!(
+                    last.end_jd.to_bits(),
+                    p.end_jd.to_bits(),
+                    "level {}",
+                    p.level
+                );
+                for w in p.sub_periods.windows(2) {
+                    assert_eq!(w[0].end_jd.to_bits(), w[1].start_jd.to_bits());
+                }
+                for sub in &p.sub_periods {
+                    check(sub);
+                }
+            }
+        }
+        for lon in [0.0, 7.3, 100.0, 211.111, 359.9] {
+            let tree = compute_yogini(lon, TEST_JD, 5);
+            for maha in &tree.maha_periods {
+                check(maha);
+            }
+        }
     }
 }

@@ -259,3 +259,34 @@ fn read_counts_for_the_moon_over_a_year() {
         "{n} longitude reads against {o} rate-based reads"
     );
 }
+
+/// The nodes by body, 1990 to 2030: the same entries as the rate-based walk,
+/// the mean node within `AGREE_D`, the true node within half a second. The
+/// true node's longitude scatters by up to 7.4e-4 arcsecond over seconds, so
+/// its crossing instant is not defined more tightly than that (see the doc of
+/// `graha_ingresses_by_longitude`; 1900 to 2100 measured 0.28 s at most).
+#[test]
+fn node_bounds_hold_per_body() {
+    let p = AnalyticalProvider::new();
+    let from = jd(1990, 1, 1, 0.0);
+    let to = jd(2030, 1, 1, 0.0);
+    for (graha, body, bound_d) in [
+        (Graha::Rahu, Body::MeanNode, AGREE_D),
+        (Graha::Rahu, Body::TrueNode, 0.5 / 86_400.0),
+        (Graha::Ketu, Body::TrueSouthNode, 0.5 / 86_400.0),
+    ] {
+        let with_rate = |t: f64| longitude_and_rate(&p, body, t);
+        let lon_only = |t: f64| longitude_and_rate(&p, body, t).map(|x| x.0);
+        let old = graha_ingresses(from, to, graha, AYAN, &with_rate);
+        let new = graha_ingresses_by_longitude(from, to, graha, AYAN, &lon_only);
+        assert!(old.len() > 20, "{body:?}: only {} entries", old.len());
+        assert_eq!(old.len(), new.len(), "{body:?}: entry count");
+        let mut max = 0.0_f64;
+        for ((to_jd, ro), (tn_jd, rn)) in old.iter().zip(&new) {
+            assert_eq!(ro, rn, "{body:?}: rashi at {to_jd}");
+            max = max.max((tn_jd - to_jd).abs());
+        }
+        println!("{body:?}: {} entries, max |dt| {:.3} ms", old.len(), max * 86_400e3);
+        assert!(max < bound_d, "{body:?}: {:.3} ms apart", max * 86_400e3);
+    }
+}

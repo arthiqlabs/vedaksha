@@ -726,9 +726,22 @@ pub fn graha_ingresses(
 /// months to 10 years across every graha, 332 entries), the largest |delta jd|
 /// between corresponding instants is 4.66e-10 day (0.04 ms, one unit in the last
 /// place of a Julian Day) for the Sun, Moon, Mercury, Venus, Mars, Jupiter and
-/// Saturn, and 5.1e-9 day (0.44 ms) for Rahu and Ketu (the osculating node, 2
-/// entries each in 4 years), where both variants' instants put the node within
-/// 3e-6 arcsecond of the edge. The tests hold the difference under 0.01 s.
+/// Saturn. The tests hold the difference under 0.01 s on those spans.
+///
+/// The nodes differ by body. Measured over 1900 to 2100 (2026-11-01): for the
+/// mean node (`Body::MeanNode`, 129 entries) the largest difference is 0.040
+/// ms; for the true node (`Body::TrueNode`, 137 entries, and `TrueSouthNode`,
+/// 137) it is 215 ms and 277 ms, with 121 and 122 entries above 0.44 ms. The
+/// count and the rashi of every entry agree. The cause is the true node's own
+/// longitude, not either search: evaluated a few seconds apart it scatters by
+/// up to 7.4e-4 arcsecond (2.4e-4 rms, measured over 1.7 s near 1924), which at
+/// the node's slowest crossing rates spans about 0.3 s. Inside that the
+/// crossing instant is not defined to better than the scatter, and
+/// [`graha_ingresses`]'s Newton refinement does not converge on it either (it
+/// stops at its pass limit). For the true node, expect the two variants to agree
+/// to about 0.3 s, and neither to be closer than that to a smooth crossing.
+/// (v10.1.0 stated 0.44 ms for the nodes from two entries each; that was a
+/// sampling error.)
 ///
 /// The cost, measured the same day for the Moon over one year from 2001-01-01
 /// (161 entries): [`graha_ingresses`] makes 1,605 calls of a callback that
