@@ -230,7 +230,8 @@ fn a_downward_crossing_is_the_rashi_entered_downward() {
 /// walk against the longitude-only one. The variant exists for a source whose
 /// motion costs about three position evaluations (a central difference), so
 /// it must read fewer than twice as often as the rate-based walk: measured
-/// 2,121 against 1,605 (2026-11-01). Plain bisection read 5,627 and fails.
+/// 2,282 against 1,766 (2026-11-01, with one look-back read per entry for the
+/// dip search; 2,121 against 1,605 without). Plain bisection read 5,627 and fails.
 #[test]
 fn read_counts_for_the_moon_over_a_year() {
     let p = AnalyticalProvider::new();
@@ -296,9 +297,10 @@ fn node_bounds_hold_per_body() {
     }
 }
 
-/// Mercury stations on the edge of Tula in 1913: it enters Kanya at JD
-/// 2420104.0858 and returns to Tula 0.198 day later, the only pair of
-/// crossings under a day apart for any graha from 1900 to 2100 (2026-11-01).
+/// Mercury stations on the Tula-Vrishchika edge in 1913: retrograde, it
+/// re-enters Tula at JD 2420104.0858 and returns to Vrishchika 0.198 day
+/// later, the only pair of crossings under a day apart that sampling every
+/// 0.05 day finds for any graha from 1900 to 2100 (2026-11-01).
 /// Through v10.1.0 the rate-based walk's Newton refinement left its bracket
 /// there and returned the first instant, from behind the seed, 8,720 times
 /// before moving on. Both walks must give the same entries, once each.
@@ -332,10 +334,9 @@ fn mercury_station_on_an_edge_is_walked_once() {
 /// other (the true node within 1 ms). A sampled change matches a walk entry for
 /// the same rashi inside the sampling interval that holds it.
 ///
-/// The sampling sees a dip across an edge that lasts longer than 0.05 day; the
-/// walks step at least a day and can miss a shorter one. The only dip under a
-/// day in this span is Mercury's in 1913 (0.198 day), which the walks from
-/// 1900-01-01 happen to sample. Measured once more widely (2026-11-01, sampling
+/// The sampling sees a dip across an edge that lasts longer than 0.05 day. The
+/// only dip under a day it finds in this span is Mercury's in 1913 (0.198 day),
+/// which both walks find through `hidden_dip`. Measured once more widely (2026-11-01, sampling
 /// the nodes every 0.02 day): the Sun, the Moon, the mean node and its Ketu
 /// matched too (2,400, 32,084 and 129 entries), as did both true nodes. Weekly
 /// tier.
@@ -431,4 +432,78 @@ fn both_walks_match_dense_sampling_1900_to_2100() {
             .collect()
     });
     assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// The 1913 Mercury dip (0.198 day back into Tula) from seeds whose daily
+/// grid falls on either side of it: without `hidden_dip`, both walks seeded
+/// anywhere from JD 2420070 to 2420100 stepped over it and returned nothing
+/// up to 2420120. Every seed must now give the dip's two
+/// crossings, in both walks, within `AGREE_D` of each other.
+#[test]
+fn a_dip_between_daily_samples_is_found_from_any_seed() {
+    let p = AnalyticalProvider::new();
+    let with_rate = |t: f64| longitude_and_rate(&p, Body::Mercury, t);
+    let lon_only = |t: f64| longitude_and_rate(&p, Body::Mercury, t).map(|x| x.0);
+    for k in 0..24 {
+        let seed = 2_420_070.0 + 1.25 * f64::from(k);
+        let old = graha_ingresses(seed, 2_420_120.0, Graha::Mercury, AYAN, &with_rate);
+        let new = graha_ingresses_by_longitude(seed, 2_420_120.0, Graha::Mercury, AYAN, &lon_only);
+        assert_eq!(new.len(), 2, "seed {seed}: {new:?}");
+        assert_eq!(old.len(), 2, "seed {seed}: {old:?}");
+        assert_eq!((new[0].1, new[1].1), (6, 7), "seed {seed}");
+        assert!(
+            (new[0].0 - 2_420_104.0858).abs() < 1e-3,
+            "seed {seed}: {new:?}"
+        );
+        assert!(
+            (new[1].0 - 2_420_104.2838).abs() < 1e-3,
+            "seed {seed}: {new:?}"
+        );
+        for (x, y) in old.iter().zip(&new) {
+            assert_eq!(x.1, y.1);
+            assert!((x.0 - y.0).abs() < AGREE_D, "seed {seed}: {x:?} vs {y:?}");
+        }
+    }
+}
+
+/// A callback with no value before the seed (a kernel that starts there) still
+/// walks: the dip check's look-back sample, a day before the seed, is skipped
+/// where it is missing instead of ending the scan.
+#[test]
+fn a_callback_undefined_before_the_seed_still_walks() {
+    let p = AnalyticalProvider::new();
+    let from = jd(2001, 1, 1, 0.0);
+    let to = from + 365.25;
+    let with_rate = |t: f64| {
+        (t >= from)
+            .then(|| longitude_and_rate(&p, Body::Sun, t))
+            .flatten()
+    };
+    let lon_only = |t: f64| with_rate(t).map(|x| x.0);
+    let old = graha_ingresses(from, to, Graha::Sun, AYAN, &with_rate);
+    let new = graha_ingresses_by_longitude(from, to, Graha::Sun, AYAN, &lon_only);
+    assert_eq!(old.len(), 12, "{old:?}");
+    assert_eq!(new.len(), 12, "{new:?}");
+}
+
+/// The consumer's case (handoff 2026-11-01): Rahu under the true node near JD
+/// 2424042.99 (1925), where v10.1.0's two walks differed by 65 ms on their
+/// source and by 135.6 ms on this crate's. With the analytic node velocity they
+/// agree within 1 ms, as everywhere from 1900 to 2100.
+#[test]
+fn the_1925_true_node_case_agrees() {
+    let p = AnalyticalProvider::new();
+    let (from, to) = (jd(1924, 1, 1, 0.0), jd(1926, 1, 1, 0.0));
+    let with_rate = |t: f64| longitude_and_rate(&p, Body::TrueNode, t);
+    let lon_only = |t: f64| longitude_and_rate(&p, Body::TrueNode, t).map(|x| x.0);
+    let old = graha_ingresses(from, to, Graha::Rahu, AYAN, &with_rate);
+    let new = graha_ingresses_by_longitude(from, to, Graha::Rahu, AYAN, &lon_only);
+    assert_eq!(old.len(), new.len());
+    let case = new
+        .iter()
+        .position(|e| (e.0 - 2_424_042.987).abs() < 1e-3)
+        .expect("the 1925 entry");
+    let d = (new[case].0 - old[case].0).abs() * 86_400e3;
+    assert_eq!(new[case].1, old[case].1);
+    assert!(d < 1.0, "{d:.3} ms apart");
 }

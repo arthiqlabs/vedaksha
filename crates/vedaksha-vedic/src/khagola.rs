@@ -312,6 +312,7 @@ fn scan_ingress(
     let mut t = t0;
     let mut lon = lon0;
     let mut steps = 0_u32;
+    let mut prev: Option<(f64, f64)> = None;
     loop {
         match window {
             IngressWindow::Days(max) => {
@@ -388,6 +389,20 @@ fn scan_ingress(
             )?;
             return Some((root, i1));
         }
+        // A dip across an edge and back between two samples changes no rashi
+        // index; look for the extremum that would hold it, from the
+        // longitudes alone, exactly as `scan_ingress_by_longitude` does.
+        let sid_lon = |tt: f64| sidereal(tt).map(|x| x.0);
+        // The first step's look-back sample costs one read, and a callback
+        // with no value a day before the seed skips the check for that step
+        // rather than ending the scan.
+        let back = prev.or_else(|| Some((t - 1.0, sid_lon(t - 1.0)?)));
+        if let Some(back) = back
+            && let Some(hit) = hidden_dip(back, (t, lon), (t1, lon1), t0, i0, speed_bound, &sid_lon)
+        {
+            return Some(hit);
+        }
+        prev = Some((t, lon));
         t = t1;
         lon = lon1;
     }
@@ -476,6 +491,117 @@ fn bracketed_edge_root(
     Some(0.5 * (lo + hi))
 }
 
+/// A dip across a rashi edge and back that falls between two samples, so no
+/// rashi index changes: `Some((jd, rashi entered))` for its first crossing,
+/// `None` for none. A read the callback cannot answer inside the search counts
+/// as no dip; the scan meets a gap that persists on its own next read.
+///
+/// `a`, `b`, `c` are three consecutive samples `(jd, sidereal longitude)` of a
+/// scan that is in rashi `i0` at all three. Such a dip needs an extremum of the
+/// longitude near the edge, and an extremum between `a` and `c` reverses the
+/// sign of the step from `a` to `b` against the step from `b` to `c`. On a
+/// reversal, a maximum can reach the upper edge and a minimum the lower one.
+/// The extremum is searched for inside `[max(a, b - 1, floor), min(c, b + 1)]`
+/// by golden section, to [`ROOT_TOL_D`]; a point past the edge ends the search,
+/// and the first crossing is then found by [`bracketed_edge_root`] between the
+/// window's start and that point. With a speed bound `v`, a sub-interval
+/// `[x, y]` can hold a point past the edge only if the distances of `x` and `y`
+/// from it sum to at most `v (y - x)`, and the search is skipped where neither
+/// does.
+///
+/// The window spans two days, and the search assumes it holds one extremum at
+/// most. Two stations closer than that leave the longitude a shallow wiggle,
+/// and a dip inside it can be missed.
+fn hidden_dip(
+    a: (f64, f64),
+    b: (f64, f64),
+    c: (f64, f64),
+    floor: f64,
+    i0: u8,
+    speed_bound: Option<f64>,
+    lon_at: &dyn Fn(f64) -> Option<f64>,
+) -> Option<(f64, u8)> {
+    let d1 = angle_past_edge(b.1, a.1);
+    let d2 = angle_past_edge(c.1, b.1);
+    if d1 * d2 >= 0.0 {
+        return None;
+    }
+    // A maximum (rising, then falling) reaches toward the upper edge, a
+    // minimum toward the lower. `g` is the angle past that edge, positive
+    // outside the rashi.
+    let maximum = d1 > 0.0;
+    let (edge, sign, entered) = if maximum {
+        (f64::from((i0 + 1) % 12) * 30.0, 1.0, (i0 + 1) % 12)
+    } else {
+        (f64::from(i0) * 30.0, -1.0, (i0 + 11) % 12)
+    };
+    let g = |t: f64| Some(sign * angle_past_edge(lon_at(t)?, edge));
+    let g_known = |p: (f64, f64)| sign * angle_past_edge(p.1, edge);
+    let lo = a.0.max(b.0 - 1.0).max(floor);
+    let hi = c.0.min(b.0 + 1.0);
+    if hi <= lo {
+        return None;
+    }
+    let g_lo = if lo == a.0 {
+        g_known(a)
+    } else if lo == b.0 {
+        g_known(b)
+    } else {
+        g(lo)?
+    };
+    let g_hi = if hi == c.0 { g_known(c) } else { g(hi)? };
+    let g_b = g_known(b);
+    if g_lo > 0.0 {
+        return None;
+    }
+    if let Some(v) = speed_bound {
+        let reach = |gx: f64, gy: f64, len: f64| -gx - gy <= v * len;
+        let left = b.0 > lo && reach(g_lo, g_b, b.0 - lo);
+        let right = hi > b.0 && reach(g_b, g_hi, hi - b.0);
+        if !left && !right {
+            return None;
+        }
+    }
+    // Golden-section search for the largest `g` on [lo, hi].
+    const INV_PHI: f64 = 0.618_033_988_749_894_9;
+    let (mut x0, mut x3) = (lo, hi);
+    let mut x1 = x3 - INV_PHI * (x3 - x0);
+    let mut x2 = x0 + INV_PHI * (x3 - x0);
+    let mut g1 = g(x1)?;
+    let mut g2 = g(x2)?;
+    let mut pass = 0_u32;
+    let past = loop {
+        if g1 > 0.0 {
+            break Some((x1, g1));
+        }
+        if g2 > 0.0 {
+            break Some((x2, g2));
+        }
+        pass += 1;
+        if x3 - x0 <= ROOT_TOL_D || pass >= ROOT_MAX_PASSES {
+            break None;
+        }
+        if g1 > g2 {
+            x3 = x2;
+            x2 = x1;
+            g2 = g1;
+            x1 = x3 - INV_PHI * (x3 - x0);
+            g1 = g(x1)?;
+        } else {
+            x0 = x1;
+            x1 = x2;
+            g1 = g2;
+            x2 = x0 + INV_PHI * (x3 - x0);
+            g2 = g(x2)?;
+        }
+    };
+    let Some((t_past, g_past)) = past else {
+        return None;
+    };
+    let root = bracketed_edge_root((lo, g_lo), (t_past, g_past), &g)?;
+    Some((root, entered))
+}
+
 /// [`scan_ingress`] for a callback that returns the tropical longitude only.
 ///
 /// The grid, the speed-bound stepping, the one-second step off an exact
@@ -512,6 +638,7 @@ fn scan_ingress_by_longitude(
     let mut t = t0;
     let mut lon = lon0;
     let mut steps = 0_u32;
+    let mut prev: Option<(f64, f64)> = None;
     loop {
         match window {
             IngressWindow::Days(max) => {
@@ -563,6 +690,19 @@ fn scan_ingress_by_longitude(
             )?;
             return Some((root, i1));
         }
+        // A dip across an edge and back between two samples changes no rashi
+        // index; look for the extremum that would hold it.
+        // The first step's look-back sample costs one read, and a callback
+        // with no value a day before the seed skips the check for that step
+        // rather than ending the scan.
+        let back = prev.or_else(|| Some((t - 1.0, sidereal(t - 1.0)?)));
+        if let Some(back) = back
+            && let Some(hit) =
+                hidden_dip(back, (t, lon), (t1, lon1), t0, i0, speed_bound, &sidereal)
+        {
+            return Some(hit);
+        }
+        prev = Some((t, lon));
         t = t1;
         lon = lon1;
     }
@@ -775,17 +915,22 @@ pub fn graha_ingresses(
 ///
 /// Both walks were checked over 1900 to 2100 against every rashi change seen by
 /// sampling every 0.02 day (nodes) or 0.05 day (Mercury to Saturn): the same
-/// entries, none missing, none extra. Neither walk can see a crossing and its
-/// return that both fall between two of its daily samples. In that span there
-/// is one such pair, Mercury's 4.75-hour dip into Kanya at JD 2420104.09
-/// (1913), and a walk finds it only if one of its samples falls inside the dip.
+/// entries, none missing, none extra. A crossing and its return that both
+/// fall between two daily samples change no rashi index; both walks look for
+/// them through the extremum such a dip needs (see `hidden_dip`), and find
+/// Mercury's 4.75-hour dip back into Tula at JD 2420104.09 (1913) from any
+/// seed. That search assumes one extremum at most in two days. Measured
+/// 1900 to 2100, consecutive stations are at least 19.8 days apart for
+/// Mercury to Saturn, but the true node has pairs closer than 0.02 day, where
+/// its longitude only wiggles: a dip inside such a wiggle can still be missed.
+/// None was found: walks seeded on three grid phases gave the same 137 entries.
 ///
 /// The cost, measured the same day for the Moon over one year from 2001-01-01
-/// (161 entries): [`graha_ingresses`] makes 1,605 calls of a callback that
-/// returns longitude and motion, this makes 2,121 calls of one that returns
-/// longitude. A source whose motion is a central difference spends about three
-/// position evaluations on each of the former, about 4,800 in all, against
-/// 2,121 here.
+/// (161 entries): [`graha_ingresses`] makes 1,766 calls of a callback that
+/// returns longitude and motion, this makes 2,282 calls of one that returns
+/// longitude, each including one look-back read per entry for the dip search.
+/// A source whose motion is a central difference spends about three position
+/// evaluations on each of the former, about 5,300 in all, against 2,282 here.
 ///
 /// Where the callback returns `None` the walk ends there, with the entries found
 /// so far, as [`graha_ingresses`] does. Nothing here corresponds to that
