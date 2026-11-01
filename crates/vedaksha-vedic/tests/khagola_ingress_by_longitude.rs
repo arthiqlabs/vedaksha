@@ -24,8 +24,8 @@ use vedaksha_vedic::khagola::{graha_ingresses, graha_ingresses_by_longitude};
 const AYAN: Ayanamsha = Ayanamsha::IndianOfficial;
 const ONE_SECOND: f64 = 1.0 / 86_400.0;
 
-/// The bisection tolerance stated in the function's doc: 1e-9 day.
-const BISECT_TOL_D: f64 = 1.0e-9;
+/// The root tolerance stated in the function's doc: 1e-9 day.
+const ROOT_TOL_D: f64 = 1.0e-9;
 
 /// The bound the two variants' instants must agree within, in days. The
 /// measured maximum is in the doc of `graha_ingresses_by_longitude`; this is
@@ -95,7 +95,7 @@ fn by_longitude_returns_the_same_entries_as_the_rate_based_walk() {
 }
 
 /// An entry is where the sidereal longitude is on a rashi edge: the angle from
-/// the nearest edge is the longitude's travel in a few bisection tolerances at
+/// the nearest edge is the longitude's travel in a few root tolerances at
 /// most, and the rashi entered is the one just after the instant, not the one
 /// just before.
 #[test]
@@ -118,7 +118,7 @@ fn each_entry_sits_on_a_rashi_edge() {
                 - 180.0)
                 / (2.0 * h);
             assert!(
-                off.abs() <= 4.0 * BISECT_TOL_D * rate.abs().max(0.01) + 1.0e-9,
+                off.abs() <= 4.0 * ROOT_TOL_D * rate.abs().max(0.01) + 1.0e-9,
                 "{graha:?}: entry at {t} is {off} deg from an edge (rate {rate})"
             );
             let idx = |x: f64| (x / 30.0).floor() as u8 % 12;
@@ -227,8 +227,10 @@ fn a_downward_crossing_is_the_rashi_entered_downward() {
 }
 
 /// Reads of the callback, Moon over one year from 2001-01-01: the rate-based
-/// walk against the longitude-only one. Printed, and bounded loosely: the
-/// longitude-only walk reads the grid plus at most 31 more a crossing.
+/// walk against the longitude-only one. The variant exists for a source whose
+/// motion costs about three position evaluations (a central difference), so
+/// it must read fewer than twice as often as the rate-based walk: measured
+/// 2,121 against 1,605 (2026-11-01). Plain bisection read 5,627 and fails.
 #[test]
 fn read_counts_for_the_moon_over_a_year() {
     let p = AnalyticalProvider::new();
@@ -252,5 +254,8 @@ fn read_counts_for_the_moon_over_a_year() {
         old.len()
     );
     assert_eq!(old.len(), new.len());
-    assert!(n <= o + 31 * new.len() as u64, "{n} reads against {o}");
+    assert!(
+        n < 2 * o,
+        "{n} longitude reads against {o} rate-based reads"
+    );
 }

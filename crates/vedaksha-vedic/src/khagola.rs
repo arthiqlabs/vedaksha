@@ -391,11 +391,16 @@ fn next_ingress(
     )
 }
 
-/// Bisection tolerance of [`scan_ingress_by_longitude`], in days: 1e-9 d, 86
-/// microseconds. The Julian Day near 2.46 million has a resolution of
-/// 4.7e-10 d (2^-31), so this is two units in the last place; a bracket of one
-/// day reaches it after 30 halvings.
-const BISECT_TOL_D: f64 = 1.0e-9;
+/// Root tolerance of [`scan_ingress_by_longitude`], in days: the search stops
+/// when its bracket is 1e-9 d (86 microseconds) wide. The Julian Day near 2.46
+/// million has a resolution of 4.7e-10 d (2^-31), so this is two units in the
+/// last place.
+const ROOT_TOL_D: f64 = 1.0e-9;
+
+/// Passes of the root search before it gives up shrinking the bracket: a
+/// bisection every fourth pass alone halves a one-day bracket to
+/// [`ROOT_TOL_D`] within 120.
+const ROOT_MAX_PASSES: u32 = 120;
 
 /// The signed angle from `edge_deg` to `lon_deg`, wrapped into (-180, 180].
 fn angle_past_edge(lon_deg: f64, edge_deg: f64) -> f64 {
@@ -410,9 +415,10 @@ fn angle_past_edge(lon_deg: f64, edge_deg: f64) -> f64 {
 /// rashi are those of [`scan_ingress`]. A crossing is detected the same way
 /// (the rashi index differs between two samples) and its direction is read from
 /// the rashi indices (`i1 == i0 + 1`, else down), not from a rate. The instant
-/// is then found by bisection of the bracket `[t, t1]` on the sign of the
-/// signed angle from the edge, wrapped into (-180, 180], to
-/// [`BISECT_TOL_D`], and the middle of the final bracket is returned.
+/// is then found inside the bracket `[t, t1]` from the signed angle past the
+/// edge, wrapped into (-180, 180], by Illinois steps with a bisection every
+/// fourth pass, to [`ROOT_TOL_D`], and the middle of the final bracket is
+/// returned.
 ///
 /// A step that lands two or more rashis from where it started (a callback
 /// faster than 30 degrees a day) has no single edge to bracket: the scan
@@ -476,22 +482,52 @@ fn scan_ingress_by_longitude(
             } else {
                 f64::from((i1 + 1) % 12) * 30.0
             };
-            // Past the edge: at or above it going up, below it going down.
-            let past = |tt: f64| -> Option<bool> {
-                let d = angle_past_edge(sidereal(tt)?, edge);
-                Some(if direct { d >= 0.0 } else { d < 0.0 })
-            };
-            // `t` is before the edge and `t1` past it, by the rashi indices.
+            // The angle past the edge: positive past it going up, past it
+            // going down after the flip. `t` is before the edge and `t1`
+            // past it, by the rashi indices, so the two samples already in
+            // hand bracket the root and cost no further reads.
+            let flip = |d: f64| if direct { d } else { -d };
+            let past = |tt: f64| Some(flip(angle_past_edge(sidereal(tt)?, edge)));
             let (mut lo, mut hi) = (t, t1);
-            while hi - lo > BISECT_TOL_D {
-                let mid = 0.5 * (lo + hi);
-                if mid <= lo || mid >= hi {
+            let (mut g_lo, mut g_hi) = (
+                flip(angle_past_edge(lon, edge)),
+                flip(angle_past_edge(lon1, edge)),
+            );
+            // Illinois (regula falsi that halves the stale end), kept inside
+            // the bracket, with a bisection every fourth pass so the
+            // bracket provably shrinks even where the angle is far from
+            // linear in time (a station near the edge).
+            let mut side = 0_i8;
+            let mut pass = 0_u32;
+            while hi - lo > ROOT_TOL_D && pass < ROOT_MAX_PASSES {
+                pass += 1;
+                let secant = (lo * g_hi - hi * g_lo) / (g_hi - g_lo);
+                let c = if pass.is_multiple_of(4) || !(secant > lo && secant < hi) {
+                    0.5 * (lo + hi)
+                } else {
+                    secant
+                };
+                if c <= lo || c >= hi {
                     break;
                 }
-                if past(mid)? {
-                    hi = mid;
+                let g = past(c)?;
+                if g == 0.0 {
+                    return Some((c, i1));
+                }
+                if g > 0.0 {
+                    hi = c;
+                    g_hi = g;
+                    if side == 1 {
+                        g_lo *= 0.5;
+                    }
+                    side = 1;
                 } else {
-                    lo = mid;
+                    lo = c;
+                    g_lo = g;
+                    if side == -1 {
+                        g_hi *= 0.5;
+                    }
+                    side = -1;
                 }
             }
             return Some((0.5 * (lo + hi), i1));
@@ -668,43 +704,43 @@ pub fn graha_ingresses(
 /// each crossing. The direction of a crossing, up or down (a vakri re-entry, a
 /// node), is read from the two rashi indices and not from a rate.
 ///
-/// The instant is found by bisection of the one-day bracket between the two
-/// samples, on the sign of the signed angle from the rashi edge wrapped into
-/// (-180, 180], so the 360/0 wrap needs no special case. The bisection stops
-/// when the bracket is 1e-9 day (86 microseconds) wide, 30 halvings of a day and
-/// two units in the last place of a Julian Day near 2.46 million, and returns
-/// the middle of it: within 0.5e-9 day of the instant at which the callback's
-/// sidereal longitude reaches the edge, and bracketed on both sides by samples
-/// of the callback. A retrograde loop inside the bracket (a station within a day
-/// of the edge) can hold three crossings; the one found is one of them.
+/// The instant is found inside the one-day bracket between the two samples
+/// from the signed angle past the rashi edge, wrapped into (-180, 180], so the
+/// 360/0 wrap needs no special case. The search is Illinois (regula falsi that
+/// halves the stale end), kept inside the bracket, with a bisection every fourth
+/// pass so that the bracket shrinks however far the angle is from linear. It
+/// starts from the two samples already in hand, stops when the bracket is 1e-9
+/// day (86 microseconds) wide, two units in the last place of a Julian Day near
+/// 2.46 million, and returns the middle of it, bracketed on both sides by
+/// samples of the callback. A retrograde loop inside the bracket (a station
+/// within a day of the edge) can hold three crossings; the one found is one of
+/// them.
 ///
 /// # Against [`graha_ingresses`]
 ///
 /// For the same position source the two return the same entries: the same
 /// count and the same rashi in the same order, but not the same bits, because
-/// [`graha_ingresses`] refines with the daily motion by Newton and this
-/// bisects. Measured on this crate's analytical positions (once, 2026-11-01,
-/// the nine spans of `tests/khagola_ingress_by_longitude.rs`, 2001-01-01 for 6
+/// [`graha_ingresses`] refines with the daily motion by Newton and this does
+/// not. Measured on this crate's analytical positions (once, 2026-11-01, the
+/// nine spans of `tests/khagola_ingress_by_longitude.rs`, 2001-01-01 for 6
 /// months to 10 years across every graha, 332 entries), the largest |delta jd|
 /// between corresponding instants is 4.66e-10 day (0.04 ms, one unit in the last
 /// place of a Julian Day) for the Sun, Moon, Mercury, Venus, Mars, Jupiter and
-/// Saturn, and 1.30e-8 day (1.13 ms) for Rahu and Ketu (the osculating node,
-/// 2 entries each in 4 years).
-/// The bisection tolerance is 1e-9 day, so a difference of the order of the
-/// tolerance is the expected one; the tests hold the difference under 0.01 s.
+/// Saturn, and 5.1e-9 day (0.44 ms) for Rahu and Ketu (the osculating node, 2
+/// entries each in 4 years), where both variants' instants put the node within
+/// 3e-6 arcsecond of the edge. The tests hold the difference under 0.01 s.
 ///
-/// The cost is not lower in callback calls. Measured the same day for the Moon
-/// over one year from 2001-01-01 (161 entries): [`graha_ingresses`] makes 1,605
-/// calls of a callback that returns longitude and motion, this makes 5,627 calls
-/// of one that returns longitude. The one-day grid is the same; the bisection
-/// adds about 30 reads to each crossing (30 halvings of a day). What a read costs
-/// each way is the caller's: a motion by central difference costs about three
-/// position evaluations.
+/// The cost, measured the same day for the Moon over one year from 2001-01-01
+/// (161 entries): [`graha_ingresses`] makes 1,605 calls of a callback that
+/// returns longitude and motion, this makes 2,121 calls of one that returns
+/// longitude. A source whose motion is a central difference spends about three
+/// position evaluations on each of the former, about 4,800 in all, against
+/// 2,121 here.
 ///
 /// Where the callback returns `None` the walk ends there, with the entries found
 /// so far, as [`graha_ingresses`] does. Nothing here corresponds to that
-/// function's other early exit, the rate vanishing at a crossing: a bisection
-/// does not use a rate. A step that lands two or more rashis away (a callback
+/// function's other early exit, the rate vanishing at a crossing: this search
+/// uses no rate. A step that lands two or more rashis away (a callback
 /// faster than 30 degrees a day) cannot be bracketed and ends the walk too. The
 /// speed bound is for an apparent geocentric longitude, as for
 /// [`graha_ingresses`].
