@@ -375,7 +375,7 @@ fn scan_ingress(
             // Newton left the bracket, or found no motion: near a station the
             // rate at `t` can be close to zero, so its first step overshoots,
             // and a step from a rate of the wrong sign walks away from the
-            // edge. Until v10.1.1 that instant was returned as it stood, days
+            // edge. Until v10.2.0 that instant was returned as it stood, days
             // or centuries from the crossing, and a vanishing rate ended the
             // walk. `t` is before the edge and `t1` past it, so the
             // bracketed search on the two samples in hand finds it. Every
@@ -911,7 +911,7 @@ pub fn graha_ingresses(
 /// was a central difference whose noise scattered its longitude by up to 7.4e-4
 /// arcsecond. [`graha_ingresses`]'s Newton refinement could also leave its
 /// bracket at a station near an edge: in v10.1.0 it repeated one Mercury entry
-/// of 1913 8,720 times. Both are fixed in v10.1.1.
+/// of 1913 8,720 times. Both are fixed in v10.2.0.
 ///
 /// Both walks were checked over 1900 to 2100 against every rashi change seen by
 /// sampling every 0.02 day (nodes) or 0.05 day (Mercury to Saturn): the same

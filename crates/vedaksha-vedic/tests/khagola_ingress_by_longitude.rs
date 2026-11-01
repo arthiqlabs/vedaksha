@@ -262,7 +262,7 @@ fn read_counts_for_the_moon_over_a_year() {
 }
 
 /// The nodes by body, 1990 to 2030: the same entries as the rate-based walk,
-/// the mean node within `AGREE_D`, the true node within 1 ms. Until v10.1.1
+/// the mean node within `AGREE_D`, the true node within 1 ms. Until v10.2.0
 /// the true node's velocity was a central difference, which made its longitude
 /// scatter by up to 7.4e-4 arcsecond over seconds and the two walks differ by
 /// up to 277 ms over 1900 to 2100. With the series' analytic velocity, 1900 to

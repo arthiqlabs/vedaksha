@@ -130,7 +130,7 @@ pub fn true_node_osculating_j2000(jd: f64) -> f64 {
 /// produces.
 ///
 /// `sample` returns the Moon's position and its velocity, the analytic
-/// derivative of the ELP/MPP02 series in the same frame. Through v10.1.x the
+/// derivative of the ELP/MPP02 series in the same frame. Through v10.1.0 the
 /// velocity was a central difference of three positions 0.001 day apart; the
 /// series' evaluation noise divided by that step made the node scatter by up to
 /// 7.4e-4 arcsecond between instants seconds apart, so its sign-ingress

@@ -1,8 +1,8 @@
-# v10.1.1
+# v10.2.0
 
-Three answers change: the true node's longitude, in its last milliarcseconds;
-the ingress instants and entries `graha_ingress` and `graha_ingresses` return
-at a station near a rashi edge; and dasha sub-period bounds, in their last
+Minor release. Three answers change: the true node's longitude, in its last
+milliarcseconds; the ingress entries the three ingress walks return at a
+station on or near a rashi edge; and dasha sub-period bounds, in their last
 binary digits. One figure stated in v10.1.0 is corrected.
 
 ## Changed answers, ephemeris

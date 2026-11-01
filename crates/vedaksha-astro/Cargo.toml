@@ -13,8 +13,8 @@ readme = "README.md"
 categories = ["science", "mathematics"]
 
 [dependencies]
-vedaksha-math = { version = "10.1.0", path = "../vedaksha-math" }
-vedaksha-ephem-core = { version = "10.1.0", path = "../vedaksha-ephem-core" }
+vedaksha-math = { version = "10.2.0", path = "../vedaksha-math" }
+vedaksha-ephem-core = { version = "10.2.0", path = "../vedaksha-ephem-core" }
 libm = "0.2"
 serde = { workspace = true }
 
