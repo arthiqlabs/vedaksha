@@ -406,7 +406,7 @@ propagated to every lower level. Mahas after the first, `initial_balance` and ev
 were correct and are unchanged.
 
 The first maha's sub-periods now run over its full length from its notional start. All of them are
-kept: those with `end_jd <= birth_jd` ended before birth, and the one running at birth starts before
+kept: those with `end_jd <= birth_jd` ended before birth, and the one running at birth starts at or before
 it, with its true start. The maha itself still opens at the birth. So the first maha's sub-periods
 sum to its full length, not to its `duration_days`. The tree was kept whole, rather than cut at the
 birth, so that no field changed and a consumer can read the true start of every running period.

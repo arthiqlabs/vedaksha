@@ -22,7 +22,8 @@
 //! notional start. The maha itself still opens at the birth, with
 //! `initial_balance` of its length. Its sub-periods are all kept: those with
 //! `end_jd <= birth_jd` ended before birth, the one running at birth has
-//! `start_jd < birth_jd < end_jd` and carries its true start, and so on down
+//! `start_jd <= birth_jd < end_jd` and carries its true start (before the
+//! birth unless the elapsed share is zero or the birth falls on a boundary), and so on down
 //! every level. So the first maha's `sub_periods` sum to its full length, not to
 //! its `duration_days`; every later maha's sub-periods tile it exactly. Until
 //! v10.1.0 the first maha's balance alone was divided, from the birth, which

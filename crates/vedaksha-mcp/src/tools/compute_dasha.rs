@@ -291,7 +291,7 @@ pub fn definition() -> super::ToolDefinition {
             at birth with `initial_balance` of its length, but its sub-periods keep \
             their full shares from the maha's notional start before birth: those with \
             end_jd <= birth_jd ended before birth, and the one running at birth starts \
-            before it.",
+            at or before it.",
         input_schema: serde_json::json!({
             "type": "object",
             "properties": {

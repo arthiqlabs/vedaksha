@@ -21,7 +21,8 @@
 //! notional start. The maha itself still opens at the birth, with
 //! `initial_balance` of its length. Its sub-periods are all kept: those with
 //! `end_jd <= birth_jd` ended before birth, the one running at birth has
-//! `start_jd < birth_jd < end_jd` and carries its true start, and so on down
+//! `start_jd <= birth_jd < end_jd` and carries its true start (before the
+//! birth unless the elapsed share is zero or the birth falls on a boundary), and so on down
 //! every level. So the first maha's `sub_periods` sum to its full length, not to
 //! its `duration_days`; every later maha's sub-periods tile it exactly. Until
 //! v10.1.0 the first maha's balance alone was divided, from the birth, which
@@ -590,7 +591,14 @@ mod tests {
                 return;
             }
             assert_eq!(p.sub_periods.len(), 8);
-            assert!((p.sub_periods[0].start_jd - start).abs() < 1e-6);
+            if start == p.start_jd {
+                assert_eq!(p.sub_periods[0].start_jd, p.start_jd);
+            } else {
+                // Round 1's first maha: the notional start, recomputed here
+                // as `end_jd - full`, which differs from the builder's by
+                // rounding.
+                assert!((p.sub_periods[0].start_jd - start).abs() < 1e-6);
+            }
             assert_eq!(
                 p.sub_periods[0].lord, p.lord,
                 "first sub is the period's own"
@@ -662,10 +670,12 @@ mod tests {
         assert!(tree.maha_periods[15].end_jd < TEST_JD + 100.0 * 365.25);
     }
 
-    // 11. Round one is the previous release's output, bit for bit, at every
-    // level. `legacy_tree` transcribes the pre-rounds algorithm (one round,
-    // no `round` field) so the comparison has an independent baseline; it
-    // returns `Legacy` nodes.
+    // 11. Round one is the single-round algorithm, bit for bit, at every
+    // level. `legacy_tree` transcribes it (one round, no `round` field) with
+    // the first maha's sub-periods from its notional start, as v10.1.0
+    // corrected it; it returns `Legacy` nodes. Since v10.1.0 it shares that
+    // rule with the code under test, so the first maha's sub-periods are held
+    // independently by `first_maha_sub_periods_run_from_the_notional_start`.
     struct Legacy {
         lord: YoginiLord,
         level: u8,
