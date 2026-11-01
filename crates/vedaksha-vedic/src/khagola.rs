@@ -391,6 +391,140 @@ fn next_ingress(
     )
 }
 
+/// Bisection tolerance of [`scan_ingress_by_longitude`], in days: 1e-9 d, 86
+/// microseconds. The Julian Day near 2.46 million has a resolution of
+/// 4.7e-10 d (2^-31), so this is two units in the last place; a bracket of one
+/// day reaches it after 30 halvings.
+const BISECT_TOL_D: f64 = 1.0e-9;
+
+/// The signed angle from `edge_deg` to `lon_deg`, wrapped into (-180, 180].
+fn angle_past_edge(lon_deg: f64, edge_deg: f64) -> f64 {
+    let d = (lon_deg - edge_deg).rem_euclid(360.0);
+    if d > 180.0 { d - 360.0 } else { d }
+}
+
+/// [`scan_ingress`] for a callback that returns the tropical longitude only.
+///
+/// The grid, the speed-bound stepping, the one-second step off an exact
+/// boundary and the fall back to a one-day step after a long step that changed
+/// rashi are those of [`scan_ingress`]. A crossing is detected the same way
+/// (the rashi index differs between two samples) and its direction is read from
+/// the rashi indices (`i1 == i0 + 1`, else down), not from a rate. The instant
+/// is then found by bisection of the bracket `[t, t1]` on the sign of the
+/// signed angle from the edge, wrapped into (-180, 180], to
+/// [`BISECT_TOL_D`], and the middle of the final bracket is returned.
+///
+/// A step that lands two or more rashis from where it started (a callback
+/// faster than 30 degrees a day) has no single edge to bracket: the scan
+/// returns `None`.
+fn scan_ingress_by_longitude(
+    jd_start: f64,
+    ayanamsha: Ayanamsha,
+    longitude: &(dyn Fn(f64) -> Option<f64> + Sync),
+    window: IngressWindow,
+    speed_bound: Option<f64>,
+) -> Option<(f64, u8)> {
+    let sidereal =
+        |t: f64| Some((longitude(t)? - true_ayanamsha_value(ayanamsha, t)).rem_euclid(360.0));
+    let mut t0 = jd_start;
+    let mut lon0 = sidereal(t0)?;
+    let mut i0 = rashi_idx(lon0);
+    // Step off an exact boundary, as `scan_ingress` does.
+    if rashi_idx(sidereal(t0 + ONE_SECOND_D)?) != i0 {
+        t0 += ONE_SECOND_D;
+        lon0 = sidereal(t0)?;
+        i0 = rashi_idx(lon0);
+    }
+    let mut t = t0;
+    let mut lon = lon0;
+    let mut steps = 0_u32;
+    loop {
+        match window {
+            IngressWindow::Days(max) => {
+                if steps >= max {
+                    return None;
+                }
+            }
+            IngressWindow::Until(end) => {
+                if t >= end {
+                    return None;
+                }
+            }
+        }
+        let days = match speed_bound {
+            Some(v) => {
+                let r = lon.rem_euclid(30.0);
+                (r.min(30.0 - r) / v).floor().max(1.0)
+            }
+            None => 1.0,
+        };
+        let mut t1 = t + days;
+        let mut lon1 = sidereal(t1)?;
+        if days > 1.0 && rashi_idx(lon1) != i0 {
+            t1 = t + 1.0;
+            lon1 = sidereal(t1)?;
+        }
+        steps += 1;
+        let i1 = rashi_idx(lon1);
+        if i1 != i0 {
+            let direct = i1 == (i0 + 1) % 12;
+            if !direct && i1 != (i0 + 11) % 12 {
+                return None;
+            }
+            let edge = if direct {
+                f64::from(i1) * 30.0
+            } else {
+                f64::from((i1 + 1) % 12) * 30.0
+            };
+            // Past the edge: at or above it going up, below it going down.
+            let past = |tt: f64| -> Option<bool> {
+                let d = angle_past_edge(sidereal(tt)?, edge);
+                Some(if direct { d >= 0.0 } else { d < 0.0 })
+            };
+            // `t` is before the edge and `t1` past it, by the rashi indices.
+            let (mut lo, mut hi) = (t, t1);
+            while hi - lo > BISECT_TOL_D {
+                let mid = 0.5 * (lo + hi);
+                if mid <= lo || mid >= hi {
+                    break;
+                }
+                if past(mid)? {
+                    hi = mid;
+                } else {
+                    lo = mid;
+                }
+            }
+            return Some((0.5 * (lo + hi), i1));
+        }
+        t = t1;
+        lon = lon1;
+    }
+}
+
+/// Step a seed through `[jd_start, jd_end)` with `scan`, re-seeding a second
+/// past each crossing it returns.
+fn walk_ingresses(
+    jd_start: f64,
+    jd_end: f64,
+    scan: &dyn Fn(f64) -> Option<(f64, u8)>,
+) -> Vec<(f64, u8)> {
+    let mut found = Vec::new();
+    let mut seed = jd_start;
+    while seed < jd_end {
+        let Some((jd, rashi)) = scan(seed) else {
+            break;
+        };
+        if jd >= jd_end {
+            break;
+        }
+        found.push((jd, rashi));
+        // A second past the crossing, as the one-ingress walk is re-seeded;
+        // never back behind the seed, so the loop always advances.
+        seed = (jd + ONE_SECOND_D).max(seed + ONE_SECOND_D);
+    }
+    found
+}
+
 /// Next solar ingress (sankranti): `(jd, rashi entered)`, sidereal.
 #[must_use]
 pub fn sun_ingress(
@@ -508,29 +642,91 @@ pub fn graha_ingresses(
     longitude: &(dyn Fn(f64) -> Option<(f64, f64)> + Sync),
 ) -> Vec<(f64, u8)> {
     let bound = ingress_speed_bound_deg_per_day(graha);
-    let mut found = Vec::new();
-    let mut seed = jd_start;
-    while seed < jd_end {
-        let Some((jd, rashi)) = scan_ingress(
+    walk_ingresses(jd_start, jd_end, &|seed| {
+        scan_ingress(
             seed,
             ayanamsha,
             longitude,
             IngressWindow::Until(jd_end),
             Some(bound),
-        ) else {
-            break;
-        };
-        if jd >= jd_end {
-            break;
-        }
-        found.push((jd, rashi));
-        // A second past the crossing, as the one-ingress walk is re-seeded;
-        // never back behind the seed, so the loop always advances.
-        seed = (jd + ONE_SECOND_D).max(seed + ONE_SECOND_D);
-    }
-    found
+        )
+    })
 }
 
+/// Every ingress of `graha` into a sidereal rashi in `[jd_start, jd_end)`, in
+/// time order, as `(jd, rashi entered)`, from a callback that returns the
+/// tropical longitude alone: [`graha_ingresses`] for a source with no daily
+/// motion to give, or one that gives it at the cost of several position
+/// evaluations (a central difference).
+///
+/// `longitude` is the tropical longitude in degrees at a JD (UT). The walk is
+/// [`graha_ingresses`]'s: the same grid of whole days from the same seed, the
+/// steps sized from [`ingress_speed_bound_deg_per_day`] (whole days to the nearer
+/// rashi edge at the bound, at least one, with the same fall back to a one-day
+/// step when a long step lands in another rashi), a crossing detected as a
+/// change of rashi between two samples, and the walk re-seeded one second past
+/// each crossing. The direction of a crossing, up or down (a vakri re-entry, a
+/// node), is read from the two rashi indices and not from a rate.
+///
+/// The instant is found by bisection of the one-day bracket between the two
+/// samples, on the sign of the signed angle from the rashi edge wrapped into
+/// (-180, 180], so the 360/0 wrap needs no special case. The bisection stops
+/// when the bracket is 1e-9 day (86 microseconds) wide, 30 halvings of a day and
+/// two units in the last place of a Julian Day near 2.46 million, and returns
+/// the middle of it: within 0.5e-9 day of the instant at which the callback's
+/// sidereal longitude reaches the edge, and bracketed on both sides by samples
+/// of the callback. A retrograde loop inside the bracket (a station within a day
+/// of the edge) can hold three crossings; the one found is one of them.
+///
+/// # Against [`graha_ingresses`]
+///
+/// For the same position source the two return the same entries: the same
+/// count and the same rashi in the same order, but not the same bits, because
+/// [`graha_ingresses`] refines with the daily motion by Newton and this
+/// bisects. Measured on this crate's analytical positions (once, 2026-11-01,
+/// the nine spans of `tests/khagola_ingress_by_longitude.rs`, 2001-01-01 for 6
+/// months to 10 years across every graha, 332 entries), the largest |delta jd|
+/// between corresponding instants is 4.66e-10 day (0.04 ms, one unit in the last
+/// place of a Julian Day) for the Sun, Moon, Mercury, Venus, Mars, Jupiter and
+/// Saturn, and 1.30e-8 day (1.13 ms) for Rahu and Ketu (the osculating node,
+/// 2 entries each in 4 years).
+/// The bisection tolerance is 1e-9 day, so a difference of the order of the
+/// tolerance is the expected one; the tests hold the difference under 0.01 s.
+///
+/// The cost is not lower in callback calls. Measured the same day for the Moon
+/// over one year from 2001-01-01 (161 entries): [`graha_ingresses`] makes 1,605
+/// calls of a callback that returns longitude and motion, this makes 5,627 calls
+/// of one that returns longitude. The one-day grid is the same; the bisection
+/// adds about 30 reads to each crossing (30 halvings of a day). What a read costs
+/// each way is the caller's: a motion by central difference costs about three
+/// position evaluations.
+///
+/// Where the callback returns `None` the walk ends there, with the entries found
+/// so far, as [`graha_ingresses`] does. Nothing here corresponds to that
+/// function's other early exit, the rate vanishing at a crossing: a bisection
+/// does not use a rate. A step that lands two or more rashis away (a callback
+/// faster than 30 degrees a day) cannot be bracketed and ends the walk too. The
+/// speed bound is for an apparent geocentric longitude, as for
+/// [`graha_ingresses`].
+#[must_use]
+pub fn graha_ingresses_by_longitude(
+    jd_start: f64,
+    jd_end: f64,
+    graha: Graha,
+    ayanamsha: Ayanamsha,
+    longitude: &(dyn Fn(f64) -> Option<f64> + Sync),
+) -> Vec<(f64, u8)> {
+    let bound = ingress_speed_bound_deg_per_day(graha);
+    walk_ingresses(jd_start, jd_end, &|seed| {
+        scan_ingress_by_longitude(
+            seed,
+            ayanamsha,
+            longitude,
+            IngressWindow::Until(jd_end),
+            Some(bound),
+        )
+    })
+}
 // ── station ─────────────────────────────────────────────────────
 
 /// Next station (speed sign change) of a star-planet: the JD of the turning
