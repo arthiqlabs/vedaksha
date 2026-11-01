@@ -366,8 +366,27 @@ fn scan_ingress(
             } else {
                 (-edge).rem_euclid(360.0)
             };
-            let jd = refine_crossing(target, t, &angle_at)?;
-            return Some((jd, i1));
+            if let Some(jd) = refine_crossing(target, t, &angle_at)
+                && (t..=t1).contains(&jd)
+            {
+                return Some((jd, i1));
+            }
+            // Newton left the bracket, or found no motion: near a station the
+            // rate at `t` can be close to zero, so its first step overshoots,
+            // and a step from a rate of the wrong sign walks away from the
+            // edge. Until v10.1.1 that instant was returned as it stood, days
+            // or centuries from the crossing, and a vanishing rate ended the
+            // walk. `t` is before the edge and `t1` past it, so the
+            // bracketed search on the two samples in hand finds it. Every
+            // answer Newton already placed inside the bracket is unchanged.
+            let flip = |d: f64| if direct { d } else { -d };
+            let past = |tt: f64| Some(flip(angle_past_edge(sidereal(tt)?.0, edge)));
+            let root = bracketed_edge_root(
+                (t, flip(angle_past_edge(lon, edge))),
+                (t1, flip(angle_past_edge(lon1, edge))),
+                &past,
+            )?;
+            return Some((root, i1));
         }
         t = t1;
         lon = lon1;
@@ -406,6 +425,55 @@ const ROOT_MAX_PASSES: u32 = 120;
 fn angle_past_edge(lon_deg: f64, edge_deg: f64) -> f64 {
     let d = (lon_deg - edge_deg).rem_euclid(360.0);
     if d > 180.0 { d - 360.0 } else { d }
+}
+
+/// The root of `past` inside `[lo, hi]`, where `past` is the signed angle
+/// past a rashi edge: at most zero at `lo` and positive at `hi`, given here
+/// with the two samples already in hand so they cost no further reads.
+///
+/// Illinois (regula falsi that halves the stale end), kept inside the bracket,
+/// with a bisection every fourth pass so the bracket provably shrinks even
+/// where the angle is far from linear in time (a station near the edge). It
+/// stops when the bracket is [`ROOT_TOL_D`] wide and returns its middle.
+fn bracketed_edge_root(
+    (mut lo, mut g_lo): (f64, f64),
+    (mut hi, mut g_hi): (f64, f64),
+    past: &dyn Fn(f64) -> Option<f64>,
+) -> Option<f64> {
+    let mut side = 0_i8;
+    let mut pass = 0_u32;
+    while hi - lo > ROOT_TOL_D && pass < ROOT_MAX_PASSES {
+        pass += 1;
+        let secant = (lo * g_hi - hi * g_lo) / (g_hi - g_lo);
+        let c = if pass.is_multiple_of(4) || !(secant > lo && secant < hi) {
+            0.5 * (lo + hi)
+        } else {
+            secant
+        };
+        if c <= lo || c >= hi {
+            break;
+        }
+        let g = past(c)?;
+        if g == 0.0 {
+            return Some(c);
+        }
+        if g > 0.0 {
+            hi = c;
+            g_hi = g;
+            if side == 1 {
+                g_lo *= 0.5;
+            }
+            side = 1;
+        } else {
+            lo = c;
+            g_lo = g;
+            if side == -1 {
+                g_hi *= 0.5;
+            }
+            side = -1;
+        }
+    }
+    Some(0.5 * (lo + hi))
 }
 
 /// [`scan_ingress`] for a callback that returns the tropical longitude only.
@@ -488,49 +556,12 @@ fn scan_ingress_by_longitude(
             // hand bracket the root and cost no further reads.
             let flip = |d: f64| if direct { d } else { -d };
             let past = |tt: f64| Some(flip(angle_past_edge(sidereal(tt)?, edge)));
-            let (mut lo, mut hi) = (t, t1);
-            let (mut g_lo, mut g_hi) = (
-                flip(angle_past_edge(lon, edge)),
-                flip(angle_past_edge(lon1, edge)),
-            );
-            // Illinois (regula falsi that halves the stale end), kept inside
-            // the bracket, with a bisection every fourth pass so the
-            // bracket provably shrinks even where the angle is far from
-            // linear in time (a station near the edge).
-            let mut side = 0_i8;
-            let mut pass = 0_u32;
-            while hi - lo > ROOT_TOL_D && pass < ROOT_MAX_PASSES {
-                pass += 1;
-                let secant = (lo * g_hi - hi * g_lo) / (g_hi - g_lo);
-                let c = if pass.is_multiple_of(4) || !(secant > lo && secant < hi) {
-                    0.5 * (lo + hi)
-                } else {
-                    secant
-                };
-                if c <= lo || c >= hi {
-                    break;
-                }
-                let g = past(c)?;
-                if g == 0.0 {
-                    return Some((c, i1));
-                }
-                if g > 0.0 {
-                    hi = c;
-                    g_hi = g;
-                    if side == 1 {
-                        g_lo *= 0.5;
-                    }
-                    side = 1;
-                } else {
-                    lo = c;
-                    g_lo = g;
-                    if side == -1 {
-                        g_hi *= 0.5;
-                    }
-                    side = -1;
-                }
-            }
-            return Some((0.5 * (lo + hi), i1));
+            let root = bracketed_edge_root(
+                (t, flip(angle_past_edge(lon, edge))),
+                (t1, flip(angle_past_edge(lon1, edge))),
+                &past,
+            )?;
+            return Some((root, i1));
         }
         t = t1;
         lon = lon1;
@@ -664,7 +695,12 @@ pub const fn ingress_speed_bound_deg_per_day(graha: Graha) -> f64 {
 ///
 /// `longitude` is the tropical longitude and daily motion in degrees at a
 /// JD (UT), as for [`graha_ingress`]. The walk ends early where the callback
-/// returns `None` or the rate vanishes at a crossing. The speed bound is for an
+/// returns `None`. Each crossing is refined by Newton from the daily motion;
+/// where Newton leaves the one-day bracket of the crossing or finds no motion
+/// (a station near the edge), the instant is found inside the bracket as
+/// [`graha_ingresses_by_longitude`] finds it. Through v10.1.0 the Newton
+/// instant was returned as it stood there, and a vanishing rate ended the walk.
+/// The speed bound is for an
 /// apparent geocentric longitude; a callback that moves faster is caught for a
 /// single missed jump (a long step that lands in another rashi falls back to
 /// one-day steps) but not for a loop that enters and leaves a rashi between two
@@ -728,20 +764,21 @@ pub fn graha_ingresses(
 /// place of a Julian Day) for the Sun, Moon, Mercury, Venus, Mars, Jupiter and
 /// Saturn. The tests hold the difference under 0.01 s on those spans.
 ///
-/// The nodes differ by body. Measured over 1900 to 2100 (2026-11-01): for the
-/// mean node (`Body::MeanNode`, 129 entries) the largest difference is 0.040
-/// ms; for the true node (`Body::TrueNode`, 137 entries, and `TrueSouthNode`,
-/// 137) it is 215 ms and 277 ms, with 121 and 122 entries above 0.44 ms. The
-/// count and the rashi of every entry agree. The cause is the true node's own
-/// longitude, not either search: evaluated a few seconds apart it scatters by
-/// up to 7.4e-4 arcsecond (2.4e-4 rms, measured over 1.7 s near 1924), which at
-/// the node's slowest crossing rates spans about 0.3 s. Inside that the
-/// crossing instant is not defined to better than the scatter, and
-/// [`graha_ingresses`]'s Newton refinement does not converge on it either (it
-/// stops at its pass limit). For the true node, expect the two variants to agree
-/// to about 0.3 s, and neither to be closer than that to a smooth crossing.
-/// (v10.1.0 stated 0.44 ms for the nodes from two entries each; that was a
-/// sampling error.)
+/// For the nodes, measured over 1900 to 2100 (2026-11-01): the mean node
+/// (`Body::MeanNode`, 129 entries) within 0.040 ms, the true node
+/// (`Body::TrueNode` and `TrueSouthNode`, 137 entries each) within 0.20 ms. In
+/// v10.1.0 the true node differed by up to 277 ms and its walk by
+/// [`graha_ingresses`] went wrong near stations. The node's velocity was then a
+/// central difference whose noise scattered its longitude by up to 7.4e-4
+/// arcsecond, and the Newton refinement left its bracket. Both are fixed in
+/// v10.1.1.
+///
+/// Both walks were checked over 1900 to 2100 against every rashi change seen by
+/// sampling every 0.02 day (nodes) or 0.05 day (Mercury to Saturn): the same
+/// entries, none missing, none extra. Neither walk can see a crossing and its
+/// return that both fall between two of its daily samples. In that span there
+/// is one such pair, Mercury's 4.75-hour dip into Kanya at JD 2420104.09
+/// (1913), and a walk finds it only if one of its samples falls inside the dip.
 ///
 /// The cost, measured the same day for the Moon over one year from 2001-01-01
 /// (161 entries): [`graha_ingresses`] makes 1,605 calls of a callback that

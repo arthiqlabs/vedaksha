@@ -261,10 +261,11 @@ fn read_counts_for_the_moon_over_a_year() {
 }
 
 /// The nodes by body, 1990 to 2030: the same entries as the rate-based walk,
-/// the mean node within `AGREE_D`, the true node within half a second. The
-/// true node's longitude scatters by up to 7.4e-4 arcsecond over seconds, so
-/// its crossing instant is not defined more tightly than that (see the doc of
-/// `graha_ingresses_by_longitude`; 1900 to 2100 measured 0.28 s at most).
+/// the mean node within `AGREE_D`, the true node within 1 ms. Until v10.1.1
+/// the true node's velocity was a central difference, which made its longitude
+/// scatter by up to 7.4e-4 arcsecond over seconds and the two walks differ by
+/// up to 277 ms over 1900 to 2100. With the series' analytic velocity, 1900 to
+/// 2100 measured 0.20 ms at most (2026-11-01).
 #[test]
 fn node_bounds_hold_per_body() {
     let p = AnalyticalProvider::new();
@@ -272,8 +273,8 @@ fn node_bounds_hold_per_body() {
     let to = jd(2030, 1, 1, 0.0);
     for (graha, body, bound_d) in [
         (Graha::Rahu, Body::MeanNode, AGREE_D),
-        (Graha::Rahu, Body::TrueNode, 0.5 / 86_400.0),
-        (Graha::Ketu, Body::TrueSouthNode, 0.5 / 86_400.0),
+        (Graha::Rahu, Body::TrueNode, 0.001 / 86_400.0),
+        (Graha::Ketu, Body::TrueSouthNode, 0.001 / 86_400.0),
     ] {
         let with_rate = |t: f64| longitude_and_rate(&p, body, t);
         let lon_only = |t: f64| longitude_and_rate(&p, body, t).map(|x| x.0);
@@ -286,7 +287,41 @@ fn node_bounds_hold_per_body() {
             assert_eq!(ro, rn, "{body:?}: rashi at {to_jd}");
             max = max.max((tn_jd - to_jd).abs());
         }
-        println!("{body:?}: {} entries, max |dt| {:.3} ms", old.len(), max * 86_400e3);
+        println!(
+            "{body:?}: {} entries, max |dt| {:.3} ms",
+            old.len(),
+            max * 86_400e3
+        );
         assert!(max < bound_d, "{body:?}: {:.3} ms apart", max * 86_400e3);
     }
+}
+
+/// Mercury stations on the edge of Tula in 1913: it enters Kanya at JD
+/// 2420104.0858 and returns to Tula 0.198 day later, the only pair of
+/// crossings under a day apart for any graha from 1900 to 2100 (2026-11-01).
+/// Through v10.1.0 the rate-based walk's Newton refinement left its bracket
+/// there and returned the first instant, from behind the seed, 8,720 times
+/// before moving on. Both walks must give the same entries, once each.
+#[test]
+fn mercury_station_on_an_edge_is_walked_once() {
+    let p = AnalyticalProvider::new();
+    let (from, to) = (2_419_700.0, 2_420_500.0);
+    let with_rate = |t: f64| longitude_and_rate(&p, Body::Mercury, t);
+    let lon_only = |t: f64| longitude_and_rate(&p, Body::Mercury, t).map(|x| x.0);
+    let old = graha_ingresses(from, to, Graha::Mercury, AYAN, &with_rate);
+    let new = graha_ingresses_by_longitude(from, to, Graha::Mercury, AYAN, &lon_only);
+    assert!(
+        new.iter()
+            .any(|e| (e.0 - 2_420_104.0858).abs() < 1e-3 && e.1 == 6),
+        "the 1913 dip is not in the longitude walk"
+    );
+    assert_eq!(old.len(), new.len(), "entry count");
+    for ((to_jd, ro), (tn_jd, rn)) in old.iter().zip(&new) {
+        assert_eq!(ro, rn, "rashi at {to_jd}");
+        assert!((tn_jd - to_jd).abs() < AGREE_D, "{to_jd} vs {tn_jd}");
+    }
+    assert!(
+        old.windows(2).all(|w| w[1].0 > w[0].0),
+        "instants not increasing"
+    );
 }

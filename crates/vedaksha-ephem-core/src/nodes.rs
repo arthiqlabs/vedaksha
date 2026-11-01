@@ -103,7 +103,7 @@ fn true_node_meeus_truncated(jd: f64) -> f64 {
 /// Montenbruck & Gill 2000).
 #[must_use]
 pub fn true_node_osculating(jd: f64) -> f64 {
-    osculating_node(elp_mpp02::elp_geocentric_position_of_date, jd)
+    osculating_node(elp_mpp02::elp_geocentric_of_date, jd)
 }
 
 /// The osculating ascending node in the **J2000** mean ecliptic.
@@ -122,30 +122,25 @@ pub fn true_node_osculating(jd: f64) -> f64 {
 /// Requires the `analytical` module (ELP/MPP02).
 #[must_use]
 pub fn true_node_osculating_j2000(jd: f64) -> f64 {
-    osculating_node(elp_mpp02::elp_geocentric_position, jd)
+    osculating_node(elp_mpp02::elp_geocentric, jd)
 }
 
 /// Shared osculating-node evaluation, parameterised by the frame the lunar
-/// position is sampled in. The returned longitude is in whatever frame
-/// `sample` produces.
+/// state is sampled in. The returned longitude is in whatever frame `sample`
+/// produces.
 ///
-/// `sample` returns position only, `(x, y, z)`: this function derives its own
-/// velocity by central difference of three position samples, so a full
-/// state's velocity/omega half was never used here even before
-/// `docs/audit/2026-08-29-perf-investigation.md` #5 — `sample` used to be
-/// `fn(f64) -> MoonRectangular`, and only `.x/.y/.z` of each of the three
-/// calls was ever read.
-fn osculating_node(sample: fn(f64) -> (f64, f64, f64), jd: f64) -> f64 {
-    // Use a tight differentiation step for velocity (0.001 day ≈ 86 seconds).
-    // The osculating node is sensitive to velocity direction.
-    let dt = 0.001_f64;
-    let (x0, y0, z0) = sample(jd);
-    let (xp, yp, zp) = sample(jd + dt);
-    let (xm, ym, zm) = sample(jd - dt);
-    let inv_2dt = 1.0 / (2.0 * dt);
-    let vx = (xp - xm) * inv_2dt;
-    let vy = (yp - ym) * inv_2dt;
-    let vz = (zp - zm) * inv_2dt;
+/// `sample` returns the Moon's position and its velocity, the analytic
+/// derivative of the ELP/MPP02 series in the same frame. Through v10.1.x the
+/// velocity was a central difference of three positions 0.001 day apart; the
+/// series' evaluation noise divided by that step made the node scatter by up to
+/// 7.4e-4 arcsecond between instants seconds apart, so its sign-ingress
+/// instants were defined to about 0.3 s only (`khagola::graha_ingresses`'s
+/// Newton refinement never converged on them). The analytic velocity has no
+/// differencing step, and one evaluation replaces three.
+fn osculating_node(sample: fn(f64) -> elp_mpp02::MoonRectangular, jd: f64) -> f64 {
+    let m = sample(jd);
+    let (x0, y0, z0) = (m.x, m.y, m.z);
+    let (vx, vy, vz) = (m.vx, m.vy, m.vz);
 
     // Avoid division by zero if Moon is exactly on the ecliptic
     // with zero vertical velocity (astronomically impossible, but safe).

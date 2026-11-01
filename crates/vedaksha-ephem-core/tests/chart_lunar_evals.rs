@@ -105,6 +105,10 @@ fn chart_evaluates_moon_only_a_few_times() {
     //     **12**. The Moon body's 6 became 3 full evaluations plus 3
     //     distance-only ones, which `ELP_DISTANCE_CALLS` counts and this
     //     guard does not; `tests/moon_light_time.rs` pins the per-read counts.
+    //   - after the osculating node took the series' analytic velocity
+    //     instead of differencing three positions (current, measured
+    //     2026-11-01): **6**. The Moon body's 3, plus TrueNode's 3, one
+    //     evaluation per daily-motion timestep instead of three.
     //
     // The threshold is set at 2x the corrected measured count rather than
     // pinning the exact number, so it still catches a real regression without
@@ -113,7 +117,7 @@ fn chart_evaluates_moon_only_a_few_times() {
     // is the only defensible value.
     assert!(
         elp_evals <= 30,
-        "chart evaluated the ELP/MPP02 series {elp_evals} times (expected a handful, ~15); \
+        "chart evaluated the ELP/MPP02 series {elp_evals} times (expected a handful, ~6); \
          the light-time Earth-extrapolation or batch memoization regressed"
     );
 }
