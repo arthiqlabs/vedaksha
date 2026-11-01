@@ -767,11 +767,11 @@ pub fn graha_ingresses(
 /// For the nodes, measured over 1900 to 2100 (2026-11-01): the mean node
 /// (`Body::MeanNode`, 129 entries) within 0.040 ms, the true node
 /// (`Body::TrueNode` and `TrueSouthNode`, 137 entries each) within 0.20 ms. In
-/// v10.1.0 the true node differed by up to 277 ms and its walk by
-/// [`graha_ingresses`] went wrong near stations. The node's velocity was then a
-/// central difference whose noise scattered its longitude by up to 7.4e-4
-/// arcsecond, and the Newton refinement left its bracket. Both are fixed in
-/// v10.1.1.
+/// v10.1.0 the true node differed by up to 277 ms, because the node's velocity
+/// was a central difference whose noise scattered its longitude by up to 7.4e-4
+/// arcsecond. [`graha_ingresses`]'s Newton refinement could also leave its
+/// bracket at a station near an edge: in v10.1.0 it repeated one Mercury entry
+/// of 1913 8,720 times. Both are fixed in v10.1.1.
 ///
 /// Both walks were checked over 1900 to 2100 against every rashi change seen by
 /// sampling every 0.02 day (nodes) or 0.05 day (Mercury to Saturn): the same

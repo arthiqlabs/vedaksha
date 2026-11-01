@@ -325,3 +325,110 @@ fn mercury_station_on_an_edge_is_walked_once() {
         "instants not increasing"
     );
 }
+
+/// Both walks against every rashi change seen by sampling every 0.05 day, 1900
+/// to 2100, for the grahas that station (Mercury to Saturn, and the true node):
+/// no entry missing, none extra, and the two walks within `AGREE_D` of each
+/// other (the true node within 1 ms). A sampled change matches a walk entry for
+/// the same rashi inside the sampling interval that holds it.
+///
+/// The sampling sees a dip across an edge that lasts longer than 0.05 day; the
+/// walks step at least a day and can miss a shorter one. The only dip under a
+/// day in this span is Mercury's in 1913 (0.198 day), which the walks from
+/// 1900-01-01 happen to sample. Measured once more widely (2026-11-01, sampling
+/// the nodes every 0.02 day): the Sun, the Moon, the mean node and its Ketu
+/// matched too (2,400, 32,084 and 129 entries), as did both true nodes. Weekly
+/// tier.
+#[test]
+#[ignore = "minutes in release; run by full validation"]
+fn both_walks_match_dense_sampling_1900_to_2100() {
+    let (a, b) = (2_415_020.5_f64, 2_488_069.5_f64);
+    let cases = [
+        (Graha::Mercury, Body::Mercury, 0.05, AGREE_D),
+        (Graha::Venus, Body::Venus, 0.05, AGREE_D),
+        (Graha::Mars, Body::Mars, 0.05, AGREE_D),
+        (Graha::Jupiter, Body::Jupiter, 0.05, AGREE_D),
+        (Graha::Saturn, Body::Saturn, 0.05, AGREE_D),
+        (Graha::Rahu, Body::TrueNode, 0.05, 0.001 / 86_400.0),
+        (Graha::Ketu, Body::TrueSouthNode, 0.05, 0.001 / 86_400.0),
+    ];
+    let sid = |p: &AnalyticalProvider, body: Body, t: f64| {
+        let (l, _) = longitude_and_rate(p, body, t).expect("a position");
+        (l - true_ayanamsha_value(AYAN, t)).rem_euclid(360.0)
+    };
+    let failures: Vec<String> = std::thread::scope(|s| {
+        let handles: Vec<_> = cases
+            .iter()
+            .map(|&(graha, body, h, bound)| {
+                s.spawn(move || {
+                    let n = ((b - a) / h).ceil() as usize;
+                    let parts = 3;
+                    let sampled: Vec<(f64, f64, u8)> = std::thread::scope(|s2| {
+                        let hs: Vec<_> = (0..parts)
+                            .map(|k| {
+                                s2.spawn(move || {
+                                    let p = AnalyticalProvider::new();
+                                    let (i0, i1) = (n * k / parts, n * (k + 1) / parts);
+                                    let mut out = Vec::new();
+                                    let mut t_prev = a + h * i0 as f64;
+                                    let mut r_prev = (sid(&p, body, t_prev) / 30.0) as u8;
+                                    for i in i0 + 1..=i1 {
+                                        let t = (a + h * i as f64).min(b);
+                                        let r = (sid(&p, body, t) / 30.0) as u8;
+                                        if r != r_prev {
+                                            out.push((t_prev, t, r));
+                                        }
+                                        (t_prev, r_prev) = (t, r);
+                                    }
+                                    out
+                                })
+                            })
+                            .collect();
+                        hs.into_iter().flat_map(|h| h.join().unwrap()).collect()
+                    });
+                    let p = AnalyticalProvider::new();
+                    let with_rate = |t: f64| longitude_and_rate(&p, body, t);
+                    let lon_only = |t: f64| longitude_and_rate(&p, body, t).map(|x| x.0);
+                    let old = graha_ingresses(a, b, graha, AYAN, &with_rate);
+                    let new = graha_ingresses_by_longitude(a, b, graha, AYAN, &lon_only);
+                    let near = |e: &(f64, u8), o: &(f64, f64, u8)| {
+                        o.2 == e.1 && e.0 >= o.0 - 1e-6 && e.0 <= o.1 + 1e-6
+                    };
+                    let mut bad = Vec::new();
+                    for (name, w) in [("graha_ingresses", &old), ("by_longitude", &new)] {
+                        let extra = w.iter().filter(|e| !sampled.iter().any(|o| near(e, o))).count();
+                        let missing = sampled.iter().filter(|o| !w.iter().any(|e| near(e, o))).count();
+                        if extra + missing > 0 || w.len() != sampled.len() {
+                            bad.push(format!(
+                                "{body:?} {name}: {} entries, {} sampled, {extra} extra, {missing} missing",
+                                w.len(),
+                                sampled.len()
+                            ));
+                        }
+                    }
+                    let max = old
+                        .iter()
+                        .zip(&new)
+                        .map(|(x, y)| (x.0 - y.0).abs())
+                        .fold(0.0_f64, f64::max);
+                    println!(
+                        "{body:?}: {} sampled, {} and {} walked, max |dt| {:.4} ms",
+                        sampled.len(),
+                        old.len(),
+                        new.len(),
+                        max * 86_400e3
+                    );
+                    if max >= bound {
+                        bad.push(format!("{body:?}: walks {:.4} ms apart", max * 86_400e3));
+                    }
+                    bad
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().unwrap())
+            .collect()
+    });
+    assert!(failures.is_empty(), "{failures:#?}");
+}

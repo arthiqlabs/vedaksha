@@ -7,8 +7,12 @@ binary digits. One figure stated in v10.1.0 is corrected.
 
 ## Changed answers, ephemeris
 
-- **The true node takes the lunar series' own velocity.** `Body::TrueNode`
-  and `Body::TrueSouthNode` (the osculating node) were computed from a
+- **The true node takes the lunar series' own velocity.** `Body::TrueNode`,
+  `Body::TrueSouthNode`, `Body::TrueNodeOsculating`,
+  `Body::TrueSouthNodeOsculating`, and the functions
+  `nodes::true_node_osculating`, `true_node_osculating_j2000`,
+  `south_node_true` and `south_node_osculating` (all the osculating node)
+  were computed from a
   velocity found by differencing three lunar positions 0.001 day apart. The
   series' evaluation noise, divided by that step, made the node's longitude
   scatter by up to 7.4e-4 arcsecond between instants seconds apart. The
@@ -16,12 +20,14 @@ binary digits. One figure stated in v10.1.0 is corrected.
   carries no differencing step. Measured 2026-11-01:
   - the scatter falls to under 4.2e-7 arcsecond, about 1,000 times less;
   - over 1900 to 2100 (197,430 instants) the value moves by at most 1.25e-3
-    arcsecond and on average 7.1e-5 arcsecond;
+    arcsecond and on average 7.1e-5 arcsecond in the ecliptic of date, and
+    by at most 1.22e-3 arcsecond in the J2000 ecliptic;
   - one lunar evaluation replaces three, so a chart evaluates the lunar
     series 6 times instead of 12.
 
-  The node's agreement with JPL Horizons, measured at 0.6 arcsecond at most
-  over 1900 to 2100, can move by no more than the 1.25e-3 arcsecond change.
+  The node's agreement with JPL Horizons, measured in the J2000 ecliptic at
+  0.6 arcsecond at most over 1900 to 2100, can move by no more than the
+  1.22e-3 arcsecond change in that frame.
   The five Horizons dates in the test suite still pass at 0.001 degree. The
   dense Horizons comparison was not re-run for this release.
 
