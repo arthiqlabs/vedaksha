@@ -26,7 +26,7 @@ from .errors import (
     VedakshaError,
 )
 
-__version__ = "10.0.2"
+__version__ = "10.1.0"
 
 __all__ = [
     "NAIF_IDS",

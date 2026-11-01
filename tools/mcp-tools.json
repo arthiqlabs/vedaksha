@@ -1,5 +1,5 @@
 {
-  "engineVersion": "10.0.2",
+  "engineVersion": "10.1.0",
   "tools": [
     {
       "annotations": {
@@ -211,7 +211,7 @@
         "openWorldHint": false,
         "readOnlyHint": true
       },
-      "description": "Compute Vedic dasha (planetary period) sequences. Supports eight classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (sign based, require BOTH `lagna_sign` AND `graha_signs`, since each sign's period length is counted to the sign its lord occupies in this chart); Sthira, NiryanaShoola (`niryana_shoola` is accepted too) and Maheshwara (Jaimini rashi dashas, require `lagna_sign` AND `graha_longitudes`, since the atmakaraka and the tie-breaks of the strength tests read degrees). `graha_signs` takes the eight `sign_index` values compute_natal_chart already returns, `graha_longitudes` the eight sidereal longitudes; Ketu is derived from Rahu and must not be supplied. Yogini takes `rounds` (1 to 10 whole 36-year rounds) or `until` (a horizon Julian Day); Chara takes `antardashas` (twelve per period, BPHS 51.5-51.9). Sthira, NiryanaShoola and Maheshwara use the defaults of the vedic crate's dasha functions (see their module docs) and always carry their antardashas. Sthira and Maheshwara start from the Brahma graha; a chart whose marks leave none returns `no_brahma: true` with a message, not an error. Returns a JSON dasha tree with start/end Julian Days.",
+      "description": "Compute Vedic dasha (planetary period) sequences. Supports eight classical systems: Vimshottari, Ashtottari, Yogini (Moon-longitude based, require `moon_longitude`); Chara, Narayana (sign based, require BOTH `lagna_sign` AND `graha_signs`, since each sign's period length is counted to the sign its lord occupies in this chart); Sthira, NiryanaShoola (`niryana_shoola` is accepted too) and Maheshwara (Jaimini rashi dashas, require `lagna_sign` AND `graha_longitudes`, since the atmakaraka and the tie-breaks of the strength tests read degrees). `graha_signs` takes the eight `sign_index` values compute_natal_chart already returns, `graha_longitudes` the eight sidereal longitudes; Ketu is derived from Rahu and must not be supplied. Yogini takes `rounds` (1 to 10 whole 36-year rounds) or `until` (a horizon Julian Day); Chara takes `antardashas` (twelve per period, BPHS 51.5-51.9). Sthira, NiryanaShoola and Maheshwara use the defaults of the vedic crate's dasha functions (see their module docs) and always carry their antardashas. Sthira and Maheshwara start from the Brahma graha; a chart whose marks leave none returns `no_brahma: true` with a message, not an error. Returns a JSON dasha tree with start/end Julian Days. For Vimshottari, Ashtottari and Yogini the first maha opens at birth with `initial_balance` of its length, but its sub-periods keep their full shares from the maha's notional start before birth: those with end_jd <= birth_jd ended before birth, and the one running at birth starts at or before it.",
       "inputSchema": {
         "properties": {
           "antardashas": {
